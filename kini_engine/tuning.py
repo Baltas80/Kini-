@@ -17,7 +17,7 @@ def tune_decay(
     for decay in candidates:
         # The public v0.2 engine keeps decay configurable at model level.
         # Evaluation is deliberately walk-forward; no future result enters a fold.
-        engine_result = walk_forward(matches, min_train=min_train)
+        engine_result = walk_forward(matches, min_train=min_train, decay=decay)
         results[str(decay)] = float(objective(engine_result))
     best = min(results, key=results.get)
     return {"best_decay": float(best), "best_score": results[best]}
