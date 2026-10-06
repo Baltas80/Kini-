@@ -316,11 +316,17 @@ def _recent_form(history: list[Match], team: str) -> float:
 
 
 class TicketOptimizer:
-    """Exact dynamic-programming optimiser for a fixed column budget."""
+    """Dynamic-programming optimiser for a fixed column budget.
+    
+    The objective is an independence-based marginal coverage proxy; it is not
+    the exact probability of the union of all covered outcome vectors.
+    """
 
     def optimize(self, predictions: list[dict[str, float]], budget: int = 8) -> dict[str, Any]:
         if len(predictions) != 14:
             raise ValueError("standard ticket optimisation needs exactly 14 matches")
+        if not isinstance(budget, int) or budget < 1:
+            raise ValueError("budget must be a positive integer")
         dp = {(0,): (1.0, [])}
         for i, p in enumerate(predictions):
             nxt = {}
@@ -358,7 +364,7 @@ class KiniEngine:
     def fit(self, history: list[Match]) -> "KiniEngine":
         self.history = sorted(list(history), key=lambda m: DixonColes._date_num(m.date))
         self.dc.fit(self.history)
-        self.fitted = True
+        self.fitted = self.dc.fitted
         return self
 
     def _predict_one(self, m: Match, history: list[Match]) -> Prediction:
