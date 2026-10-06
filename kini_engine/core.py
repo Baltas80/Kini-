@@ -9,6 +9,8 @@ import numpy as np
 from scipy.optimize import minimize
 from scipy.stats import poisson
 
+from .temporal import PredictionContext, parse_information_at
+
 
 SIGNS = ("1", "X", "2")
 
@@ -42,6 +44,8 @@ class Prediction:
     scorelines: list[dict[str, Any]]
     surprise: dict[str, Any] | None
     reasons: list[str]
+    information_at: str
+    target_kickoff_at: str
 
 
 def _norm(p: Iterable[float]) -> np.ndarray:
@@ -346,7 +350,12 @@ class KiniEngine:
         self.fitted = True
         return self
 
-    def _predict_one(self, m: Match, history: list[Match]) -> Prediction:
+    def _predict_one(
+        self,
+        m: Match,
+        history: list[Match],
+        context: PredictionContext,
+    ) -> Prediction:
         dc_probs, scores = self.dc.predict(m.home, m.away)
         ml = self.ml.fit_predict_proba(history, m)
         ml_probs = None if ml is None else dict(zip(SIGNS, map(float, ml)))
@@ -361,15 +370,54 @@ class KiniEngine:
         adjusted, reasons = context_adjust(base, m, history)
         surprise = surprise_signal(adjusted, m.lae, m.market, m, history)
         sign = max(SIGNS, key=lambda s: adjusted[s])
-        return Prediction(m.home, m.away, adjusted, sign, scores, surprise, reasons)
+        return Prediction(
+            m.home,
+            m.away,
+            adjusted,
+            sign,
+            scores,
+            surprise,
+            reasons,
+            context.information_at_iso,
+            context.target_kickoff_at_iso,
+        )
 
-    def predict(self, match: Match) -> Prediction:
-        return self._predict_one(match, getattr(self, "history", []))
+    def _assert_history_causal(self, information_at: datetime) -> None:
+        history = getattr(self, "history", [])
+        for historical_match in history:
+            kickoff_at = parse_information_at(historical_match.date, "historical match timestamp")
+            if kickoff_at >= information_at:
+                raise ValueError(
+                    "prediction information_at is not after every historical match kickoff; "
+                    f"historical match at {kickoff_at.isoformat()} would be future information"
+                )
 
-    def quiniela(self, fixtures: list[Match], budget: int = 8) -> dict[str, Any]:
+    def predict(
+        self,
+        match: Match,
+        *,
+        information_at: datetime | str,
+    ) -> Prediction:
+        context = PredictionContext.from_match(match.date, information_at)
+        self._assert_history_causal(context.information_at)
+        return self._predict_one(match, getattr(self, "history", []), context)
+
+    def quiniela(
+        self,
+        fixtures: list[Match],
+        budget: int = 8,
+        *,
+        information_at: datetime | str,
+    ) -> dict[str, Any]:
         if len(fixtures) != 15:
             raise ValueError("Quiniela needs 15 fixtures")
-        preds = [self._predict_one(m, self.history) for m in fixtures]
+        contexts = [PredictionContext.from_match(m.date, information_at) for m in fixtures]
+        for context in contexts:
+            self._assert_history_causal(context.information_at)
+        preds = [
+            self._predict_one(m, self.history, context)
+            for m, context in zip(fixtures, contexts)
+        ]
         ticket = self.optimizer.optimize([p.probabilities for p in preds[:14]], budget=budget)
         return {
             "predictions": [p.__dict__ for p in preds],

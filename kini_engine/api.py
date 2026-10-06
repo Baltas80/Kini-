@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from datetime import datetime
 from typing import Any
 
 from .core import KiniEngine, Match
+
 
 try:
     from fastapi import FastAPI
@@ -22,8 +22,16 @@ def create_app(engine: KiniEngine | None = None):
         return {"ok": True, "fitted": model.fitted}
 
     @app.post("/predict")
-    def predict(home: str, away: str) -> dict[str, Any]:
-        p = model.predict(Match(datetime.now(), home, away))
+    def predict(
+        home: str,
+        away: str,
+        kickoff_at: str,
+        information_at: str,
+    ) -> dict[str, Any]:
+        p = model.predict(
+            Match(kickoff_at, home, away),
+            information_at=information_at,
+        )
         return p.__dict__
 
     return app

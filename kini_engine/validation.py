@@ -448,7 +448,7 @@ def validate_dataset(
     duplicate_codes = {"duplicate_match_id", "duplicate_fixture", "duplicate_observation_id"}
     impossible_codes = {"impossible_match", "impossible_score", "impossible_round", "status_score_conflict"}
     result_codes = {"invalid_result", "result_mismatch", "finished_without_result", "invalid_score"}
-    date_codes = {"invalid_timestamp", "invalid_season", "round_date_order", "observation_date_order", "invalid_observation_timestamp", "late_scheduled_observation"}
+    date_codes = {"invalid_timestamp", "invalid_season", "date_incoherent", "round_date_order", "observation_date_order", "invalid_observation_timestamp", "late_scheduled_observation"}
     round_codes = {"incomplete_round", "missing_round", "missing_round_expectation"}
 
     if error_codes & duplicate_codes:

@@ -5,6 +5,7 @@ from typing import Any
 from .core import KiniEngine, Match
 from .sources import KinielaGPTSource
 
+
 try:
     from mcp.server.fastmcp import FastMCP
 except Exception:
@@ -28,12 +29,24 @@ def create_server(engine: KiniEngine | None = None):
         return source.probabilities(jornada, temporada)
 
     @mcp.tool()
-    def analyze_match(home: str, away: str) -> dict[str, Any]:
-        return model.predict(Match("", home, away)).__dict__
+    def analyze_match(
+        home: str,
+        away: str,
+        kickoff_at: str,
+        information_at: str,
+    ) -> dict[str, Any]:
+        return model.predict(
+            Match(kickoff_at, home, away),
+            information_at=information_at,
+        ).__dict__
 
     @mcp.tool()
-    def predict_quiniela(fixtures: list[dict[str, str]], budget: int = 8) -> dict[str, Any]:
-        ms = [Match("", x["home"], x["away"]) for x in fixtures]
-        return model.quiniela(ms, budget)
+    def predict_quiniela(
+        fixtures: list[dict[str, str]],
+        information_at: str,
+        budget: int = 8,
+    ) -> dict[str, Any]:
+        ms = [Match(x["kickoff_at"], x["home"], x["away"]) for x in fixtures]
+        return model.quiniela(ms, budget, information_at=information_at)
 
     return mcp

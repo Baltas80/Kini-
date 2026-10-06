@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from kini_engine.core import KiniEngine, Match, TicketOptimizer
 
@@ -6,7 +6,7 @@ from kini_engine.core import KiniEngine, Match, TicketOptimizer
 def sample():
     teams = ["A", "B", "C", "D"]
     out = []
-    base = datetime(2025, 1, 1)
+    base = datetime(2025, 1, 1, tzinfo=timezone.utc)
     for i in range(80):
         h, a = teams[i % 4], teams[(i + 1) % 4]
         hg = (i * 3) % 4
@@ -17,9 +17,14 @@ def sample():
 
 def test_fit_predict():
     e = KiniEngine().fit(sample())
-    p = e.predict(Match(datetime(2025, 4, 1), "A", "D"))
+    p = e.predict(
+        Match(datetime(2025, 4, 1, tzinfo=timezone.utc), "A", "D"),
+        information_at="2025-03-31T23:59:59Z",
+    )
     assert abs(sum(p.probabilities.values()) - 1.0) < 1e-9
     assert p.sign in {"1", "X", "2"}
+    assert p.information_at == "2025-03-31T23:59:59Z"
+    assert p.target_kickoff_at == "2025-04-01T00:00:00Z"
 
 
 def test_optimizer_budget():
