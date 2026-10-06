@@ -7,7 +7,7 @@ name = "kini-engine"
 version = "0.2.0"
 description = "Spanish Quiniela prediction engine based on KinielaGPT with mature statistical modelling and walk-forward validation."
 requires-python = ">=3.11"
-license = { text = "AGPL-3.0-or-later" }
+license = "AGPL-3.0-or-later"
 dependencies = [
   "numpy>=1.26",
   "pandas>=2.2",
@@ -28,3 +28,6 @@ dev = ["pytest>=8", "ruff>=0.8"]
 
 [project.scripts]
 kini = "kini_engine.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["kini_engine*"]
