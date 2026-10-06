@@ -143,10 +143,20 @@ class DixonColes:
     def _date_num(value: datetime | str) -> float:
         if isinstance(value, datetime):
             return value.timestamp()
-        try:
-            return datetime.fromisoformat(str(value).replace("Z", "+00:00")).timestamp()
-        except ValueError:
+        text = str(value).strip()
+        if not text:
             return 0.0
+        normalized = text.replace("Z", "+00:00")
+        try:
+            return datetime.fromisoformat(normalized).timestamp()
+        except ValueError:
+            pass
+        for fmt in ("%d/%m/%Y", "%d/%m/%y", "%Y/%m/%d", "%d-%m-%Y", "%d-%m-%y"):
+            try:
+                return datetime.strptime(text, fmt).timestamp()
+            except ValueError:
+                continue
+        return 0.0
 
     def expected_goals(self, home: str, away: str) -> tuple[float, float]:
         if not self.fitted or home not in self.attack or away not in self.attack:
@@ -173,7 +183,7 @@ class FeatureModel:
 
     def _features(self, history: list[Match], m: Match) -> np.ndarray:
         def stats(team: str, venue: str | None = None) -> tuple[float, float, float]:
-            xs = [x for x in history if (x.home == team or x.away == team)]
+            xs = [x for x in history if x.home_goals is not None and x.away_goals is not None and (x.home == team or x.away == team)]
             if venue == "home":
                 xs = [x for x in xs if x.home == team]
             elif venue == "away":
@@ -229,7 +239,7 @@ def context_adjust(
     reasons: list[str] = []
 
     def form(team: str) -> float:
-        xs = [m for m in history if m.home == team or m.away == team][-5:]
+        xs = [m for m in history if m.home_goals is not None and m.away_goals is not None and (m.home == team or m.away == team)][-5:]
         val = 0.0
         for m in xs:
             if m.home == team:
@@ -279,7 +289,7 @@ def surprise_signal(
     refs = []
     for name, probs in (("LAE", lae), ("mercado", market)):
         if probs:
-            refs.append((name, np.array([probs.get(s, 0.0) for s in SIGNS])))
+            refs.append((name, _norm([probs.get(s, 0.0) for s in SIGNS])))
     if not refs:
         return None
     m = np.array([model[s] for s in SIGNS])
