@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from .backtest import walk_forward
+from .backtest import benchmark, walk_forward
 from .core import KiniEngine, Match
 
 
@@ -27,13 +27,15 @@ def load_csv(path: str) -> list[Match]:
 
 def main() -> None:
     ap = argparse.ArgumentParser(prog="kini")
-    ap.add_argument("command", choices=("backtest",))
+    ap.add_argument("command", choices=("backtest", "benchmark"))
     ap.add_argument("csv")
     ap.add_argument("--min-train", type=int, default=80)
     args = ap.parse_args()
     matches = load_csv(args.csv)
     if args.command == "backtest":
         print(json.dumps(walk_forward(matches, min_train=args.min_train)["metrics"], indent=2, ensure_ascii=False))
+    elif args.command == "benchmark":
+        print(json.dumps(benchmark(matches, min_train=args.min_train), indent=2, ensure_ascii=False))
 
 
 if __name__ == "__main__":
