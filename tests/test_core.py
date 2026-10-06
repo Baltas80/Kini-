@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 
-from kini_engine.core import KiniEngine, Match, TicketOptimizer
+from kini_engine.core import DixonColes, KiniEngine, Match, TicketOptimizer
 
 
 def sample():
@@ -26,3 +26,18 @@ def test_optimizer_budget():
     p = [{"1": 0.5, "X": 0.3, "2": 0.2} for _ in range(14)]
     t = TicketOptimizer().optimize(p, budget=8)
     assert t["column_count"] <= 8
+
+
+def test_dixon_coles_fit_is_successful():
+    model = DixonColes(decay=0.995).fit(sample())
+    assert model.fitted
+    assert model.teams
+    assert set(model.attack) == set(model.teams)
+    assert set(model.defence) == set(model.teams)
+
+
+def test_engine_default_is_deterministic_core_only():
+    e = KiniEngine().fit(sample())
+    assert e.ml is None
+    assert e.enable_ml is False
+    assert e.enable_context is False
