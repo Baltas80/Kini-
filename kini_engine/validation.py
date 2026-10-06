@@ -7,9 +7,8 @@ import csv
 import json
 import re
 from pathlib import Path
-from typing import Any, Iterable
-
 import hashlib
+from typing import Any, Iterable
 
 VALID_STATUSES = {
     "scheduled",
@@ -21,6 +20,18 @@ VALID_STATUSES = {
     "unknown",
 }
 SIGNS = {"1", "X", "2"}
+
+
+def canonical_payload_hash(payload: dict[str, Any]) -> str:
+    encoded = json.dumps(
+        payload,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
 SEASON_RE = re.compile(r"^(?P<start>\d{4})-(?P<end>\d{2})$")
 
 
