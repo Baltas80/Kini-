@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from math import exp
+from math import exp, lgamma
 from typing import Any, Iterable
 
 import numpy as np
@@ -101,8 +101,7 @@ class DixonColes:
         idx = {t: i for i, t in enumerate(self.teams)}
         n = len(self.teams)
         dates = np.asarray([self._date_num(m.date) for m in usable], dtype=float)
-        # Decay is expressed per day. Using Unix seconds here makes 0.995
-        # collapse almost the entire historical sample to zero weight.
+        # Decay is expressed per day, not per Unix second.
         age_days = np.maximum((dates.max() - dates) / 86400.0, 0.0)
         weights = np.power(self.decay, age_days)
 
@@ -121,7 +120,7 @@ class DixonColes:
                 tau = max(_dc_tau(h, aw, lh, la, rho), 1e-9)
                 ll = poisson.logpmf(h, lh) + poisson.logpmf(aw, la) + np.log(tau)
                 total -= weights[k] * ll
-                return float(total)
+            return float(total)
 
         x0 = np.r_[np.zeros(2*n), 0.25, self.rho]
         x0[n:2*n] = -0.1
@@ -130,7 +129,7 @@ class DixonColes:
             {"type": "eq", "fun": lambda x: float(np.mean(x[n:2*n]))},
         ]
         bounds = [(-2.5, 2.5)] * (2*n) + [(0.0, 1.5), (-0.5, 0.5)]
-        res = minimize(loss, x0, method="SLSQP", bounds=bounds, constraints=[cons], options={"maxiter": 500, "ftol": 1e-7})
+        res = minimize(loss, x0, method="SLSQP", bounds=bounds, constraints=cons, options={"maxiter": 500, "ftol": 1e-7})
         if not res.success:
             self.fitted = False
             return self
@@ -144,10 +143,20 @@ class DixonColes:
     def _date_num(value: datetime | str) -> float:
         if isinstance(value, datetime):
             return value.timestamp()
-        try:
-            return datetime.fromisoformat(str(value).replace("Z", "+00:00")).timestamp()
-        except ValueError:
+        text = str(value).strip()
+        if not text:
             return 0.0
+        normalized = text.replace("Z", "+00:00")
+        try:
+            return datetime.fromisoformat(normalized).timestamp()
+        except ValueError:
+            pass
+        for fmt in ("%d/%m/%Y", "%d/%m/%y", "%Y/%m/%d", "%d-%m-%Y", "%d-%m-%y"):
+            try:
+                return datetime.strptime(text, fmt).timestamp()
+            except ValueError:
+                continue
+        return 0.0
 
     def expected_goals(self, home: str, away: str) -> tuple[float, float]:
         if not self.fitted or home not in self.attack or away not in self.attack:
@@ -174,7 +183,7 @@ class FeatureModel:
 
     def _features(self, history: list[Match], m: Match) -> np.ndarray:
         def stats(team: str, venue: str | None = None) -> tuple[float, float, float]:
-            xs = [x for x in history if (x.home == team or x.away == team)]
+            xs = [x for x in history if x.home_goals is not None and x.away_goals is not None and (x.home == team or x.away == team)]
             if venue == "home":
                 xs = [x for x in xs if x.home == team]
             elif venue == "away":
@@ -230,7 +239,7 @@ def context_adjust(
     reasons: list[str] = []
 
     def form(team: str) -> float:
-        xs = [m for m in history if m.home == team or m.away == team][-5:]
+        xs = [m for m in history if m.home_goals is not None and m.away_goals is not None and (m.home == team or m.away == team)][-5:]
         val = 0.0
         for m in xs:
             if m.home == team:
@@ -280,7 +289,7 @@ def surprise_signal(
     refs = []
     for name, probs in (("LAE", lae), ("mercado", market)):
         if probs:
-            refs.append((name, np.array([probs.get(s, 0.0) for s in SIGNS])))
+            refs.append((name, _norm([probs.get(s, 0.0) for s in SIGNS])))
     if not refs:
         return None
     m = np.array([model[s] for s in SIGNS])
@@ -299,7 +308,7 @@ def surprise_signal(
 
 
 def _recent_form(history: list[Match], team: str) -> float:
-    xs = [m for m in history if m.home == team or m.away == team][-5:]
+    xs = [m for m in history if m.home_goals is not None and m.away_goals is not None and (m.home == team or m.away == team)][-5:]
     val = 0
     for m in xs:
         val += 3 if ((m.home == team and m.home_goals > m.away_goals) or (m.away == team and m.away_goals > m.home_goals)) else (1 if m.home_goals == m.away_goals else 0)
@@ -307,11 +316,17 @@ def _recent_form(history: list[Match], team: str) -> float:
 
 
 class TicketOptimizer:
-    """Exact dynamic-programming optimiser for a fixed column budget."""
+    """Dynamic-programming optimiser for a fixed column budget.
+    
+    The objective is an independence-based marginal coverage proxy; it is not
+    the exact probability of the union of all covered outcome vectors.
+    """
 
     def optimize(self, predictions: list[dict[str, float]], budget: int = 8) -> dict[str, Any]:
         if len(predictions) != 14:
             raise ValueError("standard ticket optimisation needs exactly 14 matches")
+        if not isinstance(budget, int) or budget < 1:
+            raise ValueError("budget must be a positive integer")
         dp = {(0,): (1.0, [])}
         for i, p in enumerate(predictions):
             nxt = {}
@@ -349,7 +364,7 @@ class KiniEngine:
     def fit(self, history: list[Match]) -> "KiniEngine":
         self.history = sorted(list(history), key=lambda m: DixonColes._date_num(m.date))
         self.dc.fit(self.history)
-        self.fitted = True
+        self.fitted = self.dc.fitted
         return self
 
     def _predict_one(self, m: Match, history: list[Match]) -> Prediction:
