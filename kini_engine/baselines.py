@@ -1,13 +1,17 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Iterable
-
-import numpy as np
 
 from .causality import assert_causal_history
 from .core import Match, SIGNS, _norm
 from .temporal import parse_information_at
+
+
+def _probability_dict(values: Iterable[float]) -> dict[str, float]:
+    normalized = _norm(values)
+    return dict(zip(SIGNS, map(float, normalized)))
 
 
 @dataclass
@@ -37,7 +41,7 @@ class ExpandingPriorBaseline:
         counts = {sign: self.alpha for sign in SIGNS}
         for match in history:
             counts[match.outcome()] += 1.0
-        self.probabilities = _norm([counts[sign] for sign in SIGNS])
+        self.probabilities = _probability_dict(counts[sign] for sign in SIGNS)
         return self
 
     def predict_proba(self) -> dict[str, float]:
@@ -64,7 +68,7 @@ class RecentPriorBaseline:
         counts = {sign: self.alpha for sign in SIGNS}
         for match in usable:
             counts[match.outcome()] += 1.0
-        self.probabilities = _norm([counts[sign] for sign in SIGNS])
+        self.probabilities = _probability_dict(counts[sign] for sign in SIGNS)
         return self
 
     def predict_proba(self) -> dict[str, float]:
@@ -76,7 +80,7 @@ class RecentPriorBaseline:
 def baseline_suite(
     history: list[Match],
     *,
-    information_at: str,
+    information_at: datetime | str,
     recent_window: int = 50,
     alpha: float = 1.0,
 ) -> dict[str, dict[str, float]]:
