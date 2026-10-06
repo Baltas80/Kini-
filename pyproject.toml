@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kini-engine"
-version = "0.2.0"
+version = "0.3.0"
 description = "Spanish Quiniela prediction engine based on KinielaGPT with mature statistical modelling and walk-forward validation."
 requires-python = ">=3.11"
 license = "AGPL-3.0-or-later"
