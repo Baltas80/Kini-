@@ -5,7 +5,7 @@ from typing import Any
 
 import numpy as np
 
-from .core import SIGNS, KiniEngine, Match, _norm
+from .core import DixonColes, SIGNS, KiniEngine, Match, _norm
 from .temporal import parse_information_at
 
 
@@ -30,7 +30,7 @@ def walk_forward(
     refit_every: int = 1,
     decay: float = 0.995,
 ) -> dict[str, Any]:
-    data = sorted(matches, key=lambda m: KiniEngine.dc._date_num(m.date))
+    data = sorted(matches, key=lambda m: DixonColes._date_num(m.date))
     scored: list[tuple[dict[str, float], str]] = []
     prediction_rows: list[dict[str, Any]] = []
     engine = KiniEngine()
