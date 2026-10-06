@@ -1,0 +1,13 @@
+match_id,competition_id,season,round_number,home_team_id,away_team_id,kickoff_at,status,home_goals,away_goals,result_1x2
+demo_001,demo_competition,2024-25,1,team:A,team:B,2025-01-01T00:00:00Z,finished,2,0,1
+demo_002,demo_competition,2024-25,1,team:C,team:D,2025-01-02T00:00:00Z,finished,1,1,X
+demo_003,demo_competition,2024-25,2,team:B,team:C,2025-01-03T00:00:00Z,finished,0,2,2
+demo_004,demo_competition,2024-25,2,team:D,team:A,2025-01-04T00:00:00Z,finished,0,1,2
+demo_005,demo_competition,2024-25,3,team:A,team:C,2025-01-05T00:00:00Z,finished,2,2,X
+demo_006,demo_competition,2024-25,3,team:B,team:D,2025-01-06T00:00:00Z,finished,3,1,1
+demo_007,demo_competition,2024-25,4,team:C,team:A,2025-01-07T00:00:00Z,finished,0,1,2
+demo_008,demo_competition,2024-25,4,team:D,team:B,2025-01-08T00:00:00Z,finished,2,2,X
+demo_009,demo_competition,2024-25,5,team:A,team:D,2025-01-09T00:00:00Z,finished,1,0,1
+demo_010,demo_competition,2024-25,5,team:C,team:B,2025-01-10T00:00:00Z,finished,2,1,1
+demo_011,demo_competition,2024-25,6,team:B,team:A,2025-01-11T00:00:00Z,finished,1,1,X
+demo_012,demo_competition,2024-25,6,team:D,team:C,2025-01-12T00:00:00Z,finished,0,2,2
