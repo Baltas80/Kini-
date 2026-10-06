@@ -100,9 +100,10 @@ class DixonColes:
         self.teams = sorted({m.home for m in usable} | {m.away for m in usable})
         idx = {t: i for i, t in enumerate(self.teams)}
         n = len(self.teams)
-        dates = np.asarray([self._date_num(m.date) for m in usable])
-        age = dates.max() - dates
-        weights = np.power(self.decay, np.maximum(age, 0))
+        dates = np.asarray([self._date_num(m.date) for m in usable], dtype=float)
+        # Decay is expressed per day, not per Unix second.
+        age_days = np.maximum((dates.max() - dates) / 86400.0, 0.0)
+        weights = np.power(self.decay, age_days)
 
         def unpack(x: np.ndarray) -> tuple[np.ndarray, np.ndarray, float, float]:
             a = x[:n]
@@ -119,14 +120,16 @@ class DixonColes:
                 tau = max(_dc_tau(h, aw, lh, la, rho), 1e-9)
                 ll = poisson.logpmf(h, lh) + poisson.logpmf(aw, la) + np.log(tau)
                 total -= weights[k] * ll
-            total += 0.03 * np.sum(np.square(a[1:] - a[:-1]))
             return float(total)
 
         x0 = np.r_[np.zeros(2*n), 0.25, self.rho]
         x0[n:2*n] = -0.1
-        cons = {"type": "eq", "fun": lambda x: np.mean(x[:n])}
+        cons = [
+            {"type": "eq", "fun": lambda x: float(np.mean(x[:n]))},
+            {"type": "eq", "fun": lambda x: float(np.mean(x[n:2*n]))},
+        ]
         bounds = [(-2.5, 2.5)] * (2*n) + [(0.0, 1.5), (-0.5, 0.5)]
-        res = minimize(loss, x0, method="SLSQP", bounds=bounds, constraints=[cons], options={"maxiter": 500, "ftol": 1e-7})
+        res = minimize(loss, x0, method="SLSQP", bounds=bounds, constraints=cons, options={"maxiter": 500, "ftol": 1e-7})
         if not res.success:
             self.fitted = False
             return self
