@@ -35,12 +35,19 @@ def walk_forward(
     prediction_rows: list[dict[str, Any]] = []
     engine = KiniEngine()
     for i in range(min_train, len(data)):
-        if (i == min_train) or ((i - min_train) % refit_every == 0):
-            engine.dc.decay = decay
-            engine.fit(data[:i])
         m = data[i]
         target_kickoff_at = parse_information_at(m.date, "target kickoff")
         information_at = target_kickoff_at - timedelta(microseconds=1)
+
+        if (i == min_train) or ((i - min_train) % refit_every == 0):
+            causal_history = [
+                historical_match
+                for historical_match in data[:i]
+                if parse_information_at(historical_match.date, "historical match timestamp") < information_at
+            ]
+            engine.dc.decay = decay
+            engine.fit(causal_history)
+
         pred = engine.predict(m, information_at=information_at)
         actual = m.outcome()
         scored.append((pred.probabilities, actual))
