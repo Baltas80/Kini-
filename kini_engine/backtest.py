@@ -5,6 +5,7 @@ from typing import Any
 
 import numpy as np
 
+from .causality import assert_causal_history
 from .core import DixonColes, SIGNS, KiniEngine, Match, _norm
 from .temporal import parse_information_at
 
@@ -40,11 +41,8 @@ def walk_forward(
         information_at = target_kickoff_at - timedelta(microseconds=1)
 
         if (i == min_train) or ((i - min_train) % refit_every == 0):
-            causal_history = [
-                historical_match
-                for historical_match in data[:i]
-                if parse_information_at(historical_match.date, "historical match timestamp") < information_at
-            ]
+            causal_history = data[:i]
+            assert_causal_history(causal_history, information_at)
             engine.dc.decay = decay
             engine.fit(causal_history)
 

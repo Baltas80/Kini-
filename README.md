@@ -45,3 +45,15 @@ El contrato temporal exige:
 - El instante de información es el límite temporal; la enumeración y congelación de snapshots de fuentes se implementa en la siguiente etapa de causalidad temporal.
 
 La API y MCP requieren ahora `kickoff_at` e `information_at` al solicitar una predicción.
+
+## Fase 2.3 — Regla anti-leakage
+
+La única regla de causalidad del motor es:
+
+> Un dato solo puede entrar en una predicción si su `availability_at <= information_at`.
+
+Las excepciones son los eventos históricos usados como resultado/modelo de entrenamiento: su instante de evento debe ser estrictamente anterior a `information_at`, porque un evento que ocurre exactamente en el corte todavía no puede considerarse históricamente consumado para una predicción prepartido.
+
+La comprobación está centralizada en `kini_engine/causality.py`. Las rutas de predicción y backtesting no implementan reglas temporales alternativas.
+
+Un dato que cruza la frontera provoca `CausalityViolation`; no se sustituye silenciosamente, no se recorta y no se utiliza como fallback.

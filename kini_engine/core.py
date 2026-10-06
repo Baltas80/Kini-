@@ -9,6 +9,7 @@ import numpy as np
 from scipy.optimize import minimize
 from scipy.stats import poisson
 
+from .causality import assert_causal_history
 from .temporal import PredictionContext, parse_information_at
 
 
@@ -383,14 +384,7 @@ class KiniEngine:
         )
 
     def _assert_history_causal(self, information_at: datetime) -> None:
-        history = getattr(self, "history", [])
-        for historical_match in history:
-            kickoff_at = parse_information_at(historical_match.date, "historical match timestamp")
-            if kickoff_at >= information_at:
-                raise ValueError(
-                    "prediction information_at is not after every historical match kickoff; "
-                    f"historical match at {kickoff_at.isoformat()} would be future information"
-                )
+        assert_causal_history(getattr(self, "history", []), information_at)
 
     def predict(
         self,

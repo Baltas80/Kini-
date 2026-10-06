@@ -7,6 +7,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Iterable
 
+from .causality import CausalityViolation, assert_available_at
 from .temporal import parse_information_at, utc_iso
 
 
@@ -165,7 +166,13 @@ def select_latest_observations(
     timestamps: set[tuple[str, str, datetime]] = set()
 
     for observation in observations:
-        if observation.captured_at > cutoff:
+        try:
+            assert_available_at(
+                observation.captured_at,
+                cutoff,
+                subject=f"observation {observation.observation_id}",
+            )
+        except CausalityViolation:
             continue
         key = observation.identity_key()
         timestamp_key = (*key, observation.captured_at)
