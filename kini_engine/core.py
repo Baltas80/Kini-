@@ -214,7 +214,8 @@ class FeatureModel:
             self.model = HistGradientBoostingClassifier(max_iter=180, learning_rate=0.05, max_leaf_nodes=15, random_state=42)
         enc = {"1": 0, "X": 1, "2": 2}
         self.model.fit(np.vstack(rows), np.asarray([enc[v] for v in y]))
-        return _norm(self.model.predict_proba(self._features(history, current))[0])
+        current_features = self._features(history, current).reshape(1, -1)
+        return _norm(self.model.predict_proba(current_features)[0])
 
 
 def context_adjust(
