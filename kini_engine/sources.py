@@ -10,6 +10,8 @@ import xmltodict
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
+from .core import SIGNS
+
 log = logging.getLogger(__name__)
 
 
@@ -62,17 +64,21 @@ class KinielaGPTSource:
 
     def details(self, jornada: int, temporada: int) -> list[dict[str, Any]]:
         self.session.get(self.HOME, headers=self.headers, timeout=self.timeout).raise_for_status()
-        r = self.session.get(self.DETAILS, params={"jornada": jornada, "temporada": temporada, "uts": int(time.time() * 1000)}, headers=self.headers, timeout=self.timeout)
+        r = self.session.get(
+            self.DETAILS,
+            params={"jornada": jornada, "temporada": temporada, "uts": int(time.time() * 1000)},
+            headers=self.headers,
+            timeout=self.timeout,
+        )
         r.raise_for_status()
         return r.json().get("detallePartidos", [])
 
 
 class SelaeSource:
-    """SELAE JSON-first fixture/results adapter with HTML fallback."""
+    """SELAE JSON-first fixture/results adapter with a stable external interface."""
 
     BASE = "https://www.loteriasyapuestas.es"
     SEARCH = BASE + "/servicios/buscadorSorteos"
-    QUINIELA = BASE + "/es/quiniela"
 
     def __init__(self, timeout: int = 15) -> None:
         self.session = requests.Session()
@@ -80,14 +86,30 @@ class SelaeSource:
         self.headers = {"User-Agent": "Kini/0.2", "Accept-Language": "es-ES,es;q=0.9"}
 
     def fixture(self, date_yyyymmdd: str) -> dict[str, Any] | None:
-        r = self.session.get(self.SEARCH, params={"game_id": "LAQU", "celebrados": "false", "fechaInicioInclusiva": date_yyyymmdd, "num_results": 1}, headers=self.headers, timeout=self.timeout)
+        r = self.session.get(
+            self.SEARCH,
+            params={"game_id": "LAQU", "celebrados": "false", "fechaInicioInclusiva": date_yyyymmdd, "num_results": 1},
+            headers=self.headers,
+            timeout=self.timeout,
+        )
         r.raise_for_status()
         data = r.json()
         if not data:
             return None
         s = data[0] if isinstance(data, list) else data
         raw = s.get("partidos") or s.get("jornada_partidos") or s.get("combinacion") or []
-        parts = []
-        for i, p in enumerate(raw, 1):
-            parts.append({"numero": i, "local": (p.get("equipoLocal") or p.get("local") or "").strip(), "visitante": (p.get("equipoVisitante") or p.get("visitante") or "").strip(), "pleno15": i == 15})
-        return {"numero_jornada": s.get("num_sorteo") or s.get("jornada"), "fecha_cierre": s.get("fecha_sorteo"), "partidos": parts, "fuente": "selae_json"}
+        parts = [
+            {
+                "numero": i,
+                "local": (p.get("equipoLocal") or p.get("local") or "").strip(),
+                "visitante": (p.get("equipoVisitante") or p.get("visitante") or "").strip(),
+                "pleno15": i == 15,
+            }
+            for i, p in enumerate(raw, 1)
+        ]
+        return {
+            "numero_jornada": s.get("num_sorteo") or s.get("jornada"),
+            "fecha_cierre": s.get("fecha_sorteo"),
+            "partidos": parts,
+            "fuente": "selae_json",
+        }
