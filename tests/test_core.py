@@ -1,3 +1,5 @@
+import pytest
+
 from datetime import datetime, timedelta, timezone
 
 from kini_engine.core import KiniEngine, Match, TicketOptimizer
@@ -31,3 +33,12 @@ def test_optimizer_budget():
     p = [{"1": 0.5, "X": 0.3, "2": 0.2} for _ in range(14)]
     t = TicketOptimizer().optimize(p, budget=8)
     assert t["column_count"] <= 8
+
+
+def test_predict_rejects_future_history():
+    engine = KiniEngine().fit(sample())
+    with pytest.raises(ValueError, match="future information"):
+        engine.predict(
+            Match(datetime(2025, 4, 1, tzinfo=timezone.utc), "A", "D"),
+            information_at="2025-01-15T00:00:00Z",
+        )

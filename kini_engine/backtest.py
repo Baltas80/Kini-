@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from dataclasses import asdict
+from datetime import timedelta
 from typing import Any
 
 import numpy as np
 
 from .core import SIGNS, KiniEngine, Match, _norm
+from .temporal import parse_information_at
 
 
 def multiclass_metrics(rows: list[tuple[dict[str, float], str]]) -> dict[str, float]:
@@ -31,15 +32,25 @@ def walk_forward(
 ) -> dict[str, Any]:
     data = sorted(matches, key=lambda m: KiniEngine.dc._date_num(m.date))
     scored: list[tuple[dict[str, float], str]] = []
+    prediction_rows: list[dict[str, Any]] = []
     engine = KiniEngine()
     for i in range(min_train, len(data)):
         if (i == min_train) or ((i - min_train) % refit_every == 0):
             engine.dc.decay = decay
             engine.fit(data[:i])
         m = data[i]
-        pred = engine.predict(m)
-        scored.append((pred.probabilities, m.outcome()))
+        target_kickoff_at = parse_information_at(m.date, "target kickoff")
+        information_at = target_kickoff_at - timedelta(microseconds=1)
+        pred = engine.predict(m, information_at=information_at)
+        actual = m.outcome()
+        scored.append((pred.probabilities, actual))
+        prediction_rows.append({
+            "actual": actual,
+            "probabilities": pred.probabilities,
+            "information_at": pred.information_at,
+            "target_kickoff_at": pred.target_kickoff_at,
+        })
     return {
         "metrics": multiclass_metrics(scored),
-        "rows": [{"actual": y, "probabilities": p} for p, y in scored],
+        "rows": prediction_rows,
     }
