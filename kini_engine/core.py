@@ -349,7 +349,14 @@ class KiniEngine:
         dc_probs, scores = self.dc.predict(m.home, m.away)
         ml = self.ml.fit_predict_proba(history, m)
         ml_probs = None if ml is None else dict(zip(SIGNS, map(float, ml)))
-        base = _blend((dc_probs, 0.58), *(([(ml_probs, 0.17)] if ml_probs else [])), *(([(m.lae, 0.18)] if m.lae else [])), *(([(m.market, 0.07)] if m.market else []))))
+        blend_items = [(dc_probs, 0.58)]
+        if ml_probs:
+            blend_items.append((ml_probs, 0.17))
+        if m.lae:
+            blend_items.append((m.lae, 0.18))
+        if m.market:
+            blend_items.append((m.market, 0.07))
+        base = _blend(*blend_items)
         adjusted, reasons = context_adjust(base, m, history)
         surprise = surprise_signal(adjusted, m.lae, m.market, m, history)
         sign = max(SIGNS, key=lambda s: adjusted[s])
