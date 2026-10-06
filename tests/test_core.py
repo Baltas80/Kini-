@@ -41,3 +41,17 @@ def test_engine_default_is_deterministic_core_only():
     assert e.ml is None
     assert e.enable_ml is False
     assert e.enable_context is False
+
+
+def test_date_parser_accepts_spanish_historical_formats():
+    model = DixonColes()
+    assert model._date_num("01/02/2025") > 0
+    assert model._date_num("01/02/25") > 0
+    assert model._date_num("2025/02/01") > 0
+
+
+def test_unplayed_fixtures_do_not_break_recent_form_or_features():
+    history = sample() + [Match("30/03/2025", "A", "B")]
+    e = KiniEngine(enable_context=True).fit(history)
+    prediction = e.predict(Match("31/03/2025", "A", "B"))
+    assert abs(sum(prediction.probabilities.values()) - 1.0) < 1e-9
