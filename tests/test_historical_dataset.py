@@ -3,10 +3,8 @@ from pathlib import Path
 
 import pytest
 
-from scripts.build_dataset_manifest import (
-    build_manifest,
-    canonical_payload_hash,
-)
+from scripts.build_dataset_manifest import build_manifest
+from kini_engine.validation import canonical_payload_hash
 
 
 RELEASE = Path("data/historical/releases/demo-v1")

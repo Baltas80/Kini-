@@ -9,6 +9,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from kini_engine.validation import canonical_payload_hash
+
 SCHEMA_VERSION = "1"
 REQUIRED_MATCH_FIELDS = (
     "match_id",

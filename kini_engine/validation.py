@@ -9,7 +9,7 @@ import re
 from pathlib import Path
 from typing import Any, Iterable
 
-from scripts.build_dataset_manifest import canonical_payload_hash
+import hashlib
 
 VALID_STATUSES = {
     "scheduled",
@@ -306,8 +306,9 @@ def _validate_observations(
     issues: list[ValidationIssue],
     *,
     as_of: datetime,
-) -> None:
+) -> int:
     seen_ids: set[str] = set()
+    count = 0
     last_captured: dict[str, datetime] = {}
 
     with path.open("r", encoding="utf-8") as handle:
@@ -351,6 +352,8 @@ def _validate_observations(
             except ValueError as exc:
                 _issue(issues, "invalid_observation_timestamp", str(exc), record_id=observation_id, line=line_number)
 
+            count += 1
+
             for field in ("source_id", "source_record_id"):
                 if not isinstance(obj.get(field), str) or not obj[field]:
                     _issue(issues, "invalid_observation_field", f"{field} is missing for {observation_id}", record_id=observation_id, line=line_number)
@@ -362,6 +365,8 @@ def _validate_observations(
                 expected_hash = canonical_payload_hash(payload)
                 if obj.get("payload_hash") != expected_hash:
                     _issue(issues, "payload_hash_mismatch", f"payload_hash does not match payload for {observation_id}", record_id=observation_id, line=line_number)
+
+    return count
 
 
 def validate_dataset(
@@ -390,8 +395,12 @@ def validate_dataset(
         return ValidationReport(False, as_of.isoformat(), checks, {}, issues)
 
     known = None if known_team_ids is None else {team_id for team_id in known_team_ids}
+    match_count = 0
+    observation_count = 0
     with matches_path.open("r", encoding="utf-8", newline="") as handle:
         reader = csv.DictReader(handle)
+        match_rows = list(reader)
+        match_count = len(match_rows)
         if tuple(reader.fieldnames or ()) != (
             "match_id",
             "competition_id",
@@ -409,7 +418,7 @@ def validate_dataset(
             kickoff_by_match = {}
         else:
             kickoff_by_match = _validate_match_rows(
-                list(reader),
+                match_rows,
                 issues,
                 as_of=as_of,
                 known_team_ids=known,
@@ -417,7 +426,12 @@ def validate_dataset(
             )
 
     if observations_path is not None:
-        _validate_observations(observations_path, kickoff_by_match, issues, as_of=as_of)
+        observation_count = _validate_observations(
+            observations_path,
+            kickoff_by_match,
+            issues,
+            as_of=as_of,
+        )
 
     error_codes = {issue.code for issue in issues}
     duplicate_codes = {"duplicate_match_id", "duplicate_fixture", "duplicate_observation_id"}
@@ -442,12 +456,8 @@ def validate_dataset(
         checks["future_data"] = "fail"
 
     counts = {
-        "matches": sum(1 for _ in matches_path.open("r", encoding="utf-8")) - 1,
-        "observations": (
-            sum(1 for line in observations_path.open("r", encoding="utf-8") if line.strip())
-            if observations_path is not None
-            else 0
-        ),
+        "matches": match_count,
+        "observations": observation_count,
         "errors": len(issues),
     }
     return ValidationReport(not issues, as_of.isoformat().replace("+00:00", "Z"), checks, counts, issues)
