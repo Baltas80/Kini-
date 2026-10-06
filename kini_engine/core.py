@@ -301,32 +301,109 @@ def _recent_form(history: list[Match], team: str) -> float:
     return val / max(1, len(xs))
 
 
+class EloModel:
+    """Dynamic Elo rating model for pre-match 1X2 probabilities.
+
+    Ratings are updated only after observed results, so the model is causal by
+    construction. The probability mapping is intentionally conservative and
+    is meant to be benchmarked before being assigned ensemble weight.
+    """
+
+    def __init__(self, initial: float = 1500.0, k_factor: float = 20.0, home_advantage: float = 55.0,
+                 draw_bias: float = 0.28) -> None:
+        self.initial = initial
+        self.k_factor = k_factor
+        self.home_advantage = home_advantage
+        self.draw_bias = draw_bias
+        self.ratings: dict[str, float] = {}
+
+    def fit(self, matches: list[Match]) -> "EloModel":
+        self.ratings = {}
+        for m in sorted(matches, key=lambda x: DixonColes._date_num(x.date)):
+            if m.home_goals is None or m.away_goals is None:
+                continue
+            rh = self.ratings.get(m.home, self.initial)
+            ra = self.ratings.get(m.away, self.initial)
+            expected_home = 1.0 / (1.0 + 10.0 ** (-((rh + self.home_advantage) - ra) / 400.0))
+            result_home = 1.0 if m.home_goals > m.away_goals else (0.5 if m.home_goals == m.away_goals else 0.0)
+            margin = max(abs(m.home_goals - m.away_goals), 1)
+            multiplier = np.log1p(margin) * (2.0 / (1.0 + abs(expected_home - result_home)))
+            delta = self.k_factor * multiplier * (result_home - expected_home)
+            self.ratings[m.home] = rh + delta
+            self.ratings[m.away] = ra - delta
+        return self
+
+    def probability(self, home: str, away: str) -> dict[str, float]:
+        rh = self.ratings.get(home, self.initial)
+        ra = self.ratings.get(away, self.initial)
+        diff = ((rh + self.home_advantage) - ra) / 400.0
+        home_non_draw = 1.0 / (1.0 + 10.0 ** (-diff))
+        draw = self.draw_bias * (1.0 - abs(2.0 * home_non_draw - 1.0))
+        draw = float(np.clip(draw, 0.05, 0.40))
+        decisive = 1.0 - draw
+        return dict(zip(SIGNS, map(float, _norm([decisive * home_non_draw, draw, decisive * (1.0 - home_non_draw)]))))
+
+    def predict(self, home: str, away: str) -> dict[str, float]:
+        return self.probability(home, away)
+
+
 class TicketOptimizer:
-    """Exact dynamic-programming optimiser for a fixed column budget."""
+    """Exact DP optimiser for the Cartesian coverage of a fixed column budget.
+
+    For a 14-match ticket, choosing one/two/three signs for each match creates
+    a Cartesian set of columns. Under the independent-match objective, the
+    coverage is the product of the selected marginal probabilities. The DP
+    therefore only needs the number of generated columns and the best coverage
+    for each state.
+    """
 
     def optimize(self, predictions: list[dict[str, float]], budget: int = 8) -> dict[str, Any]:
         if len(predictions) != 14:
             raise ValueError("standard ticket optimisation needs exactly 14 matches")
-        dp = {(0,): (1.0, [])}
+        if budget < 1 or budget > 3**14:
+            raise ValueError("budget must be between 1 and 3^14")
+
+        # Normalise each probability vector and choose the best k signs.
+        ordered_sets: list[dict[int, tuple[str, ...]]] = []
+        for p in predictions:
+            q = _norm([p[s] for s in SIGNS])
+            ordered = tuple(SIGNS[i] for i in np.argsort(q)[::-1])
+            ordered_sets.append({k: ordered[:k] for k in (1, 2, 3)})
+
+        # dp[columns] = (coverage, selected sign sets). Since future choices
+        # depend only on the number of generated columns, this is exact.
+        dp: dict[int, tuple[float, list[tuple[str, ...]]]] = {1: (1.0, [])}
         for i, p in enumerate(predictions):
-            nxt = {}
-            ordered = sorted(SIGNS, key=lambda s: p[s], reverse=True)
-            for keys, (prob, picks) in dp.items():
+            nxt: dict[int, tuple[float, list[tuple[str, ...]]]] = {}
+            for used, (coverage, selected) in dp.items():
                 for k in (1, 2, 3):
-                    if np.prod([2 if k == 2 else 3 if k == 3 else 1 for _ in range(i + 1)]) > budget:
+                    new_used = used * k
+                    if new_used > budget:
                         continue
-                    signs = tuple(ordered[:k])
-                    nk = keys + (k,)
-                    npb = prob * float(sum(p[s] for s in signs))
-                    if npb > nxt.get(nk, (-1, []))[0]:
-                        nxt[nk] = (npb, picks + [signs])
+                    signs = ordered_sets[i][k]
+                    marginal = float(sum(p[s] for s in signs))
+                    value = coverage * marginal
+                    current = nxt.get(new_used)
+                    if current is None or value > current[0]:
+                        nxt[new_used] = (value, selected + [signs])
             dp = nxt
-        feasible = [(prob, picks, keys) for keys, (prob, picks) in dp.items() if np.prod(keys) <= budget]
-        prob, picks, keys = max(feasible, key=lambda x: x[0])
-        columns = []
-        for mask in np.ndindex(tuple(len(x) for x in picks)):
-            columns.append([picks[j][mask[j]] for j in range(14)])
-        return {"budget": budget, "columns": columns[:budget], "column_count": len(columns[:budget]), "shape": keys, "joint_coverage": prob}
+
+        feasible = [(used, value) for used, value in dp.items() if used <= budget]
+        if not feasible:
+            raise ValueError("no feasible ticket for requested budget")
+        used, (coverage, selected) = max(feasible, key=lambda item: item[1][0])
+
+        columns: list[list[str]] = []
+        for mask in np.ndindex(tuple(len(x) for x in selected)):
+            columns.append([selected[j][mask[j]] for j in range(14)])
+
+        return {
+            "budget": budget,
+            "columns": columns,
+            "column_count": len(columns),
+            "shape": tuple(len(x) for x in selected),
+            "joint_coverage": float(coverage),
+        }
 
 
 class KiniEngine:
