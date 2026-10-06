@@ -68,3 +68,18 @@ python scripts/validate_dataset.py <matches.csv> --observations <observations.js
 ```
 
 El pipeline controla duplicados de identidad y fixture, partidos imposibles, puntuaciones y signos inválidos, coherencia temporal entre temporadas y jornadas, completitud de jornadas, equipos desconocidos y datos posteriores a as_of.
+
+## Fase 2.2 — Snapshots temporales
+
+Las observaciones de fuentes forman un historial de eventos. Para reconstruir qué conocía el sistema en un instante concreto se crea un `TemporalSnapshot`.
+
+Reglas del snapshot:
+
+- solo entran observaciones con `captured_at <= information_at`;
+- para cada combinación `source_id + match_id` se selecciona la observación más reciente disponible;
+- una observación futura nunca participa aunque esté presente en el release histórico;
+- dos observaciones de la misma fuente, partido e instante de captura se consideran ambiguas y se rechazan;
+- el snapshot se ordena de forma determinista y obtiene un `snapshot_id` SHA-256 derivado de su contenido y de `information_at`;
+- el snapshot conserva el payload y su `payload_hash`, permitiendo auditar exactamente qué versión de una fuente quedó disponible.
+
+Esto permite reconstruir el estado de las fuentes para un instante concreto sin modificar los releases inmutables.
