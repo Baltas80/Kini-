@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 
-from kini_engine.core import KiniEngine, Match, TicketOptimizer
+from kini_engine.core import DixonColes, KiniEngine, Match, TicketOptimizer
 
 
 def sample():
@@ -26,3 +26,43 @@ def test_optimizer_budget():
     p = [{"1": 0.5, "X": 0.3, "2": 0.2} for _ in range(14)]
     t = TicketOptimizer().optimize(p, budget=8)
     assert t["column_count"] <= 8
+
+
+def test_dixon_coles_fit_is_successful():
+    model = DixonColes(decay=0.995).fit(sample())
+    assert model.fitted
+    assert model.teams
+    assert set(model.attack) == set(model.teams)
+    assert set(model.defence) == set(model.teams)
+
+
+def test_engine_default_is_deterministic_core_only():
+    e = KiniEngine().fit(sample())
+    assert e.ml is None
+    assert e.enable_ml is False
+    assert e.enable_context is False
+
+
+def test_optimizer_rejects_invalid_budget():
+    p = [{"1": 0.5, "X": 0.3, "2": 0.2} for _ in range(14)]
+    for budget in (0, -1):
+        try:
+            TicketOptimizer().optimize(p, budget=budget)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("invalid budget must raise ValueError")
+
+
+def test_date_parser_accepts_spanish_historical_formats():
+    model = DixonColes()
+    assert model._date_num("01/02/2025") > 0
+    assert model._date_num("01/02/25") > 0
+    assert model._date_num("2025/02/01") > 0
+
+
+def test_unplayed_fixtures_do_not_break_recent_form_or_features():
+    history = sample() + [Match("30/03/2025", "A", "B")]
+    e = KiniEngine(enable_context=True).fit(history)
+    prediction = e.predict(Match("31/03/2025", "A", "B"))
+    assert abs(sum(prediction.probabilities.values()) - 1.0) < 1e-9
