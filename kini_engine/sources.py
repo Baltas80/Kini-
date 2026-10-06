@@ -83,7 +83,7 @@ class SelaeSource:
     def __init__(self, timeout: int = 15) -> None:
         self.session = requests.Session()
         self.timeout = timeout
-        self.headers = {"User-Agent": "Kini/0.2", "Accept-Language": "es-ES,es;q=0.9"}
+        self.headers = {"User-Agent": "Kini/0.3", "Accept-Language": "es-ES,es;q=0.9"}
 
     def fixture(self, date_yyyymmdd: str) -> dict[str, Any] | None:
         r = self.session.get(
