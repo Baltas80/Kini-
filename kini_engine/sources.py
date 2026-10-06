@@ -29,7 +29,7 @@ class KinielaGPTSource:
         retry = Retry(total=3, backoff_factor=0.6, status_forcelist=(429, 500, 502, 503, 504), allowed_methods=("GET",))
         self.session.mount("https://", HTTPAdapter(max_retries=retry))
         self.timeout = timeout
-        self.headers = {"User-Agent": "Kini/0.2 (+https://github.com/Baltas80/Kini-)", "Accept-Language": "es-ES,es;q=0.9"}
+        self.headers = {"User-Agent": "Kini/0.3 (+https://github.com/Baltas80/Kini-)", "Accept-Language": "es-ES,es;q=0.9"}
 
     def _xml(self, url: str) -> dict[str, Any]:
         r = self.session.get(url, headers=self.headers, timeout=self.timeout)
@@ -83,7 +83,7 @@ class SelaeSource:
     def __init__(self, timeout: int = 15) -> None:
         self.session = requests.Session()
         self.timeout = timeout
-        self.headers = {"User-Agent": "Kini/0.2", "Accept-Language": "es-ES,es;q=0.9"}
+        self.headers = {"User-Agent": "Kini/0.3", "Accept-Language": "es-ES,es;q=0.9"}
 
     def fixture(self, date_yyyymmdd: str) -> dict[str, Any] | None:
         r = self.session.get(
