@@ -43,6 +43,17 @@ def test_engine_default_is_deterministic_core_only():
     assert e.enable_context is False
 
 
+def test_optimizer_rejects_invalid_budget():
+    p = [{"1": 0.5, "X": 0.3, "2": 0.2} for _ in range(14)]
+    for budget in (0, -1):
+        try:
+            TicketOptimizer().optimize(p, budget=budget)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("invalid budget must raise ValueError")
+
+
 def test_date_parser_accepts_spanish_historical_formats():
     model = DixonColes()
     assert model._date_num("01/02/2025") > 0
