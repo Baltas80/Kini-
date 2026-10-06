@@ -261,9 +261,10 @@ def _blend(*items: tuple[dict[str, float], float]) -> dict[str, float]:
     acc = np.zeros(3)
     weight = 0.0
     for probs, w in items:
-        if not probs:
+        if not probs or w <= 0:
             continue
-        acc += w * np.array([probs.get(s, 0.0) for s in SIGNS])
+        q = _norm([probs.get(s, 0.0) for s in SIGNS])
+        acc += w * q
         weight += w
     return dict(zip(SIGNS, map(float, _norm(acc / max(weight, 1e-12)))))
 
@@ -335,9 +336,11 @@ class TicketOptimizer:
 class KiniEngine:
     """Main pipeline: KinielaGPT data/context + Dixon-Coles + supervised ML + LAE/market ensemble."""
 
-    def __init__(self) -> None:
+    def __init__(self, enable_ml: bool = False, enable_context: bool = False) -> None:
         self.dc = DixonColes()
-        self.ml = FeatureModel()
+        self.ml = FeatureModel() if enable_ml else None
+        self.enable_ml = enable_ml
+        self.enable_context = enable_context
         self.optimizer = TicketOptimizer()
         self.fitted = False
         self.temperature = 1.0
@@ -350,7 +353,7 @@ class KiniEngine:
 
     def _predict_one(self, m: Match, history: list[Match]) -> Prediction:
         dc_probs, scores = self.dc.predict(m.home, m.away)
-        ml = self.ml.fit_predict_proba(history, m)
+        ml = self.ml.fit_predict_proba(history, m) if self.ml is not None else None
         ml_probs = None if ml is None else dict(zip(SIGNS, map(float, ml)))
         blend_items = [(dc_probs, 0.58)]
         if ml_probs:
@@ -360,7 +363,10 @@ class KiniEngine:
         if m.market:
             blend_items.append((m.market, 0.07))
         base = _blend(*blend_items)
-        adjusted, reasons = context_adjust(base, m, history)
+        if self.enable_context:
+            adjusted, reasons = context_adjust(base, m, history)
+        else:
+            adjusted, reasons = base, []
         surprise = surprise_signal(adjusted, m.lae, m.market, m, history)
         sign = max(SIGNS, key=lambda s: adjusted[s])
         return Prediction(m.home, m.away, adjusted, sign, scores, surprise, reasons)
