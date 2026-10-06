@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from math import exp, lgamma
+from math import exp
 from typing import Any, Iterable
 
 import numpy as np
