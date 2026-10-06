@@ -308,7 +308,7 @@ def surprise_signal(
 
 
 def _recent_form(history: list[Match], team: str) -> float:
-    xs = [m for m in history if m.home == team or m.away == team][-5:]
+    xs = [m for m in history if m.home_goals is not None and m.away_goals is not None and (m.home == team or m.away == team)][-5:]
     val = 0
     for m in xs:
         val += 3 if ((m.home == team and m.home_goals > m.away_goals) or (m.away == team and m.away_goals > m.home_goals)) else (1 if m.home_goals == m.away_goals else 0)
