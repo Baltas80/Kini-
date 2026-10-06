@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from math import exp, lgamma
+from math import exp
 from typing import Any, Iterable
 
 import numpy as np
@@ -100,9 +100,9 @@ class DixonColes:
         self.teams = sorted({m.home for m in usable} | {m.away for m in usable})
         idx = {t: i for i, t in enumerate(self.teams)}
         n = len(self.teams)
-        dates = np.asarray([self._date_num(m.date) for m in usable])
-        age = dates.max() - dates
-        weights = np.power(self.decay, np.maximum(age, 0))
+        dates = np.asarray([self._date_num(m.date) for m in usable], dtype=float)
+        age_days = np.maximum((dates.max() - dates) / 86400.0, 0.0)
+        weights = np.power(self.decay, age_days)
 
         def unpack(x: np.ndarray) -> tuple[np.ndarray, np.ndarray, float, float]:
             a = x[:n]
@@ -119,12 +119,11 @@ class DixonColes:
                 tau = max(_dc_tau(h, aw, lh, la, rho), 1e-9)
                 ll = poisson.logpmf(h, lh) + poisson.logpmf(aw, la) + np.log(tau)
                 total -= weights[k] * ll
-            total += 0.03 * np.sum(np.square(a[1:] - a[:-1]))
             return float(total)
 
         x0 = np.r_[np.zeros(2*n), 0.25, self.rho]
         x0[n:2*n] = -0.1
-        cons = {"type": "eq", "fun": lambda x: np.mean(x[:n])}
+        cons = {"type": "eq", "fun": lambda x: float(np.mean(x[:n]))}
         bounds = [(-2.5, 2.5)] * (2*n) + [(0.0, 1.5), (-0.5, 0.5)]
         res = minimize(loss, x0, method="SLSQP", bounds=bounds, constraints=[cons], options={"maxiter": 500, "ftol": 1e-7})
         if not res.success:
@@ -140,10 +139,19 @@ class DixonColes:
     def _date_num(value: datetime | str) -> float:
         if isinstance(value, datetime):
             return value.timestamp()
-        try:
-            return datetime.fromisoformat(str(value).replace("Z", "+00:00")).timestamp()
-        except ValueError:
+        text = str(value).strip()
+        if not text:
             return 0.0
+        normalized = text.replace("Z", "+00:00")
+        try:
+            return datetime.fromisoformat(normalized).timestamp()
+        except ValueError:
+            for fmt in ("%d/%m/%Y", "%d/%m/%y", "%Y/%m/%d", "%d-%m-%Y", "%d-%m-%y"):
+                try:
+                    return datetime.strptime(text, fmt).timestamp()
+                except ValueError:
+                    continue
+        return 0.0
 
     def expected_goals(self, home: str, away: str) -> tuple[float, float]:
         if not self.fitted or home not in self.attack or away not in self.attack:
@@ -170,7 +178,7 @@ class FeatureModel:
 
     def _features(self, history: list[Match], m: Match) -> np.ndarray:
         def stats(team: str, venue: str | None = None) -> tuple[float, float, float]:
-            xs = [x for x in history if (x.home == team or x.away == team)]
+            xs = [x for x in history if x.home_goals is not None and x.away_goals is not None and (x.home == team or x.away == team)]
             if venue == "home":
                 xs = [x for x in xs if x.home == team]
             elif venue == "away":
@@ -226,7 +234,7 @@ def context_adjust(
     reasons: list[str] = []
 
     def form(team: str) -> float:
-        xs = [m for m in history if m.home == team or m.away == team][-5:]
+        xs = [m for m in history if m.home_goals is not None and m.away_goals is not None and (m.home == team or m.away == team)][-5:]
         val = 0.0
         for m in xs:
             if m.home == team:
@@ -258,9 +266,10 @@ def _blend(*items: tuple[dict[str, float], float]) -> dict[str, float]:
     acc = np.zeros(3)
     weight = 0.0
     for probs, w in items:
-        if not probs:
+        if not probs or w <= 0:
             continue
-        acc += w * np.array([probs.get(s, 0.0) for s in SIGNS])
+        q = _norm([probs.get(s, 0.0) for s in SIGNS])
+        acc += w * q
         weight += w
     return dict(zip(SIGNS, map(float, _norm(acc / max(weight, 1e-12)))))
 
@@ -275,7 +284,7 @@ def surprise_signal(
     refs = []
     for name, probs in (("LAE", lae), ("mercado", market)):
         if probs:
-            refs.append((name, np.array([probs.get(s, 0.0) for s in SIGNS])))
+            refs.append((name, _norm([probs.get(s, 0.0) for s in SIGNS])))
     if not refs:
         return None
     m = np.array([model[s] for s in SIGNS])
@@ -332,9 +341,11 @@ class TicketOptimizer:
 class KiniEngine:
     """Main pipeline: KinielaGPT data/context + Dixon-Coles + supervised ML + LAE/market ensemble."""
 
-    def __init__(self) -> None:
+    def __init__(self, enable_ml: bool = False, enable_context: bool = False) -> None:
         self.dc = DixonColes()
-        self.ml = FeatureModel()
+        self.ml = FeatureModel() if enable_ml else None
+        self.enable_ml = enable_ml
+        self.enable_context = enable_context
         self.optimizer = TicketOptimizer()
         self.fitted = False
         self.temperature = 1.0
@@ -342,12 +353,12 @@ class KiniEngine:
     def fit(self, history: list[Match]) -> "KiniEngine":
         self.history = sorted(list(history), key=lambda m: DixonColes._date_num(m.date))
         self.dc.fit(self.history)
-        self.fitted = True
+        self.fitted = self.dc.fitted
         return self
 
     def _predict_one(self, m: Match, history: list[Match]) -> Prediction:
         dc_probs, scores = self.dc.predict(m.home, m.away)
-        ml = self.ml.fit_predict_proba(history, m)
+        ml = self.ml.fit_predict_proba(history, m) if self.ml is not None else None
         ml_probs = None if ml is None else dict(zip(SIGNS, map(float, ml)))
         blend_items = [(dc_probs, 0.58)]
         if ml_probs:
@@ -357,7 +368,10 @@ class KiniEngine:
         if m.market:
             blend_items.append((m.market, 0.07))
         base = _blend(*blend_items)
-        adjusted, reasons = context_adjust(base, m, history)
+        if self.enable_context:
+            adjusted, reasons = context_adjust(base, m, history)
+        else:
+            adjusted, reasons = base, []
         surprise = surprise_signal(adjusted, m.lae, m.market, m, history)
         sign = max(SIGNS, key=lambda s: adjusted[s])
         return Prediction(m.home, m.away, adjusted, sign, scores, surprise, reasons)
