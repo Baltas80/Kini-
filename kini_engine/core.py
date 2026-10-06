@@ -381,7 +381,8 @@ class TicketOptimizer:
                     if new_used > budget:
                         continue
                     signs = ordered_sets[i][k]
-                    marginal = float(sum(p[s] for s in signs))
+                    q = _norm([p[s] for s in SIGNS])
+                    marginal = float(sum(q[SIGNS.index(s)] for s in signs))
                     value = coverage * marginal
                     current = nxt.get(new_used)
                     if current is None or value > current[0]:
