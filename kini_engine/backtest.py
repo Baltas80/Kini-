@@ -27,12 +27,14 @@ def walk_forward(
     matches: list[Match],
     min_train: int = 80,
     refit_every: int = 1,
+    decay: float = 0.995,
 ) -> dict[str, Any]:
     data = sorted(matches, key=lambda m: KiniEngine.dc._date_num(m.date))
     scored: list[tuple[dict[str, float], str]] = []
     engine = KiniEngine()
     for i in range(min_train, len(data)):
         if (i == min_train) or ((i - min_train) % refit_every == 0):
+            engine.dc.decay = decay
             engine.fit(data[:i])
         m = data[i]
         pred = engine.predict(m)
