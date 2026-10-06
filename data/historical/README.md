@@ -36,3 +36,35 @@ Describe exactamente un release: versión del esquema, rango temporal, conteos y
 - Las observaciones con estado `scheduled` deben capturarse antes del kickoff.
 - La reproducción depende del contenido del release, su manifest y el commit de código indicado.
 - El release demo incluido es un fixture sintético basado en los 12 partidos de prueba actuales. No se presenta como el histórico real de La Quiniela.
+
+## Pipeline de validación
+
+La validación estricta requiere una fecha de corte (as_of), el registro de equipos canónicos y la expectativa de partidos por jornada. El comando devuelve código 0 solo cuando no existen errores y genera un informe JSON opcional.
+
+Los equipos se expresan como una lista de team_id en JSON:
+
+```json
+["team:A", "team:B", "team:C", "team:D"]
+```
+
+La expectativa de jornadas usa competitions -> temporada -> jornada -> número de partidos:
+
+```json
+{
+  "competitions": {
+    "competition_id": {
+      "2024-25": {
+        "1": 15
+      }
+    }
+  }
+}
+```
+
+Ejecución:
+
+```text
+python scripts/validate_dataset.py <matches.csv> --observations <observations.jsonl> --known-teams <known_teams.json> --expected-rounds <expected_rounds.json> --as-of <UTC_TIMESTAMP_Z> --report-out validation_report.json
+```
+
+El pipeline controla duplicados de identidad y fixture, partidos imposibles, puntuaciones y signos inválidos, coherencia temporal entre temporadas y jornadas, completitud de jornadas, equipos desconocidos y datos posteriores a as_of.

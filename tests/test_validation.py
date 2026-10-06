@@ -78,6 +78,19 @@ def test_match_validation_detects_corrupt_records(tmp_path, field, value, code):
     assert code in {issue.code for issue in report.issues}
 
 
+def test_round_date_order_is_detected(tmp_path):
+    rows = (RELEASE / "matches.csv").read_text(encoding="utf-8").splitlines()
+    header = rows[0].split(",")
+    round_two = rows[3].split(",")
+    round_two[header.index("kickoff_at")] = "2024-12-01T00:00:00Z"
+    rows[3] = ",".join(round_two)
+    path = tmp_path / "matches.csv"
+    path.write_text("\n".join(rows) + "\n", encoding="utf-8")
+    report = validate(matches=path, observations=None)
+    assert not report.valid
+    assert "round_date_order" in {issue.code for issue in report.issues}
+
+
 def test_incomplete_round_is_detected(tmp_path):
     rows = (RELEASE / "matches.csv").read_text(encoding="utf-8").splitlines()
     path = tmp_path / "matches.csv"
