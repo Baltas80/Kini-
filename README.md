@@ -57,3 +57,15 @@ Las excepciones son los eventos históricos usados como resultado/modelo de entr
 La comprobación está centralizada en `kini_engine/causality.py`. Las rutas de predicción y backtesting no implementan reglas temporales alternativas.
 
 Un dato que cruza la frontera provoca `CausalityViolation`; no se sustituye silenciosamente, no se recorta y no se utiliza como fallback.
+
+## Fase 3 — Baselines
+
+Antes de comparar modelos sofisticados, Kini dispone de tres referencias probabilísticas auditables:
+
+- **uniforme:** `1/X/2 = 1/3`;
+- **prior histórico expansivo:** frecuencia acumulada con suavizado de Laplace;
+- **prior reciente:** frecuencia de las últimas `N` observaciones causales, también con suavizado de Laplace.
+
+Las referencias se evalúan mediante walk-forward y exactamente el mismo corte temporal que se utilizará para los modelos avanzados. `baseline_suite` exige `information_at` y vuelve a validar la causalidad del histórico.
+
+El prior histórico expansivo es la referencia principal para determinar si un modelo complejo aporta señal adicional sobre una estrategia que solo conoce la distribución histórica de resultados.
