@@ -20,6 +20,8 @@ def test_fit_predict():
     p = e.predict(Match(datetime(2025, 4, 1), "A", "D"))
     assert abs(sum(p.probabilities.values()) - 1.0) < 1e-9
     assert p.sign in {"1", "X", "2"}
+    dc = e.predict(Match(datetime(2025, 4, 1), "A", "D"), mode="dc")
+    assert abs(sum(dc.probabilities.values()) - 1.0) < 1e-9
 
 
 def test_optimizer_budget():
