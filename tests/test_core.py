@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 
-from kini_engine.core import KiniEngine, Match, TicketOptimizer
+from kini_engine.core import KiniEngine, Match, TicketOptimizer, _date_num
 
 
 def sample():
