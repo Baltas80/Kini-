@@ -25,10 +25,11 @@ pytest -q
 El cargador acepta el formato histórico habitual de Football-Data/DataHub (`Date`, `HomeTeam`, `AwayTeam`, `FTHG`, `FTAG`, `FTR`) y normaliza H/D/A a 1/X/2 sin usar el resultado futuro como variable de entrada.
 
 ```bash
-python -m kini_engine.cli backtest data/matches.csv --min-train 300
+python scripts/build_history.py
+python -m kini_engine.cli backtest data/historical_spain.csv --min-train 300
 ```
 
-Para validación histórica seria, se recomienda descargar varias temporadas de La Liga y Segunda y evaluar cronológicamente. DataHub mantiene temporadas de La Liga con licencia ODC-PDDL y procedencia de football-data.co.uk; el proyecto no incorpora esos CSV en el repositorio para evitar convertir datos externos en una dependencia versionada.
+Para validación histórica seria, `scripts/build_history.py` descarga seis temporadas de Primera y Segunda directamente desde Football-Data y genera `data/historical_spain.csv`. El proyecto no incorpora esos CSV en el repositorio: son datos externos y sus condiciones de uso deben respetarse según su fuente.
 
 El backtest informa `accuracy`, `brier`, `logloss`, `rps` y `ece`. La métrica principal para comparar modelos debe ser probabilística (log-loss/Brier/RPS), no únicamente el porcentaje de signos acertados.
 
