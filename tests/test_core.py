@@ -36,3 +36,11 @@ def test_dixon_coles_uses_full_history():
     # With a non-degenerate sample, fitting on 20 vs 80 observations
     # must not produce identical parameters as if only the first row mattered.
     assert abs(e1.dc.home_adv - e2.dc.home_adv) > 1e-6 or e1.dc.attack != e2.dc.attack
+
+
+def test_optimizer_returns_exact_column_count():
+    p = [{"1": 0.50, "X": 0.30, "2": 0.20} for _ in range(14)]
+    t = TicketOptimizer().optimize(p, budget=8)
+    assert t["column_count"] == 8
+    assert len(t["columns"]) == 8
+    assert all(len(column) == 14 for column in t["columns"])
