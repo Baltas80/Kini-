@@ -312,13 +312,15 @@ class TicketOptimizer:
     def optimize(self, predictions: list[dict[str, float]], budget: int = 8) -> dict[str, Any]:
         if len(predictions) != 14:
             raise ValueError("standard ticket optimisation needs exactly 14 matches")
+        if not isinstance(budget, int) or budget < 1:
+            raise ValueError("budget must be a positive integer")
         dp = {(0,): (1.0, [])}
         for i, p in enumerate(predictions):
             nxt = {}
             ordered = sorted(SIGNS, key=lambda s: p[s], reverse=True)
             for keys, (prob, picks) in dp.items():
                 for k in (1, 2, 3):
-                    if np.prod([2 if k == 2 else 3 if k == 3 else 1 for _ in range(i + 1)]) > budget:
+                    if int(np.prod([2 if k == 2 else 3 if k == 3 else 1 for _ in range(i + 1)])) > budget:
                         continue
                     signs = tuple(ordered[:k])
                     nk = keys + (k,)
