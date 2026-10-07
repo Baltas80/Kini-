@@ -26,3 +26,13 @@ def test_optimizer_budget():
     p = [{"1": 0.5, "X": 0.3, "2": 0.2} for _ in range(14)]
     t = TicketOptimizer().optimize(p, budget=8)
     assert t["column_count"] <= 8
+
+
+def test_dixon_coles_uses_full_history():
+    data = sample()
+    e1 = KiniEngine().fit(data[:20])
+    e2 = KiniEngine().fit(data[:80])
+    assert e1.dc.fitted and e2.dc.fitted
+    # With a non-degenerate sample, fitting on 20 vs 80 observations
+    # must not produce identical parameters as if only the first row mattered.
+    assert abs(e1.dc.home_adv - e2.dc.home_adv) > 1e-6 or e1.dc.attack != e2.dc.attack
