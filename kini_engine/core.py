@@ -245,7 +245,7 @@ def context_adjust(
         p += np.array([delta, -abs(delta) * 0.25, -delta])
         reasons.append(f"forma reciente: {current.home} {hf:.2f} vs {current.away} {af:.2f}")
 
-    h2h = [m for m in history if {m.home, m.away} == {current.home, current.away}]
+    h2h = [m for m in history if {m.home, m.away} == {current.home, current.away} and m.home_goals is not None and m.away_goals is not None]
     if len(h2h) >= 5:
         local_wins = sum(1 for m in h2h[-10:] if m.home == current.home and m.home_goals > m.away_goals)
         draw = sum(1 for m in h2h[-10:] if m.home_goals == m.away_goals)
