@@ -7,7 +7,7 @@ import pandas as pd
 
 
 DATAHUB = "https://datahub.io/football/spanish-{league}/_r/-/season-{season}.csv"
-SEASONS = ("202021", "2122", "2223", "2324", "2425", "2526")
+SEASONS = ("2021", "2122", "2223", "2324", "2425", "2526")
 LEAGUES = {
     "la-liga": "sp1",
     "segunda": "sp2",
