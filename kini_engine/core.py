@@ -292,33 +292,55 @@ def _recent_form(history: list[Match], team: str) -> float:
 
 
 class TicketOptimizer:
-    """Exact dynamic-programming optimiser for a fixed column budget."""
+    """Exact budget-constrained optimizer for the 14 standard matches."""
 
     def optimize(self, predictions: list[dict[str, float]], budget: int = 8) -> dict[str, Any]:
         if len(predictions) != 14:
             raise ValueError("standard ticket optimisation needs exactly 14 matches")
         if not isinstance(budget, int) or budget < 1:
             raise ValueError("budget must be a positive integer")
-        dp = {(0,): (1.0, [])}
-        for i, p in enumerate(predictions):
-            nxt = {}
-            ordered = sorted(SIGNS, key=lambda s: p[s], reverse=True)
-            for keys, (prob, picks) in dp.items():
+
+        # A single, double or triple contributes respectively 1, 2 or 3
+        # columns. For a fixed selection of signs, the covered probability is
+        # the product of the selected marginal masses. Maximising its log turns
+        # the problem into a small exact dynamic programme over column budget.
+        neg_inf = -float("inf")
+        dp: dict[int, tuple[float, list[tuple[str, ...]]]] = {1: (0.0, [])}
+
+        for p in predictions:
+            nxt: dict[int, tuple[float, list[tuple[str, ...]]]] = {}
+            ordered = sorted(SIGNS, key=lambda sign: float(p.get(sign, 0.0)), reverse=True)
+
+            for used, (log_mass, picks) in dp.items():
                 for k in (1, 2, 3):
-                    if int(np.prod([2 if k == 2 else 3 if k == 3 else 1 for _ in range(i + 1)])) > budget:
+                    new_used = used * k
+                    if new_used > budget:
                         continue
                     signs = tuple(ordered[:k])
-                    nk = keys + (k,)
-                    npb = prob * float(sum(p[s] for s in signs))
-                    if npb > nxt.get(nk, (-1, []))[0]:
-                        nxt[nk] = (npb, picks + [signs])
+                    mass = max(sum(float(p.get(sign, 0.0)) for sign in signs), 1e-15)
+                    candidate = log_mass + float(np.log(mass))
+                    previous = nxt.get(new_used)
+                    if previous is None or candidate > previous[0]:
+                        nxt[new_used] = (candidate, picks + [signs])
+
             dp = nxt
-        feasible = [(prob, picks, keys) for keys, (prob, picks) in dp.items() if np.prod(keys) <= budget]
-        prob, picks, keys = max(feasible, key=lambda x: x[0])
-        columns = []
-        for mask in np.ndindex(tuple(len(x) for x in picks)):
-            columns.append([picks[j][mask[j]] for j in range(14)])
-        return {"budget": budget, "columns": columns[:budget], "column_count": len(columns[:budget]), "shape": keys, "joint_coverage": prob}
+
+        if not dp:
+            raise ValueError(f"budget {budget} cannot represent a 14-match ticket")
+
+        used, (log_mass, picks) = max(dp.items(), key=lambda item: item[1][0])
+        columns = [
+            [picks[j][mask[j]] for j in range(14)]
+            for mask in np.ndindex(tuple(len(x) for x in picks))
+        ]
+
+        return {
+            "budget": budget,
+            "columns": columns,
+            "column_count": len(columns),
+            "shape": tuple(len(x) for x in picks),
+            "joint_coverage": float(np.exp(log_mass)),
+        }
 
 
 class KiniEngine:
