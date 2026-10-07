@@ -126,7 +126,7 @@ def compare_walk_forward(
     decay: float = 0.995,
 ) -> dict[str, Any]:
     """Compare isolated baselines and the ensemble using identical time splits."""
-    data = sorted(matches, key=lambda m: KiniEngine.dc._date_num(m.date))
+    data = sorted(matches, key=lambda m: _date_num(m.date))
     modes = ("dc", "ml", "ensemble")
     rows = {mode: [] for mode in modes}
     market_rows: list[tuple[dict[str, float], str]] = []
