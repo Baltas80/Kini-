@@ -19,12 +19,13 @@ def main() -> None:
     ap.add_argument("command", choices=("backtest", "compare"))
     ap.add_argument("csv")
     ap.add_argument("--min-train", type=int, default=80)
+    ap.add_argument("--refit-every", type=int, default=1)
     args = ap.parse_args()
     matches = load_csv(args.csv)
     if args.command == "backtest":
-        result = walk_forward(matches, min_train=args.min_train)
+        result = walk_forward(matches, min_train=args.min_train, refit_every=args.refit_every)
     else:
-        result = compare_walk_forward(matches, min_train=args.min_train)
+        result = compare_walk_forward(matches, min_train=args.min_train, refit_every=args.refit_every)
     print(json.dumps(result["metrics"] if args.command == "backtest" else result, indent=2, ensure_ascii=False))
 
 
