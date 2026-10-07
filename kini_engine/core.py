@@ -77,11 +77,7 @@ def grid_to_1x2(grid: np.ndarray) -> dict[str, float]:
 
 
 class DixonColes:
-    """Weighted maximum-likelihood Dixon-Coles model.
-
-    The formulation follows the mature implementation exposed by penaltyblog,
-    while keeping Kini's runtime surface small and auditable.
-    """
+    """Kini adapter around the maintained penaltyblog Dixon-Coles model."""
 
     def __init__(self, decay: float = 0.995, rho: float = -0.05) -> None:
         self.decay = decay
@@ -91,76 +87,72 @@ class DixonColes:
         self.defence: dict[str, float] = {}
         self.home_adv = 0.25
         self.fitted = False
+        self.model: Any = None
 
     def fit(self, matches: list[Match]) -> "DixonColes":
-        usable = [m for m in matches if m.home_goals is not None and m.away_goals is not None]
+        usable = [
+            m for m in matches
+            if m.home_goals is not None and m.away_goals is not None
+        ]
         if len(usable) < 12:
             self.fitted = False
             return self
+
+        import pandas as pd
+        import penaltyblog as pb
+
         self.teams = sorted({m.home for m in usable} | {m.away for m in usable})
-        idx = {t: i for i, t in enumerate(self.teams)}
-        n = len(self.teams)
-        dates = np.asarray([self._date_num(m.date) for m in usable], dtype=float)
-        # Decay is expressed per day. Using Unix seconds here makes 0.995
-        # collapse almost the entire historical sample to zero weight.
-        age_days = np.maximum((dates.max() - dates) / 86400.0, 0.0)
-        weights = np.power(self.decay, age_days)
+        dates = pd.to_datetime([m.date for m in usable], errors="coerce")
+        if dates.isna().any():
+            dates = pd.Series(range(len(usable)))
 
-        def unpack(x: np.ndarray) -> tuple[np.ndarray, np.ndarray, float, float]:
-            a = x[:n]
-            d = x[n:2*n]
-            return a, d, float(x[-2]), float(x[-1])
+        xi = max(-np.log(float(self.decay)), 0.0)
+        weights = pb.models.dixon_coles_weights(dates, xi=xi)
 
-        def loss(x: np.ndarray) -> float:
-            a, d, ha, rho = unpack(x)
-            total = 0.0
-            for k, m in enumerate(usable):
-                lh = exp(a[idx[m.home]] + d[idx[m.away]] + ha)
-                la = exp(a[idx[m.away]] + d[idx[m.home]])
-                h, aw = int(m.home_goals), int(m.away_goals)
-                tau = max(_dc_tau(h, aw, lh, la, rho), 1e-9)
-                ll = poisson.logpmf(h, lh) + poisson.logpmf(aw, la) + np.log(tau)
-                total -= weights[k] * ll
-            return float(total)
+        self.model = pb.models.DixonColesGoalModel(
+            goals_home=np.asarray([m.home_goals for m in usable], dtype=float),
+            goals_away=np.asarray([m.away_goals for m in usable], dtype=float),
+            teams_home=np.asarray([m.home for m in usable], dtype=str),
+            teams_away=np.asarray([m.away for m in usable], dtype=str),
+            weights=weights,
+        )
+        self.model.fit(
+            use_gradient=True,
+            minimizer_options={"maxiter": 3000, "ftol": 1e-9},
+        )
 
-        x0 = np.r_[np.zeros(2*n), 0.25, self.rho]
-        x0[n:2*n] = -0.1
-        cons = [
-            {"type": "eq", "fun": lambda x: float(np.mean(x[:n]))},
-            {"type": "eq", "fun": lambda x: float(np.mean(x[n:2*n]))},
-        ]
-        bounds = [(-2.5, 2.5)] * (2*n) + [(0.0, 1.5), (-0.5, 0.5)]
-        res = minimize(loss, x0, method="SLSQP", bounds=bounds, constraints=[cons], options={"maxiter": 500, "ftol": 1e-7})
-        if not res.success:
-            self.fitted = False
-            return self
-        a, d, self.home_adv, self.rho = unpack(res.x)
-        self.attack = dict(zip(self.teams, a))
-        self.defence = dict(zip(self.teams, d))
+        params = np.asarray(self.model.params_array, dtype=float)
+        n = len(self.model.teams)
+        self.attack = dict(zip(self.model.teams, params[:n]))
+        self.defence = dict(zip(self.model.teams, params[n:2 * n]))
+        self.home_adv = float(params[-2])
+        self.rho = float(params[-1])
         self.fitted = True
         return self
-
-    @staticmethod
-    def _date_num(value: datetime | str) -> float:
-        if isinstance(value, datetime):
-            return value.timestamp()
-        try:
-            return datetime.fromisoformat(str(value).replace("Z", "+00:00")).timestamp()
-        except ValueError:
-            return 0.0
 
     def expected_goals(self, home: str, away: str) -> tuple[float, float]:
         if not self.fitted or home not in self.attack or away not in self.attack:
             return 1.35, 1.05
-        lh = exp(self.attack[home] + self.defence[away] + self.home_adv)
-        la = exp(self.attack[away] + self.defence[home])
-        return float(np.clip(lh, 0.15, 5.0)), float(np.clip(la, 0.15, 5.0))
+        pred = self.model.predict(home, away, max_goals=15, normalize=True)
+        return (
+            float(np.clip(pred.home_goal_expectation, 0.15, 5.0)),
+            float(np.clip(pred.away_goal_expectation, 0.15, 5.0)),
+        )
 
     def predict(self, home: str, away: str) -> tuple[dict[str, float], list[dict[str, Any]]]:
-        lh, la = self.expected_goals(home, away)
-        grid = score_grid(lh, la, self.rho)
-        probs = grid_to_1x2(grid)
-        flat = [{"score": f"{h}-{a}", "probability": float(grid[h, a])} for h, a in np.ndindex(grid.shape)]
+        if not self.fitted or home not in self.attack or away not in self.attack:
+            lh, la = self.expected_goals(home, away)
+            grid = score_grid(lh, la, self.rho)
+            probs = grid_to_1x2(grid)
+        else:
+            pred = self.model.predict(home, away, max_goals=15, normalize=True)
+            grid = np.asarray(pred.grid, dtype=float)
+            probs = dict(zip(SIGNS, map(float, pred.home_draw_away)))
+
+        flat = [
+            {"score": f"{h}-{a}", "probability": float(grid[h, a])}
+            for h, a in np.ndindex(grid.shape)
+        ]
         flat.sort(key=lambda x: x["probability"], reverse=True)
         return probs, flat[:10]
 
