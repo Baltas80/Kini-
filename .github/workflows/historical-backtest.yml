@@ -18,7 +18,7 @@ jobs:
       - run: python scripts/build_history.py
       - name: Run historical comparison
         run: |
-          python -m kini_engine.cli compare data/historical_spain.csv --min-train 300 --refit-every 20 > backtest-results.json
+          python -m kini_engine.cli compare data/historical_spain.csv --min-train 300 --refit-every 100 > backtest-results.json
           cat backtest-results.json
       - name: Upload backtest results
         uses: actions/upload-artifact@v4
