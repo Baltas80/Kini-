@@ -24,3 +24,15 @@ def test_validate_rejects_incomplete_score():
 
     with pytest.raises(ValueError, match="incomplete score"):
         validate_matches([Match("", "A", "B", 1, None)])
+
+
+def test_market_probabilities_remove_overround(tmp_path: Path):
+    p = tmp_path / "odds.csv"
+    p.write_text(
+        "Date,HomeTeam,AwayTeam,FTHG,FTAG,FTR,B365H,B365D,B365A\n"
+        "2025-01-01,A,B,1,0,H,2.0,3.5,4.0\n",
+        encoding="utf-8",
+    )
+    matches = load_matches_csv(p)
+    assert matches[0].market is not None
+    assert abs(sum(matches[0].market.values()) - 1.0) < 1e-12
