@@ -4,7 +4,7 @@ from typing import Any
 
 import numpy as np
 
-from .core import SIGNS, KiniEngine, Match
+from .core import SIGNS, KiniEngine, Match, _date_num
 
 
 def multiclass_metrics(rows: list[tuple[dict[str, float], str]], calibration_bins: int = 10) -> dict[str, float]:
@@ -96,7 +96,7 @@ def walk_forward(
     decay: float = 0.995,
 ) -> dict[str, Any]:
     """Strict chronological evaluation: every forecast sees only prior matches."""
-    data = sorted(matches, key=lambda m: KiniEngine.dc._date_num(m.date))
+    data = sorted(matches, key=lambda m: _date_num(m.date))
     if min_train < 12:
         raise ValueError("min_train must be at least 12")
     if refit_every < 1:
