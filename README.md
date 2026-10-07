@@ -6,7 +6,7 @@ Motor de predicción de La Quiniela española.
 
 La columna vertebral es **KinielaGPT**: probabilidades LAE, forma reciente, H2H, clasificación/contexto, detección de divergencias y estrategias. Encima incorporamos componentes maduros, preferentemente como dependencias y no copiando código:
 
-- Dixon-Coles y grids de marcador mediante la familia de modelos de penaltyblog.
+- Dixon-Coles y grids de marcador mediante `penaltyblog` como backend estadístico mantenido, incluyendo ponderación temporal y salidas de marcador/1X2.
 - XGBoost opcional + fallback scikit-learn.
 - Backtesting walk-forward sin información futura.
 - Optimización de dobles/triples bajo presupuesto.
