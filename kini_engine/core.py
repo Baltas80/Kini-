@@ -117,13 +117,13 @@ class DixonColes:
             self.fitted = False
             return self
 
-        import pandas as pd
         from penaltyblog.models import DixonColesGoalModel, dixon_coles_weights
 
         self.teams = sorted({m.home for m in usable} | {m.away for m in usable})
-        dates = pd.to_datetime([m.date for m in usable], errors="coerce")
-        if dates.isna().any():
-            dates = pd.Series(range(len(usable)))
+        # penaltyblog expects datetime-like values because it computes timedelta.days.
+        # Parse through the shared date parser so ISO and Football-Data DD/MM/YYYY
+        # inputs follow exactly the same chronological interpretation.
+        dates = [datetime.fromtimestamp(_date_num(m.date)) for m in usable]
 
         xi = max(-np.log(float(self.decay)), 0.0)
         weights = dixon_coles_weights(dates, xi=xi)
