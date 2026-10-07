@@ -45,11 +45,24 @@ class Prediction:
 
 
 def _date_num(value: datetime | str) -> float:
-    """Return a stable chronological key for walk-forward evaluation."""
+    """Return a stable timestamp for ISO and Football-Data date formats."""
     if isinstance(value, datetime):
         return value.timestamp()
-    parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-    return parsed.timestamp()
+
+    raw = str(value).strip()
+    normalized = raw.replace("Z", "+00:00")
+    try:
+        return datetime.fromisoformat(normalized).timestamp()
+    except ValueError:
+        pass
+
+    for fmt in ("%d/%m/%Y", "%d/%m/%y", "%Y/%m/%d", "%m/%d/%Y"):
+        try:
+            return datetime.strptime(raw, fmt).timestamp()
+        except ValueError:
+            continue
+
+    raise ValueError(f"Unsupported date format: {raw!r}")
 
 
 def _norm(p: Iterable[float]) -> np.ndarray:
