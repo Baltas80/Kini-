@@ -83,8 +83,6 @@ class DixonColes:
         self.decay = decay
         self.rho = rho
         self.teams: list[str] = []
-        self.attack: dict[str, float] = {}
-        self.defence: dict[str, float] = {}
         self.home_adv = 0.25
         self.fitted = False
         self.model: Any = None
@@ -121,17 +119,12 @@ class DixonColes:
             minimizer_options={"maxiter": 3000, "ftol": 1e-9},
         )
 
-        params = np.asarray(self.model.params_array, dtype=float)
-        n = len(self.model.teams)
-        self.attack = dict(zip(self.model.teams, params[:n]))
-        self.defence = dict(zip(self.model.teams, params[n:2 * n]))
-        self.home_adv = float(params[-2])
-        self.rho = float(params[-1])
-        self.fitted = True
+        self.teams = list(self.model.teams)
+        self.fitted = bool(self.model.fitted)
         return self
 
     def expected_goals(self, home: str, away: str) -> tuple[float, float]:
-        if not self.fitted or home not in self.attack or away not in self.attack:
+        if not self.fitted or home not in self.teams or away not in self.teams:
             return 1.35, 1.05
         pred = self.model.predict(home, away, max_goals=15, normalize=True)
         return (
@@ -140,7 +133,7 @@ class DixonColes:
         )
 
     def predict(self, home: str, away: str) -> tuple[dict[str, float], list[dict[str, Any]]]:
-        if not self.fitted or home not in self.attack or away not in self.attack:
+        if not self.fitted or home not in self.teams or away not in self.teams:
             lh, la = self.expected_goals(home, away)
             grid = score_grid(lh, la, self.rho)
             probs = grid_to_1x2(grid)
