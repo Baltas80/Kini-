@@ -97,7 +97,7 @@ class DixonColes:
             return self
 
         import pandas as pd
-        import penaltyblog as pb
+        from penaltyblog.models import DixonColesGoalModel, dixon_coles_weights
 
         self.teams = sorted({m.home for m in usable} | {m.away for m in usable})
         dates = pd.to_datetime([m.date for m in usable], errors="coerce")
@@ -105,9 +105,9 @@ class DixonColes:
             dates = pd.Series(range(len(usable)))
 
         xi = max(-np.log(float(self.decay)), 0.0)
-        weights = pb.models.dixon_coles_weights(dates, xi=xi)
+        weights = dixon_coles_weights(dates, xi=xi)
 
-        self.model = pb.models.DixonColesGoalModel(
+        self.model = DixonColesGoalModel(
             goals_home=np.asarray([m.home_goals for m in usable], dtype=float),
             goals_away=np.asarray([m.away_goals for m in usable], dtype=float),
             teams_home=np.asarray([m.home for m in usable], dtype=str),
@@ -304,7 +304,6 @@ class TicketOptimizer:
         # columns. For a fixed selection of signs, the covered probability is
         # the product of the selected marginal masses. Maximising its log turns
         # the problem into a small exact dynamic programme over column budget.
-        neg_inf = -float("inf")
         dp: dict[int, tuple[float, list[tuple[str, ...]]]] = {1: (0.0, [])}
 
         for p in predictions:
