@@ -6,12 +6,9 @@ from urllib.request import urlopen
 import pandas as pd
 
 
-DATAHUB = "https://datahub.io/football/spanish-{league}/_r/-/season-{season}.csv"
+FOOTBALL_DATA = "https://www.football-data.co.uk/mmz4281/{season}/{division}.csv"
 SEASONS = ("2021", "2122", "2223", "2324", "2425", "2526")
-LEAGUES = {
-    "la-liga": "sp1",
-    "segunda": "sp2",
-}
+LEAGUES = {"la-liga": "SP1", "segunda": "SP2"}
 
 
 def fetch(url: str) -> pd.DataFrame:
@@ -23,9 +20,7 @@ def main() -> None:
     frames: list[pd.DataFrame] = []
     for season in SEASONS:
         for league, code in LEAGUES.items():
-            url = DATAHUB.format(league=league, season=season)
-            # DataHub uses season names matching the source dataset; keep the
-            # source URL in metadata rather than copying the external files.
+            url = FOOTBALL_DATA.format(season=season, division=code)
             df = fetch(url)
             df["League"] = league
             df["Season"] = season
