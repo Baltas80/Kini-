@@ -361,19 +361,38 @@ class KiniEngine:
         self.fitted = True
         return self
 
-    def _predict_one(self, m: Match, history: list[Match]) -> Prediction:
+    def _predict_one(self, m: Match, history: list[Match], mode: str = "ensemble") -> Prediction:
         dc_probs, scores = self.dc.predict(m.home, m.away)
         ml = self.ml.fit_predict_proba(history, m) if self.ml is not None else None
         ml_probs = None if ml is None else dict(zip(SIGNS, map(float, ml)))
-        blend_items = [(dc_probs, 0.58)]
-        if ml_probs:
-            blend_items.append((ml_probs, 0.17))
-        if m.lae:
-            blend_items.append((m.lae, 0.18))
-        if m.market:
-            blend_items.append((m.market, 0.07))
-        base = _blend(*blend_items)
-        if self.enable_context:
+        if mode not in {"ensemble", "dc", "ml", "lae", "market"}:
+            raise ValueError("mode must be one of: ensemble, dc, ml, lae, market")
+
+        if mode == "dc":
+            base = dc_probs
+        elif mode == "ml":
+            if ml_probs is None:
+                raise ValueError("ML mode requires enable_ml=True and sufficient history")
+            base = ml_probs
+        elif mode == "lae":
+            if not m.lae:
+                raise ValueError("LAE probabilities are unavailable")
+            base = _blend((m.lae, 1.0))
+        elif mode == "market":
+            if not m.market:
+                raise ValueError("market probabilities are unavailable")
+            base = _blend((m.market, 1.0))
+        else:
+            blend_items = [(dc_probs, 0.58)]
+            if ml_probs:
+                blend_items.append((ml_probs, 0.17))
+            if m.lae:
+                blend_items.append((m.lae, 0.18))
+            if m.market:
+                blend_items.append((m.market, 0.07))
+            base = _blend(*blend_items)
+
+        if self.enable_context and mode == "ensemble":
             adjusted, reasons = context_adjust(base, m, history)
         else:
             adjusted, reasons = base, []
@@ -381,8 +400,8 @@ class KiniEngine:
         sign = max(SIGNS, key=lambda s: adjusted[s])
         return Prediction(m.home, m.away, adjusted, sign, scores, surprise, reasons)
 
-    def predict(self, match: Match) -> Prediction:
-        return self._predict_one(match, getattr(self, "history", []))
+    def predict(self, match: Match, mode: str = "ensemble") -> Prediction:
+        return self._predict_one(match, getattr(self, "history", []), mode=mode)
 
     def quiniela(self, fixtures: list[Match], budget: int = 8) -> dict[str, Any]:
         if len(fixtures) != 15:
