@@ -27,11 +27,12 @@ El cargador acepta el formato histórico habitual de Football-Data/DataHub (`Dat
 ```bash
 python scripts/build_history.py
 python -m kini_engine.cli backtest data/historical_spain.csv --min-train 300
+python -m kini_engine.cli compare data/historical_spain.csv --min-train 300
 ```
 
 Para validación histórica seria, `scripts/build_history.py` descarga seis temporadas de Primera y Segunda directamente desde Football-Data y genera `data/historical_spain.csv`. El proyecto no incorpora esos CSV en el repositorio: son datos externos y sus condiciones de uso deben respetarse según su fuente.
 
-El backtest informa `accuracy`, `brier`, `logloss`, `rps` y `ece`. La métrica principal para comparar modelos debe ser probabilística (log-loss/Brier/RPS), no únicamente el porcentaje de signos acertados.
+El backtest informa `accuracy`, `brier`, `logloss`, `rps` y `ece`. `compare` enfrenta Dixon-Coles, ML, ensemble y mercado bajo exactamente las mismas divisiones temporales. La métrica principal para comparar modelos debe ser probabilística (log-loss/Brier/RPS), no únicamente el porcentaje de signos acertados.
 
 ## Licencia y procedencia
 
