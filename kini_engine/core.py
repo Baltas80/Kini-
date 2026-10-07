@@ -174,7 +174,7 @@ class FeatureModel:
 
     def _features(self, history: list[Match], m: Match) -> np.ndarray:
         def stats(team: str, venue: str | None = None) -> tuple[float, float, float]:
-            xs = [x for x in history if (x.home == team or x.away == team)]
+            xs = [x for x in history if (x.home == team or x.away == team) and x.home_goals is not None and x.away_goals is not None]
             if venue == "home":
                 xs = [x for x in xs if x.home == team]
             elif venue == "away":
@@ -230,7 +230,7 @@ def context_adjust(
     reasons: list[str] = []
 
     def form(team: str) -> float:
-        xs = [m for m in history if m.home == team or m.away == team][-5:]
+        xs = [m for m in history if (m.home == team or m.away == team) and m.home_goals is not None and m.away_goals is not None][-5:]
         val = 0.0
         for m in xs:
             if m.home == team:
