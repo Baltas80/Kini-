@@ -34,10 +34,9 @@ def test_dixon_coles_uses_full_history():
     data = sample()
     e1 = KiniEngine().fit(data[:20])
     e2 = KiniEngine().fit(data[:80])
-    assert e1.dc.fitted and e2.dc.fitted
-    # With a non-degenerate sample, fitting on 20 vs 80 observations
-    # must not produce identical parameters as if only the first row mattered.
-    assert abs(e1.dc.home_adv - e2.dc.home_adv) > 1e-6 or e1.dc.attack != e2.dc.attack
+    p1 = e1.predict(Match(datetime(2025, 4, 1), "A", "D"), mode="dc").probabilities
+    p2 = e2.predict(Match(datetime(2025, 4, 1), "A", "D"), mode="dc").probabilities
+    assert max(abs(p1[s] - p2[s]) for s in ("1", "X", "2")) > 1e-6
 
 
 def test_optimizer_returns_exact_column_count():
