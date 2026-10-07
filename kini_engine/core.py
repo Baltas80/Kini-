@@ -137,7 +137,7 @@ class DixonColes:
         )
         self.model.fit(
             use_gradient=True,
-            minimizer_options={"maxiter": 3000, "ftol": 1e-9},
+            minimizer_options={"maxiter": 1000, "ftol": 1e-7},
         )
 
         self.teams = list(self.model.teams)
