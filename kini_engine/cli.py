@@ -4,25 +4,14 @@ import argparse
 import json
 from pathlib import Path
 
-import pandas as pd
-
 from .backtest import walk_forward
-from .core import KiniEngine, Match
+from .dataio import load_matches_csv, validate_matches
 
 
-def load_csv(path: str) -> list[Match]:
-    df = pd.read_csv(path)
-    out = []
-    for _, r in df.iterrows():
-        out.append(Match(
-            date=str(r.get("Date") or r.get("date") or ""),
-            home=str(r["HomeTeam"]),
-            away=str(r["AwayTeam"]),
-            home_goals=int(r["FTHG"]) if pd.notna(r.get("FTHG")) else None,
-            away_goals=int(r["FTAG"]) if pd.notna(r.get("FTAG")) else None,
-            result=str(r["FTR"]) if pd.notna(r.get("FTR")) else None,
-        ))
-    return out
+def load_csv(path: str):
+    matches = load_matches_csv(path)
+    validate_matches(matches)
+    return matches
 
 
 def main() -> None:
