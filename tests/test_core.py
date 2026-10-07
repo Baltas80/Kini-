@@ -45,3 +45,7 @@ def test_optimizer_returns_exact_column_count():
     assert t["column_count"] == 8
     assert len(t["columns"]) == 8
     assert all(len(column) == 14 for column in t["columns"])
+
+
+def test_date_num_accepts_football_data_format():
+    assert _date_num("01/02/2021") < _date_num("02/02/2021")
