@@ -117,3 +117,43 @@ def walk_forward(
         "metrics": multiclass_metrics(scored),
         "rows": [{"actual": y, "probabilities": p} for p, y in scored],
     }
+
+
+def compare_walk_forward(
+    matches: list[Match],
+    min_train: int = 80,
+    refit_every: int = 1,
+    decay: float = 0.995,
+) -> dict[str, Any]:
+    """Compare isolated baselines and the ensemble using identical time splits."""
+    data = sorted(matches, key=lambda m: KiniEngine.dc._date_num(m.date))
+    modes = ("dc", "ml", "ensemble")
+    rows = {mode: [] for mode in modes}
+    market_rows: list[tuple[dict[str, float], str]] = []
+
+    engine = KiniEngine(enable_ml=True)
+    for i in range(min_train, len(data)):
+        if (i == min_train) or ((i - min_train) % refit_every == 0):
+            engine.dc.decay = decay
+            engine.fit(data[:i])
+
+        m = data[i]
+        for mode in modes:
+            try:
+                pred = engine.predict(m, mode=mode)
+            except ValueError:
+                continue
+            rows[mode].append((pred.probabilities, m.outcome()))
+
+        if m.market:
+            market_rows.append((m.market, m.outcome()))
+
+    result = {
+        mode: multiclass_metrics(values)
+        for mode, values in rows.items()
+    }
+    result["market"] = multiclass_metrics(market_rows) if market_rows else {
+        "n": 0, "accuracy": 0.0, "brier": 0.0, "logloss": 0.0, "rps": 0.0, "ece": 0.0
+    }
+    result["n_total"] = len(data) - min_train
+    return result
