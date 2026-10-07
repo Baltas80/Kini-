@@ -121,7 +121,7 @@ class DixonColes:
                 tau = max(_dc_tau(h, aw, lh, la, rho), 1e-9)
                 ll = poisson.logpmf(h, lh) + poisson.logpmf(aw, la) + np.log(tau)
                 total -= weights[k] * ll
-                return float(total)
+            return float(total)
 
         x0 = np.r_[np.zeros(2*n), 0.25, self.rho]
         x0[n:2*n] = -0.1
