@@ -7,6 +7,35 @@ import pandas as pd
 from .core import Match, SIGNS
 
 
+def _market_from_row(row: pd.Series) -> dict[str, float] | None:
+    books = (
+        ("B365H", "B365D", "B365A"),
+        ("WHH", "WHD", "WHA"),
+        ("VCH", "VCD", "VCA"),
+        ("PSH", "PSD", "PSA"),
+    )
+    estimates: list[dict[str, float]] = []
+    for h_col, d_col, a_col in books:
+        if not all(col in row.index for col in (h_col, d_col, a_col)):
+            continue
+        try:
+            odds = [float(row[h_col]), float(row[d_col]), float(row[a_col])]
+        except (TypeError, ValueError):
+            continue
+        if any(value <= 1.0 for value in odds):
+            continue
+        inv = [1.0 / value for value in odds]
+        total = sum(inv)
+        if total > 0:
+            estimates.append(dict(zip(SIGNS, (value / total for value in inv))))
+    if not estimates:
+        return None
+    return {
+        sign: float(sum(item[sign] for item in estimates) / len(estimates))
+        for sign in SIGNS
+    }
+
+
 RESULT_MAP = {"H": "1", "D": "X", "A": "2", "1": "1", "X": "X", "2": "2"}
 
 
@@ -36,6 +65,7 @@ def load_matches_csv(path: str | Path) -> list[Match]:
             for k in ("League", "Season", "Div")
             if k in row.index and pd.notna(row[k])
         }
+        market = _market_from_row(row)
 
         out.append(
             Match(
@@ -46,6 +76,7 @@ def load_matches_csv(path: str | Path) -> list[Match]:
                 away_goals=away_goals,
                 result=result,
                 detail=detail,
+                market=market,
             )
         )
     return out
