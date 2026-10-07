@@ -44,6 +44,14 @@ class Prediction:
     reasons: list[str]
 
 
+def _date_num(value: datetime | str) -> float:
+    """Return a stable chronological key for walk-forward evaluation."""
+    if isinstance(value, datetime):
+        return value.timestamp()
+    parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    return parsed.timestamp()
+
+
 def _norm(p: Iterable[float]) -> np.ndarray:
     x = np.asarray(list(p), dtype=float)
     x = np.clip(x, 1e-12, None)
@@ -355,7 +363,7 @@ class KiniEngine:
         self.temperature = 1.0
 
     def fit(self, history: list[Match]) -> "KiniEngine":
-        self.history = sorted(list(history), key=lambda m: DixonColes._date_num(m.date))
+        self.history = sorted(list(history), key=lambda m: _date_num(m.date))
         self.dc.fit(self.history)
         self.fitted = True
         return self
