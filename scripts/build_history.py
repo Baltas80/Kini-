@@ -60,7 +60,7 @@ def _parse_source_csv(content: bytes, source: str) -> pd.DataFrame:
             candidate = pd.read_csv(io.BytesIO(content), encoding=encoding, low_memory=False)
             df = candidate
             break
-        except (UnicodeDecodeError, pd.errors.ParserError) as exc:
+        except (UnicodeDecodeError, pd.errors.ParserError, pd.errors.EmptyDataError) as exc:
             errors.append(exc)
     if df is None:
         raise ValueError(f"{source}: no se pudo interpretar el CSV") from errors[-1]
