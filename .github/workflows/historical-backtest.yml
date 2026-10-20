@@ -3,6 +3,7 @@ name: historical-backtest
 on:
   push:
   workflow_dispatch:
+  workflow_dispatch:
   schedule:
     - cron: "17 4 * * 1"
 
@@ -15,14 +16,26 @@ jobs:
         with:
           python-version: "3.12"
       - run: python -m pip install -e ".[all]"
+      - name: Restore Football-Data raw CSV cache
+        uses: actions/cache@v4
+        with:
+          path: .cache/football-data
+          key: football-data-${{ runner.os }}-${{ github.ref_name }}-${{ github.run_id }}
+          restore-keys: |
+            football-data-${{ runner.os }}-${{ github.ref_name }}-
+            football-data-${{ runner.os }}-
       - run: python scripts/build_history.py
       - name: Run historical comparison
         run: |
           python -m kini_engine.cli compare data/historical_spain.csv --min-train 300 --refit-every 1000 > backtest-results.json
           cat backtest-results.json
-      - name: Upload backtest results
+      - name: Upload historical dataset and backtest results
+        if: always() && hashFiles('data/historical_spain.csv') != ''
         uses: actions/upload-artifact@v4
         with:
-          name: historical-backtest
-          path: backtest-results.json
+          name: kini-historical-data
+          path: |
+            data/historical_spain.csv
+            backtest-results.json
+          if-no-files-found: warn
           retention-days: 30
