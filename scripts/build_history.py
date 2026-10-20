@@ -17,7 +17,7 @@ from urllib3.util.retry import Retry
 FOOTBALL_DATA = "https://www.football-data.co.uk/mmz4281/{season}/{division}.csv"
 SEASONS = ("2021", "2122", "2223", "2324", "2425", "2526", "2627")
 LEAGUES = {"la-liga": "SP1", "segunda": "SP2"}
-REQUIRED_COLUMNS = {"Date", "HomeTeam", "AwayTeam", "FTHG", "FTAG"}
+REQUIRED_COLUMNS = {"Div", "Date", "HomeTeam", "AwayTeam", "FTHG", "FTAG"}
 DEFAULT_CACHE_DIR = Path(".cache/football-data")
 DEFAULT_CACHE_TTL_HOURS = 24.0
 
@@ -48,7 +48,9 @@ def make_session() -> requests.Session:
     return session
 
 
-def _parse_source_csv(content: bytes, source: str) -> pd.DataFrame:
+def _parse_source_csv(
+    content: bytes, source: str, expected_division: str | None = None
+) -> pd.DataFrame:
     """Parse and validate a Football-Data CSV before it can enter the cache."""
     if not content or not content.strip():
         raise ValueError(f"{source}: respuesta vacía")
@@ -73,6 +75,14 @@ def _parse_source_csv(content: bytes, source: str) -> pd.DataFrame:
         )
     if df.empty:
         raise ValueError(f"{source}: CSV sin filas")
+
+    if expected_division is not None:
+        divisions = set(df["Div"].dropna().astype(str).str.strip().str.upper())
+        if divisions != {expected_division.upper()}:
+            raise ValueError(
+                f"{source}: división esperada {expected_division!r}, "
+                f"pero la respuesta declara {sorted(divisions)!r}; posible redirección errónea"
+            )
 
     # Team names are normalized before validating dates and duplicate keys.
     for column in ("HomeTeam", "AwayTeam"):
@@ -138,6 +148,7 @@ def fetch_csv(
     session: requests.Session | None = None,
     cache_ttl_hours: float = DEFAULT_CACHE_TTL_HOURS,
     refresh: bool = False,
+    expected_division: str | None = None,
 ) -> pd.DataFrame:
     """Read a validated cache or download the source, retrying and falling back safely."""
     path = Path(cache_path)
@@ -147,7 +158,7 @@ def fetch_csv(
     if path.is_file():
         try:
             candidate = path.read_bytes()
-            validated = _parse_source_csv(candidate, f"caché {path}")
+            validated = _parse_source_csv(candidate, f"caché {path}", expected_division)
             cached_content, cached_df = candidate, validated
             age_hours = max(0.0, time.time() - path.stat().st_mtime) / 3600
             if not refresh and age_hours <= max(0.0, cache_ttl_hours):
@@ -161,7 +172,7 @@ def fetch_csv(
         response = client.get(url, timeout=(5, 30))
         response.raise_for_status()
         # Validate before replacing the last known-good cached file.
-        downloaded = _parse_source_csv(response.content, url)
+        downloaded = _parse_source_csv(response.content, url, expected_division)
         try:
             _atomic_write(path, response.content)
         except OSError as exc:
@@ -233,6 +244,7 @@ def build_history(
                 session=client,
                 cache_ttl_hours=cache_ttl_hours,
                 refresh=refresh,
+                expected_division=code,
             )
             df["League"] = league
             df["Season"] = season
