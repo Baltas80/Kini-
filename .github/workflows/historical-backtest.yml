@@ -15,6 +15,14 @@ jobs:
         with:
           python-version: "3.12"
       - run: python -m pip install -e ".[all]"
+      - name: Restore Football-Data raw CSV cache
+        uses: actions/cache@v4
+        with:
+          path: .cache/football-data
+          key: football-data-${{ runner.os }}-${{ github.ref_name }}-${{ github.run_id }}
+          restore-keys: |
+            football-data-${{ runner.os }}-${{ github.ref_name }}-
+            football-data-${{ runner.os }}-
       - run: python scripts/build_history.py
       - name: Run historical comparison
         run: |
