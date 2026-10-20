@@ -12,11 +12,11 @@ from scripts.build_history import build_history, fetch_csv
 
 
 VALID_CSV = (
-    "Date,HomeTeam,AwayTeam,FTHG,FTAG,FTR\n"
-    "02/01/2022,B,C,1,0,H\n"
-    "01/01/2022,A,B,0,0,D\n"
-    "02/01/2022,B,C,1,0,H\n"
-    "05/01/2022,D,E,,,\n"
+    "Div,Date,HomeTeam,AwayTeam,FTHG,FTAG,FTR\n"
+    "SP1,02/01/2022,B,C,1,0,H\n"
+    "SP1,01/01/2022,A,B,0,0,D\n"
+    "SP1,02/01/2022,B,C,1,0,H\n"
+    "SP1,05/01/2022,D,E,,,\n"
 ).encode("utf-8")
 
 
@@ -97,3 +97,16 @@ def test_build_history_sorts_deduplicates_and_drops_unplayed(tmp_path: Path) -> 
     assert saved["FTHG"].tolist() == [0, 1]
     assert saved["Season"].astype(str).tolist() == ["2122", "2122"]
     assert session.calls == 0
+
+
+def test_fetch_csv_rejects_wrong_league_redirect(tmp_path: Path) -> None:
+    wrong_division = VALID_CSV.replace(b"SP1,", b"SC2,")
+    session = FakeSession(content=wrong_division)
+
+    with pytest.raises(RuntimeError, match="divisi[oó]n esperada"):
+        fetch_csv(
+            "https://example.test/2627/SP2.csv",
+            tmp_path / "2627_SP2.csv",
+            session=session,
+            expected_division="SP2",
+        )
