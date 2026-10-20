@@ -3,6 +3,7 @@ name: historical-backtest
 on:
   push:
   workflow_dispatch:
+  workflow_dispatch:
   schedule:
     - cron: "17 4 * * 1"
 
@@ -28,9 +29,12 @@ jobs:
         run: |
           python -m kini_engine.cli compare data/historical_spain.csv --min-train 300 --refit-every 1000 > backtest-results.json
           cat backtest-results.json
-      - name: Upload backtest results
+      - name: Upload historical dataset and backtest results
         uses: actions/upload-artifact@v4
         with:
-          name: historical-backtest
-          path: backtest-results.json
+          name: kini-historical-data
+          path: |
+            data/historical_spain.csv
+            backtest-results.json
+          if-no-files-found: error
           retention-days: 30
