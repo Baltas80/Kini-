@@ -95,5 +95,5 @@ def test_build_history_sorts_deduplicates_and_drops_unplayed(tmp_path: Path) -> 
     assert saved["HomeTeam"].tolist() == ["A", "B"]
     assert saved["Date"].tolist() == ["01/01/2022", "02/01/2022"]
     assert saved["FTHG"].tolist() == [0, 1]
-    assert saved["Season"].tolist() == ["2122", "2122"]
+    assert saved["Season"].astype(str).tolist() == ["2122", "2122"]
     assert session.calls == 0
