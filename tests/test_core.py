@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 
-from kini_engine.core import KiniEngine, Match, TicketOptimizer, _date_num
+from kini_engine.core import KiniEngine, Match, TicketOptimizer, _date_num, context_adjust
 
 
 def sample():
@@ -49,3 +49,16 @@ def test_optimizer_returns_exact_column_count():
 
 def test_date_num_accepts_football_data_format():
     assert _date_num("01/02/2021") < _date_num("02/02/2021")
+
+
+
+def test_h2h_counts_current_home_team_wins_regardless_of_historical_venue():
+    current = Match(datetime(2025, 4, 1), "A", "B")
+    history = [
+        Match(datetime(2024, 1, i), "B", "A", 0, 1, "2")
+        for i in range(1, 6)
+    ]
+    adjusted, reasons = context_adjust({"1": 1 / 3, "X": 1 / 3, "2": 1 / 3}, current, history)
+
+    assert adjusted["1"] > adjusted["2"]
+    assert "histórico H2H incorporado con peso limitado" in reasons
