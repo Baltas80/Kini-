@@ -30,7 +30,7 @@ Recommended follow-up: extend validation and make the CLI data-loading path fail
 ### P1 — H2H adjustment maps outcomes to the wrong current-match perspective
 In kini_engine/core.py::context_adjust, H2H values are constructed as if the current home team's historical home wins were current home wins and its historical away wins were current away wins. For a fixed current fixture, H2H home/draw/away outcomes should be determined by the current home and away teams, independent of which side hosted the historical match. The current calculation can misclassify historical evidence.
 
-Recommended follow-up: fix the perspective mapping and add asymmetric H2H regression cases before enabling context adjustments.
+Action in this branch: the perspective mapping is corrected and an asymmetric regression test covers five wins by the current home team while playing away historically. Broader context-adjustment validation remains pending.
 
 ### P1 — RPS definition needs scrutiny
 The implementation documents RPS as an ordinal score with order 1 < X < 2. These outcomes are nominal rather than ordinal, so RPS is not an ideal primary 1X2 metric. Use multiclass Brier and log-loss as primary metrics; treat ECE as a secondary diagnostic and report the binning scheme and sample size.
