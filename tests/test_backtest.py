@@ -89,3 +89,37 @@ def test_walk_forward_refit_interval_counts_dates(monkeypatch):
 
     # First forecast date fits, second reuses that fit, third refits.
     assert fitted_sizes == [12, 14]
+
+
+
+def test_compare_reports_market_metrics_on_same_fixture_sample(monkeypatch):
+    class FakeEngine:
+        def __init__(self, enable_ml=False):
+            self.dc = type("DC", (), {"decay": 0.995})()
+            self.history = []
+
+        def fit(self, history):
+            self.history = list(history)
+            return self
+
+        def predict(self, match, mode="ensemble"):
+            return type("Prediction", (), {
+                "probabilities": {"1": 0.5, "X": 0.3, "2": 0.2}
+            })()
+
+    monkeypatch.setattr(backtest, "KiniEngine", FakeEngine)
+    day1 = datetime(2025, 1, 1)
+    day2 = datetime(2025, 1, 2)
+    matches = [
+        Match(day1, f"H{i}", f"A{i}", 1, 0, "1")
+        for i in range(12)
+    ] + [
+        Match(day2, "H12", "A12", 1, 0, "1", market={"1": 0.4, "X": 0.3, "2": 0.3}),
+        Match(day2, "H13", "A13", 0, 0, "X"),
+    ]
+
+    result = backtest.compare_walk_forward(matches, min_train=12)
+
+    for mode in ("dc", "ml", "ensemble"):
+        assert result["common_sample"][mode]["model"]["n"] == 1
+        assert result["common_sample"][mode]["market"]["n"] == 1
