@@ -54,6 +54,9 @@ def test_walk_forward_keeps_same_day_fixtures_out_of_training(monkeypatch):
     result = backtest.walk_forward(matches, min_train=12)
 
     assert result["metrics"]["n"] == 2
+    assert result["n_test"] == 2
+    assert result["test_start_date"] == "2025-01-02"
+    assert result["test_end_date"] == "2025-01-02"
     assert fitted_sizes == [12]
     assert prediction_training_sizes == [12, 12]
 
