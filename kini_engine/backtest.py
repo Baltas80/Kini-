@@ -110,7 +110,7 @@ def _calendar_day(value: datetime | str) -> str:
 
 def _date_groups(matches: list[Match]) -> list[list[Match]]:
     """Sort matches and group fixtures from the same calendar day."""
-    data = sorted(matches, key=lambda m: _date_num(m.date))
+    data = sorted(matches, key=lambda m: (_calendar_day(m.date), _date_num(m.date)))
     groups: list[list[Match]] = []
     current_day: str | None = None
     for match in data:
@@ -143,23 +143,32 @@ def walk_forward(
     scored: list[tuple[dict[str, float], str]] = []
     engine = KiniEngine()
     forecast_day = 0
+    test_dates: list[str] = []
+    initial_train_size: int | None = None
 
     for group in groups:
         if len(train) < min_train:
             train.extend(group)
             continue
+        if initial_train_size is None:
+            initial_train_size = len(train)
         if forecast_day % refit_every == 0:
             engine.dc.decay = decay
             engine.fit(train)
         for match in group:
             pred = engine.predict(match)
             scored.append((pred.probabilities, match.outcome()))
+            test_dates.append(_calendar_day(match.date))
         train.extend(group)
         forecast_day += 1
 
     return {
         "metrics": multiclass_metrics(scored),
         "rows": [{"actual": y, "probabilities": p} for p, y in scored],
+        "n_train_initial": initial_train_size or len(train),
+        "n_test": len(scored),
+        "test_start_date": min(test_dates) if test_dates else None,
+        "test_end_date": max(test_dates) if test_dates else None,
     }
 
 
@@ -184,11 +193,15 @@ def compare_walk_forward(
     engine = KiniEngine(enable_ml=True)
     forecast_day = 0
     n_total = 0
+    test_dates: list[str] = []
+    initial_train_size: int | None = None
 
     for group in groups:
         if len(train) < min_train:
             train.extend(group)
             continue
+        if initial_train_size is None:
+            initial_train_size = len(train)
         if forecast_day % refit_every == 0:
             engine.dc.decay = decay
             engine.fit(train)
@@ -209,6 +222,7 @@ def compare_walk_forward(
                 for mode, probabilities in predictions.items():
                     common_rows[mode].append((probabilities, actual))
             n_total += 1
+            test_dates.append(_calendar_day(match.date))
 
         train.extend(group)
         forecast_day += 1
@@ -223,4 +237,7 @@ def compare_walk_forward(
         "market": multiclass_metrics(market_rows) if market_rows else empty,
     }
     result["n_total"] = n_total
+    result["n_train_initial"] = initial_train_size or len(train)
+    result["test_start_date"] = min(test_dates) if test_dates else None
+    result["test_end_date"] = max(test_dates) if test_dates else None
     return result
