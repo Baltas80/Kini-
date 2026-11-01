@@ -253,10 +253,19 @@ def context_adjust(
 
     h2h = [m for m in history if {m.home, m.away} == {current.home, current.away} and m.home_goals is not None and m.away_goals is not None]
     if len(h2h) >= 5:
-        local_wins = sum(1 for m in h2h[-10:] if m.home == current.home and m.home_goals > m.away_goals)
-        draw = sum(1 for m in h2h[-10:] if m.home_goals == m.away_goals)
-        away_wins = sum(1 for m in h2h[-10:] if m.away == current.home and m.away_goals > m.home_goals)
-        hp = _norm([local_wins, draw, away_wins])
+        current_home_wins = 0
+        draws = 0
+        current_away_wins = 0
+        for m in h2h[-10:]:
+            if m.home_goals == m.away_goals:
+                draws += 1
+            elif (m.home == current.home and m.home_goals > m.away_goals) or (
+                m.away == current.home and m.away_goals > m.home_goals
+            ):
+                current_home_wins += 1
+            else:
+                current_away_wins += 1
+        hp = _norm([current_home_wins, draws, current_away_wins])
         p = 0.94 * p + 0.06 * hp
         reasons.append("histórico H2H incorporado con peso limitado")
 
