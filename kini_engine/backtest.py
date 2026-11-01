@@ -189,6 +189,7 @@ def compare_walk_forward(
     modes = ("dc", "ml", "ensemble")
     rows = {mode: [] for mode in modes}
     common_rows = {mode: [] for mode in modes}
+    common_market_rows = {mode: [] for mode in modes}
     market_rows: list[tuple[dict[str, float], str]] = []
     engine = KiniEngine(enable_ml=True)
     forecast_day = 0
@@ -221,6 +222,7 @@ def compare_walk_forward(
                 market_rows.append((match.market, actual))
                 for mode, probabilities in predictions.items():
                     common_rows[mode].append((probabilities, actual))
+                    common_market_rows[mode].append((match.market, actual))
             n_total += 1
             test_dates.append(_calendar_day(match.date))
 
@@ -233,8 +235,11 @@ def compare_walk_forward(
     }
     result["market"] = multiclass_metrics(market_rows) if market_rows else empty
     result["common_sample"] = {
-        **{mode: multiclass_metrics(values) for mode, values in common_rows.items()},
-        "market": multiclass_metrics(market_rows) if market_rows else empty,
+        mode: {
+            "model": multiclass_metrics(common_rows[mode]),
+            "market": multiclass_metrics(common_market_rows[mode]) if common_market_rows[mode] else empty,
+        }
+        for mode in modes
     }
     result["n_total"] = n_total
     result["n_train_initial"] = initial_train_size or len(train)
