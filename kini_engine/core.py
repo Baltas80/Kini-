@@ -392,7 +392,11 @@ class KiniEngine:
 
     def _predict_one(self, m: Match, history: list[Match], mode: str = "ensemble") -> Prediction:
         dc_probs, scores = self.dc.predict(m.home, m.away)
-        ml = self.ml.fit_predict_proba(history, m) if self.ml is not None else None
+        # Do not train the ML model for DC-only (or LAE/market-only) forecasts.
+        # Previously this eager fit ran before mode dispatch, so an ML ValueError
+        # could invalidate otherwise independent Dixon-Coles predictions.
+        needs_ml = mode in {"ml", "ensemble"}
+        ml = self.ml.fit_predict_proba(history, m) if self.ml is not None and needs_ml else None
         ml_probs = None if ml is None else dict(zip(SIGNS, map(float, ml)))
         if mode not in {"ensemble", "dc", "ml", "lae", "market"}:
             raise ValueError("mode must be one of: ensemble, dc, ml, lae, market")
