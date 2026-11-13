@@ -62,3 +62,17 @@ def test_h2h_counts_current_home_team_wins_regardless_of_historical_venue():
 
     assert adjusted["1"] > adjusted["2"]
     assert "histórico H2H incorporado con peso limitado" in reasons
+
+
+
+def test_dc_forecast_does_not_train_optional_ml_model():
+    class ExplodingML:
+        def fit_predict_proba(self, history, current):
+            raise AssertionError("ML must not run for a DC-only forecast")
+
+    engine = KiniEngine(enable_ml=True)
+    engine.ml = ExplodingML()
+    prediction = engine.predict(Match(datetime(2025, 4, 1), "A", "D"), mode="dc")
+
+    assert set(prediction.probabilities) == {"1", "X", "2"}
+    assert abs(sum(prediction.probabilities.values()) - 1.0) < 1e-9
