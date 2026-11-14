@@ -23,11 +23,48 @@ jobs:
           restore-keys: |
             football-data-${{ runner.os }}-${{ github.ref_name }}-
             football-data-${{ runner.os }}-
-      - run: python scripts/build_history.py
+      - name: Build historical data and profile
+        run: python scripts/build_history.py
+      - name: Validate and display dataset profile
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          profile = json.loads(Path("data/historical_spain.profile.json").read_text(encoding="utf-8"))
+          if not profile.get("integrity_passed"):
+              raise SystemExit("Dataset integrity checks did not pass")
+          if int(profile.get("rows_after_deduplication", 0)) <= 0:
+              raise SystemExit("Historical dataset is empty")
+          if not profile.get("source_urls") or not profile.get("source_cache_metadata"):
+              raise SystemExit("Dataset profile is missing source provenance")
+          seasons = profile.get("league_season_counts", {})
+          for key in ("la-liga/2627", "segunda/2627"):
+              if int(seasons.get(key, 0)) <= 0:
+                  raise SystemExit(f"Current-season coverage missing: {key}")
+          print(json.dumps(profile, indent=2, ensure_ascii=False))
+          PY
       - name: Run historical comparison
         run: |
           python -m kini_engine.cli compare data/historical_spain.csv --min-train 300 --refit-every 1000 > backtest-results.json
           cat backtest-results.json
+      - name: Enforce non-empty model backtests
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          result = json.loads(Path("backtest-results.json").read_text(encoding="utf-8"))
+          total = int(result.get("n_total", 0))
+          if total <= 0:
+              raise SystemExit("Backtest has no test fixtures")
+          for name in ("dc", "ml", "ensemble"):
+              n = int(result.get(name, {}).get("n", 0))
+              if n != total:
+                  errors = result.get("prediction_errors", {}).get(name, {})
+                  raise SystemExit(f"{name} produced {n}/{total} predictions; errors={errors}")
+          print(f"BACKTEST_ACCEPTANCE_OK: {total} fixtures for dc, ml, ensemble")
+          PY
       - name: Upload historical dataset, profile and backtest results
         if: always()
         uses: actions/upload-artifact@v4

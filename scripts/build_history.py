@@ -217,10 +217,11 @@ def build_dataset_profile(
     final_frame: pd.DataFrame,
     source_urls: list[str],
     duplicates_removed: int,
-    retrieved_at: datetime | None = None,
+    source_metadata: list[dict[str, object]] | None = None,
+    profile_generated_at: datetime | None = None,
 ) -> dict[str, object]:
     """Summarize provenance, coverage, missingness and integrity before modeling."""
-    retrieved_at = retrieved_at or datetime.now(timezone.utc)
+    profile_generated_at = profile_generated_at or datetime.now(timezone.utc)
     dates = raw_frame.get("_ParsedDate")
     if dates is None:
         dates = pd.to_datetime(raw_frame["Date"], dayfirst=True, errors="coerce")
@@ -316,8 +317,9 @@ def build_dataset_profile(
         (invalid_labels, mismatches, incomplete_scores, invalid_dates_with_teams, conflicting_duplicates)
     )
     return {
-        "retrieved_at_utc": retrieved_at.astimezone(timezone.utc).isoformat(),
+        "profile_generated_at_utc": profile_generated_at.astimezone(timezone.utc).isoformat(),
         "source_urls": sorted(set(source_urls)),
+        "source_cache_metadata": source_metadata or [],
         "source_row_counts": source_counts,
         "rows_before_filter": int(len(raw_frame)),
         "rows_after_complete_score_filter": int(len(complete_frame)),
@@ -364,7 +366,8 @@ def build_history(
 
     frames: list[pd.DataFrame] = []
     source_urls: list[str] = []
-    retrieved_at = datetime.now(timezone.utc)
+    source_metadata: list[dict[str, object]] = []
+    profile_generated_at = datetime.now(timezone.utc)
     client = session or make_session()
     cache_root = Path(cache_dir)
 
@@ -382,6 +385,29 @@ def build_history(
                 expected_division=code,
             )
             source_urls.append(url)
+            if cache_path.is_file():
+                cache_mtime = cache_path.stat().st_mtime
+                source_metadata.append(
+                    {
+                        "source_url": url,
+                        "cache_path": str(cache_path),
+                        "cache_file_mtime_utc": datetime.fromtimestamp(
+                            cache_mtime, timezone.utc
+                        ).isoformat(),
+                        "cache_age_hours": round(
+                            max(0.0, time.time() - cache_mtime) / 3600.0, 3
+                        ),
+                    }
+                )
+            else:
+                source_metadata.append(
+                    {
+                        "source_url": url,
+                        "cache_path": str(cache_path),
+                        "cache_file_mtime_utc": None,
+                        "cache_age_hours": None,
+                    }
+                )
             df["League"] = league
             df["Season"] = season
             df["SourceURL"] = url
@@ -420,7 +446,8 @@ def build_history(
         out,
         source_urls,
         duplicates_removed,
-        retrieved_at=retrieved_at,
+        source_metadata=source_metadata,
+        profile_generated_at=profile_generated_at,
     )
     profile_target = target.with_name(f"{target.stem}.profile.json")
     _atomic_write(
