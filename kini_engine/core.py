@@ -583,15 +583,15 @@ class KiniEngine:
         dc_probs, scores = self.dc.predict(m.home, m.away)
         # The fitted estimator uses model_history; current features and context
         # use all results available before this fixture.
-        needs_ml = mode in {"ml", "ensemble"}
+        needs_ml = mode in {"ml", "ensemble", "ensemble_dc_ml"}
         training_history = model_history if model_history is not None else history
         ml = (
             self.ml.fit_predict_proba(training_history, m, feature_history=history)
             if self.ml is not None and needs_ml else None
         )
         ml_probs = None if ml is None else dict(zip(SIGNS, map(float, ml)))
-        if mode not in {"ensemble", "dc", "ml", "lae", "market"}:
-            raise ValueError("mode must be one of: ensemble, dc, ml, lae, market")
+        if mode not in {"ensemble", "ensemble_dc_ml", "dc", "ml", "lae", "market"}:
+            raise ValueError("mode must be one of: ensemble, ensemble_dc_ml, dc, ml, lae, market")
 
         if mode == "dc":
             base = dc_probs
@@ -607,6 +607,12 @@ class KiniEngine:
             if not m.market:
                 raise ValueError("market probabilities are unavailable")
             base = _blend((m.market, 1.0))
+        elif mode == "ensemble_dc_ml":
+            if ml_probs is None:
+                raise ValueError("model-only ensemble requires valid ML probabilities")
+            # Preserve the relative DC/ML weights of the existing ensemble,
+            # normalized to 100%; market and LAE are deliberately excluded.
+            base = _blend((dc_probs, 0.58), (ml_probs, 0.17))
         else:
             blend_items = [(dc_probs, 0.58)]
             if ml_probs:

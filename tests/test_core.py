@@ -97,6 +97,37 @@ def test_dc_forecast_does_not_train_optional_ml_model():
 
 
 
+def test_model_only_ensemble_excludes_market_and_lae():
+    class FakeML:
+        def fit_predict_proba(self, training_history, current, feature_history=None):
+            return np.asarray([0.60, 0.20, 0.20])
+
+    engine = KiniEngine(enable_ml=True)
+    engine.dc.predict = lambda home, away: (
+        {"1": 0.80, "X": 0.10, "2": 0.10},
+        [],
+    )
+    engine.ml = FakeML()
+    fixture = Match(
+        datetime(2025, 4, 1),
+        "A",
+        "B",
+        market={"1": 0.01, "X": 0.01, "2": 0.98},
+        lae={"1": 0.01, "X": 0.98, "2": 0.01},
+    )
+
+    prediction = engine.predict(fixture, mode="ensemble_dc_ml")
+
+    # Relative weights 0.58:0.17, normalized over model probabilities only.
+    expected = {
+        "1": (0.58 * 0.80 + 0.17 * 0.60) / 0.75,
+        "X": (0.58 * 0.10 + 0.17 * 0.20) / 0.75,
+        "2": (0.58 * 0.10 + 0.17 * 0.20) / 0.75,
+    }
+    assert prediction.probabilities == pytest.approx(expected)
+    assert sum(prediction.probabilities.values()) == pytest.approx(1.0)
+
+
 def test_feature_model_uses_2d_inference_and_caches_fit_per_history(monkeypatch):
     class FakeXGBClassifier:
         fit_calls = 0

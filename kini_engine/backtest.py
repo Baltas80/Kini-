@@ -186,7 +186,7 @@ def compare_walk_forward(
 
     groups = _date_groups(matches)
     train: list[Match] = []
-    modes = ("dc", "ml", "ensemble")
+    modes = ("dc", "ml", "ensemble", "ensemble_dc_ml")
     rows = {mode: [] for mode in modes}
     common_rows = {mode: [] for mode in modes}
     common_market_rows = {mode: [] for mode in modes}

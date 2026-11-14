@@ -83,7 +83,7 @@ Code commit evaluated: `6e9d0aca5a844b2ae0a1a9db2e32d4f23ae2a4b1`
 - The market outperforms all three model configurations on accuracy, Brier and Log Loss.
 - The ensemble is marginally better than Dixon-Coles on Brier and Log Loss, but not enough to establish a meaningful advantage.
 - ML remains materially weaker than Dixon-Coles and market.
-- The current `ensemble` is **not a pure model-only ensemble**: its configured blend can include market probabilities (and LAE probabilities when available). Football-Data historical input supplies market odds but no LAE feed. A separate DC+ML-only blend should be evaluated before describing the ensemble as independent of the market.
+- The current `ensemble` is **not a pure model-only ensemble**: its configured blend can include market probabilities (and LAE probabilities when available). Football-Data historical input supplies market odds but no LAE feed. A separate `ensemble_dc_ml` mode has now been implemented using only Dixon-Coles and ML, preserving their previous relative weights (0.58:0.17, normalized). It is evaluated as a separate walk-forward series and must not be described as better until its fresh backtest completes.
 - ECE values alone do not establish calibration quality; class-wise reliability and calibration on a strictly prior window remain necessary.
 - These historical results do not demonstrate future profitability.
 
@@ -126,7 +126,7 @@ Warnings include pandas DataFrame fragmentation during ingestion and GitHub Acti
 
 ## Remaining work — priority order
 
-1. **Separate ensembles:** implement and compare a DC+ML-only blend against the current market-blended ensemble. Learn weights only from prior out-of-sample predictions; do not tune on the final test period.
+1. **Separate ensembles:** a fixed-weight DC+ML-only baseline (`ensemble_dc_ml`) is implemented with explicit market/LAE exclusion and added to walk-forward comparison. Its first full backtest is pending. Next, tune weights only from prior out-of-sample predictions; do not tune on the final test period.
 2. **Calibration:** add rolling/temporal calibration evaluation (including class-wise reliability) and compare Brier/Log Loss before and after without contaminating test data.
 3. **Odds provenance:** establish a usable pre-match cutoff or explicitly constrain the market benchmark to the available Football-Data semantics.
 4. **Data identity:** audit team aliases, renamed clubs and cross-season continuity; profile checks currently normalize text but do not maintain a canonical team-identity registry.
@@ -142,7 +142,7 @@ Warnings include pandas DataFrame fragmentation during ingestion and GitHub Acti
 5. Source/cache provenance and current-season coverage — **validated on 5,311 fixtures**.
 6. Non-empty Dixon-Coles, ML and ensemble backtests — **validated, 5,011 predictions each**.
 7. Optimizer probability validation and small-budget DP exactness — **implemented and CI-tested**.
-8. Independent model-only ensemble, temporal calibration, timestamped odds and expected-payout model — **pending**.
+8. Fixed-weight independent model-only ensemble — **implemented; fresh full backtest pending**. Temporal calibration, timestamped odds and expected-payout model — **pending**.
 
 ## Integration status
 

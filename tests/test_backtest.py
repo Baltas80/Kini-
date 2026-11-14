@@ -120,6 +120,6 @@ def test_compare_reports_market_metrics_on_same_fixture_sample(monkeypatch):
 
     result = backtest.compare_walk_forward(matches, min_train=12)
 
-    for mode in ("dc", "ml", "ensemble"):
+    for mode in ("dc", "ml", "ensemble", "ensemble_dc_ml"):
         assert result["common_sample"][mode]["model"]["n"] == 1
         assert result["common_sample"][mode]["market"]["n"] == 1
