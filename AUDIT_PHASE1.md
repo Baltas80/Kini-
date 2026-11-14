@@ -15,7 +15,8 @@ Latest validated branch HEAD: `2963e7dcbc3f0aca6680011e9c347367c79af44e`
 - **P6 ticket optimizer:** probability validation, budget constraints, exhaustive small-budget DP comparison, minimum stake and Pleno al 15 aggregation are implemented and CI-tested.
 - **Predictive performance:** the market remains materially better than every model configuration on accuracy, Brier and Log Loss.
 - **Ensemble weighting:** fixed and rolling prequential DC/ML-only comparisons are now evaluated. The adaptive variant did not improve Brier or Log Loss over the fixed DC/ML blend and is not selected as the default.
-- **Not complete:** class-wise temporal calibration, timestamped odds provenance, canonical team identity, correlation-aware ticket coverage and expected-payout modelling.
+- **Calibration diagnostics:** one-vs-rest reliability, prevalence, mean predicted probability, binary Brier/Log Loss and ECE by 1/X/2 class and football season are implemented on out-of-sample forecasts. Fitting and promoting a probability calibrator remains pending.
+- **Not complete:** timestamped odds provenance, canonical team identity, correlation-aware ticket coverage and expected-payout modelling.
 
 ## P0/P2 — walk-forward and ML integrity
 
@@ -82,6 +83,19 @@ Code commit evaluated: `fbffca8b1600346ca728e19f010ab3f61f35f198`
 * RPS is secondary because 1/X/2 are nominal outcomes rather than a naturally ordinal scale.  
 ** ECE is maximum-confidence expected calibration error with 10 equal-width bins; it is not a complete class-wise calibration assessment.
 
+
+### Class-wise and seasonal calibration diagnostics
+
+Commit `4508e903dbdee409e4f21571377de4626cd4ef92` adds one-vs-rest diagnostics for each 1/X/2 outcome:
+- Class prevalence and mean predicted probability.
+- Binary Brier score and binary Log Loss.
+- Equal-width reliability bins with count, mean forecast probability and observed frequency.
+- Class-wise ECE, weighted by bin population.
+- Seasonal slices using July-June football seasons.
+- Separate seasonal model-versus-market diagnostics on the exact common market-available fixture sample.
+
+These diagnostics consume only walk-forward out-of-sample predictions. All fixtures on a forecast date are evaluated before any of their outcomes enter subsequent history. No calibrator is fitted or applied by this change; the output measures reliability and exposes class/season weaknesses without changing forecasts. A future calibrator must be trained only on earlier out-of-sample predictions and selected by proper scoring rules on a later untouched period.
+
 ### Adaptive DC/ML weighting
 
 The adaptive ensemble selects its Dixon-Coles weight once per forecast date using only earlier out-of-sample predictions:
@@ -144,7 +158,7 @@ The ingestion builder now consolidates the normalized CSV frame before adding `_
 
 ## Remaining work — priority order
 
-1. **Class-wise calibration:** add temporal reliability and one-vs-rest calibration diagnostics for 1, X and 2. Any calibration fit must use only predictions/outcomes available before the evaluated date.
+1. **Calibration correction:** use the new class-wise seasonal reliability diagnostics to determine whether a calibrator is justified. If so, fit it only on prior out-of-sample predictions and evaluate it on a later untouched temporal block; do not promote it unless proper scoring rules improve.
 2. **Odds provenance:** establish a usable pre-match cutoff or explicitly constrain the market benchmark to the available Football-Data semantics. Do not describe closing odds as executable at an earlier cutoff.
 3. **Data identity:** audit aliases, renamed clubs and cross-season continuity; profile checks currently normalize text but do not maintain a canonical team-identity registry.
 4. **Ticket economics:** test cross-match dependence and realistic system/reduced-bet constraints. Do not claim expected payout or profitability without a defensible payout model and prize-pool data.
@@ -160,7 +174,7 @@ The ingestion builder now consolidates the normalized CSV frame before adding `_
 5. Source/cache provenance and current-season coverage — **validated on 5,311 fixtures**.
 6. Non-empty Dixon-Coles, ML and ensemble backtests — **validated, 5,011 predictions each**.
 7. Optimizer probability validation and small-budget DP exactness — **implemented and CI-tested**.
-8. Fixed and adaptive independent model-only ensembles — **implemented and validated on 5,011 walk-forward fixtures**; adaptive weighting did not improve Brier or Log Loss over the fixed blend. Latest code head CI, ingestion validation and five-model backtest — **passed**. Class-wise temporal calibration, timestamped odds and expected-payout model — **pending**.
+8. Fixed and adaptive independent model-only ensembles — **implemented and validated on 5,011 walk-forward fixtures**; adaptive weighting did not improve Brier or Log Loss over the fixed blend. Class-wise and seasonal one-vs-rest reliability diagnostics — **implemented; latest commit awaiting CI**. Calibrator fitting, timestamped odds and expected-payout model — **pending**.
 
 ## Integration status
 
