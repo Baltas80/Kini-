@@ -196,3 +196,85 @@ def test_adaptive_weight_updates_only_after_complete_forecast_date(monkeypatch):
     assert trace[1]["prior_oof_predictions"] == 2
     assert trace[1]["dc_weight"] == 1.0
     assert result["ensemble_dc_ml_adaptive"]["n"] == 3
+
+
+def test_classwise_one_vs_rest_calibration_reports_reliability_bins():
+    rows = [
+        ({"1": 0.8, "X": 0.1, "2": 0.1}, "1"),
+        ({"1": 0.2, "X": 0.7, "2": 0.1}, "X"),
+    ]
+
+    metrics = multiclass_metrics(rows, calibration_bins=2)
+    home = metrics["classwise_calibration"]["1"]
+    draw = metrics["classwise_calibration"]["X"]
+
+    assert home["n"] == 2
+    assert home["prevalence"] == 0.5
+    assert home["mean_probability"] == 0.5
+    assert home["brier"] == 0.04
+    assert abs(home["logloss"] - 0.2231435513) < 1e-9
+    assert abs(home["ece"] - 0.2) < 1e-12
+    assert sum(item["count"] for item in home["bins"]) == 2
+    assert draw["prevalence"] == 0.5
+    assert abs(draw["ece"] - 0.3) < 1e-12
+
+
+def test_empty_metrics_expose_empty_classwise_calibration():
+    metrics = multiclass_metrics([])
+
+    assert metrics["n"] == 0
+    assert set(metrics["classwise_calibration"]) == {"1", "X", "2"}
+    for diagnostics in metrics["classwise_calibration"].values():
+        assert diagnostics["n"] == 0
+        assert diagnostics["prevalence"] is None
+        assert diagnostics["mean_probability"] is None
+        assert diagnostics["ece"] is None
+        assert diagnostics["bins"] == []
+
+
+def test_compare_reports_out_of_sample_classwise_calibration_by_season(monkeypatch):
+    class FakeEngine:
+        def __init__(self, enable_ml=False):
+            self.dc = type("DC", (), {"decay": 0.995})()
+            self.history = []
+
+        def fit(self, history):
+            self.history = list(history)
+            return self
+
+        def predict(self, match, mode="ensemble", history=None):
+            return type("Prediction", (), {
+                "probabilities": {"1": 0.6, "X": 0.25, "2": 0.15}
+            })()
+
+    monkeypatch.setattr(backtest, "KiniEngine", FakeEngine)
+    training_day = datetime(2024, 6, 30)
+    matches = [
+        Match(training_day, f"H{i}", f"A{i}", 1, 0, "1")
+        for i in range(12)
+    ]
+    matches.extend([
+        Match(
+            datetime(2024, 7, 1), "H12", "A12", 1, 0, "1",
+            market={"1": 0.5, "X": 0.3, "2": 0.2},
+        ),
+        Match(
+            datetime(2025, 7, 1), "H13", "A13", 0, 0, "X",
+            market={"1": 0.4, "X": 0.35, "2": 0.25},
+        ),
+    ])
+
+    result = backtest.compare_walk_forward(matches, min_train=12)
+
+    dc_seasons = result["temporal_classwise_calibration"]["dc"]
+    assert set(dc_seasons) == {"2024/25", "2025/26"}
+    assert dc_seasons["2024/25"]["n"] == 1
+    assert dc_seasons["2025/26"]["n"] == 1
+    assert dc_seasons["2024/25"]["classes"]["1"]["prevalence"] == 1.0
+    assert dc_seasons["2025/26"]["classes"]["X"]["prevalence"] == 1.0
+
+    common = result["temporal_common_sample_calibration"]["dc"]
+    assert common["model"]["2024/25"]["n"] == 1
+    assert common["market"]["2024/25"]["n"] == 1
+    assert common["model"]["2025/26"]["n"] == 1
+    assert common["market"]["2025/26"]["n"] == 1
