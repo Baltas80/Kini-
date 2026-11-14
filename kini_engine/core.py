@@ -187,14 +187,22 @@ class DixonColes:
         return grid / total
 
     def predict(self, home: str, away: str) -> tuple[dict[str, float], list[dict[str, Any]]]:
-        grid = self._score_grid(home, away)
-        probs = grid_to_1x2(grid)
+        if not self.fitted or home not in self.teams or away not in self.teams:
+            lh, la = self.expected_goals(home, away)
+            grid = score_grid(lh, la, self.rho)
+            probs = grid_to_1x2(grid)
+        else:
+            pred = self.model.predict(home, away, max_goals=15, normalize=True)
+            grid = np.asarray(pred.grid, dtype=float)
+            probs = dict(zip(SIGNS, map(float, pred.home_draw_away)))
+
         flat = [
             {"score": f"{h}-{a}", "probability": float(grid[h, a])}
             for h, a in np.ndindex(grid.shape)
         ]
         flat.sort(key=lambda x: x["probability"], reverse=True)
         return probs, flat[:10]
+
 
     def pleno15_probs(self, home: str, away: str) -> list[dict[str, Any]]:
         """Aggregate the score grid into SELAE Pleno al 15 goal categories."""
