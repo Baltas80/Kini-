@@ -425,7 +425,7 @@ def build_history(
     profile_target = target.with_name(f"{target.stem}.profile.json")
     _atomic_write(
         profile_target,
-        (json.dumps(profile, indent=2, ensure_ascii=False) + "\\n").encode("utf-8"),
+        (json.dumps(profile, indent=2, ensure_ascii=False) + "\n").encode("utf-8"),
     )
     if not profile["integrity_passed"]:
         raise ValueError(
