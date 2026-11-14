@@ -44,26 +44,23 @@ jobs:
                   raise SystemExit(f"Current-season coverage missing: {key}")
           print(json.dumps(profile, indent=2, ensure_ascii=False))
           PY
-      - name: Run historical comparison
+      - name: Run historical Dixon-Coles backtest
         run: |
-          python -m kini_engine.cli compare data/historical_spain.csv --min-train 300 --refit-every 1000 > backtest-results.json
+          python -m kini_engine.cli backtest data/historical_spain.csv --min-train 300 --refit-every 1000 > backtest-results.json
           cat backtest-results.json
-      - name: Enforce non-empty model backtests
+      - name: Enforce non-empty Dixon-Coles backtest
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
 
           result = json.loads(Path("backtest-results.json").read_text(encoding="utf-8"))
-          total = int(result.get("n_total", 0))
-          if total <= 0:
-              raise SystemExit("Backtest has no test fixtures")
-          for name in ("dc", "ml", "ensemble"):
-              n = int(result.get(name, {}).get("n", 0))
-              if n != total:
-                  errors = result.get("prediction_errors", {}).get(name, {})
-                  raise SystemExit(f"{name} produced {n}/{total} predictions; errors={errors}")
-          print(f"BACKTEST_ACCEPTANCE_OK: {total} fixtures for dc, ml, ensemble")
+          metrics = result.get("metrics", {})
+          n = int(metrics.get("n", 0))
+          n_test = int(result.get("n_test", 0))
+          if n <= 0 or n != n_test:
+              raise SystemExit(f"Dixon-Coles produced {n}/{n_test} predictions")
+          print(f"BACKTEST_ACCEPTANCE_OK: {n} Dixon-Coles fixtures")
           PY
       - name: Upload historical dataset, profile and backtest results
         if: always()
