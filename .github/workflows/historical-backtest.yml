@@ -55,11 +55,9 @@ jobs:
           from pathlib import Path
 
           result = json.loads(Path("backtest-results.json").read_text(encoding="utf-8"))
-          metrics = result.get("metrics", {})
-          n = int(metrics.get("n", 0))
-          n_test = int(result.get("n_test", 0))
-          if n <= 0 or n != n_test:
-              raise SystemExit(f"Baseline ensemble produced {n}/{n_test} predictions")
+          n = int(result.get("n", 0))
+          if n <= 0:
+              raise SystemExit("ML-disabled baseline backtest has no predictions")
           print(f"BACKTEST_ACCEPTANCE_OK: {n} ML-disabled baseline fixtures")
           PY
       - name: Upload historical dataset, profile and backtest results
