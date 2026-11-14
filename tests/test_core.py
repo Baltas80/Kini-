@@ -1,6 +1,5 @@
 from datetime import datetime, timedelta
 from itertools import combinations
-from math import prod
 import sys
 from types import SimpleNamespace
 

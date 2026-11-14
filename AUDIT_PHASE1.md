@@ -4,11 +4,11 @@ Date: 2026-11-14
 Repository: Baltas80/Kini-  
 Working branch: `audit/phase-1-temporal-validation`  
 Base branch: `master`  
-Status: P0 backtest and temporal controls validated; historical loader validation implemented; expanded ingestion/profile work is being validated separately in PR #5.
+Status: temporal validation and non-empty model backtests validated; historical input validation and optimizer safeguards implemented and CI-tested; current-season ingestion/profile validation is running separately in PR #5.
 
 ## P0 — temporal validation and non-empty model forecasts
 
-The walk-forward evaluator now groups fixtures by calendar date. Every fixture on a date uses training data strictly earlier than that date. Refit cadence counts forecast dates, not individual fixtures.
+The walk-forward evaluator groups fixtures by calendar date. Every fixture on a date uses training data strictly earlier than that date. Refit cadence counts forecast dates, not individual fixtures.
 
 The ML training matrix is also built using only results from dates strictly earlier than each training fixture. Inference features use the history available before the forecast date. A regression test covers same-calendar-day exclusion.
 
@@ -16,17 +16,16 @@ The earlier ML inference failure was traced to a one-dimensional input being pas
 
 ## Historical backtest evidence
 
-GitHub Actions run: [43625407725](https://github.com/Baltas80/Kini-/actions/runs/43625407725)  
-Commit: `f67d5e267d6bf783878b1ca24fac4d5473d20741`
+GitHub Actions run: [43626020678](https://github.com/Baltas80/Kini-/actions/runs/43626020678)  
+Validated code commit: `14ecc87539731bccff1408ef16b6fc6038cd6c35`
 
 - Generated historical rows: 5,052.
 - Initial training sample: 300 matches.
 - Test sample: 4,752 matches.
 - Test period: 2020-12-11 through 2026-05-31.
 - Prediction errors: 0 for Dixon-Coles, ML and ensemble.
-- Acceptance check: `BACKTEST_ACCEPTANCE_OK: 4752 fixtures for dc, ml, ensemble`.
-
-All model and market metrics below use the same 4,752 fixtures.
+- All three models and the market were evaluated on the same 4,752 fixtures.
+- The workflow's non-empty prediction acceptance step passed.
 
 | Model | Accuracy | Multiclass Brier | Log Loss | RPS* | ECE** |
 |---|---:|---:|---:|---:|---:|
@@ -60,28 +59,38 @@ Implemented on this branch:
 - Rejection of result labels that conflict with the final score.
 - Validation is applied by `load_matches_csv` before returning historical matches.
 
-GitHub Actions CI: [43625413225](https://github.com/Baltas80/Kini-/actions/runs/43625413225) — 23 tests passed, 4 warnings.
+## P6 — optimizer input and dynamic-programming validation
+
+Implemented on this branch:
+
+- Rejects malformed, non-finite, negative, out-of-range or non-normalized 1/X/2 probabilities.
+- Rejects boolean or non-positive column budgets.
+- Documents that `joint_coverage` assumes independent match outcomes.
+- Distinguishes full-ticket coverage from expected prize or expected profit.
+- Adds an exhaustive small-budget comparison proving that the dynamic programme returns the maximum covered probability for the tested budget-4 search space.
+
+GitHub Actions CI: [43626025664](https://github.com/Baltas80/Kini-/actions/runs/43626025664) — 26 tests passed, 4 warnings.
+
+This does not yet establish expected payout, economic value, correlation-aware coverage or real ticket-price constraints. Those remain open.
 
 ## P1 — resilient source ingestion and dataset profile
 
-A separate, existing PR is being repaired and extended:
+PR #5: [Robustecer la ingesta histórica de Football-Data](https://github.com/Baltas80/Kini-/pull/5)  
+Branch: `feat/resilient-history-ingestion`  
+Latest commit at this report: `278423e7a6b2fc0674565311cd6dc0915586efa3`
 
-- PR #5: [Robustecer la ingesta histórica de Football-Data](https://github.com/Baltas80/Kini-/pull/5)
-- Branch: `feat/resilient-history-ingestion`
-- Latest commit at this report: `b0c413c64f31f2e666805b778eadc8ee487d202f`
+That branch contains bounded HTTP retries, validated per-season/league caching, atomic writes, chronological sorting, duplicate removal and the 2026/27 season. It generates a dataset profile with source URLs, profile-generation time, cache-file timestamps/age, date coverage, missingness, duplicate counts, score/result consistency and league/season counts.
 
-That branch contains bounded HTTP retries, validated per-season/league caching, atomic writes, chronological sorting, duplicate removal and the 2026/27 season. It now also generates a dataset profile containing source URLs, retrieval time, date coverage, missingness, duplicate counts, score/result consistency and league/season counts.
-
-The earlier PR #5 CI failure was caused by tests being unable to import the `scripts` package. A repository-root pytest path has been added; the new CI and ingestion/backtest runs are pending. Do not treat the profile or 2026/27 coverage as validated until those runs complete and their artifacts are inspected.
+The earlier CI import and JSON-serialization failures have been corrected. CI passed at the preceding commit `eac2849` (15 tests). The latest commit adds cache provenance and workflow assertions for 2026/27 coverage and non-empty model predictions; its CI and historical run are pending. Do not mark the profile or current-season coverage validated until those latest runs complete and the profile artifact is inspected.
 
 ## Remaining work
 
 1. Confirm PR #5 CI and the 2026/27 ingestion/backtest; inspect the generated profile and artifact rather than relying only on job success.
-2. Audit team-name normalization, cross-season duplicates, missing values and score/result consistency across the downloaded data.
+2. Audit team aliases, cross-season duplicates, missing values and score/result consistency across the downloaded data.
 3. Establish the operational timestamp/cutoff for market odds or clearly constrain comparisons to the source's available pre-match quote semantics.
 4. Tune ensemble weights using training-only temporal validation; test whether ML adds incremental value. Do not optimize weights on the final test period.
 5. Evaluate calibration methods on a strictly prior calibration window and report Brier/Log Loss before and after.
-6. Audit the optimizer's coverage and budget calculations with exhaustive small-case tests and realistic 14-match Quiniela constraints.
+6. Extend optimizer validation to realistic Quiniela costs, 14-match constraints, Pleno al 15 treatment, and sensitivity to cross-match dependence; do not claim expected profitability without a defensible payout model.
 
 ## Phase 1 acceptance status
 
@@ -89,9 +98,9 @@ The earlier PR #5 CI failure was caused by tests being unable to import the `scr
 2. Walk-forward reports test count and date coverage — **validated**.
 3. Model/market comparison uses a common fixture sample — **validated**.
 4. Historical input validation rejects invalid dates, duplicates, incomplete scores and inconsistent labels — **implemented and CI-tested**.
-5. Dataset profile records source, retrieval time, coverage, missingness, duplicates and label consistency — **implemented on PR #5; validation pending**.
+5. Dataset profile records source, retrieval/cache provenance, coverage, missingness, duplicates and label consistency — **implemented on PR #5; latest end-to-end validation pending**.
 6. Tests and CI pass; empirical comparisons are only reported after non-empty model backtests — **validated on PR #6 branch**.
 
 ## Integration status
 
-PR #6 remains open and draft. No PR has been merged. The `master` branch remains at `ef331c3a3f50220b5d2b1a71900a2d7003b259c4`.
+PR #6 remains open and draft. PR #5 remains open. No PR has been merged. The `master` branch remains at `ef331c3a3f50220b5d2b1a71900a2d7003b259c4`.
