@@ -1,5 +1,7 @@
 from datetime import datetime, timedelta
 
+import numpy as np
+
 import kini_engine.backtest as backtest
 from kini_engine.backtest import multiclass_metrics
 from kini_engine.core import Match
@@ -278,3 +280,129 @@ def test_compare_reports_out_of_sample_classwise_calibration_by_season(monkeypat
     assert common["market"]["2024/25"]["n"] == 1
     assert common["model"]["2025/26"]["n"] == 1
     assert common["market"]["2025/26"]["n"] == 1
+
+
+def test_multiclass_calibrator_is_identity_until_history_is_sufficient():
+    probabilities = {"1": 0.5, "X": 0.3, "2": 0.2}
+    history = [(probabilities, "1"), (probabilities, "X")]
+
+    calibrator = backtest.fit_multiclass_calibrator(
+        history,
+        min_history=3,
+        window=3,
+        min_class_count=1,
+    )
+
+    assert calibrator["fitted"] is False
+    assert calibrator["reason"] == "insufficient_history"
+    assert backtest.apply_multiclass_calibrator(
+        probabilities, calibrator
+    ) == probabilities
+
+
+def test_prequential_multiclass_calibrator_improves_biased_holdout_logloss():
+    rng = np.random.default_rng(123)
+    n = 1200
+    signs = ("1", "X", "2")
+    true_probabilities = rng.dirichlet([4.0, 2.5, 2.5], size=n)
+    outcomes = np.asarray([
+        rng.choice(3, p=probability)
+        for probability in true_probabilities
+    ])
+
+    # Simulate a stable class-prior and sharpness distortion.
+    logits = 1.15 * np.log(true_probabilities) + np.asarray(
+        [-0.18, 0.04, 0.14]
+    )
+    logits -= logits.max(axis=1, keepdims=True)
+    raw_probabilities = np.exp(logits)
+    raw_probabilities /= raw_probabilities.sum(axis=1, keepdims=True)
+
+    training_rows = [
+        (
+            dict(zip(signs, map(float, raw_probabilities[index]))),
+            signs[int(outcomes[index])],
+        )
+        for index in range(700)
+    ]
+    holdout_rows = [
+        (
+            dict(zip(signs, map(float, raw_probabilities[index]))),
+            signs[int(outcomes[index])],
+        )
+        for index in range(700, n)
+    ]
+
+    calibrator = backtest.fit_multiclass_calibrator(
+        training_rows,
+        min_history=700,
+        window=700,
+        regularization=0.05,
+        min_class_count=20,
+    )
+    assert calibrator["fitted"] is True
+    assert calibrator["n_train"] == 700
+
+    raw_logloss = multiclass_metrics(holdout_rows)["logloss"]
+    calibrated_rows = [
+        (
+            backtest.apply_multiclass_calibrator(probabilities, calibrator),
+            outcome,
+        )
+        for probabilities, outcome in holdout_rows
+    ]
+    calibrated_logloss = multiclass_metrics(calibrated_rows)["logloss"]
+
+    assert calibrated_logloss < raw_logloss
+    for probabilities, _ in calibrated_rows:
+        assert abs(sum(probabilities.values()) - 1.0) < 1e-12
+        assert all(0.0 <= value <= 1.0 for value in probabilities.values())
+
+
+def test_compare_fits_calibrator_only_from_completed_prior_dates(monkeypatch):
+    class FakeEngine:
+        def __init__(self, enable_ml=False):
+            self.dc = type("DC", (), {"decay": 0.995})()
+
+        def fit(self, history):
+            return self
+
+        def predict(self, match, mode="ensemble", history=None):
+            return type("Prediction", (), {
+                "probabilities": {"1": 0.50, "X": 0.30, "2": 0.20}
+            })()
+
+    monkeypatch.setattr(backtest, "KiniEngine", FakeEngine)
+    start = datetime(2025, 1, 1)
+    matches = [
+        Match(start, f"H{i}", f"A{i}", 1, 0, "1")
+        for i in range(12)
+    ]
+    matches.extend([
+        Match(datetime(2025, 1, 2), "H12", "A12", 1, 0, "1"),
+        Match(datetime(2025, 1, 2), "H13", "A13", 0, 0, "X"),
+        Match(datetime(2025, 1, 2), "H14", "A14", 0, 1, "2"),
+        Match(datetime(2025, 1, 3), "H15", "A15", 1, 0, "1"),
+        Match(datetime(2025, 1, 3), "H16", "A16", 0, 0, "X"),
+        Match(datetime(2025, 1, 4), "H17", "A17", 0, 1, "2"),
+    ])
+
+    result = backtest.compare_walk_forward(
+        matches,
+        min_train=12,
+        calibration_min_history=3,
+        calibration_window=10,
+        calibration_refit_every=1,
+        calibration_regularization=0.05,
+        calibration_min_class_count=1,
+        adaptive_min_history=1,
+        adaptive_window=10,
+    )
+
+    summary = result["prequential_calibration"]["models"]["dc"]
+    # The final fit is made before 4 January: it can see only the three
+    # forecasts from 2 January and two from 3 January, never 4 January's result.
+    assert summary["last_fit"]["fit_date"] == "2025-01-04"
+    assert summary["last_fit"]["n_train"] == 5
+    assert summary["n"] == 3
+    assert result["prequential_calibration"]["same_calendar_day_outcomes_excluded"] is True
