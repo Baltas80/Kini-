@@ -6,7 +6,7 @@ Working branch: `audit/phase-1-temporal-validation`
 Base branch: `master`  
 Backtest code commit evaluated: `fbffca8b1600346ca728e19f010ab3f61f35f198`  
 Latest fully validated baseline: `2963e7dcbc3f0aca6680011e9c347367c79af44e`  
-Latest branch HEAD: `3fff53c52d4b60efe851eba18d9bd4e85a463f88` (44 tests and historical-data validation passed; calibrated historical backtest pending)
+Latest code HEAD: `3fff53c52d4b60efe851eba18d9bd4e85a463f88` (44 tests and historical-data validation passed; calibrated historical backtest pending)
 
 ## Executive status
 
