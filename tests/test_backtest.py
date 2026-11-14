@@ -102,7 +102,7 @@ def test_compare_reports_market_metrics_on_same_fixture_sample(monkeypatch):
             self.history = list(history)
             return self
 
-        def predict(self, match, mode="ensemble"):
+        def predict(self, match, mode="ensemble", history=None):
             return type("Prediction", (), {
                 "probabilities": {"1": 0.5, "X": 0.3, "2": 0.2}
             })()
