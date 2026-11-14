@@ -211,7 +211,7 @@ def test_classwise_one_vs_rest_calibration_reports_reliability_bins():
     assert home["n"] == 2
     assert home["prevalence"] == 0.5
     assert home["mean_probability"] == 0.5
-    assert home["brier"] == 0.04
+    assert abs(home["brier"] - 0.04) < 1e-12
     assert abs(home["logloss"] - 0.2231435513) < 1e-9
     assert abs(home["ece"] - 0.2) < 1e-12
     assert sum(item["count"] for item in home["bins"]) == 2
