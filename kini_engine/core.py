@@ -385,29 +385,67 @@ class TicketOptimizer:
     """Exact budget-constrained optimizer for the 14 standard matches."""
 
     def optimize(self, predictions: list[dict[str, float]], budget: int = 8) -> dict[str, Any]:
+        """Maximize full-ticket coverage under an independent-match approximation.
+
+        This optimizes the probability that the complete 14-sign outcome is
+        included in the generated columns. It is not an expected-prize or
+        expected-profit optimizer.
+        """
         if len(predictions) != 14:
             raise ValueError("standard ticket optimisation needs exactly 14 matches")
-        if not isinstance(budget, int) or budget < 1:
-            raise ValueError("budget must be a positive integer")
+        if isinstance(budget, bool) or not isinstance(budget, int) or budget < 1:
+            raise ValueError("budget must be a positive integer number of columns")
+
+        normalized: list[dict[str, float]] = []
+        for index, prediction in enumerate(predictions, start=1):
+            if not isinstance(prediction, dict):
+                raise ValueError(f"match {index}: probabilities must be a mapping")
+            values: dict[str, float] = {}
+            for sign in SIGNS:
+                raw = prediction.get(sign, 0.0)
+                if isinstance(raw, (bool, np.bool_)):
+                    raise ValueError(f"match {index}: invalid probability for sign {sign}")
+                try:
+                    value = float(raw)
+                except (TypeError, ValueError) as exc:
+                    raise ValueError(
+                        f"match {index}: invalid probability for sign {sign}"
+                    ) from exc
+                if not np.isfinite(value) or value < 0.0 or value > 1.0:
+                    raise ValueError(
+                        f"match {index}: probability for sign {sign} must be finite and in [0, 1]"
+                    )
+                values[sign] = value
+
+            total = sum(values.values())
+            if total <= 0.0 or not np.isclose(total, 1.0, rtol=0.0, atol=1e-6):
+                raise ValueError(
+                    f"match {index}: 1/X/2 probabilities must sum to 1 (got {total:.8g})"
+                )
+            normalized.append({sign: values[sign] / total for sign in SIGNS})
 
         # A single, double or triple contributes respectively 1, 2 or 3
-        # columns. For a fixed selection of signs, the covered probability is
-        # the product of the selected marginal masses. Maximising its log turns
-        # the problem into a small exact dynamic programme over column budget.
+        # columns. For fixed signs, covered mass is the product of selected
+        # marginal masses. Maximizing its logarithm gives an exact DP over
+        # the column budget under the independence approximation.
         dp: dict[int, tuple[float, list[tuple[str, ...]]]] = {1: (0.0, [])}
 
-        for p in predictions:
+        for probabilities in normalized:
             nxt: dict[int, tuple[float, list[tuple[str, ...]]]] = {}
-            ordered = sorted(SIGNS, key=lambda sign: float(p.get(sign, 0.0)), reverse=True)
+            ordered = sorted(
+                SIGNS,
+                key=lambda sign: probabilities[sign],
+                reverse=True,
+            )
 
             for used, (log_mass, picks) in dp.items():
-                for k in (1, 2, 3):
-                    new_used = used * k
+                for count in (1, 2, 3):
+                    new_used = used * count
                     if new_used > budget:
                         continue
-                    signs = tuple(ordered[:k])
-                    mass = max(sum(float(p.get(sign, 0.0)) for sign in signs), 1e-15)
-                    candidate = log_mass + float(np.log(mass))
+                    signs = tuple(ordered[:count])
+                    mass = sum(probabilities[sign] for sign in signs)
+                    candidate = log_mass + float(np.log(max(mass, 1e-15)))
                     previous = nxt.get(new_used)
                     if previous is None or candidate > previous[0]:
                         nxt[new_used] = (candidate, picks + [signs])
@@ -422,6 +460,8 @@ class TicketOptimizer:
             [picks[j][mask[j]] for j in range(14)]
             for mask in np.ndindex(tuple(len(x) for x in picks))
         ]
+        if len(columns) != used:
+            raise RuntimeError("ticket column count does not match the optimizer state")
 
         return {
             "budget": budget,
@@ -429,7 +469,9 @@ class TicketOptimizer:
             "column_count": len(columns),
             "shape": tuple(len(x) for x in picks),
             "joint_coverage": float(np.exp(log_mass)),
+            "coverage_assumption": "independent_matches",
         }
+
 
 
 class KiniEngine:

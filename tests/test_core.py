@@ -1,4 +1,6 @@
 from datetime import datetime, timedelta
+from itertools import combinations
+from math import prod
 import sys
 from types import SimpleNamespace
 
@@ -184,3 +186,71 @@ def test_feature_model_uses_latest_feature_history_without_refitting(monkeypatch
 
     assert FakeXGBClassifier.fit_calls == 1
     assert FakeXGBClassifier.inference_first_feature == len(feature_history)
+
+
+def test_optimizer_rejects_invalid_probability_distributions():
+    import pytest
+
+    valid = {"1": 0.5, "X": 0.3, "2": 0.2}
+    predictions = [valid.copy() for _ in range(14)]
+    predictions[4]["1"] = 0.8
+    with pytest.raises(ValueError, match="must sum to 1"):
+        TicketOptimizer().optimize(predictions, budget=8)
+
+    predictions = [valid.copy() for _ in range(14)]
+    predictions[2]["X"] = float("nan")
+    with pytest.raises(ValueError, match="finite and in"):
+        TicketOptimizer().optimize(predictions, budget=8)
+
+    predictions = [valid.copy() for _ in range(14)]
+    predictions[1]["2"] = -0.1
+    with pytest.raises(ValueError, match="finite and in"):
+        TicketOptimizer().optimize(predictions, budget=8)
+
+
+def test_optimizer_rejects_boolean_budget():
+    import pytest
+
+    predictions = [{"1": 0.5, "X": 0.3, "2": 0.2} for _ in range(14)]
+    with pytest.raises(ValueError, match="positive integer"):
+        TicketOptimizer().optimize(predictions, budget=True)
+
+
+def test_optimizer_matches_exhaustive_search_for_small_budget():
+    predictions = [
+        {
+            "1": 0.40 + (index % 4) * 0.03,
+            "X": 0.35 - (index % 3) * 0.02,
+            "2": 0.25 - (index % 4) * 0.01,
+        }
+        for index in range(14)
+    ]
+    predictions = [
+        {sign: value / sum(row.values()) for sign, value in row.items()}
+        for row in predictions
+    ]
+    result = TicketOptimizer().optimize(predictions, budget=4)
+
+    shapes = [[1] * 14]
+    for index in range(14):
+        for count in (2, 3):
+            shape = [1] * 14
+            shape[index] = count
+            shapes.append(shape)
+    for first, second in combinations(range(14), 2):
+        shape = [1] * 14
+        shape[first] = shape[second] = 2
+        shapes.append(shape)
+
+    expected = 0.0
+    for shape in shapes:
+        covered = 1.0
+        for row, count in zip(predictions, shape):
+            top = sorted(row.values(), reverse=True)[:count]
+            covered *= sum(top)
+        expected = max(expected, covered)
+
+    assert result["column_count"] <= 4
+    assert result["joint_coverage"] == pytest.approx(expected)
+    assert len(result["columns"]) == result["column_count"]
+    assert result["coverage_assumption"] == "independent_matches"
