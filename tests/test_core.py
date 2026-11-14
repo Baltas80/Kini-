@@ -268,6 +268,7 @@ def test_quiniela_returns_16_pleno15_categories():
     result = KiniEngine(enable_ml=False).quiniela(fixtures, budget=2)
     assert len(result["pleno_al_15"]) == 16
     assert sum(row["probability"] for row in result["pleno_al_15"]) == pytest.approx(1.0)
+    assert result["pleno_al_15_best"] == result["pleno_al_15"][0]
 
 
 def test_optimizer_matches_exhaustive_search_for_small_budget():

@@ -648,8 +648,13 @@ class KiniEngine:
             raise ValueError("Quiniela needs 15 fixtures")
         preds = [self._predict_one(m, self.history) for m in fixtures]
         ticket = self.optimizer.optimize([p.probabilities for p in preds[:14]], budget=budget)
+        pleno_distribution = self.dc.pleno15_probs(
+            fixtures[14].home,
+            fixtures[14].away,
+        )
         return {
             "predictions": [p.__dict__ for p in preds],
             "ticket": ticket,
-            "pleno_al_15": self.dc.pleno15_probs(fixtures[14].home, fixtures[14].away),
+            "pleno_al_15": pleno_distribution,
+            "pleno_al_15_best": pleno_distribution[0],
         }
