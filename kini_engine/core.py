@@ -174,22 +174,54 @@ class DixonColes:
             float(np.clip(pred.away_goal_expectation, 0.15, 5.0)),
         )
 
-    def predict(self, home: str, away: str) -> tuple[dict[str, float], list[dict[str, Any]]]:
+    def _score_grid(self, home: str, away: str) -> np.ndarray:
         if not self.fitted or home not in self.teams or away not in self.teams:
             lh, la = self.expected_goals(home, away)
-            grid = score_grid(lh, la, self.rho)
-            probs = grid_to_1x2(grid)
-        else:
-            pred = self.model.predict(home, away, max_goals=15, normalize=True)
-            grid = np.asarray(pred.grid, dtype=float)
-            probs = dict(zip(SIGNS, map(float, pred.home_draw_away)))
+            return score_grid(lh, la, self.rho)
 
+        prediction = self.model.predict(home, away, max_goals=15, normalize=True)
+        grid = np.asarray(prediction.grid, dtype=float)
+        total = float(grid.sum())
+        if not np.isfinite(grid).all() or total <= 0.0:
+            raise ValueError("Dixon-Coles returned an invalid score grid")
+        return grid / total
+
+    def predict(self, home: str, away: str) -> tuple[dict[str, float], list[dict[str, Any]]]:
+        grid = self._score_grid(home, away)
+        probs = grid_to_1x2(grid)
         flat = [
             {"score": f"{h}-{a}", "probability": float(grid[h, a])}
             for h, a in np.ndindex(grid.shape)
         ]
         flat.sort(key=lambda x: x["probability"], reverse=True)
         return probs, flat[:10]
+
+    def pleno15_probs(self, home: str, away: str) -> list[dict[str, Any]]:
+        """Aggregate the score grid into SELAE Pleno al 15 goal categories."""
+        grid = self._score_grid(home, away)
+        categories = {
+            (home_goals, away_goals): 0.0
+            for home_goals in ("0", "1", "2", "M")
+            for away_goals in ("0", "1", "2", "M")
+        }
+        for home_goals, away_goals in np.ndindex(grid.shape):
+            home_category = str(home_goals) if home_goals < 3 else "M"
+            away_category = str(away_goals) if away_goals < 3 else "M"
+            categories[(home_category, away_category)] += float(
+                grid[home_goals, away_goals]
+            )
+
+        result = [
+            {
+                "home_goals": home_category,
+                "away_goals": away_category,
+                "probability": probability,
+            }
+            for (home_category, away_category), probability in categories.items()
+        ]
+        result.sort(key=lambda item: item["probability"], reverse=True)
+        return result
+
 
 
 class FeatureModel:
@@ -382,19 +414,43 @@ def _recent_form(history: list[Match], team: str) -> float:
 
 
 class TicketOptimizer:
-    """Exact budget-constrained optimizer for the 14 standard matches."""
+    """Exact column-budget optimizer under an independent-match approximation."""
+
+    def __init__(
+        self,
+        price_per_column_eur: float = 0.75,
+        minimum_columns: int = 2,
+    ) -> None:
+        try:
+            price = float(price_per_column_eur)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("price_per_column_eur must be finite and positive") from exc
+        if isinstance(price_per_column_eur, bool) or not np.isfinite(price) or price <= 0.0:
+            raise ValueError("price_per_column_eur must be finite and positive")
+        if (
+            isinstance(minimum_columns, bool)
+            or not isinstance(minimum_columns, int)
+            or minimum_columns < 1
+        ):
+            raise ValueError("minimum_columns must be a positive integer")
+        self.price_per_column_eur = price
+        self.minimum_columns = minimum_columns
 
     def optimize(self, predictions: list[dict[str, float]], budget: int = 8) -> dict[str, Any]:
-        """Maximize full-ticket coverage under an independent-match approximation.
+        """Maximize full-ticket coverage, not expected prize or expected profit.
 
-        This optimizes the probability that the complete 14-sign outcome is
-        included in the generated columns. It is not an expected-prize or
-        expected-profit optimizer.
+        Budget is the maximum number of 14-match columns. The default
+        0.75 EUR price and two-column minimum follow the SELAE 2024 annual
+        report; both are configurable for later rule or price changes.
         """
         if len(predictions) != 14:
             raise ValueError("standard ticket optimisation needs exactly 14 matches")
-        if isinstance(budget, bool) or not isinstance(budget, int) or budget < 1:
+        if isinstance(budget, bool) or not isinstance(budget, int):
             raise ValueError("budget must be a positive integer number of columns")
+        if budget < self.minimum_columns:
+            raise ValueError(
+                f"budget must be at least {self.minimum_columns} columns"
+            )
 
         normalized: list[dict[str, float]] = []
         for index, prediction in enumerate(predictions, start=1):
@@ -424,10 +480,10 @@ class TicketOptimizer:
                 )
             normalized.append({sign: values[sign] / total for sign in SIGNS})
 
-        # A single, double or triple contributes respectively 1, 2 or 3
-        # columns. For fixed signs, covered mass is the product of selected
-        # marginal masses. Maximizing its logarithm gives an exact DP over
-        # the column budget under the independence approximation.
+        # Each match contributes one, two or three selected signs. The number
+        # of resulting columns is their product. Maximizing the log of the
+        # product of selected marginal masses gives an exact DP under the
+        # independence approximation.
         dp: dict[int, tuple[float, list[tuple[str, ...]]]] = {1: (0.0, [])}
 
         for probabilities in normalized:
@@ -452,10 +508,20 @@ class TicketOptimizer:
 
             dp = nxt
 
-        if not dp:
-            raise ValueError(f"budget {budget} cannot represent a 14-match ticket")
+        eligible = {
+            used: value
+            for used, value in dp.items()
+            if used >= self.minimum_columns
+        }
+        if not eligible:
+            raise ValueError(
+                f"budget {budget} cannot satisfy the {self.minimum_columns}-column minimum"
+            )
 
-        used, (log_mass, picks) = max(dp.items(), key=lambda item: item[1][0])
+        used, (log_mass, picks) = max(
+            eligible.items(),
+            key=lambda item: item[1][0],
+        )
         columns = [
             [picks[j][mask[j]] for j in range(14)]
             for mask in np.ndindex(tuple(len(x) for x in picks))
@@ -465,11 +531,15 @@ class TicketOptimizer:
 
         return {
             "budget": budget,
+            "budget_unit": "columns",
             "columns": columns,
             "column_count": len(columns),
             "shape": tuple(len(x) for x in picks),
             "joint_coverage": float(np.exp(log_mass)),
             "coverage_assumption": "independent_matches",
+            "minimum_columns": self.minimum_columns,
+            "price_per_column_eur": self.price_per_column_eur,
+            "cost_eur": round(len(columns) * self.price_per_column_eur, 2),
         }
 
 
@@ -573,5 +643,5 @@ class KiniEngine:
         return {
             "predictions": [p.__dict__ for p in preds],
             "ticket": ticket,
-            "pleno_al_15": preds[14].scorelines[:8],
+            "pleno_al_15": self.dc.pleno15_probs(fixtures[14].home, fixtures[14].away),
         }

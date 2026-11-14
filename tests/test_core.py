@@ -6,7 +6,16 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from kini_engine.core import FeatureModel, KiniEngine, Match, TicketOptimizer, _date_num, context_adjust
+from kini_engine.core import (
+    DixonColes,
+    FeatureModel,
+    KiniEngine,
+    Match,
+    TicketOptimizer,
+    _date_num,
+    context_adjust,
+    score_grid,
+)
 
 
 def sample():
@@ -34,6 +43,8 @@ def test_optimizer_budget():
     p = [{"1": 0.5, "X": 0.3, "2": 0.2} for _ in range(14)]
     t = TicketOptimizer().optimize(p, budget=8)
     assert t["column_count"] <= 8
+    assert t["cost_eur"] == round(t["column_count"] * 0.75, 2)
+    assert t["budget_unit"] == "columns"
 
 
 def test_dixon_coles_uses_full_history():
@@ -51,6 +62,7 @@ def test_optimizer_returns_exact_column_count():
     assert t["column_count"] == 8
     assert len(t["columns"]) == 8
     assert all(len(column) == 14 for column in t["columns"])
+    assert t["cost_eur"] == 6.0
 
 
 def test_date_num_accepts_football_data_format():
@@ -209,11 +221,53 @@ def test_optimizer_rejects_invalid_probability_distributions():
 
 
 def test_optimizer_rejects_boolean_budget():
-    import pytest
-
     predictions = [{"1": 0.5, "X": 0.3, "2": 0.2} for _ in range(14)]
     with pytest.raises(ValueError, match="positive integer"):
         TicketOptimizer().optimize(predictions, budget=True)
+
+
+def test_optimizer_enforces_minimum_stake_and_price():
+    predictions = [{"1": 0.5, "X": 0.3, "2": 0.2} for _ in range(14)]
+    with pytest.raises(ValueError, match="at least 2 columns"):
+        TicketOptimizer().optimize(predictions, budget=1)
+
+    result = TicketOptimizer().optimize(predictions, budget=2)
+    assert result["column_count"] == 2
+    assert result["minimum_columns"] == 2
+    assert result["price_per_column_eur"] == 0.75
+    assert result["cost_eur"] == 1.50
+
+    custom = TicketOptimizer(price_per_column_eur=1.0).optimize(predictions, budget=2)
+    assert custom["cost_eur"] == 2.0
+
+
+def test_pleno15_aggregates_official_goal_categories():
+    model = DixonColes()
+    distribution = model.pleno15_probs("A", "B")
+
+    assert len(distribution) == 16
+    assert {row["home_goals"] for row in distribution} == {"0", "1", "2", "M"}
+    assert {row["away_goals"] for row in distribution} == {"0", "1", "2", "M"}
+    assert sum(row["probability"] for row in distribution) == pytest.approx(1.0)
+
+    grid = score_grid(1.35, 1.05)
+    expected_m_m = float(grid[3:, 3:].sum())
+    observed_m_m = next(
+        row["probability"]
+        for row in distribution
+        if row["home_goals"] == "M" and row["away_goals"] == "M"
+    )
+    assert observed_m_m == pytest.approx(expected_m_m)
+
+
+def test_quiniela_returns_16_pleno15_categories():
+    fixtures = [
+        Match(datetime(2025, 1, 1), f"Home{i}", f"Away{i}")
+        for i in range(15)
+    ]
+    result = KiniEngine(enable_ml=False).quiniela(fixtures, budget=2)
+    assert len(result["pleno_al_15"]) == 16
+    assert sum(row["probability"] for row in result["pleno_al_15"]) == pytest.approx(1.0)
 
 
 def test_optimizer_matches_exhaustive_search_for_small_budget():
@@ -231,7 +285,7 @@ def test_optimizer_matches_exhaustive_search_for_small_budget():
     ]
     result = TicketOptimizer().optimize(predictions, budget=4)
 
-    shapes = [[1] * 14]
+    shapes = []
     for index in range(14):
         for count in (2, 3):
             shape = [1] * 14
