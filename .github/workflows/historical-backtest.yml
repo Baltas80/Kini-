@@ -16,6 +16,8 @@ jobs:
           python-version: "3.12"
       - run: python -m pip install -e ".[all]"
       - run: python scripts/build_history.py
+      - name: Diagnose first ML forecast
+        run: python scripts/diagnose_ml.py data/historical_spain.csv --min-train 300
       - name: Run historical comparison
         run: |
           python -m kini_engine.cli compare data/historical_spain.csv --min-train 300 --refit-every 1000 > backtest-results.json
