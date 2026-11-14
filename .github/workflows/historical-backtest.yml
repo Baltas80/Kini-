@@ -44,7 +44,7 @@ jobs:
                   raise SystemExit(f"Current-season coverage missing: {key}")
           print(json.dumps(profile, indent=2, ensure_ascii=False))
           PY
-      - name: Run historical Dixon-Coles backtest
+      - name: Run historical baseline backtest (ML disabled)
         run: |
           python -m kini_engine.cli backtest data/historical_spain.csv --min-train 300 --refit-every 1000 > backtest-results.json
           cat backtest-results.json
@@ -59,8 +59,8 @@ jobs:
           n = int(metrics.get("n", 0))
           n_test = int(result.get("n_test", 0))
           if n <= 0 or n != n_test:
-              raise SystemExit(f"Dixon-Coles produced {n}/{n_test} predictions")
-          print(f"BACKTEST_ACCEPTANCE_OK: {n} Dixon-Coles fixtures")
+              raise SystemExit(f"Baseline ensemble produced {n}/{n_test} predictions")
+          print(f"BACKTEST_ACCEPTANCE_OK: {n} ML-disabled baseline fixtures")
           PY
       - name: Upload historical dataset, profile and backtest results
         if: always()
