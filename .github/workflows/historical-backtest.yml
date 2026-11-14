@@ -42,8 +42,8 @@ jobs:
                       f"errors={errors}"
                   )
           print(f"BACKTEST_ACCEPTANCE_OK: {total} fixtures for {', '.join(required)}")
+          PY
 
- 
       - name: Enforce prequential calibration acceptance
         run: |
           python - <<'PY'
@@ -90,7 +90,8 @@ jobs:
               "PREQUENTIAL_CALIBRATION_OK: calibrated and raw forecasts "
               "share the same post-warm-up samples"
           )
-          PY          PY
+          PY
+
       - name: Upload backtest results
         uses: actions/upload-artifact@v4
         with:
