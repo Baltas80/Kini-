@@ -8,7 +8,7 @@ import pandas as pd
 import pytest
 import requests
 
-from scripts.build_history import build_history, fetch_csv
+from scripts.build_history import build_dataset_profile, build_history, fetch_csv
 
 
 VALID_CSV = (
@@ -97,6 +97,37 @@ def test_build_history_sorts_deduplicates_and_drops_unplayed(tmp_path: Path) -> 
     assert saved["FTHG"].tolist() == [0, 1]
     assert saved["Season"].astype(str).tolist() == ["2122", "2122"]
     assert session.calls == 0
+    profile_path = output.with_name("historical.profile.json")
+    assert profile_path.is_file()
+    profile = __import__("json").loads(profile_path.read_text(encoding="utf-8"))
+    assert profile["duplicate_fixtures_before_deduplication"] == 1
+    assert profile["rows_missing_final_scores"] == 1
+    assert profile["integrity_passed"] is True
+
+
+def test_dataset_profile_detects_conflicting_result_and_duplicate(tmp_path: Path) -> None:
+    raw = pd.DataFrame(
+        [
+            {"Date": "01/01/2025", "HomeTeam": "A", "AwayTeam": "B", "FTHG": 1, "FTAG": 0, "FTR": "H", "Div": "SP1", "League": "la-liga", "Season": "2425", "SourceURL": "https://example.test/SP1.csv"},
+            {"Date": "01/01/2025", "HomeTeam": "A", "AwayTeam": "B", "FTHG": 1, "FTAG": 0, "FTR": "H", "Div": "SP1", "League": "la-liga", "Season": "2425", "SourceURL": "https://example.test/SP1.csv"},
+            {"Date": "02/01/2025", "HomeTeam": "C", "AwayTeam": "D", "FTHG": 0, "FTAG": 2, "FTR": "H", "Div": "SP1", "League": "la-liga", "Season": "2425", "SourceURL": "https://example.test/SP1.csv"},
+        ]
+    )
+    raw["_ParsedDate"] = pd.to_datetime(raw["Date"], dayfirst=True)
+    complete = raw.copy()
+    final = complete.drop_duplicates(
+        subset=["League", "Season", "_ParsedDate", "HomeTeam", "AwayTeam"]
+    )
+    profile = build_dataset_profile(
+        raw,
+        complete,
+        final,
+        ["https://example.test/SP1.csv"],
+        duplicates_removed=1,
+    )
+    assert profile["duplicate_fixtures_before_deduplication"] == 1
+    assert profile["score_result_mismatches"] == 1
+    assert profile["integrity_passed"] is False
 
 
 def test_fetch_csv_rejects_wrong_league_redirect(tmp_path: Path) -> None:

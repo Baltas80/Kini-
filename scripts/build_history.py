@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import argparse
 import io
+import json
 import logging
 import os
 import tempfile
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable
 
@@ -208,6 +210,137 @@ def _atomic_write_dataframe(frame: pd.DataFrame, target: Path) -> None:
                 pass
 
 
+
+def build_dataset_profile(
+    raw_frame: pd.DataFrame,
+    complete_frame: pd.DataFrame,
+    final_frame: pd.DataFrame,
+    source_urls: list[str],
+    duplicates_removed: int,
+    retrieved_at: datetime | None = None,
+) -> dict[str, object]:
+    """Summarize provenance, coverage, missingness and integrity before modeling."""
+    retrieved_at = retrieved_at or datetime.now(timezone.utc)
+    dates = raw_frame.get("_ParsedDate")
+    if dates is None:
+        dates = pd.to_datetime(raw_frame["Date"], dayfirst=True, errors="coerce")
+
+    source_columns = raw_frame.drop(columns=["_ParsedDate"], errors="ignore")
+    missingness = {
+        str(column): {
+            "count": int(source_columns[column].isna().sum()),
+            "fraction": float(source_columns[column].isna().mean()) if len(source_columns) else 0.0,
+        }
+        for column in source_columns.columns
+    }
+
+    home = raw_frame["HomeTeam"].astype("string").str.strip()
+    away = raw_frame["AwayTeam"].astype("string").str.strip()
+    team_mask = home.notna() & away.notna() & home.ne("") & away.ne("")
+    score_home = pd.to_numeric(raw_frame["FTHG"], errors="coerce")
+    score_away = pd.to_numeric(raw_frame["FTAG"], errors="coerce")
+    complete_score = score_home.notna() & score_away.notna()
+    complete_mask = team_mask & complete_score
+
+    def fixture_keys(frame: pd.DataFrame) -> pd.DataFrame:
+        frame_dates = frame.get("_ParsedDate")
+        if frame_dates is None:
+            frame_dates = pd.to_datetime(frame["Date"], dayfirst=True, errors="coerce")
+        return pd.DataFrame(
+            {
+                "league": frame["League"].astype("string").str.strip().str.casefold(),
+                "season": frame["Season"].astype("string").str.strip(),
+                "date": frame_dates.dt.strftime("%Y-%m-%d"),
+                "home": frame["HomeTeam"].astype("string").str.strip().str.casefold(),
+                "away": frame["AwayTeam"].astype("string").str.strip().str.casefold(),
+            },
+            index=frame.index,
+        )
+
+    raw_complete = raw_frame.loc[complete_mask].copy()
+    keys = fixture_keys(raw_complete)
+    duplicate_count = int(keys.duplicated().sum())
+    conflicting_duplicates = 0
+    if duplicate_count:
+        keyed = raw_complete.copy()
+        keyed["_fixture_key"] = list(map(tuple, keys.to_numpy()))
+        for _, group in keyed.groupby("_fixture_key", sort=False):
+            if len(group) < 2:
+                continue
+            score_variants = group[["FTHG", "FTAG"]].drop_duplicates()
+            labels = (
+                group.get("FTR", pd.Series(index=group.index, dtype="object"))
+                .dropna()
+                .astype(str)
+                .str.strip()
+                .str.upper()
+            )
+            labels = labels[labels.ne("")]
+            if len(score_variants) > 1 or labels.nunique() > 1:
+                conflicting_duplicates += 1
+
+    result_values = raw_frame.get("FTR", pd.Series(index=raw_frame.index, dtype="object"))
+    normalized = result_values.astype("string").str.strip().str.upper()
+    result_map = {"H": "1", "D": "X", "A": "2", "1": "1", "X": "X", "2": "2"}
+    mapped = normalized.map(result_map)
+    labels_present = result_values.notna() & normalized.ne("")
+    invalid_labels = int((labels_present & mapped.isna()).sum())
+
+    expected = pd.Series(index=raw_frame.index, dtype="object")
+    expected.loc[score_home > score_away] = "1"
+    expected.loc[score_home < score_away] = "2"
+    expected.loc[score_home.eq(score_away) & complete_score] = "X"
+    mismatches = int((complete_mask & mapped.notna() & expected.ne(mapped)).sum())
+
+    valid_dates = dates.notna()
+    invalid_dates_with_teams = int((team_mask & ~valid_dates).sum())
+    missing_scores = int((~complete_score).sum())
+    incomplete_scores = int((score_home.isna() ^ score_away.isna()).sum())
+
+    league_season_counts: dict[str, int] = {}
+    if {"League", "Season"}.issubset(final_frame.columns):
+        grouped = final_frame.groupby(["League", "Season"], dropna=False).size()
+        league_season_counts = {
+            f"{league}/{season}": int(count)
+            for (league, season), count in grouped.items()
+        }
+
+    source_counts: dict[str, int] = {}
+    if "SourceURL" in raw_frame.columns:
+        source_counts = {
+            str(source): int(count)
+            for source, count in raw_frame["SourceURL"].value_counts(dropna=False).items()
+        }
+
+    integrity_passed = not any(
+        (invalid_labels, mismatches, incomplete_scores, invalid_dates_with_teams, conflicting_duplicates)
+    )
+    return {
+        "retrieved_at_utc": retrieved_at.astimezone(timezone.utc).isoformat(),
+        "source_urls": sorted(set(source_urls)),
+        "source_row_counts": source_counts,
+        "rows_before_filter": int(len(raw_frame)),
+        "rows_after_complete_score_filter": int(len(complete_frame)),
+        "rows_after_deduplication": int(len(final_frame)),
+        "rows_missing_team_names": int((~team_mask).sum()),
+        "rows_missing_final_scores": missing_scores,
+        "rows_with_incomplete_scores": incomplete_scores,
+        "date_coverage": {
+            "start": dates.min().date().isoformat() if valid_dates.any() else None,
+            "end": dates.max().date().isoformat() if valid_dates.any() else None,
+            "invalid_or_missing_with_teams": invalid_dates_with_teams,
+        },
+        "missingness": missingness,
+        "duplicate_fixtures_before_deduplication": duplicate_count,
+        "duplicates_removed": int(duplicates_removed),
+        "conflicting_duplicate_fixtures": int(conflicting_duplicates),
+        "invalid_result_labels": invalid_labels,
+        "score_result_mismatches": mismatches,
+        "league_season_counts": league_season_counts,
+        "integrity_passed": bool(integrity_passed),
+    }
+
+
 def build_history(
     *,
     seasons: Iterable[str] = SEASONS,
@@ -230,6 +363,8 @@ def build_history(
         raise ValueError("cache_ttl_hours no puede ser negativo")
 
     frames: list[pd.DataFrame] = []
+    source_urls: list[str] = []
+    retrieved_at = datetime.now(timezone.utc)
     client = session or make_session()
     cache_root = Path(cache_dir)
 
@@ -246,6 +381,7 @@ def build_history(
                 refresh=refresh,
                 expected_division=code,
             )
+            source_urls.append(url)
             df["League"] = league
             df["Season"] = season
             df["SourceURL"] = url
@@ -259,27 +395,51 @@ def build_history(
         & combined["FTAG"].notna()
     )
     out = combined.loc[complete].copy()
+    complete_rows = out.copy()
     if out.empty:
         raise ValueError("Las fuentes no contienen ningún partido con resultado completo")
 
     out["FTHG"] = out["FTHG"].astype(int)
     out["FTAG"] = out["FTAG"].astype(int)
 
-    key = ["League", "Season", "Date", "HomeTeam", "AwayTeam"]
+    out["_HomeKey"] = out["HomeTeam"].astype("string").str.strip().str.casefold()
+    out["_AwayKey"] = out["AwayTeam"].astype("string").str.strip().str.casefold()
+    key = ["League", "Season", "_ParsedDate", "_HomeKey", "_AwayKey"]
     before_dedup = len(out)
     out = out.drop_duplicates(subset=key, keep="last")
     duplicates_removed = before_dedup - len(out)
     out = out.sort_values(
-        ["_ParsedDate", "League", "Season", "HomeTeam", "AwayTeam"],
+        ["_ParsedDate", "League", "Season", "_HomeKey", "_AwayKey"],
         kind="mergesort",
-    )
-    out = out.drop(columns=["_ParsedDate"]).reset_index(drop=True)
+    ).reset_index(drop=True)
 
     target = Path(output)
+    profile = build_dataset_profile(
+        combined,
+        complete_rows,
+        out,
+        source_urls,
+        duplicates_removed,
+        retrieved_at=retrieved_at,
+    )
+    profile_target = target.with_name(f"{target.stem}.profile.json")
+    _atomic_write(
+        profile_target,
+        (json.dumps(profile, indent=2, ensure_ascii=False) + "\\n").encode("utf-8"),
+    )
+    if not profile["integrity_passed"]:
+        raise ValueError(
+            "Dataset integrity checks failed; inspect "
+            f"{profile_target}: invalid labels={profile['invalid_result_labels']}, "
+            f"score/result mismatches={profile['score_result_mismatches']}, "
+            f"conflicting duplicates={profile['conflicting_duplicate_fixtures']}"
+        )
+
+    out = out.drop(columns=["_ParsedDate", "_HomeKey", "_AwayKey"])
     _atomic_write_dataframe(out, target)
     log.info(
-        "Histórico escrito: %s; partidos=%d; duplicados eliminados=%d; temporadas=%d; ligas=%d",
-        target, len(out), duplicates_removed, len(selected_seasons), len(selected_leagues),
+        "Histórico escrito: %s; partidos=%d; duplicados eliminados=%d; temporadas=%d; ligas=%d; perfil=%s",
+        target, len(out), duplicates_removed, len(selected_seasons), len(selected_leagues), profile_target,
     )
     return out
 
