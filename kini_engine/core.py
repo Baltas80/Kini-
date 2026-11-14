@@ -65,6 +65,27 @@ def _date_num(value: datetime | str) -> float:
     raise ValueError(f"Unsupported date format: {raw!r}")
 
 
+def _calendar_date_key(value: datetime | str) -> str:
+    """Return the source calendar date without admitting same-day results."""
+    if isinstance(value, datetime):
+        return value.date().isoformat()
+
+    raw = str(value).strip()
+    normalized = raw.replace("Z", "+00:00")
+    try:
+        return datetime.fromisoformat(normalized).date().isoformat()
+    except ValueError:
+        pass
+
+    for fmt in ("%d/%m/%Y", "%d/%m/%y", "%Y/%m/%d", "%m/%d/%Y"):
+        try:
+            return datetime.strptime(raw, fmt).date().isoformat()
+        except ValueError:
+            continue
+
+    return datetime.fromtimestamp(_date_num(value)).date().isoformat()
+
+
 def _norm(p: Iterable[float]) -> np.ndarray:
     x = np.asarray(list(p), dtype=float)
     x = np.clip(x, 1e-12, None)
@@ -177,12 +198,12 @@ class FeatureModel:
     def __init__(self) -> None:
         self.model: Any = None
         self.teams: dict[str, int] = {}
-        self._history_token: int | None = None
+        self._history_ref: list[Match] | None = None
 
     def invalidate(self) -> None:
         """Invalidate the fitted estimator when the engine receives new history."""
         self.model = None
-        self._history_token = None
+        self._history_ref = None
 
     def _features(self, history: list[Match], m: Match) -> np.ndarray:
         def stats(team: str, venue: str | None = None) -> tuple[float, float, float]:
@@ -209,20 +230,32 @@ class FeatureModel:
         pos_a = float(m.detail.get("clasificacion_visitante_pos", 0) or 0)
         return np.array([hp, hgf, hga, ap, agf, aga, hhp, hhgf, hhga, aap, aagf, aaga, pos_h, pos_a, pos_h - pos_a], dtype=float)
 
-    def fit_predict_proba(self, history: list[Match], current: Match) -> np.ndarray | None:
-        # KiniEngine.fit replaces its history list on every refit. Cache the
-        # estimator for that exact snapshot instead of retraining for every fixture.
-        if self._history_token != id(history):
+    def fit_predict_proba(
+        self,
+        training_history: list[Match],
+        current: Match,
+        feature_history: list[Match] | None = None,
+    ) -> np.ndarray | None:
+        # Fit once per model-training snapshot. Inference features may advance
+        # between refits as new results become available.
+        if self._history_ref is not training_history:
             self.model = None
             rows, y = [], []
-            for i, m in enumerate(history):
-                if m.home_goals is None or m.away_goals is None:
+            days = [_calendar_date_key(match.date) for match in training_history]
+            for i, match in enumerate(training_history):
+                if match.home_goals is None or match.away_goals is None:
                     continue
-                rows.append(self._features(history[:i], m))
-                y.append(m.outcome())
+                # Date-only sources cannot order kickoffs: exclude every result
+                # from the same calendar day from that historical training row.
+                prior_history = [
+                    past for past, past_day in zip(training_history, days)
+                    if past_day < days[i]
+                ]
+                rows.append(self._features(prior_history, match))
+                y.append(match.outcome())
 
             if len(rows) < 40 or len(set(y)) < 3:
-                self._history_token = id(history)
+                self._history_ref = training_history
                 return None
 
             try:
@@ -240,13 +273,14 @@ class FeatureModel:
 
             enc = {"1": 0, "X": 1, "2": 2}
             self.model.fit(np.vstack(rows), np.asarray([enc[v] for v in y]))
-            self._history_token = id(history)
+            self._history_ref = training_history
 
         if self.model is None:
             return None
 
+        current_history = feature_history if feature_history is not None else training_history
         # Estimators require a 2D matrix even for a single forecast row.
-        features = np.asarray(self._features(history, current), dtype=float).reshape(1, -1)
+        features = np.asarray(self._features(current_history, current), dtype=float).reshape(1, -1)
         raw = np.asarray(self.model.predict_proba(features)[0], dtype=float)
         probabilities = np.zeros(len(SIGNS), dtype=float)
         probabilities[np.asarray(self.model.classes_, dtype=int)] = raw
@@ -418,13 +452,22 @@ class KiniEngine:
         self.fitted = True
         return self
 
-    def _predict_one(self, m: Match, history: list[Match], mode: str = "ensemble") -> Prediction:
+    def _predict_one(
+        self,
+        m: Match,
+        history: list[Match],
+        mode: str = "ensemble",
+        model_history: list[Match] | None = None,
+    ) -> Prediction:
         dc_probs, scores = self.dc.predict(m.home, m.away)
-        # Do not train the ML model for DC-only (or LAE/market-only) forecasts.
-        # Previously this eager fit ran before mode dispatch, so an ML ValueError
-        # could invalidate otherwise independent Dixon-Coles predictions.
+        # The fitted estimator uses model_history; current features and context
+        # use all results available before this fixture.
         needs_ml = mode in {"ml", "ensemble"}
-        ml = self.ml.fit_predict_proba(history, m) if self.ml is not None and needs_ml else None
+        training_history = model_history if model_history is not None else history
+        ml = (
+            self.ml.fit_predict_proba(training_history, m, feature_history=history)
+            if self.ml is not None and needs_ml else None
+        )
         ml_probs = None if ml is None else dict(zip(SIGNS, map(float, ml)))
         if mode not in {"ensemble", "dc", "ml", "lae", "market"}:
             raise ValueError("mode must be one of: ensemble, dc, ml, lae, market")
@@ -461,8 +504,24 @@ class KiniEngine:
         sign = max(SIGNS, key=lambda s: adjusted[s])
         return Prediction(m.home, m.away, adjusted, sign, scores, surprise, reasons)
 
-    def predict(self, match: Match, mode: str = "ensemble") -> Prediction:
-        return self._predict_one(match, getattr(self, "history", []), mode=mode)
+    def predict(
+        self,
+        match: Match,
+        mode: str = "ensemble",
+        history: list[Match] | None = None,
+    ) -> Prediction:
+        model_history = getattr(self, "history", None)
+        feature_history = history if history is not None else model_history
+        if feature_history is None:
+            feature_history = []
+        if model_history is None:
+            model_history = feature_history
+        return self._predict_one(
+            match,
+            feature_history,
+            mode=mode,
+            model_history=model_history,
+        )
 
     def quiniela(self, fixtures: list[Match], budget: int = 8) -> dict[str, Any]:
         if len(fixtures) != 15:

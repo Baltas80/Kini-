@@ -213,7 +213,7 @@ def compare_walk_forward(
             predictions: dict[str, dict[str, float]] = {}
             for mode in modes:
                 try:
-                    pred = engine.predict(match, mode=mode)
+                    pred = engine.predict(match, mode=mode, history=train)
                 except ValueError as exc:
                     diagnostic = prediction_errors[mode]
                     diagnostic["count"] += 1

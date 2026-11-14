@@ -117,3 +117,70 @@ def test_feature_model_uses_2d_inference_and_caches_fit_per_history(monkeypatch)
 
     model.fit_predict_proba(list(history), current)
     assert FakeXGBClassifier.fit_calls == 2
+
+
+
+def test_feature_model_training_rows_exclude_same_calendar_day_results(monkeypatch):
+    class FakeXGBClassifier:
+        def __init__(self, **kwargs):
+            self.classes_ = np.array([0, 1, 2])
+
+        def fit(self, features, labels):
+            assert features.shape == (80, 15)
+            return self
+
+        def predict_proba(self, features):
+            assert features.shape == (1, 15)
+            return np.array([[0.4, 0.35, 0.25]])
+
+    monkeypatch.setitem(sys.modules, "xgboost", SimpleNamespace(XGBClassifier=FakeXGBClassifier))
+    history = sample()
+    first = history[0]
+    second = history[1]
+    history[1] = Match(first.date, second.home, second.away, second.home_goals, second.away_goals, second.result)
+    captured = {}
+    model = FeatureModel()
+
+    def capture_features(past, current):
+        if current is history[1]:
+            captured["past"] = list(past)
+        return np.zeros(15, dtype=float)
+
+    monkeypatch.setattr(model, "_features", capture_features)
+    probabilities = model.fit_predict_proba(history, Match(datetime(2025, 4, 1), "A", "D"))
+
+    assert probabilities is not None
+    assert first not in captured["past"]
+
+
+def test_feature_model_uses_latest_feature_history_without_refitting(monkeypatch):
+    class FakeXGBClassifier:
+        fit_calls = 0
+        inference_first_feature = None
+
+        def __init__(self, **kwargs):
+            self.classes_ = np.array([0, 1, 2])
+
+        def fit(self, features, labels):
+            type(self).fit_calls += 1
+            return self
+
+        def predict_proba(self, features):
+            type(self).inference_first_feature = float(features[0, 0])
+            return np.array([[0.5, 0.3, 0.2]])
+
+    monkeypatch.setitem(sys.modules, "xgboost", SimpleNamespace(XGBClassifier=FakeXGBClassifier))
+    training_history = sample()
+    feature_history = training_history + [Match(datetime(2025, 4, 1), "B", "D", 2, 0, "1")]
+    model = FeatureModel()
+    monkeypatch.setattr(
+        model,
+        "_features",
+        lambda past, current: np.full(15, len(past), dtype=float),
+    )
+
+    model.fit_predict_proba(training_history, Match(datetime(2025, 4, 2), "A", "D"), feature_history)
+    model.fit_predict_proba(training_history, Match(datetime(2025, 4, 3), "C", "A"), feature_history)
+
+    assert FakeXGBClassifier.fit_calls == 1
+    assert FakeXGBClassifier.inference_first_feature == len(feature_history)
