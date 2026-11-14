@@ -29,7 +29,7 @@ jobs:
           from pathlib import Path
 
           result = json.loads(Path("backtest-results.json").read_text())
-          required = ("dc", "ml", "ensemble", "ensemble_dc_ml")
+          required = ("dc", "ml", "ensemble", "ensemble_dc_ml", "ensemble_dc_ml_adaptive")
           total = int(result.get("n_total", 0))
           if total <= 0:
               raise SystemExit("Backtest has no test fixtures")
