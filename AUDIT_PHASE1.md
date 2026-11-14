@@ -117,12 +117,14 @@ Rule and price references are documented in `docs/QUINIELA_RULES.md`. The price/
 
 ## CI
 
+The historical-backtest workflow uses `.[ml]` rather than `.[all]`: the backtest requires XGBoost but does not import the API, MCP server or Optuna tuning extras. The ingestion builder assigns `League`, `Season` and `SourceURL` in one operation to avoid repeated DataFrame column insertion.
+
 Current branch head CI:
 - [Push CI](https://github.com/Baltas80/Kini-/actions/runs/43631064279)
 - [Pull-request CI](https://github.com/Baltas80/Kini-/actions/runs/43631069299)
 - **35 tests passed, 4 warnings.**
 
-Warnings include pandas DataFrame fragmentation during ingestion and GitHub Actions Node.js deprecation notices. They do not fail validation, but the ingestion warning can be removed by assigning the metadata columns in one operation.
+The previous run reported pandas DataFrame fragmentation during ingestion and GitHub Actions Node.js deprecation notices. The ingestion builder now assigns its three source metadata columns together. The historical-backtest workflow installs only `.[ml]` (including XGBoost), avoiding unrelated API/MCP/Optuna extras. Fresh validation is pending.
 
 ## Remaining work — priority order
 

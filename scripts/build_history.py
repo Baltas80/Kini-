@@ -408,9 +408,9 @@ def build_history(
                         "cache_age_hours": None,
                     }
                 )
-            df["League"] = league
-            df["Season"] = season
-            df["SourceURL"] = url
+            # Insert source metadata as one block to avoid repeated DataFrame
+            # column insertion and pandas fragmentation on long histories.
+            df = df.assign(League=league, Season=season, SourceURL=url)
             frames.append(df)
 
     combined = pd.concat(frames, ignore_index=True)
