@@ -1,6 +1,10 @@
 from datetime import datetime, timedelta
+import sys
+from types import SimpleNamespace
 
-from kini_engine.core import KiniEngine, Match, TicketOptimizer, _date_num, context_adjust
+import numpy as np
+
+from kini_engine.core import FeatureModel, KiniEngine, Match, TicketOptimizer, _date_num, context_adjust
 
 
 def sample():
