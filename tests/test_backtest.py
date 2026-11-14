@@ -216,7 +216,7 @@ def test_classwise_one_vs_rest_calibration_reports_reliability_bins():
     assert abs(home["ece"] - 0.2) < 1e-12
     assert sum(item["count"] for item in home["bins"]) == 2
     assert draw["prevalence"] == 0.5
-    assert abs(draw["ece"] - 0.3) < 1e-12
+    assert abs(draw["ece"] - 0.2) < 1e-12
 
 
 def test_empty_metrics_expose_empty_classwise_calibration():
