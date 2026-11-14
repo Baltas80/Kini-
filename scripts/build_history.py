@@ -117,7 +117,10 @@ def _parse_source_csv(
         raise ValueError(f"{source}: hay partidos con solo uno de los dos marcadores")
 
     # Add an internal parsed date to ensure chronology is real, not lexical.
-    # CSV normalization above updates several columns in place. Copy once to\n    # consolidate pandas blocks before adding the parsed-date column.\n    df = df.copy()\n    df["_ParsedDate"] = parsed_dates
+    # CSV normalization above updates several columns in place. Copy once to
+    # consolidate pandas blocks before adding the parsed-date column.
+    df = df.copy()
+    df["_ParsedDate"] = parsed_dates
     return df
 
 
