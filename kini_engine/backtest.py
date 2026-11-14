@@ -8,14 +8,83 @@ import numpy as np
 from .core import SIGNS, KiniEngine, Match, _date_num
 
 
-def multiclass_metrics(rows: list[tuple[dict[str, float], str]], calibration_bins: int = 10) -> dict[str, float]:
-    """Evaluate probabilistic 1/X/2 forecasts.
+def _classwise_calibration(
+    probability_matrix: np.ndarray,
+    target_indices: np.ndarray,
+    calibration_bins: int,
+) -> dict[str, dict[str, Any]]:
+    """Return one-vs-rest reliability diagnostics for each 1/X/2 class."""
+    n = int(len(target_indices))
+    edges = np.linspace(0.0, 1.0, calibration_bins + 1)
+    diagnostics: dict[str, dict[str, Any]] = {}
 
-    Brier is the multiclass squared-error score. RPS is the ordinal Ranked
-    Probability Score using the natural order 1 < X < 2 only as a stable
-    reporting convention; it should be compared consistently across runs.
-    ECE measures calibration of the maximum predicted probability.
+    for class_index, sign in enumerate(SIGNS):
+        predicted = probability_matrix[:, class_index]
+        observed = (target_indices == class_index).astype(float)
+        clipped = np.clip(predicted, 1e-12, 1.0 - 1e-12)
+        bins: list[dict[str, float | int]] = []
+        ece = 0.0
+
+        for bin_index, (lower, upper) in enumerate(zip(edges[:-1], edges[1:])):
+            if bin_index == calibration_bins - 1:
+                mask = (predicted >= lower) & (predicted <= upper)
+            else:
+                mask = (predicted >= lower) & (predicted < upper)
+            count = int(mask.sum())
+            if not count:
+                continue
+            mean_probability = float(predicted[mask].mean())
+            observed_frequency = float(observed[mask].mean())
+            ece += count / n * abs(mean_probability - observed_frequency)
+            bins.append({
+                "lower": float(lower),
+                "upper": float(upper),
+                "count": count,
+                "mean_probability": mean_probability,
+                "observed_frequency": observed_frequency,
+            })
+
+        if n:
+            binary_brier = float(np.mean((predicted - observed) ** 2))
+            binary_logloss = float(-np.mean(
+                observed * np.log(clipped)
+                + (1.0 - observed) * np.log1p(-clipped)
+            ))
+            prevalence: float | None = float(observed.mean())
+            mean_probability: float | None = float(predicted.mean())
+            ece_value: float | None = float(ece)
+        else:
+            binary_brier = 0.0
+            binary_logloss = 0.0
+            prevalence = None
+            mean_probability = None
+            ece_value = None
+
+        diagnostics[sign] = {
+            "n": n,
+            "prevalence": prevalence,
+            "mean_probability": mean_probability,
+            "brier": binary_brier,
+            "logloss": binary_logloss,
+            "ece": ece_value,
+            "bins": bins,
+        }
+
+    return diagnostics
+
+
+def multiclass_metrics(
+    rows: list[tuple[dict[str, float], str]],
+    calibration_bins: int = 10,
+) -> dict[str, Any]:
+    """Evaluate 1/X/2 forecasts, including one-vs-rest class calibration.
+
+    Class-wise diagnostics are computed only from the supplied out-of-sample
+    forecasts. They describe reliability; they do not fit or apply a calibrator.
     """
+    if isinstance(calibration_bins, bool) or not isinstance(calibration_bins, int) or calibration_bins < 1:
+        raise ValueError("calibration_bins must be a positive integer")
+
     if not rows:
         return {
             "n": 0,
@@ -24,41 +93,59 @@ def multiclass_metrics(rows: list[tuple[dict[str, float], str]], calibration_bin
             "logloss": 0.0,
             "rps": 0.0,
             "ece": 0.0,
+            "classwise_calibration": _classwise_calibration(
+                np.empty((0, 3), dtype=float),
+                np.empty((0,), dtype=int),
+                calibration_bins,
+            ),
         }
 
     idx = {s: i for i, s in enumerate(SIGNS)}
+    probability_vectors: list[np.ndarray] = []
+    target_indices: list[int] = []
+    for probabilities, outcome in rows:
+        if outcome not in idx:
+            raise ValueError(f"unknown 1/X/2 outcome: {outcome!r}")
+        try:
+            vector = np.asarray([probabilities[sign] for sign in SIGNS], dtype=float)
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ValueError("forecast must contain finite 1/X/2 probabilities") from exc
+        if not np.isfinite(vector).all() or np.any(vector < 0.0) or vector.sum() <= 0.0:
+            raise ValueError("forecast probabilities must be finite, non-negative and have positive sum")
+        probability_vectors.append(vector / vector.sum())
+        target_indices.append(idx[outcome])
+
+    probability_matrix = np.vstack(probability_vectors)
+    targets = np.asarray(target_indices, dtype=int)
     acc = brier = ll = rps = 0.0
     confidences: list[float] = []
     correct: list[float] = []
 
-    for p, y in rows:
-        v = np.asarray([p[s] for s in SIGNS], dtype=float)
-        v = np.clip(v, 1e-12, None)
-        v /= v.sum()
-        yi = idx[y]
-        acc += float(int(SIGNS[int(np.argmax(v))] == y))
-        brier += float(np.sum((v - np.eye(3)[yi]) ** 2))
-        ll -= float(np.log(v[yi]))
+    for vector, target_index in zip(probability_matrix, targets):
+        acc += float(int(SIGNS[int(np.argmax(vector))] == SIGNS[target_index]))
+        brier += float(np.sum((vector - np.eye(3)[target_index]) ** 2))
+        ll -= float(np.log(np.clip(vector[target_index], 1e-12, 1.0)))
 
-        pred_cdf = np.cumsum(v)[:2]
-        obs_cdf = np.cumsum(np.eye(3)[yi])[:2]
+        pred_cdf = np.cumsum(vector)[:2]
+        obs_cdf = np.cumsum(np.eye(3)[target_index])[:2]
         rps += float(np.mean((pred_cdf - obs_cdf) ** 2))
 
-        confidences.append(float(v.max()))
-        correct.append(float(int(np.argmax(v) == yi)))
+        confidences.append(float(vector.max()))
+        correct.append(float(int(np.argmax(vector) == target_index)))
 
     n = len(rows)
     ece = 0.0
     edges = np.linspace(0.0, 1.0, calibration_bins + 1)
     for lo, hi in zip(edges[:-1], edges[1:]):
         mask = [
-            i for i, conf in enumerate(confidences)
-            if (conf >= lo and conf < hi) or (hi == 1.0 and conf == hi)
+            i for i, confidence in enumerate(confidences)
+            if (confidence >= lo and confidence < hi)
+            or (hi == 1.0 and confidence == hi)
         ]
         if mask:
             ece += len(mask) / n * abs(
-                float(np.mean([correct[i] for i in mask])) -
-                float(np.mean([confidences[i] for i in mask]))
+                float(np.mean([correct[i] for i in mask]))
+                - float(np.mean([confidences[i] for i in mask]))
             )
 
     return {
@@ -68,8 +155,10 @@ def multiclass_metrics(rows: list[tuple[dict[str, float], str]], calibration_bin
         "logloss": ll / n,
         "rps": rps / n,
         "ece": ece,
+        "classwise_calibration": _classwise_calibration(
+            probability_matrix, targets, calibration_bins
+        ),
     }
-
 
 DEFAULT_DC_ML_WEIGHT = 0.58 / (0.58 + 0.17)
 
@@ -177,6 +266,31 @@ def _calendar_day(value: datetime | str) -> str:
     return datetime.fromtimestamp(_date_num(value)).date().isoformat()
 
 
+def _temporal_classwise_calibration(
+    dated_rows: list[tuple[str, dict[str, float], str]],
+    calibration_bins: int = 10,
+) -> dict[str, dict[str, Any]]:
+    """Summarize OOF one-vs-rest reliability by football season (July-June)."""
+    grouped: dict[str, list[tuple[dict[str, float], str]]] = {}
+    for date_value, probabilities, outcome in dated_rows:
+        day = _calendar_day(date_value)
+        year = int(day[:4])
+        month = int(day[5:7])
+        season_start = year if month >= 7 else year - 1
+        season = f"{season_start}/{(season_start + 1) % 100:02d}"
+        grouped.setdefault(season, []).append((probabilities, outcome))
+
+    return {
+        season: {
+            "n": len(season_rows),
+            "classes": multiclass_metrics(
+                season_rows, calibration_bins=calibration_bins
+            )["classwise_calibration"],
+        }
+        for season, season_rows in sorted(grouped.items())
+    }
+
+
 def _date_groups(matches: list[Match]) -> list[list[Match]]:
     """Sort matches and group fixtures from the same calendar day."""
     data = sorted(matches, key=lambda m: (_calendar_day(m.date), _date_num(m.date)))
@@ -262,9 +376,13 @@ def compare_walk_forward(
     adaptive_mode = "ensemble_dc_ml_adaptive"
     all_modes = modes + (adaptive_mode,)
     rows = {mode: [] for mode in all_modes}
+    dated_rows = {mode: [] for mode in all_modes}
     common_rows = {mode: [] for mode in all_modes}
     common_market_rows = {mode: [] for mode in all_modes}
+    dated_common_rows = {mode: [] for mode in all_modes}
+    dated_common_market_rows = {mode: [] for mode in all_modes}
     market_rows: list[tuple[dict[str, float], str]] = []
+    dated_market_rows: list[tuple[str, dict[str, float], str]] = []
     prediction_errors = {mode: {"count": 0, "first_error": None} for mode in all_modes}
     adaptive_history: list[tuple[dict[str, float], dict[str, float], str]] = []
     adaptive_weight_trace: list[dict[str, Any]] = []
@@ -298,6 +416,7 @@ def compare_walk_forward(
 
         for match in group:
             actual = match.outcome()
+            forecast_date = _calendar_day(match.date)
             predictions: dict[str, dict[str, float]] = {}
             for mode in modes:
                 try:
@@ -310,6 +429,7 @@ def compare_walk_forward(
                     continue
                 predictions[mode] = pred.probabilities
                 rows[mode].append((pred.probabilities, actual))
+                dated_rows[mode].append((forecast_date, pred.probabilities, actual))
 
             if "dc" in predictions and "ml" in predictions:
                 adaptive_probabilities = _blend_dc_ml(
@@ -317,6 +437,7 @@ def compare_walk_forward(
                 )
                 predictions[adaptive_mode] = adaptive_probabilities
                 rows[adaptive_mode].append((adaptive_probabilities, actual))
+                dated_rows[adaptive_mode].append((forecast_date, adaptive_probabilities, actual))
                 pending_adaptive_history.append(
                     (predictions["dc"], predictions["ml"], actual)
                 )
@@ -330,9 +451,12 @@ def compare_walk_forward(
 
             if match.market:
                 market_rows.append((match.market, actual))
+                dated_market_rows.append((forecast_date, match.market, actual))
                 for mode, probabilities in predictions.items():
                     common_rows[mode].append((probabilities, actual))
                     common_market_rows[mode].append((match.market, actual))
+                    dated_common_rows[mode].append((forecast_date, probabilities, actual))
+                    dated_common_market_rows[mode].append((forecast_date, match.market, actual))
             n_total += 1
             test_dates.append(_calendar_day(match.date))
 
@@ -375,6 +499,20 @@ def compare_walk_forward(
         "max_dc_weight": float(np.max(weights)) if weights else DEFAULT_DC_ML_WEIGHT,
         "last_dc_weight": weights[-1] if weights else DEFAULT_DC_ML_WEIGHT,
         "weight_trace": adaptive_weight_trace,
+    }
+    result["temporal_classwise_calibration"] = {
+        mode: _temporal_classwise_calibration(values)
+        for mode, values in dated_rows.items()
+    }
+    result["temporal_classwise_calibration"]["market"] = (
+        _temporal_classwise_calibration(dated_market_rows)
+    )
+    result["temporal_common_sample_calibration"] = {
+        mode: {
+            "model": _temporal_classwise_calibration(dated_common_rows[mode]),
+            "market": _temporal_classwise_calibration(dated_common_market_rows[mode]),
+        }
+        for mode in all_modes
     }
     result["prediction_errors"] = prediction_errors
     result["n_total"] = n_total
