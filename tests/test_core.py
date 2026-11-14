@@ -76,3 +76,40 @@ def test_dc_forecast_does_not_train_optional_ml_model():
 
     assert set(prediction.probabilities) == {"1", "X", "2"}
     assert abs(sum(prediction.probabilities.values()) - 1.0) < 1e-9
+
+
+
+def test_feature_model_uses_2d_inference_and_caches_fit_per_history(monkeypatch):
+    class FakeXGBClassifier:
+        fit_calls = 0
+
+        def __init__(self, **kwargs):
+            self.classes_ = np.array([0, 1, 2])
+
+        def fit(self, features, labels):
+            assert features.ndim == 2
+            assert features.shape == (80, 15)
+            assert labels.shape == (80,)
+            type(self).fit_calls += 1
+            return self
+
+        def predict_proba(self, features):
+            assert features.ndim == 2
+            assert features.shape == (1, 15)
+            return np.array([[0.55, 0.25, 0.20]])
+
+    monkeypatch.setitem(sys.modules, "xgboost", SimpleNamespace(XGBClassifier=FakeXGBClassifier))
+    history = sample()
+    model = FeatureModel()
+    current = Match(datetime(2025, 4, 1), "A", "D")
+
+    first = model.fit_predict_proba(history, current)
+    second = model.fit_predict_proba(history, current)
+
+    assert first is not None and second is not None
+    assert np.allclose(first, [0.55, 0.25, 0.20])
+    assert np.allclose(second, first)
+    assert FakeXGBClassifier.fit_calls == 1
+
+    model.fit_predict_proba(list(history), current)
+    assert FakeXGBClassifier.fit_calls == 2

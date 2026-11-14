@@ -20,8 +20,29 @@ jobs:
         run: python scripts/diagnose_ml.py data/historical_spain.csv --min-train 300
       - name: Run historical comparison
         run: |
-          python -m kini_engine.cli compare data/historical_spain.csv --min-train 300 --refit-every 1000 > backtest-results.json
+          python -m kini_engine.cli compare data/historical_spain.csv --min-train 300 --refit-every 30 > backtest-results.json
           cat backtest-results.json
+      - name: Enforce non-empty model backtests
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          result = json.loads(Path("backtest-results.json").read_text())
+          required = ("dc", "ml", "ensemble")
+          total = int(result.get("n_total", 0))
+          if total <= 0:
+              raise SystemExit("Backtest has no test fixtures")
+          for name in required:
+              n = int(result.get(name, {}).get("n", 0))
+              if n != total:
+                  errors = result.get("prediction_errors", {}).get(name, {})
+                  raise SystemExit(
+                      f"{name} produced {n}/{total} predictions; "
+                      f"errors={errors}"
+                  )
+          print(f"BACKTEST_ACCEPTANCE_OK: {total} fixtures for {', '.join(required)}")
+          PY
       - name: Upload backtest results
         uses: actions/upload-artifact@v4
         with:

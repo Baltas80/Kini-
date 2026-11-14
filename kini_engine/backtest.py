@@ -191,6 +191,7 @@ def compare_walk_forward(
     common_rows = {mode: [] for mode in modes}
     common_market_rows = {mode: [] for mode in modes}
     market_rows: list[tuple[dict[str, float], str]] = []
+    prediction_errors = {mode: {"count": 0, "first_error": None} for mode in modes}
     engine = KiniEngine(enable_ml=True)
     forecast_day = 0
     n_total = 0
@@ -213,7 +214,11 @@ def compare_walk_forward(
             for mode in modes:
                 try:
                     pred = engine.predict(match, mode=mode)
-                except ValueError:
+                except ValueError as exc:
+                    diagnostic = prediction_errors[mode]
+                    diagnostic["count"] += 1
+                    if diagnostic["first_error"] is None:
+                        diagnostic["first_error"] = str(exc)
                     continue
                 predictions[mode] = pred.probabilities
                 rows[mode].append((pred.probabilities, actual))
@@ -241,6 +246,7 @@ def compare_walk_forward(
         }
         for mode in modes
     }
+    result["prediction_errors"] = prediction_errors
     result["n_total"] = n_total
     result["n_train_initial"] = initial_train_size or len(train)
     result["test_start_date"] = min(test_dates) if test_dates else None

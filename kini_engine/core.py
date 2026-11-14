@@ -177,6 +177,12 @@ class FeatureModel:
     def __init__(self) -> None:
         self.model: Any = None
         self.teams: dict[str, int] = {}
+        self._history_token: int | None = None
+
+    def invalidate(self) -> None:
+        """Invalidate the fitted estimator when the engine receives new history."""
+        self.model = None
+        self._history_token = None
 
     def _features(self, history: list[Match], m: Match) -> np.ndarray:
         def stats(team: str, venue: str | None = None) -> tuple[float, float, float]:
@@ -204,27 +210,47 @@ class FeatureModel:
         return np.array([hp, hgf, hga, ap, agf, aga, hhp, hhgf, hhga, aap, aagf, aaga, pos_h, pos_a, pos_h - pos_a], dtype=float)
 
     def fit_predict_proba(self, history: list[Match], current: Match) -> np.ndarray | None:
-        rows, y = [], []
-        for i, m in enumerate(history):
-            if m.home_goals is None or m.away_goals is None:
-                continue
-            rows.append(self._features(history[:i], m))
-            y.append(m.outcome())
-        if len(rows) < 40 or len(set(y)) < 3:
+        # KiniEngine.fit replaces its history list on every refit. Cache the
+        # estimator for that exact snapshot instead of retraining for every fixture.
+        if self._history_token != id(history):
+            self.model = None
+            rows, y = [], []
+            for i, m in enumerate(history):
+                if m.home_goals is None or m.away_goals is None:
+                    continue
+                rows.append(self._features(history[:i], m))
+                y.append(m.outcome())
+
+            if len(rows) < 40 or len(set(y)) < 3:
+                self._history_token = id(history)
+                return None
+
+            try:
+                from xgboost import XGBClassifier
+                self.model = XGBClassifier(
+                    n_estimators=180, max_depth=4, learning_rate=0.04,
+                    subsample=0.85, colsample_bytree=0.85, objective="multi:softprob",
+                    num_class=3, eval_metric="mlogloss", random_state=42, n_jobs=1
+                )
+            except Exception:
+                from sklearn.ensemble import HistGradientBoostingClassifier
+                self.model = HistGradientBoostingClassifier(
+                    max_iter=180, learning_rate=0.05, max_leaf_nodes=15, random_state=42
+                )
+
+            enc = {"1": 0, "X": 1, "2": 2}
+            self.model.fit(np.vstack(rows), np.asarray([enc[v] for v in y]))
+            self._history_token = id(history)
+
+        if self.model is None:
             return None
-        try:
-            from xgboost import XGBClassifier
-            self.model = XGBClassifier(
-                n_estimators=180, max_depth=4, learning_rate=0.04,
-                subsample=0.85, colsample_bytree=0.85, objective="multi:softprob",
-                num_class=3, eval_metric="mlogloss", random_state=42
-            )
-        except Exception:
-            from sklearn.ensemble import HistGradientBoostingClassifier
-            self.model = HistGradientBoostingClassifier(max_iter=180, learning_rate=0.05, max_leaf_nodes=15, random_state=42)
-        enc = {"1": 0, "X": 1, "2": 2}
-        self.model.fit(np.vstack(rows), np.asarray([enc[v] for v in y]))
-        return _norm(self.model.predict_proba(self._features(history, current))[0])
+
+        # Estimators require a 2D matrix even for a single forecast row.
+        features = np.asarray(self._features(history, current), dtype=float).reshape(1, -1)
+        raw = np.asarray(self.model.predict_proba(features)[0], dtype=float)
+        probabilities = np.zeros(len(SIGNS), dtype=float)
+        probabilities[np.asarray(self.model.classes_, dtype=int)] = raw
+        return _norm(probabilities)
 
 
 def context_adjust(
@@ -387,6 +413,8 @@ class KiniEngine:
     def fit(self, history: list[Match]) -> "KiniEngine":
         self.history = sorted(list(history), key=lambda m: _date_num(m.date))
         self.dc.fit(self.history)
+        if self.ml is not None and hasattr(self.ml, "invalidate"):
+            self.ml.invalidate()
         self.fitted = True
         return self
 
