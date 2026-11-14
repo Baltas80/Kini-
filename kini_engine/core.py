@@ -561,6 +561,7 @@ class KiniEngine:
         self.enable_ml = enable_ml
         self.enable_context = enable_context
         self.optimizer = TicketOptimizer()
+        self.history: list[Match] = []
         self.fitted = False
         self.temperature = 1.0
 
