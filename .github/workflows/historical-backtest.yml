@@ -47,5 +47,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: historical-backtest
-          path: backtest-results.json
+          path: |
+            backtest-results.json
+            data/historical_spain.profile.json
           retention-days: 30
