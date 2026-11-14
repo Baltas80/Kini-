@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import Any
 
 import numpy as np
+from scipy.optimize import minimize
 
 from .core import SIGNS, KiniEngine, Match, _date_num
 
@@ -185,6 +186,156 @@ def _blend_dc_ml(
     return dict(zip(SIGNS, map(float, blended)))
 
 
+
+def _identity_multiclass_calibrator(
+    n_train: int = 0,
+    reason: str = "insufficient_history",
+) -> dict[str, Any]:
+    return {
+        "fitted": False,
+        "n_train": int(n_train),
+        "scale": 1.0,
+        "bias": [0.0, 0.0, 0.0],
+        "reason": reason,
+    }
+
+
+def fit_multiclass_calibrator(
+    history: list[tuple[dict[str, float], str]],
+    min_history: int = 500,
+    window: int = 1500,
+    regularization: float = 0.05,
+    min_class_count: int = 20,
+) -> dict[str, Any]:
+    """Fit regularized vector-bias/shared-scale calibration on prior OOF rows.
+
+    The mapping is softmax(scale * log(p) + class_bias), with positive scale
+    and zero-sum class biases. It is deliberately low-dimensional and shrunk
+    toward the identity transform to limit overfitting.
+    """
+    if isinstance(min_history, bool) or not isinstance(min_history, int) or min_history < 1:
+        raise ValueError("min_history must be a positive integer")
+    if isinstance(window, bool) or not isinstance(window, int) or window < min_history:
+        raise ValueError("window must be an integer greater than or equal to min_history")
+    if isinstance(min_class_count, bool) or not isinstance(min_class_count, int) or min_class_count < 1:
+        raise ValueError("min_class_count must be a positive integer")
+    if not np.isfinite(regularization) or regularization < 0.0:
+        raise ValueError("regularization must be finite and non-negative")
+
+    recent = history[-window:]
+    if len(recent) < min_history:
+        return _identity_multiclass_calibrator(len(recent))
+
+    outcome_index = {sign: index for index, sign in enumerate(SIGNS)}
+    try:
+        probability_matrix = np.vstack([
+            _probability_vector(probabilities) for probabilities, _ in recent
+        ])
+        targets = np.asarray(
+            [outcome_index[outcome] for _, outcome in recent],
+            dtype=int,
+        )
+    except KeyError as exc:
+        raise ValueError(f"unknown outcome in calibration history: {exc.args[0]}") from exc
+
+    class_counts = np.bincount(targets, minlength=3)
+    if np.any(class_counts < min_class_count):
+        return _identity_multiclass_calibrator(
+            len(recent),
+            reason="insufficient_class_support",
+        )
+
+    log_probabilities = np.log(np.clip(probability_matrix, 1e-8, 1.0))
+    row_indices = np.arange(len(targets))
+    n = len(targets)
+
+    def objective(parameters: np.ndarray) -> tuple[float, np.ndarray]:
+        log_scale, bias_1, bias_x = parameters
+        scale = float(np.exp(log_scale))
+        bias = np.asarray([bias_1, bias_x, -bias_1 - bias_x], dtype=float)
+
+        logits = scale * log_probabilities + bias
+        logits -= logits.max(axis=1, keepdims=True)
+        exponentials = np.exp(logits)
+        calibrated = exponentials / exponentials.sum(axis=1, keepdims=True)
+
+        loss = -float(np.log(np.clip(
+            calibrated[row_indices, targets], 1e-12, 1.0
+        )).mean())
+        penalty = 0.5 * regularization * (
+            log_scale ** 2 + float(np.sum(bias ** 2))
+        )
+
+        gradient_logits = calibrated.copy()
+        gradient_logits[row_indices, targets] -= 1.0
+        gradient_logits /= n
+
+        gradient_log_scale = (
+            scale * float(np.sum(gradient_logits * log_probabilities))
+            + regularization * log_scale
+        )
+        gradient_bias = gradient_logits.sum(axis=0) + regularization * bias
+        gradient = np.asarray([
+            gradient_log_scale,
+            gradient_bias[0] - gradient_bias[2],
+            gradient_bias[1] - gradient_bias[2],
+        ], dtype=float)
+        return loss + penalty, gradient
+
+    fitted = minimize(
+        objective,
+        np.zeros(3, dtype=float),
+        jac=True,
+        method="L-BFGS-B",
+        bounds=((-1.5, 1.5), (-1.0, 1.0), (-1.0, 1.0)),
+        options={"maxiter": 250, "ftol": 1e-10},
+    )
+    if not fitted.success or not np.isfinite(fitted.x).all():
+        return _identity_multiclass_calibrator(
+            len(recent),
+            reason=f"optimizer_failed: {fitted.message}",
+        )
+
+    log_scale, bias_1, bias_x = map(float, fitted.x)
+    bias = [bias_1, bias_x, -bias_1 - bias_x]
+    return {
+        "fitted": True,
+        "n_train": len(recent),
+        "scale": float(np.exp(log_scale)),
+        "bias": bias,
+        "regularization": float(regularization),
+        "objective": float(fitted.fun),
+        "iterations": int(fitted.nit),
+        "class_counts": class_counts.astype(int).tolist(),
+        "reason": None,
+    }
+
+
+def apply_multiclass_calibrator(
+    probabilities: dict[str, float],
+    calibrator: dict[str, Any],
+) -> dict[str, float]:
+    """Apply a fitted calibrator, or return normalized raw probabilities."""
+    vector = _probability_vector(probabilities)
+    if not calibrator.get("fitted", False):
+        return dict(zip(SIGNS, map(float, vector)))
+
+    scale = float(calibrator["scale"])
+    bias = np.asarray(calibrator["bias"], dtype=float)
+    if (
+        not np.isfinite(scale)
+        or scale <= 0.0
+        or bias.shape != (3,)
+        or not np.isfinite(bias).all()
+    ):
+        raise ValueError("invalid multiclass calibrator parameters")
+
+    logits = scale * np.log(np.clip(vector, 1e-8, 1.0)) + bias
+    logits -= float(logits.max())
+    calibrated = np.exp(logits)
+    calibrated /= calibrated.sum()
+    return dict(zip(SIGNS, map(float, calibrated)))
+
 def select_dc_ml_weight(
     history: list[tuple[dict[str, float], dict[str, float], str]],
     default_weight: float = DEFAULT_DC_ML_WEIGHT,
@@ -363,18 +514,40 @@ def compare_walk_forward(
     adaptive_min_history: int = 300,
     adaptive_window: int = 1000,
     adaptive_regularization: float = 0.02,
+    calibration_min_history: int = 500,
+    calibration_window: int = 1500,
+    calibration_refit_every: int = 30,
+    calibration_regularization: float = 0.05,
+    calibration_min_class_count: int = 20,
 ) -> dict[str, Any]:
-    """Compare models on date-grouped splits and report a market common sample."""
+    """Compare models and evaluate a strictly prequential probability calibrator.
+
+    Each calibrator is fitted only from prior out-of-sample forecasts. A
+    calendar day's predictions are all produced before any outcome from that
+    day is appended to either adaptive-weight or calibration history.
+    """
     if min_train < 12:
         raise ValueError("min_train must be at least 12")
     if refit_every < 1:
         raise ValueError("refit_every must be positive")
+    if calibration_min_history < 1:
+        raise ValueError("calibration_min_history must be positive")
+    if calibration_window < calibration_min_history:
+        raise ValueError("calibration_window must be >= calibration_min_history")
+    if calibration_refit_every < 1:
+        raise ValueError("calibration_refit_every must be positive")
+    if calibration_min_class_count < 1:
+        raise ValueError("calibration_min_class_count must be positive")
+    if not np.isfinite(calibration_regularization) or calibration_regularization < 0.0:
+        raise ValueError("calibration_regularization must be finite and non-negative")
 
     groups = _date_groups(matches)
     train: list[Match] = []
     modes = ("dc", "ml", "ensemble", "ensemble_dc_ml")
     adaptive_mode = "ensemble_dc_ml_adaptive"
     all_modes = modes + (adaptive_mode,)
+    calibration_modes = all_modes + ("market",)
+
     rows = {mode: [] for mode in all_modes}
     dated_rows = {mode: [] for mode in all_modes}
     common_rows = {mode: [] for mode in all_modes}
@@ -386,6 +559,22 @@ def compare_walk_forward(
     prediction_errors = {mode: {"count": 0, "first_error": None} for mode in all_modes}
     adaptive_history: list[tuple[dict[str, float], dict[str, float], str]] = []
     adaptive_weight_trace: list[dict[str, Any]] = []
+
+    calibration_history = {mode: [] for mode in calibration_modes}
+    calibrators = {
+        mode: _identity_multiclass_calibrator()
+        for mode in calibration_modes
+    }
+    calibration_fit_counts = {mode: 0 for mode in calibration_modes}
+    calibration_raw_rows = {mode: [] for mode in calibration_modes}
+    calibration_rows = {mode: [] for mode in calibration_modes}
+    calibration_raw_dated_rows = {mode: [] for mode in calibration_modes}
+    calibration_dated_rows = {mode: [] for mode in calibration_modes}
+    calibration_common_raw_model = {mode: [] for mode in all_modes}
+    calibration_common_model = {mode: [] for mode in all_modes}
+    calibration_common_raw_market = {mode: [] for mode in all_modes}
+    calibration_common_market = {mode: [] for mode in all_modes}
+
     engine = KiniEngine(enable_ml=True)
     forecast_day = 0
     n_total = 0
@@ -402,8 +591,23 @@ def compare_walk_forward(
             engine.dc.decay = decay
             engine.fit(train)
 
-        # Select once per calendar date. Outcomes from fixtures in this group
-        # are appended only after every fixture for the date has been forecast.
+        forecast_date = _calendar_day(group[0].date)
+        if forecast_day % calibration_refit_every == 0:
+            for mode in calibration_modes:
+                candidate = fit_multiclass_calibrator(
+                    calibration_history[mode],
+                    min_history=calibration_min_history,
+                    window=calibration_window,
+                    regularization=calibration_regularization,
+                    min_class_count=calibration_min_class_count,
+                )
+                if candidate["fitted"]:
+                    candidate["fit_date"] = forecast_date
+                    calibrators[mode] = candidate
+                    calibration_fit_counts[mode] += 1
+
+        # Select the adaptive DC/ML weight and all calibrators before this
+        # date's first forecast. Same-day outcomes are appended only below.
         dc_weight = select_dc_ml_weight(
             adaptive_history,
             min_history=adaptive_min_history,
@@ -413,10 +617,12 @@ def compare_walk_forward(
         pending_adaptive_history: list[
             tuple[dict[str, float], dict[str, float], str]
         ] = []
+        pending_calibration_history = {
+            mode: [] for mode in calibration_modes
+        }
 
         for match in group:
             actual = match.outcome()
-            forecast_date = _calendar_day(match.date)
             predictions: dict[str, dict[str, float]] = {}
             for mode in modes:
                 try:
@@ -437,7 +643,9 @@ def compare_walk_forward(
                 )
                 predictions[adaptive_mode] = adaptive_probabilities
                 rows[adaptive_mode].append((adaptive_probabilities, actual))
-                dated_rows[adaptive_mode].append((forecast_date, adaptive_probabilities, actual))
+                dated_rows[adaptive_mode].append(
+                    (forecast_date, adaptive_probabilities, actual)
+                )
                 pending_adaptive_history.append(
                     (predictions["dc"], predictions["ml"], actual)
                 )
@@ -449,27 +657,106 @@ def compare_walk_forward(
                         "adaptive DC/ML ensemble requires valid predictions from both models"
                     )
 
+            # Store raw forecasts for future calibration only after the whole
+            # date has been evaluated. Calibrated metrics use a common,
+            # post-warm-up sample for raw-vs-calibrated comparisons.
+            for mode, raw_probabilities in predictions.items():
+                pending_calibration_history[mode].append(
+                    (raw_probabilities, actual)
+                )
+                if calibrators[mode]["fitted"]:
+                    calibrated = apply_multiclass_calibrator(
+                        raw_probabilities, calibrators[mode]
+                    )
+                    calibration_raw_rows[mode].append(
+                        (raw_probabilities, actual)
+                    )
+                    calibration_rows[mode].append((calibrated, actual))
+                    calibration_raw_dated_rows[mode].append(
+                        (forecast_date, raw_probabilities, actual)
+                    )
+                    calibration_dated_rows[mode].append(
+                        (forecast_date, calibrated, actual)
+                    )
+
             if match.market:
                 market_rows.append((match.market, actual))
-                dated_market_rows.append((forecast_date, match.market, actual))
+                dated_market_rows.append(
+                    (forecast_date, match.market, actual)
+                )
+                pending_calibration_history["market"].append(
+                    (match.market, actual)
+                )
+                if calibrators["market"]["fitted"]:
+                    calibrated_market = apply_multiclass_calibrator(
+                        match.market, calibrators["market"]
+                    )
+                    calibration_raw_rows["market"].append(
+                        (match.market, actual)
+                    )
+                    calibration_rows["market"].append(
+                        (calibrated_market, actual)
+                    )
+                    calibration_raw_dated_rows["market"].append(
+                        (forecast_date, match.market, actual)
+                    )
+                    calibration_dated_rows["market"].append(
+                        (forecast_date, calibrated_market, actual)
+                    )
+
                 for mode, probabilities in predictions.items():
                     common_rows[mode].append((probabilities, actual))
                     common_market_rows[mode].append((match.market, actual))
-                    dated_common_rows[mode].append((forecast_date, probabilities, actual))
-                    dated_common_market_rows[mode].append((forecast_date, match.market, actual))
+                    dated_common_rows[mode].append(
+                        (forecast_date, probabilities, actual)
+                    )
+                    dated_common_market_rows[mode].append(
+                        (forecast_date, match.market, actual)
+                    )
+
+                    if calibrators[mode]["fitted"] and calibrators["market"]["fitted"]:
+                        calibration_common_raw_model[mode].append(
+                            (probabilities, actual)
+                        )
+                        calibration_common_model[mode].append((
+                            apply_multiclass_calibrator(
+                                probabilities, calibrators[mode]
+                            ),
+                            actual,
+                        ))
+                        calibration_common_raw_market[mode].append(
+                            (match.market, actual)
+                        )
+                        calibration_common_market[mode].append((
+                            apply_multiclass_calibrator(
+                                match.market, calibrators["market"]
+                            ),
+                            actual,
+                        ))
             n_total += 1
-            test_dates.append(_calendar_day(match.date))
+            test_dates.append(forecast_date)
 
         adaptive_history.extend(pending_adaptive_history)
+        for mode in calibration_modes:
+            calibration_history[mode].extend(
+                pending_calibration_history[mode]
+            )
         adaptive_weight_trace.append({
-            "date": _calendar_day(group[0].date),
+            "date": forecast_date,
             "dc_weight": dc_weight,
             "prior_oof_predictions": len(adaptive_history) - len(pending_adaptive_history),
         })
         train.extend(group)
         forecast_day += 1
 
-    empty = {"n": 0, "accuracy": 0.0, "brier": 0.0, "logloss": 0.0, "rps": 0.0, "ece": 0.0}
+    empty = {
+        "n": 0,
+        "accuracy": 0.0,
+        "brier": 0.0,
+        "logloss": 0.0,
+        "rps": 0.0,
+        "ece": 0.0,
+    }
     result: dict[str, Any] = {
         mode: multiclass_metrics(values) for mode, values in rows.items()
     }
@@ -477,7 +764,10 @@ def compare_walk_forward(
     result["common_sample"] = {
         mode: {
             "model": multiclass_metrics(common_rows[mode]),
-            "market": multiclass_metrics(common_market_rows[mode]) if common_market_rows[mode] else empty,
+            "market": (
+                multiclass_metrics(common_market_rows[mode])
+                if common_market_rows[mode] else empty
+            ),
         }
         for mode in all_modes
     }
@@ -510,9 +800,63 @@ def compare_walk_forward(
     result["temporal_common_sample_calibration"] = {
         mode: {
             "model": _temporal_classwise_calibration(dated_common_rows[mode]),
-            "market": _temporal_classwise_calibration(dated_common_market_rows[mode]),
+            "market": _temporal_classwise_calibration(
+                dated_common_market_rows[mode]
+            ),
         }
         for mode in all_modes
+    }
+
+    def calibration_summary(mode: str) -> dict[str, Any]:
+        return {
+            "n": len(calibration_rows[mode]),
+            "raw_on_same_sample": multiclass_metrics(
+                calibration_raw_rows[mode]
+            ),
+            "calibrated": multiclass_metrics(calibration_rows[mode]),
+            "raw_seasonal": _temporal_classwise_calibration(
+                calibration_raw_dated_rows[mode]
+            ),
+            "calibrated_seasonal": _temporal_classwise_calibration(
+                calibration_dated_rows[mode]
+            ),
+            "fit_count": calibration_fit_counts[mode],
+            "last_fit": calibrators[mode],
+            "history_rows": len(calibration_history[mode]),
+        }
+
+    result["prequential_calibration"] = {
+        "method": "regularized multinomial vector-bias plus shared logit-scale",
+        "training_source": "prior walk-forward out-of-sample forecasts only",
+        "same_calendar_day_outcomes_excluded": True,
+        "min_history": calibration_min_history,
+        "window": calibration_window,
+        "refit_every_dates": calibration_refit_every,
+        "min_class_count": calibration_min_class_count,
+        "regularization": calibration_regularization,
+        "models": {
+            mode: calibration_summary(mode)
+            for mode in all_modes
+        },
+        "market": calibration_summary("market"),
+        "common_market_sample": {
+            mode: {
+                "n": len(calibration_common_model[mode]),
+                "raw_model": multiclass_metrics(
+                    calibration_common_raw_model[mode]
+                ),
+                "calibrated_model": multiclass_metrics(
+                    calibration_common_model[mode]
+                ),
+                "raw_market": multiclass_metrics(
+                    calibration_common_raw_market[mode]
+                ),
+                "calibrated_market": multiclass_metrics(
+                    calibration_common_market[mode]
+                ),
+            }
+            for mode in all_modes
+        },
     }
     result["prediction_errors"] = prediction_errors
     result["n_total"] = n_total
