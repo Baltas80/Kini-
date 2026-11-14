@@ -4,7 +4,8 @@ Date: 2026-11-14
 Repository: Baltas80/Kini-  
 Working branch: `audit/phase-1-temporal-validation`  
 Base branch: `master`  
-Code commit evaluated: `fbffca8b1600346ca728e19f010ab3f61f35f198`
+Backtest code commit evaluated: `fbffca8b1600346ca728e19f010ab3f61f35f198`  
+Latest validated branch HEAD: `2963e7dcbc3f0aca6680011e9c347367c79af44e`
 
 ## Executive status
 
@@ -133,14 +134,13 @@ Rule and price references are documented in `docs/QUINIELA_RULES.md`. The price/
 
 ## CI
 
-Current branch head validation:
-- [CI — 38 tests passed, 4 warnings](https://github.com/Baltas80/Kini-/actions/runs/43641699040).
-- [Historical data validation — success](https://github.com/Baltas80/Kini-/actions/runs/43641699075).
-- [Historical backtest — success, five model configurations and 5,011 predictions each](https://github.com/Baltas80/Kini-/actions/runs/43641695219).
+Latest validated branch HEAD: `2963e7dcbc3f0aca6680011e9c347367c79af44e`.
 
-The backtest installs `.[ml]` rather than `.[all]`: it needs XGBoost but not API, MCP or Optuna extras.
+- [CI — 38 tests passed](https://github.com/Baltas80/Kini-/actions/runs/43642060893). Four remaining test warnings originate in `penaltyblog` 1.13.1 when it assigns an array shape under NumPy 2.5; tests pass.
+- [Historical data validation — success](https://github.com/Baltas80/Kini-/actions/runs/43642060904): 5,311 matches, `integrity_passed: true`, zero duplicates, and no pandas fragmentation warnings.
+- [Historical backtest — success](https://github.com/Baltas80/Kini-/actions/runs/43642060879): 5,011 predictions for each of the five configurations, zero prediction errors, and `BACKTEST_ACCEPTANCE_OK`.
 
-The latest backtest still emitted pandas fragmentation warnings at `_ParsedDate` creation and source-metadata insertion. The earlier `DataFrame.assign` change did not remove the warning. This update now consolidates the parsed CSV frame before adding `_ParsedDate` and concatenates `League`, `Season` and `SourceURL` as one metadata block. Validation of this final warning fix is pending on the new commit.
+The ingestion builder now consolidates the normalized CSV frame before adding `_ParsedDate` and concatenates `League`, `Season` and `SourceURL` as a single metadata block. The first attempt accidentally commented out the parsed-date assignment; CI caught it, and commit `2963e7d` restores the assignment. The corrected implementation passes CI, data validation and the full backtest. The pandas fragmentation warnings are absent from the latest ingestion logs.
 
 ## Remaining work — priority order
 
@@ -149,7 +149,7 @@ The latest backtest still emitted pandas fragmentation warnings at `_ParsedDate`
 3. **Data identity:** audit aliases, renamed clubs and cross-season continuity; profile checks currently normalize text but do not maintain a canonical team-identity registry.
 4. **Ticket economics:** test cross-match dependence and realistic system/reduced-bet constraints. Do not claim expected payout or profitability without a defensible payout model and prize-pool data.
 5. **Model research:** retain the adaptive DC/ML weighting as an experiment; do not promote it unless a prequential or nested temporal evaluation demonstrates improvement in proper scoring rules.
-6. **Ingestion efficiency:** validate the new DataFrame consolidation/metadata concatenation change and confirm the fragmentation warnings disappear without changing row counts or profile integrity.
+6. **Ingestion efficiency:** DataFrame consolidation and metadata concatenation are **validated**; latest data validation retains 5,311 rows and the fragmentation warnings are absent.
 
 ## Phase 1 acceptance status
 
@@ -160,7 +160,7 @@ The latest backtest still emitted pandas fragmentation warnings at `_ParsedDate`
 5. Source/cache provenance and current-season coverage — **validated on 5,311 fixtures**.
 6. Non-empty Dixon-Coles, ML and ensemble backtests — **validated, 5,011 predictions each**.
 7. Optimizer probability validation and small-budget DP exactness — **implemented and CI-tested**.
-8. Fixed and adaptive independent model-only ensembles — **implemented and validated on 5,011 walk-forward fixtures**; adaptive weighting did not improve Brier or Log Loss over the fixed blend. Class-wise temporal calibration, timestamped odds and expected-payout model — **pending**.
+8. Fixed and adaptive independent model-only ensembles — **implemented and validated on 5,011 walk-forward fixtures**; adaptive weighting did not improve Brier or Log Loss over the fixed blend. Latest code head CI, ingestion validation and five-model backtest — **passed**. Class-wise temporal calibration, timestamped odds and expected-payout model — **pending**.
 
 ## Integration status
 
