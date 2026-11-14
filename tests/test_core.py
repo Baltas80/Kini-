@@ -5,6 +5,7 @@ import sys
 from types import SimpleNamespace
 
 import numpy as np
+import pytest
 
 from kini_engine.core import FeatureModel, KiniEngine, Match, TicketOptimizer, _date_num, context_adjust
 
