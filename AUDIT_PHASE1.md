@@ -1,12 +1,12 @@
 # Phase 1 audit — data integrity, temporal validation and model comparison
 
-Date: 2026-11-14  
+Date: 2026-11-15  
 Repository: Baltas80/Kini-  
 Working branch: `audit/phase-1-temporal-validation`  
 Base branch: `master`  
 Backtest code commit evaluated: `fbffca8b1600346ca728e19f010ab3f61f35f198`  
 Latest fully validated baseline: `2963e7dcbc3f0aca6680011e9c347367c79af44e`  
-Latest branch HEAD: `f41a336c97a147d167befc11c8c9d2536bd88133` (prequential calibration implementation; full backtest validation pending)
+Latest branch HEAD: `3fff53c52d4b60efe851eba18d9bd4e85a463f88` (44 tests and historical-data validation passed; calibrated historical backtest pending)
 
 ## Executive status
 
@@ -100,27 +100,27 @@ These diagnostics consume only walk-forward out-of-sample predictions. All fixtu
 
 
 
-### Prequential calibration experiment — implementation added
+### Experimento de calibración prequential — implementado
 
-The new calibrator applies:
+El calibrador aplica:
 
-`softmax(scale * log(p) + class_bias)`
+\`softmax(scale * log(p) + class_bias)\`
 
-with one positive shared scale and three zero-sum class offsets (two free parameters). It is fitted by regularized maximum likelihood using SciPy L-BFGS-B, with shrinkage toward the identity transformation.
+Utiliza una escala positiva compartida y tres sesgos por clase cuya suma es cero (dos parámetros libres). Se ajusta mediante máxima verosimilitud regularizada con SciPy L-BFGS-B y contracción hacia la transformación identidad.
 
-Default walk-forward policy:
-- Minimum prior OOF history: 500 forecasts.
-- Rolling fit window: 1,500 forecasts.
-- Minimum class support: 20 outcomes for each of 1/X/2.
-- Refit cadence: every 30 forecast dates.
-- Until a valid fit exists, forecasts remain unchanged.
-- Each model configuration and the market has its own independent calibration history and fitted parameters.
-- Raw and calibrated metrics are calculated on the same post-warm-up fixtures.
-- A separate model-versus-market comparison uses only fixtures for which both calibrators were already fitted.
+Configuración predeterminada del walk-forward:
+- Historial OOF previo mínimo: 500 predicciones.
+- Ventana móvil de ajuste: 1.500 predicciones.
+- Soporte mínimo por clase: 20 resultados de cada signo (1/X/2).
+- Reajuste: cada 30 fechas de pronóstico.
+- Hasta disponer de un ajuste válido, las probabilidades permanecen sin modificar.
+- Cada configuración de modelo y el mercado mantienen su propio historial y calibrador.
+- Las métricas originales y calibradas se calculan sobre exactamente los mismos partidos posteriores al calentamiento.
+- La comparación adicional modelo/mercado utiliza solo partidos para los que ambos calibradores ya estaban ajustados.
 
-The implementation includes a synthetic held-out test for correction of known class-prior/sharpness bias and a date-isolation regression test proving that the current forecast date's outcomes are not included in its calibrator fit.
+Las pruebas incluyen un conjunto sintético con sesgo conocido y un bloque de test independiente, además de una prueba de regresión que demuestra que los resultados de la fecha actual no entran en el ajuste de esa misma fecha.
 
-The historical-backtest workflow now rejects empty calibrated samples, mismatched raw/calibrated sample sizes, missing fitted calibrators, or missing common-market comparisons. This validates that the experiment actually ran; it does not require calibration to improve scores. Model promotion remains conditional on lower out-of-sample Brier/Log Loss on the same untouched evaluation sample. The new workflow result is pending.
+El workflow histórico rechaza muestras calibradas vacías, tamaños distintos entre muestras originales y calibradas, calibradores sin ajuste válido o comparaciones comunes con el mercado inexistentes. La aceptación comprueba que el experimento se ejecutó; no exige que mejore las métricas. Solo se promoverá si reduce Brier y Log Loss fuera de muestra sobre la misma muestra temporal. El resultado del backtest completo sigue pendiente.
 
 ### Adaptive DC/ML weighting
 
@@ -174,13 +174,13 @@ Rule and price references are documented in `docs/QUINIELA_RULES.md`. The price/
 
 ## CI
 
-Latest validated branch HEAD: `2963e7dcbc3f0aca6680011e9c347367c79af44e`.
+Baseline validado: `2963e7dcbc3f0aca6680011e9c347367c79af44e`. Último HEAD: `3fff53c52d4b60efe851eba18d9bd4e85a463f88`.
 
-- [CI — 38 tests passed](https://github.com/Baltas80/Kini-/actions/runs/43642060893). Four remaining test warnings originate in `penaltyblog` 1.13.1 when it assigns an array shape under NumPy 2.5; tests pass.
-- [Historical data validation — success](https://github.com/Baltas80/Kini-/actions/runs/43642060904): 5,311 matches, `integrity_passed: true`, zero duplicates, and no pandas fragmentation warnings.
-- [Historical backtest — success](https://github.com/Baltas80/Kini-/actions/runs/43642060879): 5,011 predictions for each of the five configurations, zero prediction errors, and `BACKTEST_ACCEPTANCE_OK`.
+- [CI del último HEAD — 44 tests superados](https://github.com/Baltas80/Kini-/actions/runs/43652728930). Permanecen cuatro advertencias deprecatorias de `penaltyblog` 1.13.1 al asignar la forma de un array bajo NumPy 2.5.
+- [Validación histórica del último HEAD](https://github.com/Baltas80/Kini-/actions/runs/43652728953): 5.311 partidos, `integrity_passed: true`, cero duplicados; LaLiga 2026/27: 119 partidos y Segunda 2026/27: 140.
+- [Backtest histórico anterior](https://github.com/Baltas80/Kini-/actions/runs/43642060879): 5.011 predicciones para cada una de las cinco configuraciones, cero errores y `BACKTEST_ACCEPTANCE_OK`. El backtest del nuevo calibrador está pendiente de confirmación.
 
-The ingestion builder now consolidates the normalized CSV frame before adding `_ParsedDate` and concatenates `League`, `Season` and `SourceURL` as a single metadata block. The first attempt accidentally commented out the parsed-date assignment; CI caught it, and commit `2963e7d` restores the assignment. The corrected implementation passes CI, data validation and the full backtest. The pandas fragmentation warnings are absent from the latest ingestion logs.
+El constructor de la ingesta consolida el DataFrame normalizado antes de añadir `_ParsedDate` y concatena `League`, `Season` y `SourceURL` como un único bloque de metadatos. CI detectó que el primer intento había comentado accidentalmente la asignación de la fecha parseada; el commit `2963e7d` la restauró. La implementación corregida conserva las 5.311 filas y elimina los avisos de fragmentación de pandas.
 
 ## Remaining work — priority order
 
