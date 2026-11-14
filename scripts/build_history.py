@@ -117,7 +117,7 @@ def _parse_source_csv(
         raise ValueError(f"{source}: hay partidos con solo uno de los dos marcadores")
 
     # Add an internal parsed date to ensure chronology is real, not lexical.
-    df["_ParsedDate"] = parsed_dates
+    # CSV normalization above updates several columns in place. Copy once to\n    # consolidate pandas blocks before adding the parsed-date column.\n    df = df.copy()\n    df["_ParsedDate"] = parsed_dates
     return df
 
 
@@ -410,7 +410,11 @@ def build_history(
                 )
             # Insert source metadata as one block to avoid repeated DataFrame
             # column insertion and pandas fragmentation on long histories.
-            df = df.assign(League=league, Season=season, SourceURL=url)
+            metadata = pd.DataFrame(
+                {"League": league, "Season": season, "SourceURL": url},
+                index=df.index,
+            )
+            df = pd.concat([df.copy(), metadata], axis=1)
             frames.append(df)
 
     combined = pd.concat(frames, ignore_index=True)

@@ -4,16 +4,17 @@ Date: 2026-11-14
 Repository: Baltas80/Kini-  
 Working branch: `audit/phase-1-temporal-validation`  
 Base branch: `master`  
-Current branch HEAD before this documentation update: `6e9d0aca5a844b2ae0a1a9db2e32d4f23ae2a4b1`
+Code commit evaluated: `fbffca8b1600346ca728e19f010ab3f61f35f198`
 
 ## Executive status
 
-- **P0 backtesting:** validated. Dixon-Coles, ML and ensemble each generated 5,011/5,011 test predictions; zero prediction errors.
-- **P1 historical ingestion:** validated. The robust Football-Data ingestion from PR #5 is now included in this branch and produced 5,311 complete matches with a passing integrity profile.
-- **P2 temporal validation:** validated for same-calendar-day exclusion, date-based refit cadence and strictly pre-match ML feature history.
-- **P6 ticket optimizer:** input checks, budget constraints, exhaustive small-budget DP comparison, minimum stake and Pleno al 15 aggregation are implemented and CI-tested.
-- **Predictive performance:** market remains better than all model configurations on accuracy, Brier and Log Loss.
-- **Not complete:** ensemble weight tuning, independent model-only ensemble comparison, temporal calibration, odds cutoff provenance, correlation-aware ticket coverage and expected-payout modelling.
+- **P0 backtesting:** validated. Dixon-Coles, ML, the market-assisted ensemble, fixed DC/ML-only ensemble and adaptive DC/ML-only ensemble each generated 5,011/5,011 predictions with zero prediction errors.
+- **P1 historical ingestion:** validated on 5,311 completed matches, with the integrity profile passing.
+- **P2 temporal validation:** same-calendar-day exclusion, date-based refit cadence and strictly pre-match ML feature history are implemented and tested.
+- **P6 ticket optimizer:** probability validation, budget constraints, exhaustive small-budget DP comparison, minimum stake and Pleno al 15 aggregation are implemented and CI-tested.
+- **Predictive performance:** the market remains materially better than every model configuration on accuracy, Brier and Log Loss.
+- **Ensemble weighting:** fixed and rolling prequential DC/ML-only comparisons are now evaluated. The adaptive variant did not improve Brier or Log Loss over the fixed DC/ML blend and is not selected as the default.
+- **Not complete:** class-wise temporal calibration, timestamped odds provenance, canonical team identity, correlation-aware ticket coverage and expected-payout modelling.
 
 ## P0/P2 — walk-forward and ML integrity
 
@@ -56,36 +57,51 @@ The profile records source URLs, cache timestamps/age, missingness, date coverag
 
 ## Current model backtest — validated
 
-GitHub Actions run: [43631064256](https://github.com/Baltas80/Kini-/actions/runs/43631064256)  
-Code commit evaluated: `6e9d0aca5a844b2ae0a1a9db2e32d4f23ae2a4b1`
+GitHub Actions run: [43641695219](https://github.com/Baltas80/Kini-/actions/runs/43641695219)  
+Code commit evaluated: `fbffca8b1600346ca728e19f010ab3f61f35f198`
 
 - Generated history: 5,311 completed fixtures.
 - Initial training sample: 300 matches.
 - Test sample: 5,011 fixtures.
 - Test period: 2020-12-11 through 2026-11-09.
 - Refit cadence: every 30 forecast dates.
-- Prediction errors: 0 for Dixon-Coles, ML and ensemble.
-- All three models and the market have 5,011 observations on the common sample.
-- Workflow acceptance: `BACKTEST_ACCEPTANCE_OK: 5011 fixtures for dc, ml, ensemble`.
+- Prediction errors: 0 for all five model configurations.
+- Every model and the market has 5,011 observations on the common sample.
+- Workflow acceptance: `BACKTEST_ACCEPTANCE_OK: 5011 fixtures for dc, ml, ensemble, ensemble_dc_ml, ensemble_dc_ml_adaptive`.
 
 | Model | Accuracy | Multiclass Brier | Log Loss | RPS* | ECE** |
 |---|---:|---:|---:|---:|---:|
 | Dixon-Coles | 0.4817 | 0.6167 | 1.0278 | 0.2082 | 0.0114 |
 | ML | 0.4404 | 0.6452 | 1.0709 | 0.2198 | 0.0453 |
-| Ensemble | 0.4825 | 0.6134 | 1.0226 | 0.2069 | 0.0117 |
+| Ensemble (DC/ML/LAE/market) | 0.4825 | 0.6134 | 1.0226 | 0.2069 | 0.0117 |
+| Fixed DC/ML-only | 0.4772 | 0.6158 | 1.0264 | 0.2080 | 0.0108 |
+| Adaptive DC/ML-only | 0.4777 | 0.6160 | 1.0267 | 0.2080 | 0.0100 |
 | Market | **0.5085** | **0.5980** | **1.0002** | **0.2002** | 0.0261 |
 
 * RPS is secondary because 1/X/2 are nominal outcomes rather than a naturally ordinal scale.  
 ** ECE is maximum-confidence expected calibration error with 10 equal-width bins; it is not a complete class-wise calibration assessment.
 
+### Adaptive DC/ML weighting
+
+The adaptive ensemble selects its Dixon-Coles weight once per forecast date using only earlier out-of-sample predictions:
+- Rolling history window: 1,000 prior forecasts.
+- Minimum history before adaptation: 300 prior forecasts.
+- Candidate grid: 0.00–1.00 in 0.025 increments, plus the fixed prior.
+- Objective: mean multiclass log loss plus a quadratic penalty of 0.02 toward the prior DC weight (0.77333).
+- Weight updates: 1,021 forecast dates.
+- Mean DC weight: 0.82925; median: 0.825; range: 0.725–0.975; final weight: 0.75.
+- The complete per-date weight trace is included in the backtest JSON artifact.
+
+The evaluator selects one weight before each calendar date and appends that date's outcomes only after all its fixtures have been forecast. Therefore, no same-day result can affect another fixture's weight.
+
 ### Interpretation
 
-- The market outperforms all three model configurations on accuracy, Brier and Log Loss.
-- The ensemble is marginally better than Dixon-Coles on Brier and Log Loss, but not enough to establish a meaningful advantage.
+- The market outperforms every model configuration on accuracy, Brier and Log Loss.
+- The market-assisted ensemble is marginally better than Dixon-Coles on Brier and Log Loss, but not accuracy; this does not establish a meaningful predictive advantage.
 - ML remains materially weaker than Dixon-Coles and market.
-- The current `ensemble` is **not a pure model-only ensemble**: its configured blend can include market probabilities (and LAE probabilities when available). Football-Data historical input supplies market odds but no LAE feed. A separate `ensemble_dc_ml` mode has now been implemented using only Dixon-Coles and ML, preserving their previous relative weights (0.58:0.17, normalized). It is evaluated as a separate walk-forward series and must not be described as better until its fresh backtest completes.
-- ECE values alone do not establish calibration quality; class-wise reliability and calibration on a strictly prior window remain necessary.
-- These historical results do not demonstrate future profitability.
+- The fixed model-only DC/ML blend slightly improves Brier and Log Loss relative to Dixon-Coles but has lower accuracy.
+- The adaptive DC/ML blend has slightly higher accuracy than the fixed model-only blend, but worse Brier and Log Loss. Its ECE is lower, but ECE alone is insufficient to claim better calibration. The adaptive method is retained as an experiment, not selected as the production default.
+- No result establishes that model probabilities are profitable or that they outperform market prices at an executable betting cutoff.
 
 Football-Data odds columns do not carry a capture timestamp. Their exact availability at an operational betting cutoff is not established; the market comparison is a historical benchmark, not proof of executable prices at a specified time.
 
@@ -117,23 +133,23 @@ Rule and price references are documented in `docs/QUINIELA_RULES.md`. The price/
 
 ## CI
 
-The historical-backtest workflow uses `.[ml]` rather than `.[all]`: the backtest requires XGBoost but does not import the API, MCP server or Optuna tuning extras. The ingestion builder assigns `League`, `Season` and `SourceURL` in one operation to avoid repeated DataFrame column insertion.
+Current branch head validation:
+- [CI — 38 tests passed, 4 warnings](https://github.com/Baltas80/Kini-/actions/runs/43641699040).
+- [Historical data validation — success](https://github.com/Baltas80/Kini-/actions/runs/43641699075).
+- [Historical backtest — success, five model configurations and 5,011 predictions each](https://github.com/Baltas80/Kini-/actions/runs/43641695219).
 
-Current branch head CI:
-- [Push CI](https://github.com/Baltas80/Kini-/actions/runs/43631064279)
-- [Pull-request CI](https://github.com/Baltas80/Kini-/actions/runs/43631069299)
-- **35 tests passed, 4 warnings.**
+The backtest installs `.[ml]` rather than `.[all]`: it needs XGBoost but not API, MCP or Optuna extras.
 
-The previous run reported pandas DataFrame fragmentation during ingestion and GitHub Actions Node.js deprecation notices. The ingestion builder now assigns its three source metadata columns together. The historical-backtest workflow installs only `.[ml]` (including XGBoost), avoiding unrelated API/MCP/Optuna extras. Fresh validation is pending.
+The latest backtest still emitted pandas fragmentation warnings at `_ParsedDate` creation and source-metadata insertion. The earlier `DataFrame.assign` change did not remove the warning. This update now consolidates the parsed CSV frame before adding `_ParsedDate` and concatenates `League`, `Season` and `SourceURL` as one metadata block. Validation of this final warning fix is pending on the new commit.
 
 ## Remaining work — priority order
 
-1. **Separate ensembles:** a fixed-weight DC+ML-only baseline (`ensemble_dc_ml`) is implemented with explicit market/LAE exclusion and added to walk-forward comparison. Its first full backtest is pending. Next, tune weights only from prior out-of-sample predictions; do not tune on the final test period.
-2. **Calibration:** add rolling/temporal calibration evaluation (including class-wise reliability) and compare Brier/Log Loss before and after without contaminating test data.
-3. **Odds provenance:** establish a usable pre-match cutoff or explicitly constrain the market benchmark to the available Football-Data semantics.
-4. **Data identity:** audit team aliases, renamed clubs and cross-season continuity; profile checks currently normalize text but do not maintain a canonical team-identity registry.
-5. **Ticket economics:** test cross-match dependence and realistic system/reduced-bet constraints. Do not claim expected payout or profitability without a defensible payout model and prize-pool data.
-6. **Ingestion efficiency:** remove the pandas fragmentation warning by assigning `League`, `Season` and `SourceURL` together; preserve current validation and tests.
+1. **Class-wise calibration:** add temporal reliability and one-vs-rest calibration diagnostics for 1, X and 2. Any calibration fit must use only predictions/outcomes available before the evaluated date.
+2. **Odds provenance:** establish a usable pre-match cutoff or explicitly constrain the market benchmark to the available Football-Data semantics. Do not describe closing odds as executable at an earlier cutoff.
+3. **Data identity:** audit aliases, renamed clubs and cross-season continuity; profile checks currently normalize text but do not maintain a canonical team-identity registry.
+4. **Ticket economics:** test cross-match dependence and realistic system/reduced-bet constraints. Do not claim expected payout or profitability without a defensible payout model and prize-pool data.
+5. **Model research:** retain the adaptive DC/ML weighting as an experiment; do not promote it unless a prequential or nested temporal evaluation demonstrates improvement in proper scoring rules.
+6. **Ingestion efficiency:** validate the new DataFrame consolidation/metadata concatenation change and confirm the fragmentation warnings disappear without changing row counts or profile integrity.
 
 ## Phase 1 acceptance status
 
@@ -144,7 +160,7 @@ The previous run reported pandas DataFrame fragmentation during ingestion and Gi
 5. Source/cache provenance and current-season coverage — **validated on 5,311 fixtures**.
 6. Non-empty Dixon-Coles, ML and ensemble backtests — **validated, 5,011 predictions each**.
 7. Optimizer probability validation and small-budget DP exactness — **implemented and CI-tested**.
-8. Fixed-weight independent model-only ensemble — **implemented; fresh full backtest pending**. Temporal calibration, timestamped odds and expected-payout model — **pending**.
+8. Fixed and adaptive independent model-only ensembles — **implemented and validated on 5,011 walk-forward fixtures**; adaptive weighting did not improve Brier or Log Loss over the fixed blend. Class-wise temporal calibration, timestamped odds and expected-payout model — **pending**.
 
 ## Integration status
 
