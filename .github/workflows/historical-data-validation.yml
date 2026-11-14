@@ -1,0 +1,87 @@
+name: historical-data-validation
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: "37 4 * * 1"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install -e ".[dev]"
+      - name: Restore Football-Data raw CSV cache
+        uses: actions/cache@v4
+        with:
+          path: .cache/football-data
+          key: football-data-${{ runner.os }}-${{ github.ref_name }}-${{ github.run_id }}
+          restore-keys: |
+            football-data-${{ runner.os }}-${{ github.ref_name }}-
+            football-data-${{ runner.os }}-
+      - name: Build historical data and profile
+        run: python scripts/build_history.py
+      - name: Validate generated dataset and profile
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          import pandas as pd
+
+          profile = json.loads(Path("data/historical_spain.profile.json").read_text(encoding="utf-8"))
+          if not profile.get("integrity_passed"):
+              raise SystemExit("Dataset integrity checks did not pass")
+          if int(profile.get("rows_after_deduplication", 0)) <= 0:
+              raise SystemExit("Historical dataset is empty")
+          if not profile.get("source_urls") or not profile.get("source_cache_metadata"):
+              raise SystemExit("Dataset profile is missing source/cache provenance")
+          seasons = profile.get("league_season_counts", {})
+          for key in ("la-liga/2627", "segunda/2627"):
+              if int(seasons.get(key, 0)) <= 0:
+                  raise SystemExit(f"Current-season coverage missing: {key}")
+
+          dataset = pd.read_csv("data/historical_spain.csv")
+          required = {"Date", "HomeTeam", "AwayTeam", "FTHG", "FTAG", "League", "Season"}
+          missing = required - set(dataset.columns)
+          if missing:
+              raise SystemExit(f"Historical CSV missing columns: {sorted(missing)}")
+          if len(dataset) != int(profile["rows_after_deduplication"]):
+              raise SystemExit("CSV row count does not match dataset profile")
+          for column in ("Date", "HomeTeam", "AwayTeam", "FTHG", "FTAG"):
+              if dataset[column].isna().any():
+                  raise SystemExit(f"Historical CSV contains missing {column}")
+          scores = dataset[["FTHG", "FTAG"]].apply(pd.to_numeric, errors="coerce")
+          if scores.isna().any().any() or (scores < 0).any().any():
+              raise SystemExit("Historical CSV contains invalid goal values")
+          if ((scores % 1) != 0).any().any():
+              raise SystemExit("Historical CSV contains fractional goals")
+          dates = pd.to_datetime(dataset["Date"], dayfirst=True, errors="coerce")
+          if dates.isna().any():
+              raise SystemExit("Historical CSV contains unparseable dates")
+          keys = pd.DataFrame({
+              "League": dataset["League"].astype("string").str.strip().str.casefold(),
+              "Season": dataset["Season"].astype("string").str.strip(),
+              "Date": dates.dt.strftime("%Y-%m-%d"),
+              "Home": dataset["HomeTeam"].astype("string").str.strip().str.casefold(),
+              "Away": dataset["AwayTeam"].astype("string").str.strip().str.casefold(),
+          })
+          if keys.duplicated().any():
+              raise SystemExit("Historical CSV still contains duplicate fixtures")
+          print(json.dumps(profile, indent=2, ensure_ascii=False))
+          print(f"DATA_VALIDATION_OK: {len(dataset)} completed fixtures")
+          PY
+      - name: Upload historical dataset and quality profile
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kini-historical-data
+          path: |
+            data/historical_spain.csv
+            data/historical_spain.profile.json
+          if-no-files-found: warn
+          retention-days: 30

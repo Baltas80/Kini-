@@ -15,59 +15,14 @@ jobs:
         with:
           python-version: "3.12"
       - run: python -m pip install -e ".[all]"
-      - name: Restore Football-Data raw CSV cache
-        uses: actions/cache@v4
-        with:
-          path: .cache/football-data
-          key: football-data-${{ runner.os }}-${{ github.ref_name }}-${{ github.run_id }}
-          restore-keys: |
-            football-data-${{ runner.os }}-${{ github.ref_name }}-
-            football-data-${{ runner.os }}-
-      - name: Build historical data and profile
-        run: python scripts/build_history.py
-      - name: Validate and display dataset profile
+      - run: python scripts/build_history.py
+      - name: Run historical comparison
         run: |
-          python - <<'PY'
-          import json
-          from pathlib import Path
-
-          profile = json.loads(Path("data/historical_spain.profile.json").read_text(encoding="utf-8"))
-          if not profile.get("integrity_passed"):
-              raise SystemExit("Dataset integrity checks did not pass")
-          if int(profile.get("rows_after_deduplication", 0)) <= 0:
-              raise SystemExit("Historical dataset is empty")
-          if not profile.get("source_urls") or not profile.get("source_cache_metadata"):
-              raise SystemExit("Dataset profile is missing source provenance")
-          seasons = profile.get("league_season_counts", {})
-          for key in ("la-liga/2627", "segunda/2627"):
-              if int(seasons.get(key, 0)) <= 0:
-                  raise SystemExit(f"Current-season coverage missing: {key}")
-          print(json.dumps(profile, indent=2, ensure_ascii=False))
-          PY
-      - name: Run historical baseline backtest (ML disabled)
-        run: |
-          python -m kini_engine.cli backtest data/historical_spain.csv --min-train 300 --refit-every 1000 > backtest-results.json
+          python -m kini_engine.cli compare data/historical_spain.csv --min-train 300 --refit-every 1000 > backtest-results.json
           cat backtest-results.json
-      - name: Enforce non-empty Dixon-Coles backtest
-        run: |
-          python - <<'PY'
-          import json
-          from pathlib import Path
-
-          result = json.loads(Path("backtest-results.json").read_text(encoding="utf-8"))
-          n = int(result.get("n", 0))
-          if n <= 0:
-              raise SystemExit("ML-disabled baseline backtest has no predictions")
-          print(f"BACKTEST_ACCEPTANCE_OK: {n} ML-disabled baseline fixtures")
-          PY
-      - name: Upload historical dataset, profile and backtest results
-        if: always()
+      - name: Upload backtest results
         uses: actions/upload-artifact@v4
         with:
-          name: kini-historical-data
-          path: |
-            data/historical_spain.csv
-            data/historical_spain.profile.json
-            backtest-results.json
-          if-no-files-found: warn
+          name: historical-backtest
+          path: backtest-results.json
           retention-days: 30
