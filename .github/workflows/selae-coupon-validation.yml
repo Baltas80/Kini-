@@ -7,7 +7,9 @@ on:
     paths:
       - "scripts/import_selae_results.py"
       - "tests/test_import_selae_results.py"
+      - "data/selae_fixture_overrides.json"
       - ".github/workflows/selae-coupon-validation.yml"
+  workflow_dispatch:
 
 permissions:
   contents: read
