@@ -305,9 +305,22 @@ def extract_match_links(html: str, *, page_url: str) -> list[dict[str, str]]:
     return [{"match_id": key, "match_url": value} for key, value in found.items()]
 
 
-def extract_round_dates(html: str, *, season_end_year: int) -> set[date]:
-    """Read explicit calendar dates shown in the official round archive."""
+def extract_round_dates(
+    html: str, *, season_end_year: int, matchday: int
+) -> set[date]:
+    """Read dates only from the requested round-results section, not news cards."""
     document = _parse_document(html)
+    section = re.search(
+        rf"(?:Liga F(?:\s+Moeve)?|Primera Iberdrola|Primera División Femenina)"
+        rf"\s+Jornada\s+{matchday}\b(?P<results>.*?)(?:Patrocinador principal|$)",
+        document.text,
+        flags=re.IGNORECASE,
+    )
+    if section is None:
+        raise LigaFHistoryError(
+            f"official archive has no results section for matchday {matchday}"
+        )
+
     season_start = date(season_end_year - 1, 7, 1)
     season_end = date(season_end_year, 6, 30)
     dates: set[date] = set()
@@ -316,7 +329,7 @@ def extract_round_dates(html: str, *, season_end_year: int) -> set[date]:
         r"(?P<year>20\d{2})\b",
         flags=re.IGNORECASE,
     )
-    for match in pattern.finditer(document.text):
+    for match in pattern.finditer(section.group("results")):
         month = MONTHS.get(match.group("month").upper())
         if month is None:
             continue
@@ -332,7 +345,7 @@ def extract_round_dates(html: str, *, season_end_year: int) -> set[date]:
             dates.add(value)
     if not dates:
         raise LigaFHistoryError(
-            f"official round page has no explicit dates for season {season_end_year}"
+            f"official round {matchday} has no explicit dates for season {season_end_year}"
         )
     return dates
 
@@ -791,6 +804,7 @@ def import_ligaf_history(
             round_dates = extract_round_dates(
                 round_html,
                 season_end_year=season_end_year,
+                matchday=matchday,
             )
             if len(links) != expected_fixtures_per_round:
                 raise LigaFHistoryError(
