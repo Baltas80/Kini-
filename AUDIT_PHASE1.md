@@ -594,7 +594,7 @@ Implementation: **committed to `feat/selae-fixture-reconciliation`**. CI run 437
 - Model-code revision tested: 2e1a92fde1b88c8480c22b953cb98de387329787.
 - Current branch head at this audit: 61a65296dac7a75d4764328afc0fbd32f7319489.
 - A GitHub compare confirms the nine commits after the backtest changed only Liga F evidence/import code and workflow path filters; no model implementation or model input files changed.
-- Dataset: 5,011 matches; initial training history: 300; evaluation period: 2020-12-11 through 2026-11-09.
+- Evaluation sample: 5,011 test matches; initial training history: 300; evaluation period: 2020-12-11 through 2026-11-09.
 - Dixon–Coles, ML, baseline ensemble, DC+ML ensemble and adaptive DC+ML ensemble each produced 5,011 forecasts. Recorded prediction errors: zero for every model.
 - The non-empty model-backtest, schedule-screened market-sample and prequential-calibration acceptance steps all passed.
 
