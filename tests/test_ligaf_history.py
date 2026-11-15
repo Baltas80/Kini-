@@ -20,6 +20,7 @@ ROUND_URL = "https://ligaf.es/resultados/primera_division_femenina/10/2027"
 MATCH_URL = "https://ligaf.es/partido/athletic-club-femenino/real-madrid-cf-femenino/202723868/detalle"
 ROUND_HTML = """
 <html><head><title>Resultados Jornada 10 Liga F | LPFF</title></head><body>
+<h2>Liga F Moeve Jornada 10</h2><h3>07 NOV 2026</h3><h3>08 NOV 2026</h3>
 <a href="/partido/athletic-club-femenino/real-madrid-cf-femenino/202723868/detalle">
 Athletic Club 1 - 1 Real Madrid CF</a>
 <a href="https://outside.example/partido/other/999/detalle">External</a>
@@ -74,12 +75,13 @@ def test_extract_match_links_rejects_empty_or_non_official_archive():
 def test_extract_round_dates_uses_explicit_archive_dates_and_season_bounds():
     html = """
     <html><body>
+    <h2>Liga F Moeve Jornada 30</h2>
     <h3>19 MAY 2023</h3>
     <h3>20 MAY 2023</h3>
     <h3>14 NOV 2026</h3>
     </body></html>
     """
-    assert extract_round_dates(html, season_end_year=2023) == {
+    assert extract_round_dates(html, season_end_year=2023, matchday=30) == {
         datetime(2023, 5, 19).date(),
         datetime(2023, 5, 20).date(),
     }
