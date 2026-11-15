@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .core import KiniEngine, Match, SIGNS
+from .core import KiniEngine, Match
 from .sources import KinielaGPTSource
 
 try:
@@ -85,13 +85,26 @@ def create_server(engine: KiniEngine | None = None):
             away = row.get("visitante", "")
             if not home or not away:
                 continue
-            pred = model.predict(Match("", home, away, lae={s: float(row.get(s, 0.0)) for s in SIGNS}))
-            if pred.surprise:
+            lae = row.get("lae")
+            detail = {
+                "lae_source": row.get("lae_source"),
+                "lae_captured_at": row.get("lae_captured_at"),
+                "kickoff_at": row.get("kickoff_at"),
+            }
+            current = Match(
+                row.get("kickoff_at") or "",
+                home,
+                away,
+                lae=lae if isinstance(lae, dict) else None,
+                detail=detail,
+            )
+            prediction = model.predict(current)
+            if prediction.surprise:
                 out.append({
                     "id": row.get("id"),
                     "home": home,
                     "away": away,
-                    "prediction": pred.__dict__,
+                    "prediction": prediction.__dict__,
                 })
         return out
 
