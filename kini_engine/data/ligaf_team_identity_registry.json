@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "registry_id": "ligaf-women-2026-27",
+  "source_dataset": {
+    "provider": "Liga F",
+    "competition_id": "LIGA_F",
+    "season": "2026-27",
+    "scope": "Six women's team identities independently linked from official Liga F match pages and team profiles for the 8 November 2026 Quiniela coupon.",
+    "verified_at_utc": "2026-11-15T09:39:37Z"
+  },
+  "teams": [
+    {
+      "team_id": "team:ligaf:athletic-club",
+      "canonical_name": "Athletic Club",
+      "gender": "women",
+      "aliases": [
+        {"source": "ligaf", "name": "Athletic Club", "participations": [["LIGA_F", "2026-27"]]},
+        {"source": "selae", "name": "Athletic Club (F)", "participations": [["LIGA_F", "2026-27"]]}
+      ]
+    },
+    {
+      "team_id": "team:ligaf:real-madrid-cf",
+      "canonical_name": "Real Madrid CF",
+      "gender": "women",
+      "aliases": [
+        {"source": "ligaf", "name": "Real Madrid CF", "participations": [["LIGA_F", "2026-27"]]},
+        {"source": "selae", "name": "Real Madrid (F)", "participations": [["LIGA_F", "2026-27"]]}
+      ]
+    },
+    {
+      "team_id": "team:ligaf:sd-eibar",
+      "canonical_name": "SD Eibar",
+      "gender": "women",
+      "aliases": [
+        {"source": "ligaf", "name": "SD Eibar", "participations": [["LIGA_F", "2026-27"]]},
+        {"source": "selae", "name": "Eibar (F)", "participations": [["LIGA_F", "2026-27"]]}
+      ]
+    },
+    {
+      "team_id": "team:ligaf:real-sociedad",
+      "canonical_name": "Real Sociedad",
+      "gender": "women",
+      "aliases": [
+        {"source": "ligaf", "name": "Real Sociedad", "participations": [["LIGA_F", "2026-27"]]},
+        {"source": "selae", "name": "Real Sociedad (F)", "participations": [["LIGA_F", "2026-27"]]}
+      ]
+    },
+    {
+      "team_id": "team:ligaf:logrono-united",
+      "canonical_name": "Logroño United",
+      "gender": "women",
+      "aliases": [
+        {"source": "ligaf", "name": "Logroño United", "participations": [["LIGA_F", "2026-27"]]},
+        {"source": "selae", "name": "Logroño (F)", "participations": [["LIGA_F", "2026-27"]]}
+      ]
+    },
+    {
+      "team_id": "team:ligaf:sevilla-fc",
+      "canonical_name": "Sevilla FC",
+      "gender": "women",
+      "aliases": [
+        {"source": "ligaf", "name": "Sevilla FC", "participations": [["LIGA_F", "2026-27"]]},
+        {"source": "selae", "name": "Sevilla (F)", "participations": [["LIGA_F", "2026-27"]]}
+      ]
+    }
+  ]
+}
