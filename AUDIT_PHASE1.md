@@ -808,3 +808,21 @@ The first CI run after the 12-feature change completed successfully: [run 437178
 The workflow previously linted fixture-reconciliation and Liga F files but did not run Ruff against the predictive core. Commit [fc9bf71](https://github.com/Baltas80/Kini-/commit/fc9bf714538352108c79d4150cf99110770a8816) expands the lint step to include `kini_engine/core.py` and `tests/test_core.py`. Its CI run is pending; any Ruff findings must be corrected before treating the code-quality check as complete.
 
 The model-code push matches the `historical-backtest` path filter. The PR-scoped workflow lookup does not expose the push-triggered backtest run, so no new ML metrics are claimed yet. The last accepted 15-feature metrics remain historical only; the 12-feature revision still requires a fresh full walk-forward result with non-empty model samples and zero prediction errors.
+
+
+## Predictive-core Ruff findings and correction — 2026-11-15
+
+Expanding CI lint coverage to `kini_engine/core.py` and `tests/test_core.py` exposed 13 existing Ruff findings that the previous CI scope had not checked. They were not test failures in the new feature change; the lint step stopped before pytest.
+
+Corrections:
+- Removed unused imports and moved `Iterable` to `collections.abc`.
+- Removed unnecessary quoted return annotations under postponed annotation evaluation.
+- Narrowed the optional XGBoost fallback from a blanket `Exception` catch to import/library-loading errors (`ImportError`, `OSError`), so estimator/configuration failures are no longer silently hidden by the fallback.
+- Marked the SELAE class-level limits table as `ClassVar`.
+- Changed invalid input-type failures in the ticket optimizer to `TypeError`; retained `ValueError` for invalid values and probability distributions.
+- Removed a redundant `list()` around `sorted()`.
+- Added regression assertions for boolean budgets, boolean probabilities and non-mapping per-match input.
+
+Implementation: [`9abee23`](https://github.com/Baltas80/Kini-/commit/9abee231ad87c86bb646a51ae0ebfb1e3721f45a). Tests: [`10d1fe5`](https://github.com/Baltas80/Kini-/commit/10d1fe5ecaa85c6f8a9d24503f882f3c54a5b5a5).
+
+The failed expanded-lint run was [43717966679](https://github.com/Baltas80/Kini-/actions/runs/43717966679). The corrected code and tests trigger a fresh CI run and another full historical benchmark because `core.py` changed. Validation remains pending until those runs finish.
