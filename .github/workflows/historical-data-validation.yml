@@ -15,6 +15,9 @@ on:
     paths:
       - "scripts/build_history.py"
       - "kini_engine/dataio.py"
+      - "kini_engine/team_identity.py"
+      - "kini_engine/data/**"
+      - "scripts/validate_team_identity_registry.py"
       - "data/**"
       - "pyproject.toml"
       - "requirements*.txt"
