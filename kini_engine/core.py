@@ -905,18 +905,22 @@ class TicketOptimizer:
             scenario_weights = np.asarray(parsed_weights, dtype=float)
             weighting = "explicit"
 
-        total_weight = float(scenario_weights.sum())
-        if not np.isfinite(total_weight) or total_weight <= 0.0:
-            raise ValueError("scenario weights must have a finite positive total")
-
-        # Scale before squaring so very small/large finite weights do not
-        # underflow or overflow the effective-sample-size calculation.
+        # Scale before summing/squaring so very small/large finite weights
+        # do not underflow or overflow aggregate calculations.
         weight_scale = float(scenario_weights.max())
+        if weight_scale <= 0.0:
+            raise ValueError("scenario weights must have a finite positive total")
         scaled_weights = scenario_weights / weight_scale
         scaled_total = float(scaled_weights.sum())
         squared_scaled_weight_sum = float(np.dot(scaled_weights, scaled_weights))
-        if scaled_total <= 0.0 or squared_scaled_weight_sum <= 0.0:
+        if (
+            not np.isfinite(scaled_total)
+            or scaled_total <= 0.0
+            or squared_scaled_weight_sum <= 0.0
+            or weight_scale > np.finfo(float).max / scaled_total
+        ):
             raise ValueError("scenario weights must have a finite positive total")
+        total_weight = weight_scale * scaled_total
 
         covered = np.asarray(
             [scenario in validated_columns for scenario in validated_scenarios],

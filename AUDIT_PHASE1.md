@@ -1358,3 +1358,5 @@ Implementation and regression tests are committed separately from the model benc
 
 The weighted evaluator now scales weights before the sum-of-squares calculation, avoiding underflow/overflow for very small or large finite weights. It rejects a non-finite aggregate weight total and rejects non-string sign labels explicitly. Regression tests cover weights of 1e-300 and 1e200, aggregate overflow, and non-string outcomes.
 
+The overflow regression initially emitted a NumPy runtime warning while correctly rejecting the aggregate. The implementation now scales first and checks the finite-total bound before multiplying, so invalid extreme weights are rejected without emitting a numerical warning.
+
