@@ -833,3 +833,28 @@ The failed expanded-lint run was [43717966679](https://github.com/Baltas80/Kini-
 The historical benchmark workflow was previously push/schedule/manual only. Its push-triggered result is not exposed by the connector's PR-only workflow lookup, which prevented reliable inspection of the exact benchmark generated for a PR head. Commit [08a24ae](https://github.com/Baltas80/Kini-/commit/08a24ae0c80b5cd6184b63df7e29027ae30b9894) adds a `pull_request` trigger with the same model/data path filters and evidence-only exclusions as the push trigger. The existing branch concurrency key keeps push/PR duplicates from running simultaneously.
 
 This makes the required non-empty forecast, zero-error, strict market-sample and prequential-calibration acceptance steps observable against the proposed PR head. The new PR-triggered run is pending; do not claim updated benchmark metrics until it completes and its artifact is inspected.
+
+## Point-in-time context hardening and ML feature-build optimization — 2026-11-15
+
+### Implemented
+
+- Commit `8c0540110c9e9fd552a212a74c4a0a9633136589` centralizes the strict prior-date, completed-result filter in `_prior_completed_matches`.
+- `context_adjust` now computes recent form and H2H exclusively from completed matches on calendar dates strictly before the fixture. The previous implementation trusted the supplied history list and could incorporate same-day/future results if a caller passed an unrestricted history.
+- `surprise_signal` now uses the same point-in-time filter for its recent-form explanation. It cannot use future results to add or remove a contextual reason.
+- `FeatureModel._training_rows` now builds the 12-feature training matrix in one chronological pass, grouped by source calendar date. All fixtures on a date are featurized before any result from that date is appended. Per-team overall/home/away histories retain only the latest eight completed matches. This replaces repeated per-row full-history filtering and feature scans.
+- The inference/reference `_features` path and the incremental training builder share `_team_form_features`, keeping the feature definition consistent.
+- Commit `af9ac241ed60a12b30dd1ae797b865a83101a724` adds regressions for context/surprise invariance under same-day/future contamination, equivalence of the incremental training matrix to the reference builder under shuffled input, and same-day training-row exclusion.
+
+### Validation status
+
+- CI run [43718207962](https://github.com/Baltas80/Kini-/actions/runs/43718207962) failed at Ruff `I001` only: one surplus blank line after imports in `kini_engine/core.py`. The exact formatting issue was corrected in `8c05401`; no tests ran in the failed CI job.
+- The earlier full backtest [43718207967](https://github.com/Baltas80/Kini-/actions/runs/43718207967) was cancelled by the subsequent branch update before the historical comparison and acceptance steps completed. It provides no new metrics.
+- Fresh PR CI [43723373814](https://github.com/Baltas80/Kini-/actions/runs/43723373814) was queued/pending at the time of this record. This audit update itself may supersede that documentation-triggered run; the latest CI run on the branch must be used for acceptance.
+- Fresh historical backtest [43723373822](https://github.com/Baltas80/Kini-/actions/runs/43723373822) passed history construction and the first-ML diagnostic, then entered the historical comparison. Non-empty forecast, market-sample and prequential-calibration acceptance steps had not yet completed. No new metrics are published.
+- The new 12-feature model remains unvalidated until the current full backtest and its uploaded JSON artifact complete successfully.
+
+### Remaining temporal limitations and next action
+
+The strict calendar-day cutoff is conservative, not proof of exact result publication time. Football-Data does not provide per-result publication timestamps. Market odds remain schedule-screened rather than per-fixture capture-timestamp verified. External LAE inputs still lack an explicit point-in-time eligibility contract and must not be treated as historically validated.
+
+Next action: collect the latest CI result, then complete the full walk-forward run and inspect its artifact for all five non-empty model configurations, identical market comparison samples, calibration samples and metrics. After that, harden external LAE eligibility and continue the remaining feature-provenance audit.
