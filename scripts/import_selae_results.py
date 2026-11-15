@@ -663,7 +663,7 @@ def _validate_draw_record(draw: dict[str, object]) -> bool:
         if not isinstance(away, dict) or not away.get("name"):
             return False
         sign = fixture.get("sign")
-        if sign not in {"1", "X", "2"}:
+        if not isinstance(sign, str) or sign not in {"1", "X", "2"}:
             return False
         score_status = fixture.get("score_status", "played")
         determination = fixture.get("sign_determination", "score")
@@ -683,8 +683,14 @@ def _validate_draw_record(draw: dict[str, object]) -> bool:
             expected_sign = "1" if home_goals > away_goals else "2" if home_goals < away_goals else "X"
             if sign != expected_sign:
                 return False
+            score_raw = fixture.get("score_raw")
+            if not isinstance(score_raw, str) or not _is_score(score_raw):
+                return False
+            parsed_home, parsed_away = _parse_score(score_raw)
+            if (parsed_home, parsed_away) != (home_goals, away_goals):
+                return False
             if draw.get("schema_version") == 2:
-                if fixture.get("reported_score_raw") != fixture.get("score_raw"):
+                if fixture.get("reported_score_raw") != score_raw:
                     return False
         elif score_status == "not_played":
             if (
