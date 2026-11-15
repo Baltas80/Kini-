@@ -1360,3 +1360,37 @@ The weighted evaluator now scales weights before the sum-of-squares calculation,
 
 The overflow regression initially emitted a NumPy runtime warning while correctly rejecting the aggregate. The implementation now scales first and checks the finite-total bound before multiplying, so invalid extreme weights are rejected without emitting a numerical warning.
 
+## Latest execution — joint-scenario coverage and source discovery (2026-11-15)
+
+### Implementation
+
+- Commit [870138c](https://github.com/Baltas80/Kini-/commit/870138c5967b32d6d47be3ba98ba9273f0ada4c1) adds `TicketOptimizer.evaluate_joint_scenario_coverage(columns, scenarios, weights=None)`.
+- The evaluator checks exact ordered 14-sign columns against complete 14-outcome scenarios. It supports explicit non-negative weights and reports weighted coverage, counts, duplicate columns and effective sample size.
+- It fails closed on malformed columns/scenarios, invalid sign labels, weight-length mismatches, booleans, negative/non-finite weights and zero total weight.
+- Commit [17f845e](https://github.com/Baltas80/Kini-/commit/17f845ec7134103c954ad278eff162f0d6112838) added six regression tests and made the existing independence estimate explicit in the optimizer response while retaining the legacy `joint_coverage` field for compatibility.
+- Commit [f19ea6e](https://github.com/Baltas80/Kini-/commit/f19ea6e3714537c317edce4a3c47d565a0afbe8d) hardened weight scaling. The implementation now scales before summing/squaring and rejects an overflowing aggregate before multiplication, without emitting a NumPy runtime warning. It also rejects non-string outcome labels.
+
+The existing optimizer still selects doubles/triples by the product of marginal selected-sign masses. The new evaluator measures a supplied joint scenario set; it does not yet optimize selections against that set. No correlation-aware optimizer or historical joint-coverage result is claimed.
+
+### Validation on final code head
+
+- PR CI [43757548790](https://github.com/Baltas80/Kini-/actions/runs/43757548790): Ruff passed; **181 tests passed, 4 upstream warnings**.
+- Historical-data validation [43757548930](https://github.com/Baltas80/Kini-/actions/runs/43757548930): passed, including dataset construction and canonical identity validation.
+- Live KinielaGPT diagnostic [43757548696](https://github.com/Baltas80/Kini-/actions/runs/43757548696): passed its change filter and skipped the external inspection because the provider adapter did not change.
+- No historical model backtest was rerun because this unit changed only ticket-coverage evaluation and its tests, not predictive models, features or training data.
+
+The push-triggered historical-backtest run [43757543794](https://github.com/Baltas80/Kini-/actions/runs/43757543794) failed before job creation (zero jobs returned by the Actions jobs endpoint). The PR CI and historical-data validation runs above completed successfully. This remains a workflow-level trigger/startup issue; it is not reported as a model or pytest failure. No change to `master` was made to investigate it.
+
+### Official historical Quiniela source discovery
+
+- SELAE's official results search page is [Resultados de La Quiniela](https://www.loteriasyapuestas.es/es/resultados/la-quiniela). It exposes a date-range search and a historical-results link to [HistoricoQuiniela.xls](https://www.loteriasyapuestas.es/f/loterias/documentos/Quiniela/Calendarios/HistoricoQuiniela.xls).
+- A date-specific official result page, for example [23 November 2025](https://www.loteriasyapuestas.es/es/la-quiniela/resultados/la-quiniela-resultados-del-23-de-noviembre-de-2025), exposes the ordered 14 fixtures, their scores and 1/X/2 signs, plus Pleno al 15.
+- The XLS binary could not be downloaded or inspected in this execution environment. Its schema and whether it contains only dates or additional draw metadata remain unverified. The date-specific pages do not visibly expose a separate stable draw ID; a date/URL key must be checked for uniqueness before it is adopted.
+- A third-party API advertises historical results since 2004 but requires an API key; it was not used as a source of truth.
+
+### Next action
+
+Retrieve the official SELAE historical calendar XLS through a binary-capable runner, inspect its schema, and use its draw dates to fetch and hash the corresponding official date-specific result pages. Build a dataset of complete, ordered 14-match scenarios with stable source IDs and explicit exclusions for incomplete/void fixtures. Only then compare the independence estimate with held-out joint-scenario coverage and consider a scenario-aware optimization objective.
+
+No predictive benchmark metrics changed in this execution. PR #9 remains a draft and unmerged; `master` remains untouched.
+
