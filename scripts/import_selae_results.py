@@ -26,6 +26,9 @@ MONTHS = (
 )
 DEFAULT_CACHE_DIR = Path(".cache/selae-quiniela")
 DEFAULT_OUTPUT = Path("data/selae_quiniela_draws.jsonl")
+DEFAULT_FIXTURE_OVERRIDES = (
+    Path(__file__).resolve().parents[1] / "data" / "selae_fixture_overrides.json"
+)
 CACHE_TTL_HOURS = 24.0
 TEAM_CATEGORY_RE = re.compile(r"^(.*?)\s+\(([MF])\)$", re.IGNORECASE)
 SCORE_RE = re.compile(r"^(\d+)\s*[-–]\s*(\d+)$")
@@ -286,6 +289,11 @@ def parse_selae_draw(
                 "home": _team_fields(home_raw),
                 "away": _team_fields(away_raw),
                 "score_raw": _clean(score_raw),
+                "reported_score_raw": _clean(score_raw),
+                "score_status": "played",
+                "sign_determination": "score",
+                "sign_evidence_url": None,
+                "sign_evidence_checked_at_utc": None,
                 "home_goals": home_goals,
                 "away_goals": away_goals,
                 "sign": sign,
@@ -303,7 +311,7 @@ def parse_selae_draw(
     now = datetime.now(UTC).isoformat()
     raw_bytes = raw_content if raw_content is not None else html.encode("utf-8")
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "provider": "SELAE",
         "record_type": "completed_quiniela_draw",
         "draw_date": draw_date.isoformat(),
@@ -318,10 +326,151 @@ def parse_selae_draw(
         "prize_tiers": prize_tiers,
         "limitations": [
             "La página de escrutinio no acredita la fecha ni la hora de inicio individual de cada partido.",
+            "Los partidos no disputados cuyo signo se determina por sorteo público se marcan como not_played; su signo solo sirve para puntuar el cupón, nunca como resultado futbolístico de entrenamiento.",
             "El marcador y el signo son resultados observados; no son variables predictoras prepartido.",
             "Los premios unitarios y acertantes no bastan para reconstruir por sí solos el valor esperado del boleto.",
         ],
     }
+
+
+
+def load_fixture_overrides(
+    path: str | Path = DEFAULT_FIXTURE_OVERRIDES,
+) -> list[dict[str, object]]:
+    """Load curated, source-evidenced exceptions for non-played coupon fixtures."""
+    override_path = Path(path)
+    try:
+        document = json.loads(override_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(f"No se puede leer el manifiesto de excepciones {override_path}: {exc}") from exc
+
+    if not isinstance(document, dict) or document.get("schema_version") != 1:
+        raise ValueError("Manifiesto de excepciones SELAE: schema_version no compatible")
+    if document.get("provider") != "SELAE":
+        raise ValueError("Manifiesto de excepciones SELAE: provider debe ser SELAE")
+    entries = document.get("overrides")
+    if not isinstance(entries, list):
+        raise ValueError("Manifiesto de excepciones SELAE: overrides debe ser una lista")
+
+    required_fields = {
+        "draw_date",
+        "position",
+        "status",
+        "determination",
+        "sign",
+        "reported_score_raw",
+        "evidence_url",
+        "evidence_checked_at_utc",
+        "reason",
+    }
+    seen: set[tuple[str, int]] = set()
+    validated: list[dict[str, object]] = []
+    for index, raw in enumerate(entries):
+        location = f"overrides[{index}]"
+        if not isinstance(raw, dict) or set(raw) != required_fields:
+            raise ValueError(
+                f"{location}: campos requeridos exactos: {sorted(required_fields)}"
+            )
+        try:
+            draw_date = date.fromisoformat(str(raw["draw_date"])).isoformat()
+        except ValueError as exc:
+            raise ValueError(f"{location}.draw_date no es una fecha ISO válida") from exc
+
+        position = raw["position"]
+        if isinstance(position, bool) or not isinstance(position, int) or not 1 <= position <= 14:
+            raise ValueError(f"{location}.position debe ser un entero entre 1 y 14")
+        if raw["status"] != "not_played" or raw["determination"] != "public_draw":
+            raise ValueError(f"{location}: solo se admiten partidos no disputados con signo por sorteo público")
+        sign = str(raw["sign"]).upper()
+        if sign not in {"1", "X", "2"}:
+            raise ValueError(f"{location}.sign debe ser 1, X o 2")
+
+        reported_score_raw = _clean(str(raw["reported_score_raw"]))
+        if not _is_score(reported_score_raw):
+            raise ValueError(f"{location}.reported_score_raw debe conservar el marcador mostrado por SELAE")
+
+        evidence_url = str(raw["evidence_url"]).strip()
+        parsed_url = urlparse(evidence_url)
+        if parsed_url.scheme != "https" or parsed_url.hostname != "www.loteriasyapuestas.es":
+            raise ValueError(f"{location}.evidence_url debe pertenecer al dominio oficial SELAE")
+
+        checked_raw = str(raw["evidence_checked_at_utc"]).strip()
+        try:
+            checked_at = datetime.fromisoformat(checked_raw.replace("Z", "+00:00"))
+        except ValueError as exc:
+            raise ValueError(f"{location}.evidence_checked_at_utc no es ISO-8601") from exc
+        if checked_at.tzinfo is None or checked_at.utcoffset() is None:
+            raise ValueError(f"{location}.evidence_checked_at_utc debe incluir zona horaria")
+
+        reason = str(raw["reason"]).strip()
+        if not reason:
+            raise ValueError(f"{location}.reason no puede estar vacío")
+
+        key = (draw_date, position)
+        if key in seen:
+            raise ValueError(f"Manifiesto de excepciones: override duplicado para {key}")
+        seen.add(key)
+        validated.append(
+            {
+                "draw_date": draw_date,
+                "position": position,
+                "status": "not_played",
+                "determination": "public_draw",
+                "sign": sign,
+                "reported_score_raw": reported_score_raw,
+                "evidence_url": evidence_url,
+                "evidence_checked_at_utc": checked_at.isoformat(),
+                "reason": reason,
+            }
+        )
+    return validated
+
+
+def apply_fixture_overrides(
+    draws: list[dict[str, object]],
+    overrides: list[dict[str, object]],
+) -> int:
+    """Separate a coupon sign decided by public draw from a played football score."""
+    draws_by_date = {str(draw.get("draw_date")): draw for draw in draws}
+    applied = 0
+    for override in overrides:
+        draw = draws_by_date.get(str(override["draw_date"]))
+        if draw is None:
+            continue
+        fixtures = draw.get("fixtures")
+        position = int(override["position"])
+        if not isinstance(fixtures, list) or len(fixtures) != 14:
+            raise ValueError(f"Sorteo {override['draw_date']}: no contiene 14 partidos")
+        fixture = fixtures[position - 1]
+        if not isinstance(fixture, dict):
+            raise ValueError(f"Sorteo {override['draw_date']}, partido {position}: registro inválido")
+        if fixture.get("reported_score_raw", fixture.get("score_raw")) != override["reported_score_raw"]:
+            raise ValueError(
+                f"Sorteo {override['draw_date']}, partido {position}: "
+                "el marcador mostrado no coincide con el manifiesto de evidencia"
+            )
+        if fixture.get("sign") != override["sign"]:
+            raise ValueError(
+                f"Sorteo {override['draw_date']}, partido {position}: "
+                "el signo publicado no coincide con el manifiesto de evidencia"
+            )
+        if fixture.get("score_status", "played") != "played":
+            raise ValueError(
+                f"Sorteo {override['draw_date']}, partido {position}: "
+                "no se puede aplicar el override dos veces"
+            )
+
+        fixture["reported_score_raw"] = str(override["reported_score_raw"])
+        fixture["score_raw"] = None
+        fixture["home_goals"] = None
+        fixture["away_goals"] = None
+        fixture["score_status"] = "not_played"
+        fixture["sign_determination"] = "public_draw"
+        fixture["sign_evidence_url"] = str(override["evidence_url"])
+        fixture["sign_evidence_checked_at_utc"] = str(override["evidence_checked_at_utc"])
+        fixture["status_reason"] = str(override["reason"])
+        applied += 1
+    return applied
 
 
 def make_session() -> requests.Session:
@@ -489,6 +638,8 @@ def load_dates(values: Iterable[str], date_file: str | Path | None = None) -> li
 
 
 def _validate_draw_record(draw: dict[str, object]) -> bool:
+    if draw.get("schema_version") not in {1, 2}:
+        return False
     if draw.get("provider") != "SELAE" or draw.get("record_type") != "completed_quiniela_draw":
         return False
     try:
@@ -511,12 +662,52 @@ def _validate_draw_record(draw: dict[str, object]) -> bool:
             return False
         if not isinstance(away, dict) or not away.get("name"):
             return False
+        sign = fixture.get("sign")
+        if sign not in {"1", "X", "2"}:
+            return False
+        score_status = fixture.get("score_status", "played")
+        determination = fixture.get("sign_determination", "score")
         home_goals = fixture.get("home_goals")
         away_goals = fixture.get("away_goals")
-        if not isinstance(home_goals, int) or not isinstance(away_goals, int):
-            return False
-        expected_sign = "1" if home_goals > away_goals else "2" if home_goals < away_goals else "X"
-        if fixture.get("sign") != expected_sign:
+        if score_status == "played":
+            if (
+                isinstance(home_goals, bool)
+                or isinstance(away_goals, bool)
+                or not isinstance(home_goals, int)
+                or not isinstance(away_goals, int)
+                or home_goals < 0
+                or away_goals < 0
+                or determination != "score"
+            ):
+                return False
+            expected_sign = "1" if home_goals > away_goals else "2" if home_goals < away_goals else "X"
+            if sign != expected_sign:
+                return False
+            if draw.get("schema_version") == 2:
+                if fixture.get("reported_score_raw") != fixture.get("score_raw"):
+                    return False
+        elif score_status == "not_played":
+            if (
+                home_goals is not None
+                or away_goals is not None
+                or fixture.get("score_raw") is not None
+                or determination != "public_draw"
+                or not _is_score(str(fixture.get("reported_score_raw", "")))
+                or not isinstance(fixture.get("status_reason"), str)
+                or not fixture.get("status_reason", "").strip()
+            ):
+                return False
+            evidence_url = urlparse(str(fixture.get("sign_evidence_url", "")))
+            if evidence_url.scheme != "https" or evidence_url.hostname != "www.loteriasyapuestas.es":
+                return False
+            checked_raw = str(fixture.get("sign_evidence_checked_at_utc", ""))
+            try:
+                checked_at = datetime.fromisoformat(checked_raw.replace("Z", "+00:00"))
+            except ValueError:
+                return False
+            if checked_at.tzinfo is None or checked_at.utcoffset() is None:
+                return False
+        else:
             return False
     return True
 
@@ -580,12 +771,29 @@ def write_draws(
         for draw in ordered_draws
     ]
     _atomic_write(target, ("\n".join(lines) + "\n").encode("utf-8"))
+    all_fixtures = [
+        fixture
+        for draw in ordered_draws
+        for fixture in draw.get("fixtures", [])
+        if isinstance(fixture, dict)
+    ]
+    not_played_count = sum(
+        fixture.get("score_status", "played") == "not_played"
+        for fixture in all_fixtures
+    )
     profile = {
         "profile_generated_at_utc": datetime.now(UTC).isoformat(),
         "provider": "SELAE",
         "source_urls": sorted({str(draw["source_url"]) for draw in ordered_draws}),
         "draw_count": len(ordered_draws),
         "fixture_count": sum(int(draw["fixture_count"]) for draw in ordered_draws),
+        "played_fixture_count": len(all_fixtures) - not_played_count,
+        "not_played_fixture_count": not_played_count,
+        "public_draw_fixture_count": sum(
+            fixture.get("sign_determination") == "public_draw"
+            for fixture in all_fixtures
+        ),
+        "football_result_usable_fixture_count": len(all_fixtures) - not_played_count,
         "draw_dates": [str(draw["draw_date"]) for draw in ordered_draws],
         "raw_sha256_by_draw_date": {
             str(draw["draw_date"]): draw["raw_sha256"] for draw in ordered_draws
@@ -613,6 +821,12 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--cache-ttl-hours", type=float, default=CACHE_TTL_HOURS)
     parser.add_argument("--refresh", action="store_true", help="Renovar incluso una caché válida.")
     parser.add_argument("--replace-existing", action="store_true", help="Reemplazar un sorteo existente solo si su SHA-256 de origen ha cambiado.")
+    parser.add_argument(
+        "--fixture-overrides",
+        type=Path,
+        default=DEFAULT_FIXTURE_OVERRIDES,
+        help="Manifiesto oficial de partidos aplazados o con signo decidido por sorteo público.",
+    )
     return parser.parse_args()
 
 
@@ -632,9 +846,14 @@ def main() -> None:
             )
             for draw_date in dates
         ]
+    overrides = load_fixture_overrides(args.fixture_overrides)
+    applied_overrides = apply_fixture_overrides(draws, overrides)
+    if applied_overrides:
+        log.info("Aplicadas %s excepciones oficiales de partidos no disputados", applied_overrides)
     write_draws(draws, args.output, replace_existing=args.replace_existing)
     profile_path = args.output.with_name(f"{args.output.stem}.profile.json")
     print(f"SELAE_IMPORT_OK: {sum(int(draw['fixture_count']) for draw in draws)} imported fixtures")
+    print(f"Official non-played overrides applied: {applied_overrides}")
     print(f"Dataset: {args.output}")
     print(f"Profile: {profile_path}")
 
