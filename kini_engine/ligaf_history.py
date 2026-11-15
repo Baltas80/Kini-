@@ -487,6 +487,13 @@ def parse_match_detail(
         status = "in_progress"
         home_goals = away_goals = None
         result = None
+    elif any(
+        marker in leading_text
+        for marker in ("programado", "pendiente", "por jugar", "no iniciado")
+    ):
+        status = "scheduled"
+        home_goals = away_goals = None
+        result = None
     else:
         raise LigaFHistoryError(
             f"match {match_id} has an unknown or missing official status"
@@ -670,6 +677,7 @@ def validate_history(
         postponed = [row for row in rows if row["match_status"] == "postponed"]
         suspended = [row for row in rows if row["match_status"] == "suspended"]
         in_progress = [row for row in rows if row["match_status"] == "in_progress"]
+        scheduled = [row for row in rows if row["match_status"] == "scheduled"]
 
         if len(rows) != expected_scheduled:
             raise LigaFHistoryError(
@@ -694,7 +702,7 @@ def validate_history(
                 f"season {season_end_year} does not contain the expected 16 scheduled teams"
             )
         if season_end_year in completed_seasons:
-            if postponed or suspended or in_progress:
+            if postponed or suspended or in_progress or scheduled:
                 raise LigaFHistoryError(
                     f"completed season {season_end_year} still has non-final fixtures"
                 )
@@ -722,6 +730,7 @@ def validate_history(
             "postponed_fixtures": len(postponed),
             "suspended_fixtures": len(suspended),
             "in_progress_fixtures": len(in_progress),
+            "scheduled_not_started_fixtures": len(scheduled),
             "team_count_in_played_fixtures": len(appearances),
             "rounds_with_expected_fixture_count": rounds - len(missing_rounds),
             "missing_or_incomplete_rounds": missing_rounds,
