@@ -1394,3 +1394,26 @@ Retrieve the official SELAE historical calendar XLS through a binary-capable run
 
 No predictive benchmark metrics changed in this execution. PR #9 remains a draft and unmerged; `master` remains untouched.
 
+## Historical-backtest workflow repair — 2026-11-15
+
+### Root cause
+
+The branch's .github/workflows/historical-backtest.yml contained two identical backtest job keys. Between them was a stray tab-prefixed fragment from an earlier changes-job shell script. The file had 500 lines, and GitHub rejected it before job creation; affected push runs returned zero jobs. This was a workflow-definition failure, not a test, model or data failure.
+
+### Repair
+
+Commit [942320e](https://github.com/Baltas80/Kini-/commit/942320ef07309bb1e2f13d41c2cf7e03250215ca):
+
+- Removes the malformed trailing fragment and duplicate backtest job; the workflow is now 287 lines with exactly one changes job and one backtest job.
+- Adds a job-level condition to skip push events on non-master branches, while preserving PR, manual and scheduled execution.
+- The repaired workflow is now parsed by GitHub and creates both changes/backtest jobs.
+
+### Validation
+
+- PR CI [43757784608](https://github.com/Baltas80/Kini-/actions/runs/43757784608): Ruff passed; **181 tests passed, four upstream warnings**.
+- Historical-data validation [43757784623](https://github.com/Baltas80/Kini-/actions/runs/43757784623): passed.
+- Live diagnostic filter [43757784610](https://github.com/Baltas80/Kini-/actions/runs/43757784610): passed and skipped the external request.
+- Repaired historical walk-forward [43757784652](https://github.com/Baltas80/Kini-/actions/runs/43757784652): workflow parsed successfully; the changes job passed and the backtest job has reached the historical comparison step. Metrics and acceptance status remain pending until that job completes.
+
+The prior zero-job failure [43757667066](https://github.com/Baltas80/Kini-/actions/runs/43757667066) is now explained by the malformed workflow file. No changes to master and no PR merge.
+
