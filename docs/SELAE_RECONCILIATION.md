@@ -51,7 +51,7 @@ Each entry must:
 - Supply `football_data_date`, the exact calendar date recorded in the historical Football-Data CSV. It is kept separate from the independently sourced local kickoff timestamp because the CSV `Time` column's timezone convention is not relied upon by this join.
 - Supply the schedule source, an HTTPS evidence URL and a UTC evidence-check timestamp.
 
-The Football-Data labels are resolved through `TeamIdentityRegistry` with exact source, competition, season and gender scope. Unknown or ambiguous aliases remain unresolved. The Football-Data registry remains limited to SP1/SP2 men's teams. A separate `kini_engine/data/ligaf_team_identity_registry.json` records six official Liga F women's identities for 2026-27; it is not mixed into the Football-Data registry and does not imply historical training coverage.
+The Football-Data labels are resolved through `TeamIdentityRegistry` with exact source, competition, season and gender scope. Unknown or ambiguous aliases remain unresolved. The Football-Data registry remains limited to SP1/SP2 men's teams. A separate `kini_engine/data/ligaf_team_identity_registry.json` records all 16 exact official Liga F women's team identities observed in 2026-27 rounds 1–10; six also have independently verified SELAE aliases for the 8 November coupon. It is not mixed into the Football-Data registry and does not imply historical training coverage.
 
 ## Run
 
@@ -86,16 +86,16 @@ This tool does **not** add SELAE records to the model's training set or alter fo
 
 - The manifest currently contains ten independently verified entries for coupon positions 1–10 on 8 November 2026. Official schedule evidence was checked at the respective clubs (Málaga CF, Osasuna, Real Madrid, Real Betis, Real Sociedad, RC Celta, Villarreal CF, Cádiz CF, Girona FC and Real Sporting).
 - All ten entries match one exact SP1/2627 or SP2/2627 row in the historical Football-Data artifact, including exact home/away labels, calendar date and full-time score.
-- For the full coupon, 13 fixtures were played and one was resolved by public draw. Ten men's fixtures are reconciled to exact Football-Data rows. The three women's fixtures are independently verified against official Liga F match pages and a separate six-team identity registry, but remain outside the Football-Data reconciler and are not training-eligible because no multi-season Liga F historical dataset has been validated. The public-draw fixture is excluded.
+- For the full coupon, 13 fixtures were played and one was resolved by public draw. Ten men's fixtures are reconciled to exact Football-Data rows. The three women's fixtures are independently verified against official Liga F match pages and a separate 16-team current-season identity registry, but remain outside the Football-Data reconciler and are not training-eligible because no multi-season Liga F historical dataset has been validated. The public-draw fixture is excluded.
 - PR #7 supplies the SELAE JSONL importer contract; this reconciliation change is developed separately on top of the canonical identity registry branch. It can be run once both changes are available in the working tree.
-- The Football-Data identity registry is limited to SP1/SP2. The separate Liga F registry covers only the six women's teams present in coupon positions 11–13 for 2026-27; it does not cover other Liga F clubs, earlier seasons, cup or European competitions.
+- The Football-Data identity registry is limited to SP1/SP2. The separate Liga F registry covers all 16 women's teams observed in 2026-27 rounds 1–10; only six of those have verified SELAE aliases for coupon positions 11–13. It does not establish cross-season club continuity for earlier seasons or cover cup/European competitions.
 - Football-Data's match CSV `Time` column is not used as an authoritative timezone-aware kickoff. The join uses the explicit `football_data_date`, competition, season, exact team labels and full-time goals; the timezone-aware `kickoff_at` is sourced independently from the official schedule evidence. Football-Data's match CSV does not provide a fully verified per-fixture odds-capture timestamp, so this join does not make the market benchmark timestamp-verified.
 - A successful identity join does not prove model performance, calibration, profitability or the absence of leakage in downstream features.
 
 
 ## Liga F official evidence — evidence-only boundary
 
-The three played women's fixtures in the 8 November 2026 coupon have now been independently checked against official Liga F match-detail pages. The SELAE display names resolve to six source-specific internal team IDs in `kini_engine/data/ligaf_team_identity_registry.json`; this registry is separate from the male Football-Data registry.
+The three played women's fixtures in the 8 November 2026 coupon have now been independently checked against official Liga F match-detail pages. The six SELAE display names resolve to six source-specific internal team IDs within the 16-team `kini_engine/data/ligaf_team_identity_registry.json`; this registry is separate from the male Football-Data registry.
 
 | SELAE position | Official Liga F fixture | Kickoff (Europe/Madrid) | Score | Official match ID |
 |---:|---|---|---:|---:|
@@ -103,7 +103,7 @@ The three played women's fixtures in the 8 November 2026 coupon have now been in
 | 12 | Logroño United – Sevilla FC | 8 Nov 2026, 12:00 | 2–2 | `202723864` |
 | 13 | SD Eibar – Real Sociedad | 7 Nov 2026, 17:00 | 1–2 | `202723866` |
 
-The evidence manifest is `data/ligaf_fixture_evidence.json`. Each row records the exact SELAE display labels, official Liga F names, internal team IDs, official match ID, timezone-aware kickoff, full-time score, official match URL, official team-profile URLs and UTC evidence-check timestamp. The validator is `kini_engine/ligaf_evidence.py`; tests run with:
+The evidence manifest is `data/ligaf_fixture_evidence.json`. The current-season official profile IDs and profile URLs for all 16 teams are recorded in `data/ligaf_team_profile_crosswalk.json`, with one official match-detail evidence URL per team. Each row records the exact SELAE display labels, official Liga F names, internal team IDs, official match ID, timezone-aware kickoff, full-time score, official match URL, official team-profile URLs and UTC evidence-check timestamp. The validator is `kini_engine/ligaf_evidence.py`; tests run with:
 
 ```bash
 pytest -q tests/test_ligaf_evidence.py
