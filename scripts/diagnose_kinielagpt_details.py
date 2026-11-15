@@ -147,7 +147,6 @@ def summarize_payload(payload: Any) -> dict[str, Any]:
     }
 
 
-
 def summarize_probability_payload(payload: Any) -> dict[str, Any]:
     """Expose bounded LAE XML probability-field evidence without storing raw XML."""
     if not isinstance(payload, Mapping):
@@ -175,9 +174,7 @@ def summarize_probability_payload(payload: Any) -> dict[str, Any]:
     else:
         records = []
 
-    field_names = sorted(
-        {str(key) for record in records[:10] for key in record}
-    )
+    field_names = sorted({str(key) for record in records[:10] for key in record})
     probability_fields = [
         key
         for key in field_names
@@ -199,9 +196,7 @@ def summarize_probability_payload(payload: Any) -> dict[str, Any]:
         if isinstance(row.get("probabilities"), Mapping)
     ]
     invalid_ids = [
-        match_id
-        for match_id, row in parsed.items()
-        if row.get("probabilities") is None
+        match_id for match_id, row in parsed.items() if row.get("probabilities") is None
     ]
 
     return {

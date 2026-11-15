@@ -170,7 +170,6 @@ def test_kickoff_attachment_summary_requires_verified_identity_and_temporal_orde
     )
 
 
-
 def test_probability_payload_summary_reports_expected_fields_and_valid_vectors():
     payload = {
         "quinielista": {
