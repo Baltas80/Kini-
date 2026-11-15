@@ -425,3 +425,31 @@ Implemented on the audit branch:
 Regression tests cover the maximum authorized 7-double/5-triple combination, rejection above the direct-system maximum, rejection of a one-column minimum, and the existing exhaustive small-budget comparison.
 
 Official source: SELAE, *Normas de la Quiniela y Elige 8* (October 2019), Anexo I, pp. 40–42, and final clause stating validity for subsequent seasons until replaced: https://www.selae.es/f/loterias/documentos/normativa/Normativa%20de%20los%20juegos/Normas_de_la_Quiniela_y_Elige8_Octubre_2019.pdf. Current SELAE normative-games index: https://www.selae.es/es/web-corporativa/normativa/normativa-de-los-juegos/normativa-de-los-juegos-web-corporativa.
+
+
+## SELAE official coupon and prize data availability — 2026-11-15
+
+A source investigation confirmed that SELAE publishes official, machine-indexable-by-date web records with the exact 14 coupon fixtures, home/away teams, full-time scores and 1/X/2 signs, plus the Pleno al 15 fixture and score. The official *escrutinios* pages also expose category winners and unit prizes. Verified examples:
+
+- [18 October 2026](https://www.loteriasyapuestas.es/es/la-quiniela/escrutinios/la-quiniela-premios-y-ganadores-del-18-de-octubre-de-2026): 14 fixtures, including four women's fixtures, Pleno al 15 and six prize categories.
+- [1 November 2026](https://www.loteriasyapuestas.es/es/la-quiniela/escrutinios/la-quiniela-premios-y-ganadores-del-01-de-noviembre-de-2026): 14 fixtures, scores/signs, Pleno al 15, winners and unit prizes.
+- [4 November 2026](https://www.loteriasyapuestas.es/es/la-quiniela/escrutinios/la-quiniela-premios-y-ganadores-del-04-de-noviembre-de-2026): 14 European men's fixtures, showing that coupon composition is not limited to LaLiga/Segunda.
+- [8 November 2026](https://www.loteriasyapuestas.es/es/la-quiniela/escrutinios/la-quiniela-premios-y-ganadores-del-08-de-noviembre-de-2026): 10 men's fixtures and four Liga F fixtures, with Pleno al 15 and prize distribution.
+
+SELAE's [official result detail page](https://www.loteriasyapuestas.es/es/resultados?drawId=1116207004) also exposes, for the 8 November 2026 result page, bets received, advertised jackpot, total collection and total prizes. SELAE's [official press-release PDF for 8 November 2026](https://www.loteriasyapuestas.es/f/loterias/documentos/Quiniela/Notas%20de%20prensa/NOTA_DE_PRENSA_LA_QUINIELA_08_11_26.pdf) independently confirms the collection and category results. The official [historical results search](https://www.loteriasyapuestas.es/es/resultados/quiniela) exposes date-range controls, but its results are loaded dynamically; the underlying request/response contract and reliable historical pagination have not yet been established. No automated historical ingestion is claimed at this stage.
+
+### Scope consequence
+
+The validated Football-Data dataset contains LaLiga and Segunda only. It is suitable for those men's domestic-league model benchmarks, but it is **not a complete historical representation of actual Quiniela coupons**. The verified 2026/27 coupons include Liga F, European competitions and cup fixtures. A model trained only on LaLiga/Segunda cannot be described as fully covering those coupons; unseen-team fallback forecasts must be surfaced as low-information estimates, not treated as equivalent to trained-team forecasts.
+
+Next P6/P1 work:
+1. Establish a stable SELAE historical-results retrieval contract (date-range search or documented result endpoint), preserving source URL, retrieval timestamp, draw/jornada identifier and raw response hash.
+2. Implement an importer with schema validation for 14 fixtures, Pleno al 15, results, prize tiers, collection and total prizes; reject incomplete or inconsistent draws.
+3. Build an explicit competition/team identity registry and connect the coupon fixtures to competition-specific historical training data.
+4. Only then evaluate actual-coupon coverage and payout distributions. Prize tiers, winners and unit prizes alone are insufficient to reconstruct expected payout without the applicable pool allocation, jackpot carry-over, ticket counts and system rules.
+
+### Full-coupon coverage reporting
+
+`TicketOptimizer.joint_coverage` remains the independent-match probability that at least one direct-system column covers all 14 1/X/2 outcomes. `KiniEngine.quiniela` now additionally reports `estimated_full_coupon_coverage_independent`, multiplying the 14-match coverage by the probability of the selected Pleno al 15 category. The output explicitly records `independent_all_14_matches_and_pleno15`; it is an approximation, not a correlation-aware estimate or an expected-payout metric.
+
+The change is metadata/reporting only: it does not modify any model probability, optimizer selection, budget or historical benchmark.
