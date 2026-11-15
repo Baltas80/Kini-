@@ -29,7 +29,7 @@ def test_cell_serialization_preserves_text_and_numeric_zero() -> None:
 
 
 def test_cell_serialization_preserves_excel_date_and_datemode() -> None:
-    serial = xlrd.xldate_from_datetime_tuple((2026, 11, 15, 0, 0, 0), 0)
+    serial = xlrd.xldate_from_date_tuple((2026, 11, 15), 0)
     result = _cell_to_json(_cell(xlrd.XL_CELL_DATE, serial), 0)
 
     assert result["type"] == "date"

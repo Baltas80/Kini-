@@ -22,13 +22,23 @@ SOURCE_URL = (
 XLS_SIGNATURE = bytes.fromhex("D0CF11E0A1B11AE1")
 MAX_DOWNLOAD_BYTES = 25 * 1024 * 1024
 CHUNK_SIZE = 64 * 1024
+INDEX_URL = "https://www.loteriasyapuestas.es/es/resultados/la-quiniela"
+SAMPLE_RESULT_URL = (
+    "https://www.loteriasyapuestas.es/es/la-quiniela/resultados/"
+    "la-quiniela-resultados-del-23-de-noviembre-de-2025"
+)
+MAX_PROBE_BYTES = 2 * 1024 * 1024
 HEADERS = {
     "User-Agent": (
-        "Mozilla/5.0 (compatible; KiniEngine/0.2; "
-        "+https://github.com/Baltas80/Kini-)"
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/131.0.0.0 Safari/537.36"
     ),
-    "Accept": "application/vnd.ms-excel,application/octet-stream;q=0.9,*/*;q=0.5",
-    "Accept-Language": "es-ES,es;q=0.9",
+    "Accept": (
+        "text/html,application/xhtml+xml,application/xml;q=0.9,"
+        "application/vnd.ms-excel,application/octet-stream;q=0.8,*/*;q=0.5"
+    ),
+    "Accept-Language": "es-ES,es;q=0.9,en;q=0.8",
 }
 
 
@@ -89,7 +99,47 @@ def _validate_xls_payload(payload: bytes) -> None:
         )
 
 
-def _download_calendar() -> tuple[bytes, dict[str, Any]]:
+class SelaeSourceError(RuntimeError):
+    def __init__(self, message: str, diagnostics: dict[str, Any]) -> None:
+        super().__init__(message)
+        self.diagnostics = diagnostics
+
+
+def _probe_page(
+    session: requests.Session,
+    name: str,
+    url: str,
+    output_dir: Path,
+) -> dict[str, Any]:
+    try:
+        response = session.get(url, timeout=(10, 30), allow_redirects=True)
+        body = response.content
+        truncated = len(body) > MAX_PROBE_BYTES
+        saved_body = body[:MAX_PROBE_BYTES]
+        (output_dir / f"access_probe_{name}.html").write_bytes(saved_body)
+        return {
+            "name": name,
+            "requested_url": url,
+            "final_url": response.url,
+            "http_status": response.status_code,
+            "content_type": response.headers.get("Content-Type"),
+            "downloaded_bytes": len(body),
+            "saved_bytes": len(saved_body),
+            "body_truncated": truncated,
+            "body_file": f"access_probe_{name}.html",
+        }
+    except requests.RequestException as exc:
+        return {
+            "name": name,
+            "requested_url": url,
+            "error_type": type(exc).__name__,
+            "error": str(exc),
+        }
+
+
+def _download_calendar(
+    output_dir: Path,
+) -> tuple[bytes, dict[str, Any]]:
     retry = Retry(
         total=3,
         connect=3,
@@ -102,13 +152,61 @@ def _download_calendar() -> tuple[bytes, dict[str, Any]]:
     with requests.Session() as session:
         session.headers.update(HEADERS)
         session.mount("https://", HTTPAdapter(max_retries=retry))
-        with session.get(
-            SOURCE_URL,
-            stream=True,
-            timeout=(15, 60),
-            allow_redirects=True,
-        ) as response:
-            response.raise_for_status()
+
+        probes = [
+            _probe_page(session, "results_index", INDEX_URL, output_dir),
+            _probe_page(session, "sample_result", SAMPLE_RESULT_URL, output_dir),
+        ]
+        download_headers = {
+            "Referer": INDEX_URL,
+            "Sec-Fetch-Dest": "document",
+            "Sec-Fetch-Mode": "navigate",
+            "Sec-Fetch-Site": "same-origin",
+            "Upgrade-Insecure-Requests": "1",
+        }
+        try:
+            response = session.get(
+                SOURCE_URL,
+                headers=download_headers,
+                stream=True,
+                timeout=(15, 60),
+                allow_redirects=True,
+            )
+        except requests.RequestException as exc:
+            raise SelaeSourceError(
+                f"SELAE historical XLS request failed: {exc}",
+                {
+                    "probes": probes,
+                    "xls": {
+                        "error_type": type(exc).__name__,
+                        "error": str(exc),
+                    },
+                },
+            ) from exc
+
+        with response:
+            response_metadata = {
+                "http_status": response.status_code,
+                "content_type": response.headers.get("Content-Type"),
+                "content_length_header": response.headers.get("Content-Length"),
+                "final_url": response.url,
+                "referer": INDEX_URL,
+                "access_probes": probes,
+            }
+            if response.status_code != 200:
+                preview = response.text[:500]
+                diagnostics = {
+                    "probes": probes,
+                    "xls": {
+                        **response_metadata,
+                        "body_preview": preview,
+                    },
+                }
+                raise SelaeSourceError(
+                    f"SELAE historical XLS returned HTTP {response.status_code}",
+                    diagnostics,
+                )
+
             chunks: list[bytes] = []
             size = 0
             for chunk in response.iter_content(chunk_size=CHUNK_SIZE):
@@ -116,21 +214,31 @@ def _download_calendar() -> tuple[bytes, dict[str, Any]]:
                     continue
                 size += len(chunk)
                 if size > MAX_DOWNLOAD_BYTES:
-                    raise ValueError(
-                        f"SELAE XLS exceeds {MAX_DOWNLOAD_BYTES} bytes"
+                    raise SelaeSourceError(
+                        f"SELAE XLS exceeds {MAX_DOWNLOAD_BYTES} bytes",
+                        {"probes": probes, "xls": response_metadata},
                     )
                 chunks.append(chunk)
             payload = b"".join(chunks)
-            _validate_xls_payload(payload)
-            metadata = {
-                "http_status": response.status_code,
-                "content_type": response.headers.get("Content-Type"),
-                "content_length_header": response.headers.get("Content-Length"),
-                "downloaded_bytes": len(payload),
-                "final_url": response.url,
-            }
-    return payload, metadata
+            try:
+                _validate_xls_payload(payload)
+            except ValueError as exc:
+                raise SelaeSourceError(
+                    str(exc),
+                    {
+                        "probes": probes,
+                        "xls": {
+                            **response_metadata,
+                            "downloaded_bytes": len(payload),
+                            "body_preview": payload[:500].decode(
+                                "utf-8", errors="replace"
+                            ),
+                        },
+                    },
+                ) from exc
+            response_metadata["downloaded_bytes"] = len(payload)
 
+    return payload, response_metadata
 
 def inspect_workbook(
     payload: bytes,
@@ -207,6 +315,7 @@ def inspect_workbook(
 
     return {
         "schema_version": 1,
+        "success": True,
         "source": SOURCE_URL,
         "retrieved_at_utc": datetime.now(timezone.utc).isoformat(),
         "response": response_metadata,
@@ -247,10 +356,10 @@ def main(argv: list[str] | None = None) -> int:
     report_path = args.output_dir / "inspection.json"
 
     try:
-        payload, response_metadata = _download_calendar()
-        report = inspect_workbook(payload, args.output_dir, response_metadata)
+        payload, response_metadata = _download_calendar(args.output_dir)
         source_path = args.output_dir / "HistoricoQuiniela.xls"
         source_path.write_bytes(payload)
+        report = inspect_workbook(payload, args.output_dir, response_metadata)
         report_path.write_text(
             json.dumps(report, ensure_ascii=False, indent=2, allow_nan=False) + "\n",
             encoding="utf-8",
@@ -264,6 +373,22 @@ def main(argv: list[str] | None = None) -> int:
         )
         print(f"Report: {report_path}")
         return 0
+    except SelaeSourceError as exc:
+        failure = {
+            "schema_version": 1,
+            "source": SOURCE_URL,
+            "retrieved_at_utc": datetime.now(timezone.utc).isoformat(),
+            "success": False,
+            "error_type": type(exc).__name__,
+            "error": str(exc),
+            "diagnostics": exc.diagnostics,
+        }
+        report_path.write_text(
+            json.dumps(failure, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        print(f"SELAE_CALENDAR_INSPECTION_ERROR: {exc}", file=sys.stderr)
+        return 2
     except (
         OSError,
         requests.RequestException,
