@@ -440,7 +440,8 @@ def summarize_kickoff_attachment(rows: Any, lae_source: str) -> dict[str, Any]:
         )
         evidence_fresh_at_capture = (
             evidence_age is not None
-            and 0 <= evidence_age.total_seconds()
+            and 0
+            <= evidence_age.total_seconds()
             <= LAE_KICKOFF_EVIDENCE_MAX_AGE.total_seconds()
         )
         capture_before_kickoff = (
