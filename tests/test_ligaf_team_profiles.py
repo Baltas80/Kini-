@@ -117,11 +117,14 @@ def _crosswalk_document() -> dict:
         entries.append(
             {
                 "team_name_in_match": f"Team {index:02d}",
+                "profile_heading": f"Team {index:02d}",
                 "provider_team_profile_id": str(1000 + index),
                 "team_profile_url": (
                     "https://ligaf.es/equipo/"
                     f"team-{index:02d}/{1000 + index}/plantilla/2023"
                 ),
+                "match_evidence_sha256": "a" * 64,
+                "profile_page_sha256": "b" * 64,
                 "match_evidence_url": (
                     f"https://ligaf.es/partido/home/away/{2023310000 + index}/detalle"
                 ),
@@ -134,7 +137,7 @@ def _crosswalk_document() -> dict:
                 "identity_status": "exact_name_match",
             }
         )
-    return {
+    document = {
         "schema_version": 1,
         "provider": "LIGA_F",
         "competition_id": "LIGA_F",
@@ -142,13 +145,31 @@ def _crosswalk_document() -> dict:
         "training_eligibility": {"eligible": False},
         "seasons": {
             "2023": {
+                "season": "2022-23",
                 "season_end_year": 2023,
+                "matchday": 30,
                 "team_count": 16,
                 "unique_profile_ids": 16,
+                "verified_profile_pages": 16,
+                "exact_name_matches": 16,
+                "review_required_count": 0,
+                "all_profile_pages_verified": True,
                 "entries": entries,
             }
         },
     }
+    provider_observations = _cross_season_observations(document["seasons"])
+    name_observations = _cross_season_display_name_observations(document["seasons"])
+    document["cross_season_provider_id_observations"] = provider_observations
+    document["cross_season_display_name_observations"] = name_observations
+    document["identity_audit_summary"] = {
+        "unique_display_names": 16,
+        "unique_provider_profile_ids": 16,
+        "display_names_with_multiple_provider_ids": 0,
+        "provider_ids_with_multiple_display_names": 0,
+        "canonical_identity_assignments": 0,
+    }
+    return document
 
 
 def test_validate_historical_profiles_accepts_season_scoped_evidence_only():
