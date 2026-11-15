@@ -61,7 +61,7 @@ El importador `scripts/import_ligaf_history.py` descarga las páginas oficiales 
 python scripts/import_ligaf_history.py
 ```
 
-El resultado se escribe en `data/ligaf_history.jsonl` y su perfil de integridad en `data/ligaf_history.profile.json`; ambos son artefactos locales ignorados por Git. Las páginas HTML originales y sus hashes se conservan en `.cache/ligaf`. Se puede usar `--refresh` para renovar la caché o `--offline` para reconstruir el resultado solo con fuentes previamente almacenadas.
+El resultado se escribe en `data/ligaf_history.jsonl` y su perfil de integridad en `data/ligaf_history.profile.json`; ambos son artefactos locales ignorados por Git. El perfil incluye un inventario exacto de nombres de equipos por temporada, apariciones locales/visitantes y rango de fechas para facilitar una revisión humana de alias; no infiere identidades entre nombres diferentes. Las páginas HTML originales y sus hashes se conservan en `.cache/ligaf`. Se puede usar `--refresh` para renovar la caché o `--offline` para reconstruir el resultado solo con fuentes previamente almacenadas.
 
 El importador exige ocho encuentros por jornada, identificadores oficiales únicos, fechas del partido coincidentes con la sección de resultados de la jornada, marcador y signo coherentes y, para temporadas completas, 240 partidos, 16 equipos y 15 encuentros como local y visitante por equipo. Los títulos de algunas fichas históricas muestran un año estático incorrecto; por eso el año de temporada se toma de la ruta oficial del archivo y la fecha del encabezado de la ficha se contrasta con las fechas de la jornada.
 
