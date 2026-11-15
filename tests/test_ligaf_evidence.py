@@ -9,6 +9,7 @@ from kini_engine.ligaf_evidence import (
     LigaFEvidenceError,
     load_ligaf_fixture_evidence,
 )
+from kini_engine.team_identity import TeamIdentityRegistry
 
 ROOT = Path(__file__).resolve().parents[1]
 EVIDENCE_PATH = ROOT / "data" / "ligaf_fixture_evidence.json"
@@ -45,6 +46,45 @@ def test_official_ligaf_evidence_resolves_three_womens_coupon_fixtures():
     ]
     assert all(item["training_label_eligible"] is False for item in fixtures)
     assert all("multi-season" in item["training_exclusion_reason"] for item in fixtures)
+
+
+def test_ligaf_registry_covers_all_sixteen_current_season_teams():
+    registry = TeamIdentityRegistry.from_path(
+        ROOT / "kini_engine" / "data" / "ligaf_team_identity_registry.json"
+    )
+    names = {
+        "Athletic Club",
+        "Atlético de Madrid",
+        "Costa Adeje Tenerife",
+        "Deportivo Abanca",
+        "Deportivo Alavés",
+        "FC Badalona Women",
+        "FC Barcelona",
+        "Granada CF",
+        "Logroño United",
+        "Madrid CFF",
+        "RCD Espanyol",
+        "Real Madrid CF",
+        "Real Sociedad",
+        "SD Eibar",
+        "Sevilla FC",
+        "VCF Femenino",
+    }
+
+    identities = {
+        registry.resolve(
+            name,
+            source="ligaf",
+            competition_id="LIGA_F",
+            season="2026-27",
+            gender="women",
+        )
+        for name in names
+    }
+
+    assert len(identities) == 16
+    assert all(identity is not None for identity in identities)
+    assert registry.team_count == 16
 
 
 def test_ligaf_registry_resolves_both_provider_aliases_for_all_six_teams():
