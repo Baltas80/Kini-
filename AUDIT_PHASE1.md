@@ -1417,3 +1417,16 @@ Commit [942320e](https://github.com/Baltas80/Kini-/commit/942320ef07309bb1e2f13d
 
 The prior zero-job failure [43757667066](https://github.com/Baltas80/Kini-/actions/runs/43757667066) is now explained by the malformed workflow file. No changes to master and no PR merge.
 
+## CI workflow lint guard — 2026-11-15
+
+Commit [24500cc](https://github.com/Baltas80/Kini-/commit/24500cc251f3c2faae2bfeab9c4a18679a018e25) adds raven-actions/actionlint@v2 to the main CI job. This validates all GitHub Actions workflow definitions on relevant PRs, addressing the gap that allowed the duplicated historical-backtest job and malformed trailing fragment to reach GitHub.
+
+Validation on this commit:
+- Actionlint workflow validation: passed.
+- PR CI [43758043087](https://github.com/Baltas80/Kini-/actions/runs/43758043087): Ruff passed; **181 tests passed, four upstream warnings**.
+- Historical-data validation [43758043114](https://github.com/Baltas80/Kini-/actions/runs/43758043114): in progress at the time of this record.
+- Full historical walk-forward [43757784652](https://github.com/Baltas80/Kini-/actions/runs/43757784652): still in the historical comparison step; no refreshed metrics are claimed.
+- The workflow repair has been validated structurally: the repaired PR run creates a changes job and a backtest job instead of failing before job creation.
+
+Next action is to capture the completed walk-forward artifact and acceptance checks. The subsequent scheduled execution should continue from the latest successful backtest head rather than repeat this audit.
+
