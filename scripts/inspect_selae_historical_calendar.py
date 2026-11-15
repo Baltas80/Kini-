@@ -6,7 +6,7 @@ import json
 import math
 import sys
 from collections import deque
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -317,7 +317,7 @@ def inspect_workbook(
         "schema_version": 1,
         "success": True,
         "source": SOURCE_URL,
-        "retrieved_at_utc": datetime.now(timezone.utc).isoformat(),
+        "retrieved_at_utc": datetime.now(UTC).isoformat(),
         "response": response_metadata,
         "file": {
             "bytes": len(payload),
@@ -377,7 +377,7 @@ def main(argv: list[str] | None = None) -> int:
         failure = {
             "schema_version": 1,
             "source": SOURCE_URL,
-            "retrieved_at_utc": datetime.now(timezone.utc).isoformat(),
+            "retrieved_at_utc": datetime.now(UTC).isoformat(),
             "success": False,
             "error_type": type(exc).__name__,
             "error": str(exc),
@@ -398,7 +398,7 @@ def main(argv: list[str] | None = None) -> int:
         failure = {
             "schema_version": 1,
             "source": SOURCE_URL,
-            "retrieved_at_utc": datetime.now(timezone.utc).isoformat(),
+            "retrieved_at_utc": datetime.now(UTC).isoformat(),
             "success": False,
             "error_type": type(exc).__name__,
             "error": str(exc),

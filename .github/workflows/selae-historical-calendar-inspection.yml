@@ -1,12 +1,6 @@
 name: selae-historical-calendar-inspection
 
 on:
-  push:
-    branches:
-      - feat/selae-fixture-reconciliation
-    paths:
-      - "scripts/inspect_selae_historical_calendar.py"
-      - ".github/workflows/selae-historical-calendar-inspection.yml"
   workflow_dispatch:
 
 permissions:
