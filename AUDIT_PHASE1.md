@@ -858,3 +858,35 @@ This makes the required non-empty forecast, zero-error, strict market-sample and
 The strict calendar-day cutoff is conservative, not proof of exact result publication time. Football-Data does not provide per-result publication timestamps. Market odds remain schedule-screened rather than per-fixture capture-timestamp verified. External LAE inputs still lack an explicit point-in-time eligibility contract and must not be treated as historically validated.
 
 Next action: collect the latest CI result, then complete the full walk-forward run and inspect its artifact for all five non-empty model configurations, identical market comparison samples, calibration samples and metrics. After that, harden external LAE eligibility and continue the remaining feature-provenance audit.
+
+## Backtest workflow efficiency correction — 2026-11-15
+
+### Root cause
+
+The expensive workflow's `pull_request.paths` filter was evaluated against the PR's changed-file set, not just the latest commit. Because the PR already contained a predictive-core change, later documentation-only commits still triggered a complete walk-forward backtest. With `cancel-in-progress: true`, those redundant runs could cancel a useful model evaluation before its acceptance steps completed.
+
+Observed consequences:
+- Backtest [43718207967](https://github.com/Baltas80/Kini-/actions/runs/43718207967) was cancelled after the next code update.
+- Backtest [43723373822](https://github.com/Baltas80/Kini-/actions/runs/43723373822) was cancelled after a documentation update.
+- Audit-only commit `346757424e14b7742f0b8fffa68d249296deb63b` nevertheless triggered [43723680047](https://github.com/Baltas80/Kini-/actions/runs/43723680047), confirming that the old PR path filter did not isolate the latest commit.
+
+### Implemented correction
+
+Workflow commits `a45f0606ae7562114907eed9d64e1357e30e5580`, `01e0406518e471e2d8c57823fa1f14235d55f88e`, `6c32944bfe7d51ded8c251d4d0c46732592df703` and `3cceba8e025bc32bb52c549563d934e560c781da` update `.github/workflows/historical-backtest.yml`:
+
+- Feature-branch validation is driven by PR open/reopen/synchronize events; push-triggered full backtests are restricted to `master`.
+- A lightweight `changes` job compares the PR head with the latest successful historical-backtest head SHA for that branch. On the first run, it compares the full PR diff with the base.
+- Only model/data/dependency paths start the expensive backtest. Audit, tests, workflow and evidence-only changes are excluded.
+- The workflow has `actions: read` and `contents: read` permissions for the run lookup and commit comparison.
+- `cancel-in-progress: false` lets an already-running walk-forward evaluation finish; the latest pending PR update is then filtered against the completed run.
+
+This avoids the previous failure mode where a documentation commit cancelled a long model comparison. The filter is fail-safe: if the Actions API lookup or ancestry comparison is unavailable, it falls back to the full PR diff rather than silently skipping a required model run.
+
+### Validation status
+
+- The current full backtest [43723680047](https://github.com/Baltas80/Kini-/actions/runs/43723680047) is still executing `Run historical comparison`; history build and first-ML diagnostic passed. It has not yet reached the non-empty forecast, market-sample or calibration acceptance steps.
+- CI [43724037642](https://github.com/Baltas80/Kini-/actions/runs/43724037642) is installing development dependencies; lint and pytest are pending.
+- The workflow-filter validation run [43724037682](https://github.com/Baltas80/Kini-/actions/runs/43724037682) is pending behind the active backtest. It should execute the lightweight change detector and skip the expensive job for the workflow-only commit.
+- No new predictive metrics are claimed. The 12-feature ML candidate and the context hardening remain pending full validation.
+
+Next action: complete CI and the active walk-forward run, verify that all five model candidates produce non-empty predictions with zero errors, inspect the uploaded JSON artifact, and confirm the workflow-only pending run skips the expensive job.
