@@ -1,6 +1,6 @@
+import sys
 from datetime import datetime, timedelta
 from itertools import combinations
-import sys
 from types import SimpleNamespace
 
 import numpy as np
@@ -351,6 +351,16 @@ def test_optimizer_rejects_invalid_probability_distributions():
     with pytest.raises(ValueError, match="finite and in"):
         TicketOptimizer().optimize(predictions, budget=8)
 
+    predictions = [valid.copy() for _ in range(14)]
+    predictions[0]["1"] = True
+    with pytest.raises(TypeError, match="invalid probability"):
+        TicketOptimizer().optimize(predictions, budget=8)
+
+    predictions = [valid.copy() for _ in range(14)]
+    predictions[0] = None
+    with pytest.raises(TypeError, match="probabilities must be a mapping"):
+        TicketOptimizer().optimize(predictions, budget=8)
+
 
 def test_optimizer_enforces_selae_direct_double_triple_table():
     predictions = [{"1": 1 / 3, "X": 1 / 3, "2": 1 / 3} for _ in range(14)]
@@ -384,7 +394,7 @@ def test_optimizer_rejects_minimum_below_selae_minimum():
 
 def test_optimizer_rejects_boolean_budget():
     predictions = [{"1": 0.5, "X": 0.3, "2": 0.2} for _ in range(14)]
-    with pytest.raises(ValueError, match="positive integer"):
+    with pytest.raises(TypeError, match="positive integer"):
         TicketOptimizer().optimize(predictions, budget=True)
 
 
