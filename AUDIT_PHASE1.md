@@ -537,3 +537,14 @@ Fuentes oficiales:
 - Nota de prensa: https://www.loteriasyapuestas.es/f/loterias/documentos/Quiniela/Notas%20de%20prensa/NOTA_DE_PRENSA_LA_QUINIELA_08_11_26.pdf
 
 La suite de regresión incorpora comprobaciones de coincidencia exacta de la excepción, dominio oficial, conservación del signo de cupón, goles nulos y recuentos separados de partidos aptos para resultados futbolísticos. La ingesta de escrutinios sigue sin proporcionar fechas reales de inicio ni competición por sí sola; esta corrección no habilita aún el entrenamiento con el histórico SELAE.
+
+### Latest SELAE outcome-semantics correction — 2026-11-15
+
+- Added schema v2 fixture fields: reported_score_raw, score_status, sign_determination, and official evidence metadata.
+- Added curated override for draw 2026-11-08, fixture 14 (Tenerife (F) – Alavés (F)): the coupon sign 1 was determined by public draw after postponement; the displayed 1-0 is preserved only as reported_score_raw, while actual football goals and score_raw are null.
+- The importer applies the manifest by exact draw date, position, displayed score and sign. A changed source value fails closed.
+- The JSONL validator accepts schema v1 for existing history and schema v2 for new imports; profile counts played and non-played fixtures separately.
+- Six regression tests were added for exact matching, score/sign drift, official-host validation, profile counts and rejection of fabricated football goals. The SELAE source-validation workflow now asserts the same semantics if live access succeeds.
+- The new code/docs are committed on feat/selae-official-coupon-ingestion, latest commit 52a25278fa83e326ac78a6a3bf2297745c3c0694; PR #7 remains a draft against audit/phase-1-temporal-validation.
+- Validation status: no new Actions run ID or commit status was exposed for this head in this execution. The previous 73-test run predates this change and is not evidence for the new code. Do not mark the new correction as CI-validated until the updated tests and workflow have actually run.
+- Preliminary artifact inspection of the 5,311-row Football-Data dataset found exact pair/date/score matches for the ten men's 1/X/2 coupon fixtures and the Pleno al 15 match from 2026-11-08. Three women's fixtures remain outside SP1/SP2, and the postponed women's fixture is not a played match. This was an exploratory cross-check only; no cross-provider aliases or automated fixture joins have yet been committed.
