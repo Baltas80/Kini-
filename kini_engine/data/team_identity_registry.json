@@ -1,0 +1,1945 @@
+{
+ "schema_version": 1,
+ "registry_id": "kini-team-identities-v1",
+ "generated_at_utc": "2026-11-15T03:27:02Z",
+ "source_dataset": {
+  "provider": "Football-Data.co.uk",
+  "workflow_run_id": 43672336819,
+  "artifact_name": "kini-historical-data",
+  "artifact_sha256": "c194edf11b0733a203a9559e20e8a2b7e43a8d35a4108eacd2c4da6dae49174d",
+  "csv_sha256": "a01a68393de69c7ad37d2088864093a50108df9e299f1993d855cad87147acab",
+  "fixture_count": 5311,
+  "team_reference_count": 10622,
+  "season_codes": [
+   "2021",
+   "2122",
+   "2223",
+   "2324",
+   "2425",
+   "2526",
+   "2627"
+  ],
+  "competition_codes": [
+   "SP1",
+   "SP2"
+  ],
+  "identity_policy": "Exact source aliases only; no fuzzy matching or cross-provider inference."
+ },
+ "limitations": [
+  "canonical_name is the Football-Data display label, not a verified legal club name.",
+  "Only Football-Data SP1 and SP2 team labels are registered.",
+  "SELAE (M)/(F) markers do not identify a competition and are not mapped to team identities.",
+  "Competition and season participation is limited to observations in the source dataset.",
+  "The registry is not yet used as a model feature or as a training-data join key."
+ ],
+ "teams": [
+  {
+   "team_id": "team:es:alaves",
+   "canonical_name": "Alaves",
+   "gender": "men",
+   "aliases": [
+    {
+     "source": "football-data",
+     "name": "Alaves",
+     "participations": [
+      [
+       "SP1",
+       "2021"
+      ],
+      [
+       "SP1",
+       "2122"
+      ],
+      [
+       "SP1",
+       "2324"
+      ],
+      [
+       "SP1",
+       "2425"
+      ],
+      [
+       "SP1",
+       "2526"
+      ],
+      [
+       "SP1",
+       "2627"
+      ],
+      [
+       "SP2",
+       "2223"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "team_id": "team:es:albacete",
+   "canonical_name": "Albacete",
+   "gender": "men",
+   "aliases": [
+    {
+     "source": "football-data",
+     "name": "Albacete",
+     "participations": [
+      [
+       "SP2",
+       "2021"
+      ],
+      [
+       "SP2",
+       "2223"
+      ],
+      [
+       "SP2",
+       "2324"
+      ],
+      [
+       "SP2",
+       "2425"
+      ],
+      [
+       "SP2",
+       "2526"
+      ],
+      [
+       "SP2",
+       "2627"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "team_id": "team:es:alcorcon",
+   "canonical_name": "Alcorcon",
+   "gender": "men",
+   "aliases": [
+    {
+     "source": "football-data",
+     "name": "Alcorcon",
+     "participations": [
+      [
+       "SP2",
+       "2021"
+      ],
+      [
+       "SP2",
+       "2122"
+      ],
+      [
+       "SP2",
+       "2324"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "team_id": "team:es:almeria",
+   "canonical_name": "Almeria",
+   "gender": "men",
+   "aliases": [
+    {
+     "source": "football-data",
+     "name": "Almeria",
+     "participations": [
+      [
+       "SP1",
+       "2223"
+      ],
+      [
+       "SP1",
+       "2324"
+      ],
+      [
+       "SP2",
+       "2021"
+      ],
+      [
+       "SP2",
+       "2122"
+      ],
+      [
+       "SP2",
+       "2425"
+      ],
+      [
+       "SP2",
+       "2526"
+      ],
+      [
+       "SP2",
+       "2627"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "team_id": "team:es:amorebieta",
+   "canonical_name": "Amorebieta",
+   "gender": "men",
+   "aliases": [
+    {
+     "source": "football-data",
+     "name": "Amorebieta",
+     "participations": [
+      [
+       "SP2",
+       "2122"
+      ],
+      [
+       "SP2",
+       "2324"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "team_id": "team:es:andorra",
+   "canonical_name": "Andorra",
+   "gender": "men",
+   "aliases": [
+    {
+     "source": "football-data",
+     "name": "Andorra",
+     "participations": [
+      [
+       "SP2",
+       "2223"
+      ],
+      [
+       "SP2",
+       "2324"
+      ],
+      [
+       "SP2",
+       "2526"
+      ],
+      [
+       "SP2",
+       "2627"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "team_id": "team:es:ath-bilbao",
+   "canonical_name": "Ath Bilbao",
+   "gender": "men",
+   "aliases": [
+    {
+     "source": "football-data",
+     "name": "Ath Bilbao",
+     "participations": [
+      [
+       "SP1",
+       "2021"
+      ],
+      [
+       "SP1",
+       "2122"
+      ],
+      [
+       "SP1",
+       "2223"
+      ],
+      [
+       "SP1",
+       "2324"
+      ],
+      [
+       "SP1",
+       "2425"
+      ],
+      [
+       "SP1",
+       "2526"
+      ],
+      [
+       "SP1",
+       "2627"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "team_id": "team:es:ath-madrid",
+   "canonical_name": "Ath Madrid",
+   "gender": "men",
+   "aliases": [
+    {
+     "source": "football-data",
+     "name": "Ath Madrid",
+     "participations": [
+      [
+       "SP1",
+       "2021"
+      ],
+      [
+       "SP1",
+       "2122"
+      ],
+      [
+       "SP1",
+       "2223"
+      ],
+      [
+       "SP1",
+       "2324"
+      ],
+      [
+       "SP1",
+       "2425"
+      ],
+      [
+       "SP1",
+       "2526"
+      ],
+      [
+       "SP1",
+       "2627"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "team_id": "team:es:barcelona",
+   "canonical_name": "Barcelona",
+   "gender": "men",
+   "aliases": [
+    {
+     "source": "football-data",
+     "name": "Barcelona",
+     "participations": [
+      [
+       "SP1",
+       "2021"
+      ],
+      [
+       "SP1",
+       "2122"
+      ],
+      [
+       "SP1",
+       "2223"
+      ],
+      [
+       "SP1",
+       "2324"
+      ],
+      [
+       "SP1",
+       "2425"
+      ],
+      [
+       "SP1",
+       "2526"
+      ],
+      [
+       "SP1",
+       "2627"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "team_id": "team:es:betis",
+   "canonical_name": "Betis",
+   "gender": "men",
+   "aliases": [
+    {
+     "source": "football-data",
+     "name": "Betis",
+     "participations": [
+      [
+       "SP1",
+       "2021"
+      ],
+      [
+       "SP1",
+       "2122"
+      ],
+      [
+       "SP1",
+       "2223"
+      ],
+      [
+       "SP1",
+       "2324"
+      ],
+      [
+       "SP1",
+       "2425"
+      ],
+      [
+       "SP1",
+       "2526"
+      ],
+      [
+       "SP1",
+       "2627"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "team_id": "team:es:burgos",
+   "canonical_name": "Burgos",
+   "gender": "men",
+   "aliases": [
+    {
+     "source": "football-data",
+     "name": "Burgos",
+     "participations": [
+      [
+       "SP2",
+       "2122"
+      ],
+      [
+       "SP2",
+       "2223"
+      ],
+      [
+       "SP2",
+       "2324"
+      ],
+      [
+       "SP2",
+       "2425"
+      ],
+      [
+       "SP2",
+       "2526"
+      ],
+      [
+       "SP2",
+       "2627"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "team_id": "team:es:cadiz",
+   "canonical_name": "Cadiz",
+   "gender": "men",
+   "aliases": [
+    {
+     "source": "football-data",
+     "name": "Cadiz",
+     "participations": [
+      [
+       "SP1",
+       "2021"
+      ],
+      [
+       "SP1",
+       "2122"
+      ],
+      [
+       "SP1",
+       "2223"
+      ],
+      [
+       "SP1",
+       "2324"
+      ],
+      [
+       "SP2",
+       "2425"
+      ],
+      [
+       "SP2",
+       "2526"
+      ],
+      [
+       "SP2",
+       "2627"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "team_id": "team:es:cartagena",
+   "canonical_name": "Cartagena",
+   "gender": "men",
+   "aliases": [
+    {
+     "source": "football-data",
+     "name": "Cartagena",
+     "participations": [
+      [
+       "SP2",
+       "2021"
+      ],
+      [
+       "SP2",
+       "2122"
+      ],
+      [
+       "SP2",
+       "2223"
+      ],
+      [
+       "SP2",
+       "2324"
+      ],
+      [
+       "SP2",
+       "2425"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "team_id": "team:es:castellon",
+   "canonical_name": "Castellon",
+   "gender": "men",
+   "aliases": [
+    {
+     "source": "football-data",
+     "name": "Castellon",
+     "participations": [
+      [
+       "SP2",
+       "2021"
+      ],
+      [
+       "SP2",
+       "2425"
+      ],
+      [
+       "SP2",
+       "2526"
+      ],
+      [
+       "SP2",
+       "2627"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "team_id": "team:es:celta",
+   "canonical_name": "Celta",
+   "gender": "men",
+   "aliases": [
+    {
+     "source": "football-data",
+     "name": "Celta",
+     "participations": [
+      [
+       "SP1",
+       "2021"
+      ],
+      [
+       "SP1",
+       "2122"
+      ],
+      [
+       "SP1",
+       "2223"
+      ],
+      [
+       "SP1",
+       "2324"
+      ],
+      [
+       "SP1",
+       "2425"
+      ],
+      [
+       "SP1",
+       "2526"
+      ],
+      [
+       "SP1",
+       "2627"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "team_id": "team:es:celta-b",
+   "canonical_name": "Celta B",
+   "gender": "men",
+   "aliases": [
+    {
+     "source": "football-data",
+     "name": "Celta B",
+     "participations": [
+      [
+       "SP2",
+       "2627"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "team_id": "team:es:ceuta",
+   "canonical_name": "Ceuta",
+   "gender": "men",
+   "aliases": [
+    {
+     "source": "football-data",
+     "name": "Ceuta",
+     "participations": [
+      [
+       "SP2",
+       "2526"
+      ],
+      [
+       "SP2",
+       "2627"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "team_id": "team:es:cordoba",
+   "canonical_name": "Cordoba",
+   "gender": "men",
+   "aliases": [
+    {
+     "source": "football-data",
+     "name": "Cordoba",
+     "participations": [
+      [
+       "SP2",
+       "2425"
+      ],
+      [
+       "SP2",
+       "2526"
+      ],
+      [
+       "SP2",
+       "2627"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "team_id": "team:es:cultural-leonesa",
+   "canonical_name": "Cultural Leonesa",
+   "gender": "men",
+   "aliases": [
+    {
+     "source": "football-data",
+     "name": "Cultural Leonesa",
+     "participations": [
+      [
+       "SP2",
+       "2526"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "team_id": "team:es:eibar",
+   "canonical_name": "Eibar",
+   "gender": "men",
+   "aliases": [
+    {
+     "source": "football-data",
+     "name": "Eibar",
+     "participations": [
+      [
+       "SP1",
+       "2021"
+      ],
+      [
+       "SP2",
+       "2122"
+      ],
+      [
+       "SP2",
+       "2223"
+      ],
+      [
+       "SP2",
+       "2324"
+      ],
+      [
+       "SP2",
+       "2425"
+      ],
+      [
+       "SP2",
+       "2526"
+      ],
+      [
+       "SP2",
+       "2627"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "team_id": "team:es:elche",
+   "canonical_name": "Elche",
+   "gender": "men",
+   "aliases": [
+    {
+     "source": "football-data",
+     "name": "Elche",
+     "participations": [
+      [
+       "SP1",
+       "2021"
+      ],
+      [
+       "SP1",
+       "2122"
+      ],
+      [
+       "SP1",
+       "2223"
+      ],
+      [
+       "SP1",
+       "2526"
+      ],
+      [
+       "SP1",
+       "2627"
+      ],
+      [
+       "SP2",
+       "2324"
+      ],
+      [
+       "SP2",
+       "2425"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "team_id": "team:es:eldense",
+   "canonical_name": "Eldense",
+   "gender": "men",
+   "aliases": [
+    {
+     "source": "football-data",
+     "name": "Eldense",
+     "participations": [
+      [
+       "SP2",
+       "2324"
+      ],
+      [
+       "SP2",
+       "2425"
+      ],
+      [
+       "SP2",
+       "2627"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "team_id": "team:es:espanol",
+   "canonical_name": "Espanol",
+   "gender": "men",
+   "aliases": [
+    {
+     "source": "football-data",
+     "name": "Espanol",
+     "participations": [
+      [
+       "SP1",
+       "2122"
+      ],
+      [
+       "SP1",
+       "2223"
+      ],
+      [
+       "SP1",
+       "2425"
+      ],
+      [
+       "SP1",
+       "2526"
+      ],
+      [
+       "SP1",
+       "2627"
+      ],
+      [
+       "SP2",
+       "2021"
+      ],
+      [
+       "SP2",
+       "2324"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "team_id": "team:es:ferrol",
+   "canonical_name": "Ferrol",
+   "gender": "men",
+   "aliases": [
+    {
+     "source": "football-data",
+     "name": "Ferrol",
+     "participations": [
+      [
+       "SP2",
+       "2324"
+      ],
+      [
+       "SP2",
+       "2425"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "team_id": "team:es:fuenlabrada",
+   "canonical_name": "Fuenlabrada",
+   "gender": "men",
+   "aliases": [
+    {
+     "source": "football-data",
+     "name": "Fuenlabrada",
+     "participations": [
+      [
+       "SP2",
+       "2021"
+      ],
+      [
+       "SP2",
+       "2122"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "team_id": "team:es:getafe",
+   "canonical_name": "Getafe",
+   "gender": "men",
+   "aliases": [
+    {
+     "source": "football-data",
+     "name": "Getafe",
+     "participations": [
+      [
+       "SP1",
+       "2021"
+      ],
+      [
+       "SP1",
+       "2122"
+      ],
+      [
+       "SP1",
+       "2223"
+      ],
+      [
+       "SP1",
+       "2324"
+      ],
+      [
+       "SP1",
+       "2425"
+      ],
+      [
+       "SP1",
+       "2526"
+      ],
+      [
+       "SP1",
+       "2627"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "team_id": "team:es:girona",
+   "canonical_name": "Girona",
+   "gender": "men",
+   "aliases": [
+    {
+     "source": "football-data",
+     "name": "Girona",
+     "participations": [
+      [
+       "SP1",
+       "2223"
+      ],
+      [
+       "SP1",
+       "2324"
+      ],
+      [
+       "SP1",
+       "2425"
+      ],
+      [
+       "SP1",
+       "2526"
+      ],
+      [
+       "SP2",
+       "2021"
+      ],
+      [
+       "SP2",
+       "2122"
+      ],
+      [
+       "SP2",
+       "2627"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "team_id": "team:es:granada",
+   "canonical_name": "Granada",
+   "gender": "men",
+   "aliases": [
+    {
+     "source": "football-data",
+     "name": "Granada",
+     "participations": [
+      [
+       "SP1",
+       "2021"
+      ],
+      [
+       "SP1",
+       "2122"
+      ],
+      [
+       "SP1",
+       "2324"
+      ],
+      [
+       "SP2",
+       "2223"
+      ],
+      [
+       "SP2",
+       "2425"
+      ],
+      [
+       "SP2",
+       "2526"
+      ],
+      [
+       "SP2",
+       "2627"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "team_id": "team:es:huesca",
+   "canonical_name": "Huesca",
+   "gender": "men",
+   "aliases": [
+    {
+     "source": "football-data",
+     "name": "Huesca",
+     "participations": [
+      [
+       "SP1",
+       "2021"
+      ],
+      [
+       "SP2",
+       "2122"
+      ],
+      [
+       "SP2",
+       "2223"
+      ],
+      [
+       "SP2",
+       "2324"
+      ],
+      [
+       "SP2",
+       "2425"
+      ],
+      [
+       "SP2",
+       "2526"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "team_id": "team:es:ibiza",
+   "canonical_name": "Ibiza",
+   "gender": "men",
+   "aliases": [
+    {
+     "source": "football-data",
+     "name": "Ibiza",
+     "participations": [
+      [
+       "SP2",
+       "2122"
+      ],
+      [
+       "SP2",
+       "2223"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "team_id": "team:es:la-coruna",
+   "canonical_name": "La Coruna",
+   "gender": "men",
+   "aliases": [
+    {
+     "source": "football-data",
+     "name": "La Coruna",
+     "participations": [
+      [
+       "SP1",
+       "2627"
+      ],
+      [
+       "SP2",
+       "2425"
+      ],
+      [
+       "SP2",
+       "2526"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "team_id": "team:es:las-palmas",
+   "canonical_name": "Las Palmas",
+   "gender": "men",
+   "aliases": [
+    {
+     "source": "football-data",
+     "name": "Las Palmas",
+     "participations": [
+      [
+       "SP1",
+       "2324"
+      ],
+      [
+       "SP1",
+       "2425"
+      ],
+      [
+       "SP2",
+       "2021"
+      ],
+      [
+       "SP2",
+       "2122"
+      ],
+      [
+       "SP2",
+       "2223"
+      ],
+      [
+       "SP2",
+       "2526"
+      ],
+      [
+       "SP2",
+       "2627"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "team_id": "team:es:leganes",
+   "canonical_name": "Leganes",
+   "gender": "men",
+   "aliases": [
+    {
+     "source": "football-data",
+     "name": "Leganes",
+     "participations": [
+      [
+       "SP1",
+       "2425"
+      ],
+      [
+       "SP2",
+       "2021"
+      ],
+      [
+       "SP2",
+       "2122"
+      ],
+      [
+       "SP2",
+       "2223"
+      ],
+      [
+       "SP2",
+       "2324"
+      ],
+      [
+       "SP2",
+       "2526"
+      ],
+      [
+       "SP2",
+       "2627"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "team_id": "team:es:levante",
+   "canonical_name": "Levante",
+   "gender": "men",
+   "aliases": [
+    {
+     "source": "football-data",
+     "name": "Levante",
+     "participations": [
+      [
+       "SP1",
+       "2021"
+      ],
+      [
+       "SP1",
+       "2122"
+      ],
+      [
+       "SP1",
+       "2526"
+      ],
+      [
+       "SP1",
+       "2627"
+      ],
+      [
+       "SP2",
+       "2223"
+      ],
+      [
+       "SP2",
+       "2324"
+      ],
+      [
+       "SP2",
+       "2425"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "team_id": "team:es:logrones",
+   "canonical_name": "Logrones",
+   "gender": "men",
+   "aliases": [
+    {
+     "source": "football-data",
+     "name": "Logrones",
+     "participations": [
+      [
+       "SP2",
+       "2021"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "team_id": "team:es:lugo",
+   "canonical_name": "Lugo",
+   "gender": "men",
+   "aliases": [
+    {
+     "source": "football-data",
+     "name": "Lugo",
+     "participations": [
+      [
+       "SP2",
+       "2021"
+      ],
+      [
+       "SP2",
+       "2122"
+      ],
+      [
+       "SP2",
+       "2223"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "team_id": "team:es:malaga",
+   "canonical_name": "Malaga",
+   "gender": "men",
+   "aliases": [
+    {
+     "source": "football-data",
+     "name": "Malaga",
+     "participations": [
+      [
+       "SP1",
+       "2627"
+      ],
+      [
+       "SP2",
+       "2021"
+      ],
+      [
+       "SP2",
+       "2122"
+      ],
+      [
+       "SP2",
+       "2223"
+      ],
+      [
+       "SP2",
+       "2425"
+      ],
+      [
+       "SP2",
+       "2526"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "team_id": "team:es:mallorca",
+   "canonical_name": "Mallorca",
+   "gender": "men",
+   "aliases": [
+    {
+     "source": "football-data",
+     "name": "Mallorca",
+     "participations": [
+      [
+       "SP1",
+       "2122"
+      ],
+      [
+       "SP1",
+       "2223"
+      ],
+      [
+       "SP1",
+       "2324"
+      ],
+      [
+       "SP1",
+       "2425"
+      ],
+      [
+       "SP1",
+       "2526"
+      ],
+      [
+       "SP2",
+       "2021"
+      ],
+      [
+       "SP2",
+       "2627"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "team_id": "team:es:mirandes",
+   "canonical_name": "Mirandes",
+   "gender": "men",
+   "aliases": [
+    {
+     "source": "football-data",
+     "name": "Mirandes",
+     "participations": [
+      [
+       "SP2",
+       "2021"
+      ],
+      [
+       "SP2",
+       "2122"
+      ],
+      [
+       "SP2",
+       "2223"
+      ],
+      [
+       "SP2",
+       "2324"
+      ],
+      [
+       "SP2",
+       "2425"
+      ],
+      [
+       "SP2",
+       "2526"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "team_id": "team:es:osasuna",
+   "canonical_name": "Osasuna",
+   "gender": "men",
+   "aliases": [
+    {
+     "source": "football-data",
+     "name": "Osasuna",
+     "participations": [
+      [
+       "SP1",
+       "2021"
+      ],
+      [
+       "SP1",
+       "2122"
+      ],
+      [
+       "SP1",
+       "2223"
+      ],
+      [
+       "SP1",
+       "2324"
+      ],
+      [
+       "SP1",
+       "2425"
+      ],
+      [
+       "SP1",
+       "2526"
+      ],
+      [
+       "SP1",
+       "2627"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "team_id": "team:es:oviedo",
+   "canonical_name": "Oviedo",
+   "gender": "men",
+   "aliases": [
+    {
+     "source": "football-data",
+     "name": "Oviedo",
+     "participations": [
+      [
+       "SP1",
+       "2526"
+      ],
+      [
+       "SP2",
+       "2021"
+      ],
+      [
+       "SP2",
+       "2122"
+      ],
+      [
+       "SP2",
+       "2223"
+      ],
+      [
+       "SP2",
+       "2324"
+      ],
+      [
+       "SP2",
+       "2425"
+      ],
+      [
+       "SP2",
+       "2627"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "team_id": "team:es:ponferradina",
+   "canonical_name": "Ponferradina",
+   "gender": "men",
+   "aliases": [
+    {
+     "source": "football-data",
+     "name": "Ponferradina",
+     "participations": [
+      [
+       "SP2",
+       "2021"
+      ],
+      [
+       "SP2",
+       "2122"
+      ],
+      [
+       "SP2",
+       "2223"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "team_id": "team:es:real-madrid",
+   "canonical_name": "Real Madrid",
+   "gender": "men",
+   "aliases": [
+    {
+     "source": "football-data",
+     "name": "Real Madrid",
+     "participations": [
+      [
+       "SP1",
+       "2021"
+      ],
+      [
+       "SP1",
+       "2122"
+      ],
+      [
+       "SP1",
+       "2223"
+      ],
+      [
+       "SP1",
+       "2324"
+      ],
+      [
+       "SP1",
+       "2425"
+      ],
+      [
+       "SP1",
+       "2526"
+      ],
+      [
+       "SP1",
+       "2627"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "team_id": "team:es:sabadell",
+   "canonical_name": "Sabadell",
+   "gender": "men",
+   "aliases": [
+    {
+     "source": "football-data",
+     "name": "Sabadell",
+     "participations": [
+      [
+       "SP2",
+       "2021"
+      ],
+      [
+       "SP2",
+       "2627"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "team_id": "team:es:santander",
+   "canonical_name": "Santander",
+   "gender": "men",
+   "aliases": [
+    {
+     "source": "football-data",
+     "name": "Santander",
+     "participations": [
+      [
+       "SP1",
+       "2627"
+      ],
+      [
+       "SP2",
+       "2223"
+      ],
+      [
+       "SP2",
+       "2324"
+      ],
+      [
+       "SP2",
+       "2425"
+      ],
+      [
+       "SP2",
+       "2526"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "team_id": "team:es:sevilla",
+   "canonical_name": "Sevilla",
+   "gender": "men",
+   "aliases": [
+    {
+     "source": "football-data",
+     "name": "Sevilla",
+     "participations": [
+      [
+       "SP1",
+       "2021"
+      ],
+      [
+       "SP1",
+       "2122"
+      ],
+      [
+       "SP1",
+       "2223"
+      ],
+      [
+       "SP1",
+       "2324"
+      ],
+      [
+       "SP1",
+       "2425"
+      ],
+      [
+       "SP1",
+       "2526"
+      ],
+      [
+       "SP1",
+       "2627"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "team_id": "team:es:sociedad",
+   "canonical_name": "Sociedad",
+   "gender": "men",
+   "aliases": [
+    {
+     "source": "football-data",
+     "name": "Sociedad",
+     "participations": [
+      [
+       "SP1",
+       "2021"
+      ],
+      [
+       "SP1",
+       "2122"
+      ],
+      [
+       "SP1",
+       "2223"
+      ],
+      [
+       "SP1",
+       "2324"
+      ],
+      [
+       "SP1",
+       "2425"
+      ],
+      [
+       "SP1",
+       "2526"
+      ],
+      [
+       "SP1",
+       "2627"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "team_id": "team:es:sociedad-b",
+   "canonical_name": "Sociedad B",
+   "gender": "men",
+   "aliases": [
+    {
+     "source": "football-data",
+     "name": "Sociedad B",
+     "participations": [
+      [
+       "SP2",
+       "2122"
+      ],
+      [
+       "SP2",
+       "2526"
+      ],
+      [
+       "SP2",
+       "2627"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "team_id": "team:es:sp-gijon",
+   "canonical_name": "Sp Gijon",
+   "gender": "men",
+   "aliases": [
+    {
+     "source": "football-data",
+     "name": "Sp Gijon",
+     "participations": [
+      [
+       "SP2",
+       "2021"
+      ],
+      [
+       "SP2",
+       "2122"
+      ],
+      [
+       "SP2",
+       "2223"
+      ],
+      [
+       "SP2",
+       "2324"
+      ],
+      [
+       "SP2",
+       "2425"
+      ],
+      [
+       "SP2",
+       "2526"
+      ],
+      [
+       "SP2",
+       "2627"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "team_id": "team:es:tenerife",
+   "canonical_name": "Tenerife",
+   "gender": "men",
+   "aliases": [
+    {
+     "source": "football-data",
+     "name": "Tenerife",
+     "participations": [
+      [
+       "SP2",
+       "2021"
+      ],
+      [
+       "SP2",
+       "2122"
+      ],
+      [
+       "SP2",
+       "2223"
+      ],
+      [
+       "SP2",
+       "2324"
+      ],
+      [
+       "SP2",
+       "2425"
+      ],
+      [
+       "SP2",
+       "2526"
+      ],
+      [
+       "SP2",
+       "2627"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "team_id": "team:es:valencia",
+   "canonical_name": "Valencia",
+   "gender": "men",
+   "aliases": [
+    {
+     "source": "football-data",
+     "name": "Valencia",
+     "participations": [
+      [
+       "SP1",
+       "2021"
+      ],
+      [
+       "SP1",
+       "2122"
+      ],
+      [
+       "SP1",
+       "2223"
+      ],
+      [
+       "SP1",
+       "2324"
+      ],
+      [
+       "SP1",
+       "2425"
+      ],
+      [
+       "SP1",
+       "2526"
+      ],
+      [
+       "SP1",
+       "2627"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "team_id": "team:es:valladolid",
+   "canonical_name": "Valladolid",
+   "gender": "men",
+   "aliases": [
+    {
+     "source": "football-data",
+     "name": "Valladolid",
+     "participations": [
+      [
+       "SP1",
+       "2021"
+      ],
+      [
+       "SP1",
+       "2223"
+      ],
+      [
+       "SP1",
+       "2425"
+      ],
+      [
+       "SP2",
+       "2122"
+      ],
+      [
+       "SP2",
+       "2324"
+      ],
+      [
+       "SP2",
+       "2526"
+      ],
+      [
+       "SP2",
+       "2627"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "team_id": "team:es:vallecano",
+   "canonical_name": "Vallecano",
+   "gender": "men",
+   "aliases": [
+    {
+     "source": "football-data",
+     "name": "Vallecano",
+     "participations": [
+      [
+       "SP1",
+       "2122"
+      ],
+      [
+       "SP1",
+       "2223"
+      ],
+      [
+       "SP1",
+       "2324"
+      ],
+      [
+       "SP1",
+       "2425"
+      ],
+      [
+       "SP1",
+       "2526"
+      ],
+      [
+       "SP1",
+       "2627"
+      ],
+      [
+       "SP2",
+       "2021"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "team_id": "team:es:villarreal",
+   "canonical_name": "Villarreal",
+   "gender": "men",
+   "aliases": [
+    {
+     "source": "football-data",
+     "name": "Villarreal",
+     "participations": [
+      [
+       "SP1",
+       "2021"
+      ],
+      [
+       "SP1",
+       "2122"
+      ],
+      [
+       "SP1",
+       "2223"
+      ],
+      [
+       "SP1",
+       "2324"
+      ],
+      [
+       "SP1",
+       "2425"
+      ],
+      [
+       "SP1",
+       "2526"
+      ],
+      [
+       "SP1",
+       "2627"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "team_id": "team:es:villarreal-b",
+   "canonical_name": "Villarreal B",
+   "gender": "men",
+   "aliases": [
+    {
+     "source": "football-data",
+     "name": "Villarreal B",
+     "participations": [
+      [
+       "SP2",
+       "2223"
+      ],
+      [
+       "SP2",
+       "2324"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "team_id": "team:es:zaragoza",
+   "canonical_name": "Zaragoza",
+   "gender": "men",
+   "aliases": [
+    {
+     "source": "football-data",
+     "name": "Zaragoza",
+     "participations": [
+      [
+       "SP2",
+       "2021"
+      ],
+      [
+       "SP2",
+       "2122"
+      ],
+      [
+       "SP2",
+       "2223"
+      ],
+      [
+       "SP2",
+       "2324"
+      ],
+      [
+       "SP2",
+       "2425"
+      ],
+      [
+       "SP2",
+       "2526"
+      ]
+     ]
+    }
+   ]
+  }
+ ]
+}

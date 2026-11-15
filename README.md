@@ -34,6 +34,14 @@ Para validación histórica seria, `scripts/build_history.py` descarga temporada
 
 El backtest informa `accuracy`, `brier`, `logloss`, `rps` y `ece`. `compare` enfrenta Dixon-Coles, ML, ensemble y mercado bajo exactamente las mismas divisiones temporales. La métrica principal para comparar modelos debe ser probabilística (log-loss/Brier/RPS), no únicamente el porcentaje de signos acertados.
 
+## Identidad canónica de equipos
+
+El registro de identidades por proveedor está en `kini_engine/data/team_identity_registry.json`. Solo resuelve alias exactos y documentados por fuente, competición y temporada; no utiliza coincidencias aproximadas.
+
+    python -m scripts.validate_team_identity_registry --csv data/historical_spain.csv
+
+Los alias SELAE y las competiciones ajenas a SP1/SP2 siguen pendientes de verificación independiente. Véase `docs/TEAM_IDENTITY.md`.
+
 ## Licencia y procedencia
 
 El proyecto es **AGPL-3.0-or-later**. KinielaGPT también es AGPL-3.0-or-later; penaltyblog es MIT, scikit-learn BSD-3-Clause, XGBoost Apache-2.0 y Optuna MIT. Ver `NOTICE.md`.

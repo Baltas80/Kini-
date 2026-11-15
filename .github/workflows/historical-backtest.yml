@@ -6,6 +6,8 @@ on:
     # commits are covered by CI; run this benchmark when its inputs or code change.
     paths:
       - "kini_engine/**"
+      - "!kini_engine/team_identity.py"
+      - "!kini_engine/data/**"
       - "scripts/build_history.py"
       - "scripts/diagnose_ml.py"
       - "data/**"
