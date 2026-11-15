@@ -55,6 +55,41 @@ def test_fit_predict():
     assert abs(sum(dc.probabilities.values()) - 1.0) < 1e-9
 
 
+@pytest.mark.parametrize("forecast_index", [78, 79])
+def test_engine_rejects_same_day_or_future_dixon_coles_training_results(forecast_index):
+    history = sample()
+    engine = KiniEngine().fit(history)
+    current = Match(history[forecast_index].date, "A", "D")
+
+    with pytest.raises(
+        ValueError,
+        match="Dixon-Coles training history.*strictly before forecast date",
+    ):
+        engine.predict(current, mode="dc")
+
+
+def test_feature_model_rejects_same_day_or_future_training_labels():
+    history = sample()
+    current = Match(history[-1].date, "A", "D")
+
+    with pytest.raises(
+        ValueError,
+        match="ML training history.*strictly before forecast date",
+    ):
+        FeatureModel().fit_predict_proba(history, current)
+
+
+def test_engine_allows_unplayed_same_day_rows_in_training_snapshot():
+    history = sample()
+    forecast_day = history[-1].date
+    training = history[:-1] + [Match(forecast_day, "C", "D")]
+    engine = KiniEngine().fit(training)
+
+    prediction = engine.predict(Match(forecast_day, "A", "B"), mode="dc")
+
+    assert abs(sum(prediction.probabilities.values()) - 1.0) < 1e-9
+
+
 def test_optimizer_budget():
     p = [{"1": 0.5, "X": 0.3, "2": 0.2} for _ in range(14)]
     t = TicketOptimizer().optimize(p, budget=8)

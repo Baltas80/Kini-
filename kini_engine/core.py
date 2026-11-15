@@ -184,6 +184,40 @@ def _prior_completed_matches(history: list[Match], current: Match) -> list[Match
     return prior
 
 
+def _assert_training_history_precedes_fixture(
+    history: list[Match],
+    current: Match,
+    model_name: str,
+) -> None:
+    """Fail closed when a dated forecast's training snapshot contains future labels.
+
+    Same-calendar-day results are excluded even when a kickoff time is present:
+    the historical source does not consistently provide verified publication
+    timestamps, so date-only grouping is the conservative point-in-time boundary.
+    Undated live-analysis calls remain supported, but cannot be certified as
+    historical point-in-time forecasts.
+    """
+    if isinstance(current.date, str) and not current.date.strip():
+        return
+
+    forecast_day = _calendar_date_key(current.date)
+    leaking_days = [
+        _calendar_date_key(match.date)
+        for match in history
+        if match.home_goals is not None
+        and match.away_goals is not None
+        and _calendar_date_key(match.date) >= forecast_day
+    ]
+    if leaking_days:
+        first_leaking_day = min(leaking_days)
+        raise ValueError(
+            f"{model_name} training history must contain only completed results "
+            f"strictly before forecast date {forecast_day}; found "
+            f"{len(leaking_days)} result(s) on or after it "
+            f"(earliest {first_leaking_day})"
+        )
+
+
 def _team_form_features(
     team: str,
     matches: list[Match],
@@ -483,6 +517,7 @@ class FeatureModel:
         current: Match,
         feature_history: list[Match] | None = None,
     ) -> np.ndarray | None:
+        _assert_training_history_precedes_fixture(training_history, current, "ML")
         # Fit once per model-training snapshot. Inference features may advance
         # between refits as new results become available.
         if self._history_ref is not training_history:
@@ -977,6 +1012,7 @@ class KiniEngine:
         mode: str = "ensemble",
         model_history: list[Match] | None = None,
     ) -> Prediction:
+        _assert_training_history_precedes_fixture(self.history, m, "Dixon-Coles")
         dc_probs, scores = self.dc.predict(m.home, m.away)
         # The fitted estimator uses model_history; current features and context
         # use all results available before this fixture.

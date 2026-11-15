@@ -1503,3 +1503,16 @@ This correction affects the public diagnostic baseline helper, not the walk-forw
 ### Next action
 
 Continue the point-in-time audit across any remaining public source-derived baseline or diagnostic helpers. Keep official historical Quiniela scenario acquisition blocked and explicit until the official SELAE workbook/result bytes can be retrieved through a non-geoblocked source session; do not fabricate draw IDs or derive joint scenarios from independent fixture rows.
+
+
+## Public forecast training-window guard — 2026-11-16
+
+A second point-in-time boundary is now enforced at the public model boundary, not only by the walk-forward caller:
+
+- `KiniEngine` rejects a dated forecast if its fitted Dixon–Coles history contains any completed result on the same calendar day or later than the forecast date.
+- `FeatureModel.fit_predict_proba()` applies the same check to its explicit training snapshot. Direct use of the ML model can no longer train on labels from the target day or a future day and then forecast backwards.
+- The check considers only completed matches because incomplete scheduled fixtures are not used by either model's fitting path. A same-day unplayed fixture remains valid in the training snapshot.
+- Undated live-analysis calls (`Match("")`) remain supported for compatibility. They cannot be certified as historical point-in-time forecasts; historical evaluations must provide a forecast date.
+- Regression tests cover same-day and future Dixon–Coles contamination, direct ML training contamination, and safe same-day unplayed fixtures.
+
+Validation for this commit is pending. The existing walk-forward path already fits each forecast date from prior-date history, so this is a fail-closed guard for external/public callers rather than a change to the established training split. No changes to `master` and no PR merge.
