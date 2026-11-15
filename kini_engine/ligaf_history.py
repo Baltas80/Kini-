@@ -534,6 +534,52 @@ def _normalized_name(value: str) -> str:
     return " ".join(value.casefold().split())
 
 
+def _season_team_profiles(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Expose exact source-name inventories for human-reviewed season identity audits."""
+    stats: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        for side in ("home", "away"):
+            display_name = row[f"{side}_team_name"].strip()
+            normalized_name = _normalized_name(display_name)
+            item = stats.setdefault(
+                normalized_name,
+                {
+                    "observed_names": set(),
+                    "scheduled_appearances": 0,
+                    "played_appearances": 0,
+                    "home_played": 0,
+                    "away_played": 0,
+                    "played_kickoffs_utc": [],
+                },
+            )
+            item["observed_names"].add(display_name)
+            item["scheduled_appearances"] += 1
+            if row["match_status"] == "played":
+                item["played_appearances"] += 1
+                item[f"{side}_played"] += 1
+                kickoff = datetime.fromisoformat(row["kickoff_at"])
+                item["played_kickoffs_utc"].append(
+                    kickoff.astimezone(UTC).isoformat()
+                )
+
+    profiles = []
+    for normalized_name, item in sorted(stats.items()):
+        kickoffs = sorted(item["played_kickoffs_utc"])
+        profiles.append(
+            {
+                "normalized_name": normalized_name,
+                "observed_names": sorted(item["observed_names"]),
+                "scheduled_appearances": item["scheduled_appearances"],
+                "played_appearances": item["played_appearances"],
+                "home_played": item["home_played"],
+                "away_played": item["away_played"],
+                "first_played_kickoff_at_utc": kickoffs[0] if kickoffs else None,
+                "last_played_kickoff_at_utc": kickoffs[-1] if kickoffs else None,
+            }
+        )
+    return profiles
+
+
 def validate_history(
     records: list[dict[str, Any]],
     *,
@@ -745,6 +791,7 @@ def validate_history(
             "in_progress_fixtures": len(in_progress),
             "scheduled_not_started_fixtures": len(scheduled),
             "team_count_in_played_fixtures": len(appearances),
+            "teams": _season_team_profiles(rows),
             "rounds_with_expected_fixture_count": rounds - len(missing_rounds),
             "missing_or_incomplete_rounds": missing_rounds,
         }
