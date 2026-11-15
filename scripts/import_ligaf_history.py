@@ -1,5 +1,5 @@
-from kini_engine.ligaf_history import main
+from kini_engine import ligaf_history
 
 
 if __name__ == "__main__":
-    main()
+    ligaf_history.main()
