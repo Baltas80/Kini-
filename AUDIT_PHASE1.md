@@ -6,7 +6,7 @@ Working branch: `audit/phase-1-temporal-validation`
 Base branch: `master`  
 Backtest code commit evaluated: `a21aedd7eb42f0e5f3d19238a4106909448136a2`  
 Latest fully validated model-code baseline: `a21aedd7eb42f0e5f3d19238a4106909448136a2`  
-Latest branch head: `491b40aa6a399f7535284c1562d8784606035b6d` (47 tests passed; historical-data validation passed; full backtest passed on the model-code commit)
+Latest validated code/test head: `491b40aa6a399f7535284c1562d8784606035b6d` (47 tests passed; historical-data validation passed; full backtest passed on the model-code commit; later commits only update documentation/workflows)
 
 ## Executive status
 
@@ -17,6 +17,7 @@ Latest branch head: `491b40aa6a399f7535284c1562d8784606035b6d` (47 tests passed;
 - **Predictive performance:** the multi-book pre-closing market benchmark remains materially better than every model configuration on accuracy, Brier and Log Loss.
 - **Ensemble weighting:** fixed and rolling prequential DC/ML-only comparisons are now evaluated. The adaptive variant did not improve Brier or Log Loss over the fixed DC/ML blend and is not selected as the default.
 - **Calibration diagnostics:** one-vs-rest reliability, prevalence, mean predicted probability, binary Brier/Log Loss and ECE by 1/X/2 class and football season are implemented on out-of-sample forecasts.
+- **Pinnacle data quality:** PSH/PSD/PSA are excluded from market inputs for match dates on/after 2025-07-23, following the provider's stale-feed warning; the full backtest passed with unchanged market coverage.
 - **Prequential calibration experiment:** a regularized multinomial vector-bias/shared-scale calibrator is implemented for every model and the market. It is fitted only on prior OOF forecasts, with a 500-row warm-up, 1,500-row rolling window, minimum 20 observations per class and refits every 30 forecast dates. Same-day outcomes are appended only after the entire date has been forecast. Its updated full walk-forward evaluation completed in run [43657960317](https://github.com/Baltas80/Kini-/actions/runs/43657960317): 4,480 post-warm-up forecasts per model and 33 successful refits after the Pinnacle data-quality correction. It remains experimental because results vary by model and season; it is not selected as a production default.
 - **Not complete:** timestamped odds provenance, canonical team identity, correlation-aware ticket coverage and expected-payout modelling.
 
@@ -120,7 +121,7 @@ Configuración predeterminada del walk-forward:
 
 Las pruebas incluyen un conjunto sintético con sesgo conocido y un bloque de test independiente, además de una prueba de regresión que demuestra que los resultados de la fecha actual no entran en el ajuste de esa misma fecha.
 
-El workflow histórico rechaza muestras calibradas vacías, tamaños distintos entre muestras originales y calibradas, calibradores sin ajuste válido o comparaciones comunes con el mercado inexistentes. La aceptación comprueba que el experimento se ejecutó; no exige que mejore las métricas. Solo se promoverá si reduce Brier y Log Loss fuera de muestra sobre la misma muestra temporal. El backtest completo terminó correctamente en el run [43652723196](https://github.com/Baltas80/Kini-/actions/runs/43652723196); sus métricas y la decisión de no promover el calibrador se documentan más abajo.
+El workflow histórico rechaza muestras calibradas vacías, tamaños distintos entre muestras originales y calibradas, calibradores sin ajuste válido o comparaciones comunes con el mercado inexistentes. La aceptación comprueba que el experimento se ejecutó; no exige que mejore las métricas. Solo se promoverá si reduce Brier y Log Loss fuera de muestra sobre la misma muestra temporal. El backtest completo actualizado terminó correctamente en el run [43657960317](https://github.com/Baltas80/Kini-/actions/runs/43657960317); sus métricas y la decisión de no promover el calibrador se documentan más abajo.
 
 ### Adaptive DC/ML weighting
 
@@ -182,10 +183,10 @@ Rule and price references are documented in `docs/QUINIELA_RULES.md`. The price/
 
 ## CI
 
-Código predictivo validado: `a21aedd7eb42f0e5f3d19238a4106909448136a2`. HEAD de la rama: `491b40aa6a399f7535284c1562d8784606035b6d`.
+Código predictivo validado: `a21aedd7eb42f0e5f3d19238a4106909448136a2`. Último commit de código/tests validado: `491b40aa6a399f7535284c1562d8784606035b6d`; los commits posteriores solo modifican documentación.
 
-- [CI del HEAD de la rama](https://github.com/Baltas80/Kini-/actions/runs/43658147899): **47 tests superados**, cuatro advertencias deprecatorias de penaltyblog 1.13.1 bajo NumPy 2.5.
-- [Validación histórica del HEAD de la rama](https://github.com/Baltas80/Kini-/actions/runs/43658147908): 5.311 partidos, integrity_passed true, cero duplicados y cobertura de temporada actual.
+- [CI del HEAD validado](https://github.com/Baltas80/Kini-/actions/runs/43658147899): **47 tests superados**, cuatro advertencias deprecatorias de penaltyblog 1.13.1 bajo NumPy 2.5.
+- [Validación histórica del HEAD validado](https://github.com/Baltas80/Kini-/actions/runs/43658147908): 5.311 partidos, integrity_passed true, cero duplicados y cobertura de temporada actual.
 - [Backtest histórico tras excluir Pinnacle obsoleto](https://github.com/Baltas80/Kini-/actions/runs/43657960317): 5.011 predicciones para cada una de las cinco configuraciones, cero errores, 4.480 comparaciones calibradas/raw por configuración, 33 ajustes por calibrador y PREQUENTIAL_CALIBRATION_OK.
 
 Los tres workflows usan filtros por rutas y concurrencia por rama: CI cubre código, tests, datos, dependencias y cambios de workflows; validación de datos cubre sus entradas reales; el backtest completo solo se ejecuta ante cambios de modelo/datos/dependencias, además de su ejecución manual y semanal. Esto evita repetir validaciones costosas por cambios documentales y cancela ejecuciones duplicadas push/PR.
@@ -222,7 +223,7 @@ El constructor de la ingesta consolida el DataFrame normalizado antes de añadir
 
 ## Execution checkpoint — 2026-11-15
 
-- Model-code commit: `a21aedd7eb42f0e5f3d19238a4106909448136a2`; latest branch head after test/workflow-only commits: `491b40aa6a399f7535284c1562d8784606035b6d`.
+- Model-code commit: `a21aedd7eb42f0e5f3d19238a4106909448136a2`; latest validated code/test head: `491b40aa6a399f7535284c1562d8784606035b6d`; subsequent documentation-only commits record the results.
 - CI: 47 tests passed on the current branch head; four third-party NumPy/penaltyblog deprecation warnings remain.
 - Data validation: 5,311 completed fixtures, integrity passed, duplicate checks and current-season coverage passed.
 - Full walk-forward backtest: 5,011/5,011 predictions for all five model configurations, zero errors; calibrated/raw comparisons use 4,480 identical post-warm-up fixtures and 33 prior-OOF fits.
@@ -260,7 +261,7 @@ The result validates the prequential implementation and the experiment, not a un
 
 ## CI efficiency
 
-The historical-backtest workflow now runs on pushes that change `kini_engine/**`, `scripts/**`, `data/**`, `pyproject.toml` or `requirements*.txt`. Documentation-only and workflow-only commits no longer trigger the expensive full walk-forward benchmark. Manual dispatch and the weekly schedule remain available.
+CI, historical-data validation and historical backtesting now use input-specific path filters and per-branch concurrency. CI runs for code, tests, data, dependencies and workflow changes; data validation runs when its builder, parser, data or dependencies change; the expensive walk-forward backtest runs when model/data/scripts/dependencies change. Documentation-only changes do not launch these jobs, and duplicate push/PR runs are cancelled. Manual dispatch and the weekly backtest schedule remain available.
 
 ## Reproducibility and team-label audit — 2026-11-15
 
