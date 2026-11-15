@@ -484,6 +484,6 @@ A strict provider-scoped identity registry has been added on branch `feat/canoni
 
 The validator `python -m scripts.validate_team_identity_registry --csv data/historical_spain.csv` resolved **10,622/10,622** team references to 56 unique IDs, with zero unresolved and zero ambiguous references on the exact historical artifact.
 
-Deterministic tests: **11 passed** locally. The historical-data-validation workflow now runs the registry validator against freshly built data and uploads its report. The expensive historical-backtest path filter has been narrowed to forecast/data inputs so identity-only changes do not trigger a full model backtest.
+Deterministic tests: **12 passed** locally, including rejection of blank competition/season filters. The historical-data-validation workflow now runs the registry validator against freshly built data and uploads its report. The expensive historical-backtest path filter has been narrowed to forecast/data inputs so identity-only changes do not trigger a full model backtest.
 
 Open limitation: the registry covers only Football-Data SP1/SP2 labels. SELAE coupon teams, Liga F, cup and European fixtures remain unresolved until independently verified aliases, competition IDs and kickoff dates are available. No model probabilities or backtest metrics were changed by this identity-layer work.
