@@ -43,7 +43,37 @@ jobs:
             exit 0
           fi
           changed_files="$(git diff --name-only HEAD^ HEAD)"
-          if grep -Eq '^(kini_engine/sources.py|scripts/diagnose_kinielagpt_details.py|tests/test_sources.py|tests/test_kinielagpt_details_diagnostic.py|\\.github/workflows/kinielagpt-live-details-diagnostic\\.yml) <<<"$changed_files"; then
+          if grep -Eq '^(kini_engine/sources.py|scripts/diagnose_kinielagpt_details.py|tests/test_sources.py|tests/test_kinielagpt_details_diagnostic.py|[.]github/workflows/kinielagpt-live-details-diagnostic[.]yml)
+            echo "inspect=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "inspect=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  inspect:
+    needs: changes
+    if: needs.changes.outputs.inspect == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install adapter dependencies
+        run: python -m pip install -e .
+      - name: Inspect current jornada details (read-only GET)
+        run: python scripts/diagnose_kinielagpt_details.py --output kinielagpt-details-diagnostic.json
+      - name: Upload bounded schema evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kinielagpt-details-diagnostic
+          path: kinielagpt-details-diagnostic.json
+          retention-days: 7
+          if-no-files-found: warn
+ <<<"$changed_files"; then
             echo "inspect=true" >> "$GITHUB_OUTPUT"
           else
             echo "inspect=false" >> "$GITHUB_OUTPUT"
