@@ -551,3 +551,35 @@ Example official archive URLs:
 - https://ligaf.es/resultados/primera_division_femenina/1/2026
 - https://ligaf.es/resultados/primera_division_femenina/30/2026
 - https://ligaf.es/resultados/primera_division_femenina/10/2027
+
+
+## Liga F historical ingestion — implementation added (2026-11-15)
+
+### Source inspection
+
+Inspected official Liga F round archives for:
+- 2022/23: matchday 30, season-end year 2023.
+- 2023/24: matchday 30, season-end year 2024.
+- 2024/25: matchday 30, season-end year 2025.
+- 2025/26: matchday 30, season-end year 2026.
+- 2026/27: matchday 10, season-end year 2027.
+
+The pages expose eight match links per round. The current-season round 10 includes seven final results and a postponed fixture. The source detail pages expose match IDs, team names, matchday, date/time, status and score.
+
+A critical historical metadata defect was identified: a match page for Real Sociedad–Real Madrid dated 19 May 2023 carries a title suffix “Liga F 2027”. The title year is therefore not authoritative. The importer takes the season-end year from the official archive URL, uses the detail-page day/month/time, and cross-checks the resulting date against the explicit date headings in the requested archive round.
+
+### Implementation
+
+- Added \`kini_engine/ligaf_history.py\` and \`scripts/import_ligaf_history.py\`.
+- Added deterministic parser, cache, source-integrity, postponed-match, date cross-check, duplicate and season-structure tests in \`tests/test_ligaf_history.py\`.
+- Added a content-addressed HTML cache with SHA-256 metadata, bounded HTTP retries, stale-cache fallback, atomic writes and offline mode.
+- Added strict eight-fixture-per-round checks, unique match IDs, exact official source URLs and result/score consistency.
+- Completed seasons must contain 240 played fixtures, 16 teams, 30 appearances per team and 15 home/15 away fixtures per team.
+- Current-season data is capped at matchday 10 by default; the limit is configurable.
+- All records remain \`training_label_eligible=false\`; no model, Football-Data CSV, forecast or backtest input is changed.
+- Added a manual \`ligaf-history-validation\` GitHub Actions workflow and expanded CI lint/test coverage.
+- Added generated-data/cache exclusions so Liga F evidence does not trigger the men's Football-Data rebuild.
+
+### State
+
+Implementation: **committed to \`feat/selae-fixture-reconciliation\`**. Deterministic CI is pending for the current branch head. Live bulk ingestion is not yet validated. The next action is to inspect CI results, fix any parser/test regressions, then run the manual workflow from a supported GitHub Actions environment. If the official host blocks GitHub runners, retain the fail-closed result and use the same CLI with official HTML captured from an accessible Spain-based environment; do not fabricate or relax source checks.
