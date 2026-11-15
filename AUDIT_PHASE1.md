@@ -583,3 +583,62 @@ A critical historical metadata defect was identified: a match page for Real Soci
 ### State
 
 Implementation: **committed to `feat/selae-fixture-reconciliation`**. Deterministic CI is pending for the current branch head. Live bulk ingestion is not yet validated. The next action is to inspect CI results, fix any parser/test regressions, then run the manual workflow from a supported GitHub Actions environment. If the official host blocks GitHub runners, retain the fail-closed result and use the same CLI with official HTML captured from an accessible Spain-based environment; do not fabricate or relax source checks.
+
+
+## Full historical model benchmark — 2026-11-15
+
+### Execution evidence
+
+- GitHub Actions workflow: historical-backtest.
+- Run: https://github.com/Baltas80/Kini-/actions/runs/43703634264
+- Model-code revision tested: 2e1a92fde1b88c8480c22b953cb98de387329787.
+- Current branch head at this audit: 61a65296dac7a75d4764328afc0fbd32f7319489.
+- A GitHub compare confirms the nine commits after the backtest changed only Liga F evidence/import code and workflow path filters; no model implementation or model input files changed.
+- Dataset: 5,011 matches; initial training history: 300; evaluation period: 2020-12-11 through 2026-11-09.
+- Dixon–Coles, ML, baseline ensemble, DC+ML ensemble and adaptive DC+ML ensemble each produced 5,011 forecasts. Recorded prediction errors: zero for every model.
+- The non-empty model-backtest, schedule-screened market-sample and prequential-calibration acceptance steps all passed.
+
+### Comparable model/market sample
+
+All figures below are on the same 4,424 fixtures with a schedule-compatible market snapshot. Brier and log loss are lower-is-better; accuracy is higher-is-better.
+
+| Candidate | n | Accuracy | Multiclass Brier | Log Loss | RPS | ECE |
+|---|---:|---:|---:|---:|---:|---:|
+| Dixon–Coles | 4,424 | 0.4806 | 0.616357 | 1.027499 | 0.207959 | 0.016274 |
+| ML | 4,424 | 0.4383 | 0.646939 | 1.073301 | 0.220439 | 0.048717 |
+| Ensemble | 4,424 | 0.4815 | 0.613467 | 1.022929 | 0.206801 | 0.014836 |
+| DC + ML | 4,424 | 0.4758 | 0.615989 | 1.026748 | 0.207909 | 0.012726 |
+| Adaptive DC + ML | 4,424 | 0.4758 | 0.616176 | 1.027032 | 0.207962 | 0.012805 |
+| Market snapshot | 4,424 | 0.5072 | 0.597504 | 0.999444 | 0.199876 | 0.024213 |
+
+The market snapshot beats every model on accuracy, Brier, log loss and RPS. The baseline ensemble is marginally better than Dixon–Coles on Brier/log loss, but the gain is small and does not close the market gap. ML is materially worse than Dixon–Coles and the baseline ensemble on all the principal predictive/probabilistic metrics. It remains experimental and is not promoted as a production candidate on this evidence.
+
+### Prequential calibration
+
+Calibration was trained only on prior walk-forward out-of-sample forecasts; same-calendar-day outcomes were excluded. Configuration: minimum history 500, rolling window 1,500, refit every 30 dates, minimum class count 20, regularization 0.05. The last recorded fit used 1,500 prior forecasts on 2026-10-26.
+
+The calibrated model/market comparison uses a common sample of 3,847 fixtures:
+
+| Candidate | Accuracy | Brier | Log Loss | RPS | ECE |
+|---|---:|---:|---:|---:|---:|
+| Dixon–Coles calibrated | 0.4890 | 0.613232 | 1.022458 | 0.207641 | 0.013549 |
+| ML calibrated | 0.4585 | 0.632559 | 1.050517 | 0.216454 | 0.010368 |
+| Ensemble calibrated | 0.4884 | 0.611412 | 1.019795 | 0.206972 | 0.012501 |
+| DC + ML calibrated | 0.4858 | 0.613535 | 1.022945 | 0.207924 | 0.007171 |
+| Adaptive DC + ML calibrated | 0.4843 | 0.613585 | 1.022991 | 0.207908 | 0.008570 |
+| Market calibrated | 0.5082 | 0.596714 | 0.998094 | 0.200481 | 0.011690 |
+
+Calibration improves some individual model metrics and ECE, but does not reverse the ranking. Market remains materially better on accuracy, Brier, log loss and RPS.
+
+### Market-data limitation
+
+The market audit found 5,011 fixtures with odds, of which 4,424 passed the current schedule-compatibility screen and 587 were marked ambiguous and excluded. The current screen is **not** proof of exact odds availability before each forecast: the source does not provide per-fixture capture timestamps, and Friday/Tuesday fixtures are excluded because the kickoff timezone is unspecified. Market results are therefore a strong reference benchmark, not yet a fully proven point-in-time market baseline.
+
+### Decision and next action
+
+- P0 empty-prediction failure: **validated absent in this run** for all five model candidates (n=5,011, zero recorded prediction errors).
+- Model/market comparison: **validated on comparable schedule-screened samples**; no model beats the market.
+- ML: **retain as experimental only** until a feature/ablation study demonstrates incremental value.
+- Ensemble: retain only as a candidate; its small improvement over Dixon–Coles does not justify a production selection yet.
+- Do not claim profitability or leak-free historical performance from this run alone.
+- Next priority: audit the market odds source and exact point-in-time availability, record the historical dataset hash/manifest with each backtest artifact, and evaluate any market/model blend strictly walk-forward on a common sample.
