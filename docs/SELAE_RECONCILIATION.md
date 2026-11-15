@@ -21,7 +21,6 @@ The manifest is `data/selae_fixture_crosswalk.json`:
       "draw_date": "2026-11-08",
       "position": 1,
       "football_data_date": "2026-11-07",
-      "football_data_date": "2026-11-07",
       "home_selae_display_name": "Atletico de Madrid (M)",
       "away_selae_display_name": "Barcelona (M)",
       "home_football_data_name": "Ath Madrid",
