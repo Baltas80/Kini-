@@ -642,3 +642,36 @@ The market audit found 5,011 fixtures with odds, of which 4,424 passed the curre
 - Ensemble: retain only as a candidate; its small improvement over Dixon–Coles does not justify a production selection yet.
 - Do not claim profitability or leak-free historical performance from this run alone.
 - Next priority: audit the market odds source and exact point-in-time availability, record the historical dataset hash/manifest with each backtest artifact, and evaluate any market/model blend strictly walk-forward on a common sample.
+
+## Liga F bulk-ingestion evidence and workflow correction — 2026-11-15
+
+### First complete live import
+
+The live importer step completed successfully in GitHub Actions runs [43703811822](https://github.com/Baltas80/Kini-/actions/runs/43703811822) and [43703836669](https://github.com/Baltas80/Kini-/actions/runs/43703836669). The jobs failed only in the subsequent workflow assertion, not in the downloader, parser or integrity validator.
+
+The uploaded artifact from run 43703811822 (artifact ID 14158173866) contains:
+- `data/ligaf_history.jsonl`: 1,040 records; SHA-256 `3348a13b55bcbb37f2f825873a95b98ea5ce3fd151298c7df91d05ad8d9c46f7`.
+- `data/ligaf_history.profile.json`: `integrity_passed=true`, 1,040 unique match IDs, no stale-cache sources, and `training_eligibility.eligible=false`.
+
+An independent local read of the downloaded artifact confirmed:
+- 2022/23, 2023/24, 2024/25 and 2025/26: 240 played fixtures each, 16 teams, 30 appearances per team, 15 home and 15 away matches per team.
+- 2026/27 rounds 1–10: 80 scheduled fixtures, 79 played and one postponed; 16 distinct teams.
+- 1,040 rows and 1,040 unique match IDs; all rows explicitly remain excluded from training.
+
+The sole non-final record is Costa Adeje Tenerife–Deportivo Alavés (Liga F match ID 202723865), matchday 10, scheduled for 8 November 2026 at 13:00 CET. Its status is `postponed`; goals and 1/X/2 result are null. It is not a football result and must not become a training label.
+
+### Root cause of the failed workflow conclusion
+
+Both live runs reached `LIGA_F_HISTORY_OK: scheduled=1040 played=1039 non-final=1`. The next shell assertion interpolated `${{ inputs.max_current_matchday }}` directly. On a push event, the `inputs` context is empty, producing `int("")` and exit code 1. This was a workflow-input default bug; it did not indicate incomplete source coverage or invalid imported records.
+
+### Correction committed
+
+- Commit `b2a81222c04d1de5ee434d8b5ef5903d364a42e4`: move the input defaults into job-level environment variables and use the same value for the importer and profile assertion.
+- Commit `1b05b3136a27f400ae35e95b2d5164b481f32263`: include workflow-file changes in the live-validation push trigger.
+- The assertion now verifies the requested current matchday count, eight fixtures per round, full round coverage, 16 teams in each completed season and unique IDs.
+- Cache keys use `github.head_ref || github.ref_name` so PR and branch runs can share the same branch cache.
+- The uploaded artifact now contains only the JSONL and integrity profile; the large HTML cache is handled by `actions/cache` rather than duplicated in every artifact.
+
+The corrected live workflow is [run 43707943077](https://github.com/Baltas80/Kini-/actions/runs/43707943077); CI for the current branch head is [run 43707943069](https://github.com/Baltas80/Kini-/actions/runs/43707943069). Both were in progress when this section was recorded. Do not mark the live workflow acceptance as passed until run 43707943077 completes its final assertion and artifact upload.
+
+**Training boundary unchanged:** this history is a validated evidence dataset candidate, not an approved model dataset. Team identity history and pre-kickoff feature availability still require separate validation. No Liga F rows are connected to Football-Data, Dixon–Coles, ML, ensemble or forecast inputs.
