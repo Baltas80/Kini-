@@ -28,7 +28,9 @@ def _normalize_fixture_name(value: Any) -> str | None:
         character for character in decomposed if not unicodedata.combining(character)
     )
     normalized = " ".join(
-        "".join(character if character.isalnum() else " " for character in without_marks).split()
+        "".join(
+            character if character.isalnum() else " " for character in without_marks
+        ).split()
     )
     return normalized or None
 
@@ -185,9 +187,7 @@ class KinielaGPTSource:
     ) -> dict[tuple[int, str, str], dict[str, str]]:
         """Load only a fully verified, timezone-aware fixture schedule."""
         try:
-            payload = json.loads(
-                cls.KICKOFF_CROSSWALK_PATH.read_text(encoding="utf-8")
-            )
+            payload = json.loads(cls.KICKOFF_CROSSWALK_PATH.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as exc:
             log.warning("Kickoff crosswalk unavailable: %s", exc)
             return {}
@@ -372,13 +372,10 @@ class KinielaGPTSource:
                     else None
                 )
                 lae_received_at = _parse_aware_timestamp(lae_captured_at)
-                evidence_precedes_capture = (
-                    lae_row is None
-                    or (
-                        evidence_checked_at is not None
-                        and lae_received_at is not None
-                        and evidence_checked_at <= lae_received_at
-                    )
+                evidence_precedes_capture = lae_row is None or (
+                    evidence_checked_at is not None
+                    and lae_received_at is not None
+                    and evidence_checked_at <= lae_received_at
                 )
                 if names_match and evidence_precedes_capture:
                     result_row.update(candidate)
