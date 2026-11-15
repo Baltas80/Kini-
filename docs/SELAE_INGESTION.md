@@ -36,7 +36,7 @@ Por defecto se generan:
 - `data/selae_quiniela_draws.profile.json`: perfil de procedencia e integridad.
 - `.cache/selae-quiniela/`: HTML original y metadatos de recuperación por fecha.
 
-El caché se valida de nuevo antes de reutilizarse. Las respuestas se guardan atómicamente y se calcula SHA-256 del contenido recibido. Se permiten reintentos acotados para fallos transitorios; una respuesta que no pase la validación no sustituye una caché válida.
+El caché se valida de nuevo antes de reutilizarse. Las respuestas se guardan atómicamente y se calcula SHA-256 del contenido recibido. Tanto la descarga como el modo offline validan que la URL de procedencia pertenezca al dominio oficial SELAE. Se permiten reintentos acotados para fallos transitorios; una respuesta que no pase la validación no sustituye una caché válida.
 
 ## Contrato de datos
 
@@ -46,7 +46,7 @@ Cada sorteo incluye:
 - Exactamente 14 partidos con posición, nombres de local/visitante, marcador y signo.
 - Marcadores numéricos no negativos y comprobación de que el signo coincide con el marcador.
 - Marcadores Pleno al 15; admite marcadores no numéricos como `M - M` y deja los goles como `null`.
-- Categorías de premio, acertantes y premio unitario en céntimos de euro cuando aparecen en la tabla oficial.
+- Categorías de premio, acertantes y premio unitario en céntimos de euro cuando aparecen en la tabla oficial; las categorías con BOTE se conservan con importe unitario `null` y estado `bote`.
 
 Los sufijos `(M)` y `(F)` se conservan como marcadores de categoría publicados por SELAE. No se transforman en una competición concreta ni en un ID canónico de equipo.
 
