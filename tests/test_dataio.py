@@ -160,11 +160,11 @@ def test_market_excludes_pinnacle_from_2025_07_23(tmp_path: Path):
 def test_market_timing_preserves_kickoff_and_excludes_snapshot_cutoff_ambiguity(tmp_path: Path):
     p = tmp_path / "market_timing.csv"
     p.write_text(
-        "Date,Time,HomeTeam,AwayTeam,FTHG,FTAG,FTR,B365H,B365D,B365A\\n"
-        "2025-01-03,16:30,A,B,1,0,H,2.0,3.5,4.0\\n"
-        "2025-01-03,17:30,C,D,0,1,A,2.0,3.5,4.0\\n"
-        "2025-01-07,12:45,E,F,1,1,D,2.0,3.5,4.0\\n"
-        "2025-01-07,13:15,G,H,2,0,H,2.0,3.5,4.0\\n",
+        "Date,Time,HomeTeam,AwayTeam,FTHG,FTAG,FTR,B365H,B365D,B365A\n"
+        "2025-01-03,16:30,A,B,1,0,H,2.0,3.5,4.0\n"
+        "2025-01-03,17:30,C,D,0,1,A,2.0,3.5,4.0\n"
+        "2025-01-07,12:45,E,F,1,1,D,2.0,3.5,4.0\n"
+        "2025-01-07,13:15,G,H,2,0,H,2.0,3.5,4.0\n",
         encoding="utf-8",
     )
 
@@ -185,9 +185,9 @@ def test_market_timing_preserves_kickoff_and_excludes_snapshot_cutoff_ambiguity(
 def test_market_with_missing_or_unparseable_kickoff_is_not_eligible(tmp_path: Path):
     p = tmp_path / "unknown_kickoff.csv"
     p.write_text(
-        "Date,Time,HomeTeam,AwayTeam,FTHG,FTAG,FTR,B365H,B365D,B365A\\n"
-        "2025-01-03,,A,B,1,0,H,2.0,3.5,4.0\\n"
-        "2025-01-04,TBA,C,D,0,1,A,2.0,3.5,4.0\\n",
+        "Date,Time,HomeTeam,AwayTeam,FTHG,FTAG,FTR,B365H,B365D,B365A\n"
+        "2025-01-03,,A,B,1,0,H,2.0,3.5,4.0\n"
+        "2025-01-04,TBA,C,D,0,1,A,2.0,3.5,4.0\n",
         encoding="utf-8",
     )
 
