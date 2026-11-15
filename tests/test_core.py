@@ -328,6 +328,36 @@ def test_optimizer_rejects_invalid_probability_distributions():
         TicketOptimizer().optimize(predictions, budget=8)
 
 
+def test_optimizer_enforces_selae_direct_double_triple_table():
+    predictions = [{"1": 1 / 3, "X": 1 / 3, "2": 1 / 3} for _ in range(14)]
+    result = TicketOptimizer().optimize(
+        predictions,
+        budget=TicketOptimizer.MAX_AUTHORIZED_COLUMNS,
+    )
+
+    assert result["double_count"] == 7
+    assert result["triple_count"] == 5
+    assert result["column_count"] == 31_104
+    assert result["system_method"] == "multiple_direct"
+    assert result["maximum_authorized_columns"] == 31_104
+    assert result["pleno15_multiplier"] == 1
+    assert result["cost_eur"] == 23_328.0
+
+
+def test_optimizer_rejects_budget_above_selae_direct_maximum():
+    predictions = [{"1": 0.5, "X": 0.3, "2": 0.2} for _ in range(14)]
+    with pytest.raises(ValueError, match="authorized direct columns"):
+        TicketOptimizer().optimize(
+            predictions,
+            budget=TicketOptimizer.MAX_AUTHORIZED_COLUMNS + 1,
+        )
+
+
+def test_optimizer_rejects_minimum_below_selae_minimum():
+    with pytest.raises(ValueError, match="at least 2"):
+        TicketOptimizer(minimum_columns=1)
+
+
 def test_optimizer_rejects_boolean_budget():
     predictions = [{"1": 0.5, "X": 0.3, "2": 0.2} for _ in range(14)]
     with pytest.raises(ValueError, match="positive integer"):
