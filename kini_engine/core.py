@@ -32,6 +32,15 @@ class Match:
             raise ValueError("Match has no observed result")
         return "1" if self.home_goals > self.away_goals else ("2" if self.away_goals > self.home_goals else "X")
 
+    @property
+    def has_temporally_eligible_market(self) -> bool:
+        """Return true only when odds passed the explicit schedule-based screen."""
+        return (
+            self.market is not None
+            and self.detail.get("market_temporal_status") == "schedule_compatible"
+            and self.detail.get("market_pre_match_eligible") is True
+        )
+
 
 @dataclass(frozen=True)
 class Prediction:
@@ -590,6 +599,9 @@ class KiniEngine:
             if self.ml is not None and needs_ml else None
         )
         ml_probs = None if ml is None else dict(zip(SIGNS, map(float, ml)))
+        # Raw odds remain on Match for audit diagnostics, but only explicitly
+        # schedule-screened odds may influence a forecast.
+        market_probs = m.market if m.has_temporally_eligible_market else None
         if mode not in {"ensemble", "ensemble_dc_ml", "dc", "ml", "lae", "market"}:
             raise ValueError("mode must be one of: ensemble, ensemble_dc_ml, dc, ml, lae, market")
 
@@ -604,9 +616,9 @@ class KiniEngine:
                 raise ValueError("LAE probabilities are unavailable")
             base = _blend((m.lae, 1.0))
         elif mode == "market":
-            if not m.market:
-                raise ValueError("market probabilities are unavailable")
-            base = _blend((m.market, 1.0))
+            if not market_probs:
+                raise ValueError("market probabilities are unavailable or not temporally eligible")
+            base = _blend((market_probs, 1.0))
         elif mode == "ensemble_dc_ml":
             if ml_probs is None:
                 raise ValueError("model-only ensemble requires valid ML probabilities")
@@ -619,15 +631,15 @@ class KiniEngine:
                 blend_items.append((ml_probs, 0.17))
             if m.lae:
                 blend_items.append((m.lae, 0.18))
-            if m.market:
-                blend_items.append((m.market, 0.07))
+            if market_probs:
+                blend_items.append((market_probs, 0.07))
             base = _blend(*blend_items)
 
         if self.enable_context and mode == "ensemble":
             adjusted, reasons = context_adjust(base, m, history)
         else:
             adjusted, reasons = base, []
-        surprise = surprise_signal(adjusted, m.lae, m.market, m, history)
+        surprise = surprise_signal(adjusted, m.lae, market_probs, m, history)
         sign = max(SIGNS, key=lambda s: adjusted[s])
         return Prediction(m.home, m.away, adjusted, sign, scores, surprise, reasons)
 

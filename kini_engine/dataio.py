@@ -67,12 +67,12 @@ def _market_temporal_status(
     except (TypeError, ValueError):
         return "unknown"
 
-    # Football-Data describes weekend snapshots by Friday 17:00 BST and
-    # midweek snapshots by Tuesday 13:00 BST. Earlier/equal kickoffs are
-    # ambiguous because the snapshot may have been collected after kickoff.
-    if weekday == 4 and kickoff_minutes <= 17 * 60:
-        return "ambiguous"
-    if weekday == 1 and kickoff_minutes <= 13 * 60:
+    # Football-Data collects weekend odds on Friday and midweek odds on
+    # Tuesday. Its CSV defines Time only as the kickoff time; it does not
+    # specify the timezone. Comparing that local-looking value directly with
+    # a BST cutoff would silently assume a timezone. Fail closed for fixtures
+    # on either snapshot-collection weekday, regardless of the displayed time.
+    if weekday in {1, 4}:
         return "ambiguous"
     return "schedule_compatible"
 

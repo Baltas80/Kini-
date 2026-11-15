@@ -128,6 +128,75 @@ def test_model_only_ensemble_excludes_market_and_lae():
     assert sum(prediction.probabilities.values()) == pytest.approx(1.0)
 
 
+def test_ensemble_ignores_temporally_ineligible_market_and_surprise_reference():
+    engine = KiniEngine()
+    engine.dc.predict = lambda home, away: (
+        {"1": 0.80, "X": 0.10, "2": 0.10},
+        [],
+    )
+    raw_market = {"1": 0.01, "X": 0.01, "2": 0.98}
+    ineligible = Match(
+        datetime(2025, 4, 1),
+        "A",
+        "B",
+        market=raw_market,
+        detail={
+            "market_temporal_status": "ambiguous",
+            "market_pre_match_eligible": False,
+        },
+    )
+    no_market = Match(datetime(2025, 4, 1), "A", "B")
+
+    with_market = engine.predict(ineligible, mode="ensemble")
+    without_market = engine.predict(no_market, mode="ensemble")
+
+    assert with_market.probabilities == pytest.approx(without_market.probabilities)
+    assert with_market.surprise is None
+    assert ineligible.has_temporally_eligible_market is False
+
+
+def test_market_mode_rejects_temporally_ineligible_odds():
+    engine = KiniEngine()
+    fixture = Match(
+        datetime(2025, 4, 1),
+        "A",
+        "B",
+        market={"1": 0.4, "X": 0.3, "2": 0.3},
+        detail={
+            "market_temporal_status": "ambiguous",
+            "market_pre_match_eligible": False,
+        },
+    )
+
+    with pytest.raises(ValueError, match="not temporally eligible"):
+        engine.predict(fixture, mode="market")
+
+
+def test_ensemble_uses_schedule_screened_market():
+    engine = KiniEngine()
+    engine.dc.predict = lambda home, away: (
+        {"1": 0.80, "X": 0.10, "2": 0.10},
+        [],
+    )
+    eligible = Match(
+        datetime(2025, 4, 1),
+        "A",
+        "B",
+        market={"1": 0.01, "X": 0.01, "2": 0.98},
+        detail={
+            "market_temporal_status": "schedule_compatible",
+            "market_pre_match_eligible": True,
+        },
+    )
+    without_market = Match(datetime(2025, 4, 1), "A", "B")
+
+    with_market = engine.predict(eligible, mode="ensemble")
+    without_market_prediction = engine.predict(without_market, mode="ensemble")
+
+    assert with_market.probabilities != pytest.approx(without_market_prediction.probabilities)
+    assert eligible.has_temporally_eligible_market is True
+
+
 def test_feature_model_uses_2d_inference_and_caches_fit_per_history(monkeypatch):
     class FakeXGBClassifier:
         fit_calls = 0

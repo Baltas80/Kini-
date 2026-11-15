@@ -45,15 +45,71 @@ jobs:
           total = int(result.get("n_total", 0))
           if total <= 0:
               raise SystemExit("Backtest has no test fixtures")
+          errors_by_model = result.get("prediction_errors", {})
           for name in required:
               n = int(result.get(name, {}).get("n", 0))
-              if n != total:
-                  errors = result.get("prediction_errors", {}).get(name, {})
+              errors = errors_by_model.get(name, {})
+              error_count = int(errors.get("count", 0))
+              if n != total or error_count != 0:
                   raise SystemExit(
-                      f"{name} produced {n}/{total} predictions; "
-                      f"errors={errors}"
+                      f"{name} produced {n}/{total} predictions with "
+                      f"{error_count} prediction errors; first_error={errors.get('first_error')}"
                   )
           print(f"BACKTEST_ACCEPTANCE_OK: {total} fixtures for {', '.join(required)}")
+          PY
+
+      - name: Enforce schedule-screened market sample acceptance
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          result = json.loads(Path("backtest-results.json").read_text())
+          audit = result.get("market_temporal_audit", {})
+          market = result.get("market", {})
+          unfiltered = result.get("market_unfiltered_snapshot", {})
+          n_with_odds = int(audit.get("n_with_odds", 0))
+          n_eligible = int(audit.get("n_schedule_eligible", 0))
+          n_excluded = int(audit.get("n_excluded", -1))
+          status_counts = {
+              str(status): int(count)
+              for status, count in audit.get("status_counts", {}).items()
+          }
+
+          if n_with_odds <= 0 or n_eligible <= 0:
+              raise SystemExit("Strict schedule-screened market sample is empty")
+          if int(unfiltered.get("n", 0)) != n_with_odds:
+              raise SystemExit("Unfiltered market count disagrees with temporal audit")
+          if int(market.get("n", 0)) != n_eligible:
+              raise SystemExit("Strict market metrics disagree with eligible count")
+          if n_excluded != n_with_odds - n_eligible:
+              raise SystemExit("Excluded market count is inconsistent")
+          if sum(status_counts.values()) != n_with_odds:
+              raise SystemExit("Market temporal status counts do not cover all odds rows")
+          excluded_by_status = sum(
+              count for status, count in status_counts.items()
+              if status != "schedule_compatible"
+          )
+          if excluded_by_status != n_excluded:
+              raise SystemExit("Excluded count disagrees with market temporal statuses")
+
+          required = ("dc", "ml", "ensemble", "ensemble_dc_ml", "ensemble_dc_ml_adaptive")
+          common = result.get("common_sample", {})
+          for name in required:
+              sample = common.get(name, {})
+              model_n = int(sample.get("model", {}).get("n", 0))
+              market_n = int(sample.get("market", {}).get("n", 0))
+              if model_n != n_eligible or market_n != n_eligible:
+                  raise SystemExit(
+                      f"{name} is not compared on the exact strict market sample: "
+                      f"model={model_n}, market={market_n}, expected={n_eligible}"
+                  )
+
+          print(
+              "MARKET_TEMPORAL_ACCEPTANCE_OK: "
+              f"{n_eligible}/{n_with_odds} schedule-screened odds; "
+              "all model/market comparisons use identical fixtures"
+          )
           PY
 
       - name: Enforce prequential calibration acceptance

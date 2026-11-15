@@ -389,7 +389,7 @@ def baseline_probabilities(
     for m in matches:
         if source == "lae" and m.lae:
             p = {s: float(m.lae.get(s, 0.0)) for s in SIGNS}
-        elif source == "market" and m.market:
+        elif source == "market" and m.has_temporally_eligible_market:
             p = {s: float(m.market.get(s, 0.0)) for s in SIGNS}
         else:
             p = {s: 1 / 3 for s in SIGNS}
@@ -690,10 +690,7 @@ def compare_walk_forward(
                 market_status_counts[temporal_status] = (
                     market_status_counts.get(temporal_status, 0) + 1
                 )
-                market_is_eligible = (
-                    temporal_status == "schedule_compatible"
-                    and match.detail.get("market_pre_match_eligible") is True
-                )
+                market_is_eligible = match.has_temporally_eligible_market
                 if not market_is_eligible and len(market_excluded_examples) < 20:
                     market_excluded_examples.append({
                         "date": forecast_date,
@@ -799,12 +796,13 @@ def compare_walk_forward(
         "n_excluded": len(market_unfiltered_rows) - len(market_rows),
         "status_counts": dict(sorted(market_status_counts.items())),
         "eligibility_rule": (
-            "market_pre_match_eligible=true and "
-            "market_temporal_status=schedule_compatible"
+            "Match.has_temporally_eligible_market: explicit schedule_compatible "
+            "status and market_pre_match_eligible=true"
         ),
         "limitation": (
-            "schedule compatibility only; Football-Data does not provide "
-            "per-fixture odds-capture timestamps or the kickoff-time timezone"
+            "schedule screen only; all Friday/Tuesday fixtures are excluded "
+            "because kickoff timezone is unspecified; exact per-fixture odds "
+            "capture timestamps are not provided"
         ),
         "excluded_examples": market_excluded_examples,
     }

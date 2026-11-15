@@ -94,6 +94,42 @@ def test_walk_forward_refit_interval_counts_dates(monkeypatch):
 
 
 
+def test_market_baseline_uses_only_schedule_screened_rows():
+    matches = [
+        Match(
+            datetime(2025, 1, 3),
+            "Ambiguous",
+            "A",
+            1,
+            0,
+            "1",
+            market={"1": 0.99, "X": 0.005, "2": 0.005},
+            detail={
+                "market_temporal_status": "ambiguous",
+                "market_pre_match_eligible": False,
+            },
+        ),
+        Match(
+            datetime(2025, 1, 4),
+            "Eligible",
+            "B",
+            0,
+            1,
+            "2",
+            market={"1": 0.20, "X": 0.30, "2": 0.50},
+            detail={
+                "market_temporal_status": "schedule_compatible",
+                "market_pre_match_eligible": True,
+            },
+        ),
+    ]
+
+    baseline = backtest.baseline_probabilities(matches, source="market")
+
+    assert baseline[0][0] == {"1": 1 / 3, "X": 1 / 3, "2": 1 / 3}
+    assert baseline[1][0] == {"1": 0.20, "X": 0.30, "2": 0.50}
+
+
 def test_compare_reports_market_metrics_on_same_fixture_sample(monkeypatch):
     class FakeEngine:
         def __init__(self, enable_ml=False):
