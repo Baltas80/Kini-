@@ -305,20 +305,19 @@ def extract_match_links(html: str, *, page_url: str) -> list[dict[str, str]]:
     return [{"match_id": key, "match_url": value} for key, value in found.items()]
 
 
-def _parse_match_title(title: str, expected_season_end_year: int) -> tuple[str, str]:
+def _parse_match_title(title: str) -> tuple[str, str]:
+    """Extract teams without trusting the site's title year for historical seasons."""
     cleaned = re.sub(r"\s+", " ", title).strip()
     match = re.search(
-        r"^(?P<home>.+?)\s+vs\.?\s+(?P<away>.+?)\s+-\s+.+?\s+(?P<year>20\d{2})\b",
+        r"^(?P<home>.+?)\s+vs\.?\s+(?P<away>.+?)\s+-\s+"
+        r"(?:Liga F|Primera Iberdrola|Primera División Femenina)"
+        r"(?:\s+20\d{2})?(?:\s*\||$)",
         cleaned,
         flags=re.IGNORECASE,
     )
     if match is None:
-        raise LigaFHistoryError(f"cannot extract home/away teams from match title: {title!r}")
-    page_year = int(match.group("year"))
-    if page_year != expected_season_end_year:
         raise LigaFHistoryError(
-            f"match page season year {page_year} does not match requested season "
-            f"{expected_season_end_year}"
+            f"cannot extract home/away teams from match title: {title!r}"
         )
     return match.group("home").strip(), match.group("away").strip()
 
@@ -386,7 +385,7 @@ def parse_match_detail(
     document = _parse_document(html)
     if "ligaf" not in document.title.casefold() and "liga f" not in document.text[:3000].casefold():
         raise LigaFHistoryError(f"match page {match_id} is not recognizable as Liga F")
-    home, away = _parse_match_title(document.title, season_end_year)
+    home, away = _parse_match_title(document.title)
     header = _parse_matchday_and_kickoff(document.text, season_end_year)
     if header is None:
         matchday = expected_matchday
