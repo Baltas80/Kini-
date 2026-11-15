@@ -197,6 +197,30 @@ def test_ensemble_uses_schedule_screened_market():
     assert eligible.has_temporally_eligible_market is True
 
 
+def test_feature_model_ignores_same_day_future_and_unverified_standings():
+    history = sample()
+    current = Match(
+        datetime(2025, 4, 1),
+        "A",
+        "D",
+        detail={
+            "clasificacion_local_pos": 1,
+            "clasificacion_visitante_pos": 20,
+        },
+    )
+    model = FeatureModel()
+    baseline = model._features(history, current)
+
+    contaminated_history = history + [
+        Match(datetime(2025, 4, 1), "A", "D", 9, 0, "1"),
+        Match(datetime(2025, 4, 2), "A", "D", 0, 9, "2"),
+    ]
+    observed = model._features(contaminated_history, current)
+
+    assert baseline.shape == (12,)
+    assert np.array_equal(observed, baseline)
+
+
 def test_feature_model_uses_2d_inference_and_caches_fit_per_history(monkeypatch):
     class FakeXGBClassifier:
         fit_calls = 0
@@ -206,14 +230,14 @@ def test_feature_model_uses_2d_inference_and_caches_fit_per_history(monkeypatch)
 
         def fit(self, features, labels):
             assert features.ndim == 2
-            assert features.shape == (80, 15)
+            assert features.shape == (80, 12)
             assert labels.shape == (80,)
             type(self).fit_calls += 1
             return self
 
         def predict_proba(self, features):
             assert features.ndim == 2
-            assert features.shape == (1, 15)
+            assert features.shape == (1, 12)
             return np.array([[0.55, 0.25, 0.20]])
 
     monkeypatch.setitem(sys.modules, "xgboost", SimpleNamespace(XGBClassifier=FakeXGBClassifier))
@@ -240,11 +264,11 @@ def test_feature_model_training_rows_exclude_same_calendar_day_results(monkeypat
             self.classes_ = np.array([0, 1, 2])
 
         def fit(self, features, labels):
-            assert features.shape == (80, 15)
+            assert features.shape == (80, 12)
             return self
 
         def predict_proba(self, features):
-            assert features.shape == (1, 15)
+            assert features.shape == (1, 12)
             return np.array([[0.4, 0.35, 0.25]])
 
     monkeypatch.setitem(sys.modules, "xgboost", SimpleNamespace(XGBClassifier=FakeXGBClassifier))
@@ -258,7 +282,7 @@ def test_feature_model_training_rows_exclude_same_calendar_day_results(monkeypat
     def capture_features(past, current):
         if current is history[1]:
             captured["past"] = list(past)
-        return np.zeros(15, dtype=float)
+        return np.zeros(12, dtype=float)
 
     monkeypatch.setattr(model, "_features", capture_features)
     probabilities = model.fit_predict_proba(history, Match(datetime(2025, 4, 1), "A", "D"))
@@ -290,7 +314,7 @@ def test_feature_model_uses_latest_feature_history_without_refitting(monkeypatch
     monkeypatch.setattr(
         model,
         "_features",
-        lambda past, current: np.full(15, len(past), dtype=float),
+        lambda past, current: np.full(12, len(past), dtype=float),
     )
 
     model.fit_predict_proba(training_history, Match(datetime(2025, 4, 2), "A", "D"), feature_history)
