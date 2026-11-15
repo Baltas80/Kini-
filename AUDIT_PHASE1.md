@@ -1253,3 +1253,79 @@ Validation:
 3. Resume the candidate-feature point-in-time audit and correlation-aware Quiniela ticket-coverage acceptance work.
 
 No direct changes to `master`; PR #9 remains open and unmerged.
+
+
+## LAE XML activation diagnosis and freshness gate — 2026-11-15
+
+### Live endpoint diagnosis
+
+The bounded live diagnostic now inspects the actual LAE percentage XML schema rather than inferring a parser failure from an empty vector.
+
+Evidence from live jornada 22 / temporada 2027:
+
+- Detail records: 15.
+- Percentage records: 15.
+- Exact normalized home/away crosswalk: **15/15**.
+- \`orden == num\` for all 15 fixtures.
+- Official kickoff mapping: **15/15**.
+- Schedule evidence fresh at the probability capture: **15/15**.
+- LAE source rows: 15.
+- Valid LAE probability vectors: **0/15**.
+- Temporally eligible LAE rows: **0/15**.
+
+The LAE XML schema contains the parser's expected fields: \`num\`, \`local\`, \`visitante\`, \`porc_1\`, \`porc_X\`, \`porc_2\`. The three percentage fields are zero in the sampled records. \`_probability_map\` correctly rejects an all-zero vector because it has no probability mass. This is **not a field-name/parser mismatch**; the provider has not supplied usable LAE percentages for this jornada snapshot.
+
+Diagnostic run [43755104246](https://github.com/Baltas80/Kini-/actions/runs/43755104246) succeeded. Bounded artifact [14177602838](https://github.com/Baltas80/Kini-/actions/runs/43755104246/artifacts/14177602838), 3,760 bytes, SHA-256 \`91e204e173282b2e36e01f796fdabedd0f1a797044c0df6999920f38bf9a5a83\`.
+
+The fixture schedule is independently grounded in the official UEFA pages:
+
+- [2026 UEFA Nations League fixtures](https://www.uefa.com/uefanationsleague/news/02a2-1fea18abbcbc-456e846509e7-1000--2026-uefa-nations-league-all-the-league-phase-fixtures-a/): Tuesday 17 November, all times CET, 20:45 unless stated.
+- [2026/27 Women's Champions League fixtures](https://www.uefa.com/womenschampionsleague/news/02a9-21848dfb62c3-1313bc23426c-1000--202627-womens-champions-league-all-the-league-phase-fixtures/): 18–19 November, all times CET, 21:00 unless stated, with the listed 18:45 exceptions.
+
+### LAE eligibility hardening
+
+A stale official schedule can become unsafe if a fixture's kickoff is amended after the schedule was checked. The previous gate only required that the schedule check preceded the LAE capture; it did not bound the age of that evidence.
+
+The shared contract now defines \`LAE_KICKOFF_EVIDENCE_MAX_AGE = timedelta(hours=24)\` and applies it in three layers:
+
+1. \`KinielaGPTSource.probabilities()\` attaches kickoff metadata to an LAE row only when the exact fixture identity is verified and the schedule evidence is between zero and 24 hours old at capture. Older evidence is labelled \`schedule_evidence_stale\`; evidence checked after capture remains \`schedule_evidence_after_lae_capture\`.
+2. \`Match.has_temporally_eligible_lae\` independently requires the exact LAE source ID, verified fixture identity, an HTTPS evidence URL, timezone-aware evidence/capture/kickoff timestamps, evidence age in \`[0, 24h]\`, capture strictly before kickoff, and a valid normalized 1/X/2 vector.
+3. The live diagnostic summary applies the same freshness rule and reports \`evidence_fresh_at_capture\`.
+
+The 24-hour threshold is a conservative project safety policy, not a provider guarantee. It means the schedule evidence must be refreshed before a later LAE capture can be accepted. LAE remains excluded until the provider supplies non-zero, valid vectors.
+
+Regression coverage now includes missing or wrong source identity, unverified fixture identity, non-HTTPS evidence, missing/naive timestamps, evidence after capture, evidence older than 24 hours, capture at/after kickoff, invalid probability vectors, and the source adapter's stale-evidence rejection.
+
+### Validation of this unit
+
+On final code commit \`86b88213734ec2d84204965e0add064086f7cbb2\`:
+
+- CI [run 43755104132](https://github.com/Baltas80/Kini-/actions/runs/43755104132): Ruff passed, formatting passed, **173 tests passed**, four upstream deprecation warnings.
+- Live diagnostic [run 43755104246](https://github.com/Baltas80/Kini-/actions/runs/43755104246): change filter and read-only inspection passed; all 15 fixture mappings and freshness checks passed; no usable LAE vectors were returned.
+- Historical data validation [run 43755104115](https://github.com/Baltas80/Kini-/actions/runs/43755104115): dataset build, canonical team identity validation and quality-profile checks passed.
+
+### Latest full probabilistic benchmark
+
+The previously pending full walk-forward run [43751566316](https://github.com/Baltas80/Kini-/actions/runs/43751566316) completed successfully. Artifact [14176219177](https://github.com/Baltas80/Kini-/actions/runs/43751566316/artifacts/14176219177). Test period: 2020-12-11 through 2026-11-09; 5,011 model predictions. The market had 4,424 schedule-eligible matches; all primary comparisons below use that same 4,424-match common sample.
+
+| Candidate | Accuracy | Brier | Log Loss |
+|---|---:|---:|---:|
+| Dixon-Coles | 48.06% | 0.616357 | 1.027499 |
+| ML | 43.78% | 0.647471 | 1.074246 |
+| Ensemble | 47.81% | 0.613563 | 1.023018 |
+| Ensemble DC+ML | 47.40% | 0.616095 | 1.026842 |
+| Adaptive ensemble | 47.49% | 0.616305 | 1.027133 |
+| Market | **50.72%** | **0.597504** | **0.999444** |
+
+The market remains better on the matched sample. The prequential calibration uses prior walk-forward out-of-sample forecasts and excludes same-calendar-day outcomes. On its 3,847-match common market sample, calibration reduced the ensemble's ECE (0.01710 to 0.00972) but slightly worsened its Brier (0.611315 to 0.611522) and Log Loss (1.019753 to 1.019966). The calibrated market remained better (Brier 0.596714; Log Loss 0.998094). Do not promote the calibrated ensemble on ECE alone.
+
+The market temporal audit still excludes 587 of 5,011 odds-bearing fixtures because kickoff schedule/timezone evidence is ambiguous. No historical model or feature code changed in the LAE freshness unit, so this benchmark remains the latest valid predictive baseline; no redundant walk-forward was launched.
+
+### Next actions
+
+1. Re-check the official UEFA fixture pages and refresh the crosswalk evidence timestamp before its 24-hour freshness window expires. Do not extend the timestamp without a fresh source check.
+2. Re-query the LAE endpoint as the jornada approaches. Keep LAE disabled while all percentages are zero; when non-zero values appear, require valid vectors and retain the same fixture/time gates.
+3. Continue the point-in-time feature audit.
+4. Continue correlation-aware ticket-coverage work. The current ticket coverage objective still uses an independence approximation; do not describe it as a joint-probability optimizer until a validated joint scenario source is available.
+
+PR #9 remains open as a draft against \`feat/canonical-team-identity-registry\`. No changes were made to \`master\`, and no PR was merged.
