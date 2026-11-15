@@ -122,6 +122,8 @@ jobs:
 
           print(json.dumps(profile, indent=2, ensure_ascii=False))
           print(json.dumps(historical_profiles["cross_season_provider_id_observations"], indent=2, ensure_ascii=False))
+          print(json.dumps(historical_profiles["cross_season_display_name_observations"], indent=2, ensure_ascii=False))
+          print(json.dumps(historical_profiles["identity_audit_summary"], indent=2, ensure_ascii=False))
           PY
       - name: Upload Liga F history and provenance profiles
         if: always()

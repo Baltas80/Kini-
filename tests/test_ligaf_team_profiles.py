@@ -4,6 +4,8 @@ import pytest
 
 from kini_engine.ligaf_history import LigaFHistoryError
 from kini_engine.ligaf_team_profiles import (
+    _cross_season_display_name_observations,
+    _cross_season_observations,
     extract_team_profile_link,
     parse_team_profile_page,
     validate_historical_team_profiles,
@@ -169,3 +171,59 @@ def test_validate_historical_profiles_rejects_duplicate_provider_ids():
     document["seasons"]["2023"]["entries"][1]["provider_team_profile_id"] = "1000"
     with pytest.raises(LigaFHistoryError, match="duplicate provider profile IDs"):
         validate_historical_team_profiles(document)
+
+
+def test_cross_season_display_name_audit_flags_multiple_provider_ids():
+    seasons = {
+        "2023": {
+            "entries": [
+                {
+                    "team_name_in_match": "Team A",
+                    "provider_team_profile_id": "123",
+                    "team_profile_url": "https://ligaf.es/equipo/team-a/123/plantilla/2023",
+                }
+            ]
+        },
+        "2024": {
+            "entries": [
+                {
+                    "team_name_in_match": "Team A",
+                    "provider_team_profile_id": "124",
+                    "team_profile_url": "https://ligaf.es/equipo/team-a/124/plantilla/2024",
+                }
+            ]
+        },
+    }
+    summary = _cross_season_display_name_observations(seasons)
+    assert summary[0]["continuity_status"] == (
+        "same_display_name_multiple_profile_ids_requires_review"
+    )
+    assert summary[0]["provider_team_profile_ids"] == ["123", "124"]
+
+
+def test_cross_season_provider_id_audit_flags_label_changes():
+    seasons = {
+        "2023": {
+            "entries": [
+                {
+                    "provider_team_profile_id": "123",
+                    "team_name_in_match": "Old Name",
+                    "team_profile_url": "https://ligaf.es/equipo/team-a/123/plantilla/2023",
+                }
+            ]
+        },
+        "2024": {
+            "entries": [
+                {
+                    "provider_team_profile_id": "123",
+                    "team_name_in_match": "New Name",
+                    "team_profile_url": "https://ligaf.es/equipo/team-a/123/plantilla/2024",
+                }
+            ]
+        },
+    }
+    summary = _cross_season_observations(seasons)
+    assert summary[0]["continuity_status"] == (
+        "repeat_profile_id_with_label_change_requires_review"
+    )
+    assert summary[0]["observed_team_names"] == ["New Name", "Old Name"]

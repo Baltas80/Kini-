@@ -12,10 +12,10 @@ from kini_engine.ligaf_history import (
     ARCHIVE_URL,
     DEFAULT_CACHE_DIR,
     LigaFHistoryError,
+    MATCH_PATH,
     _atomic_write,
     _official_url,
     _parse_document,
-    _parse_match_title,
     extract_match_links,
     extract_round_dates,
     fetch_html,
@@ -173,6 +173,54 @@ def _cross_season_observations(
     return summaries
 
 
+def _cross_season_display_name_observations(
+    seasons: dict[str, dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Detect one source display name being assigned multiple provider IDs."""
+    observed: dict[str, list[dict[str, str]]] = defaultdict(list)
+    for season_end_year, season in seasons.items():
+        for entry in season["entries"]:
+            observed[_normalized_name(entry["team_name_in_match"])].append(
+                {
+                    "season_end_year": season_end_year,
+                    "team_name_in_match": entry["team_name_in_match"],
+                    "provider_team_profile_id": entry["provider_team_profile_id"],
+                    "team_profile_url": entry["team_profile_url"],
+                }
+            )
+
+    summaries = []
+    for normalized_name, rows in sorted(observed.items()):
+        season_years = sorted({row["season_end_year"] for row in rows})
+        profile_ids = sorted(
+            {row["provider_team_profile_id"] for row in rows}
+        )
+        labels = sorted({row["team_name_in_match"] for row in rows})
+        if len(season_years) < 2:
+            status = "single_season_observation"
+        elif len(profile_ids) == 1:
+            status = "same_display_name_same_profile_id_unreviewed"
+        else:
+            status = "same_display_name_multiple_profile_ids_requires_review"
+        summaries.append(
+            {
+                "normalized_name": normalized_name,
+                "seasons": season_years,
+                "observed_team_names": labels,
+                "provider_team_profile_ids": profile_ids,
+                "continuity_status": status,
+                "observations": sorted(
+                    rows,
+                    key=lambda row: (
+                        row["season_end_year"],
+                        row["provider_team_profile_id"],
+                    ),
+                ),
+            }
+        )
+    return summaries
+
+
 def validate_historical_team_profiles(document: dict[str, Any]) -> None:
     """Validate evidence structure without assigning canonical club identities."""
     if document.get("schema_version") != 1:
@@ -201,6 +249,12 @@ def validate_historical_team_profiles(document: dict[str, Any]) -> None:
         expected_year = int(season_end_year)
         if season.get("season_end_year") != expected_year:
             raise LigaFHistoryError("season_end_year does not match its season key")
+        if season.get("season") != _season_name(expected_year):
+            raise LigaFHistoryError("season label does not match season_end_year")
+        if season.get("matchday") != 30:
+            raise LigaFHistoryError("historical profile evidence must use matchday 30")
+        if season.get("all_profile_pages_verified") is not True:
+            raise LigaFHistoryError("all historical profile pages must be verified")
         entries = season.get("entries")
         if not isinstance(entries, list) or len(entries) != 16:
             raise LigaFHistoryError(
@@ -245,29 +299,100 @@ def validate_historical_team_profiles(document: dict[str, Any]) -> None:
                 raise LigaFHistoryError(
                     f"{location}.team_profile_url conflicts with its ID or season"
                 )
-            _official_url(
-                entry.get("match_evidence_url", ""),
-                f"{location}.match_evidence_url",
-            )
-            _official_url(
+            profile_link_url = _official_url(
                 entry.get("match_detail_profile_link_url", ""),
                 f"{location}.match_detail_profile_link_url",
             )
-            if entry.get("identity_review_required") is not (
-                not entry.get("name_match_exact")
+            profile_link_path = PROFILE_PATH.fullmatch(
+                urlparse(profile_link_url).path
+            )
+            if (
+                profile_link_path is None
+                or profile_link_path.group("profile_id") != profile_id
+                or profile_link_path.group("slug") != profile_path.group("slug")
             ):
+                raise LigaFHistoryError(
+                    f"{location}.match_detail_profile_link_url conflicts with its profile"
+                )
+            match_evidence_url = _official_url(
+                entry.get("match_evidence_url", ""),
+                f"{location}.match_evidence_url",
+            )
+            if MATCH_PATH.fullmatch(urlparse(match_evidence_url).path) is None:
+                raise LigaFHistoryError(
+                    f"{location}.match_evidence_url is not an official match URL"
+                )
+            heading = entry.get("profile_heading")
+            if not isinstance(heading, str) or not heading.strip():
+                raise LigaFHistoryError(f"{location} has no verified profile heading")
+            name_match_exact = entry.get("name_match_exact")
+            review_required = entry.get("identity_review_required")
+            if not isinstance(name_match_exact, bool) or not isinstance(
+                review_required, bool
+            ):
+                raise LigaFHistoryError(
+                    f"{location} has invalid identity-review flags"
+                )
+            if review_required != (not name_match_exact):
                 raise LigaFHistoryError(
                     f"{location} has inconsistent identity-review status"
                 )
+            for digest_field in (
+                "match_evidence_sha256",
+                "profile_page_sha256",
+            ):
+                digest = entry.get(digest_field)
+                if not isinstance(digest, str) or re.fullmatch(
+                    r"[0-9a-f]{64}", digest
+                ) is None:
+                    raise LigaFHistoryError(
+                        f"{location}.{digest_field} must be a SHA-256 hex digest"
+                    )
             if entry.get("identity_status") not in {
                 "exact_name_match",
                 "manual_review_required",
             }:
                 raise LigaFHistoryError(f"{location} has an invalid identity status")
-        if season.get("team_count") != 16 or season.get("unique_profile_ids") != 16:
+        exact_matches = sum(
+            entry["name_match_exact"] for entry in entries
+        )
+        review_count = sum(
+            entry["identity_review_required"] for entry in entries
+        )
+        if (
+            season.get("team_count") != 16
+            or season.get("unique_profile_ids") != 16
+            or season.get("verified_profile_pages") != 16
+            or season.get("exact_name_matches") != exact_matches
+            or season.get("review_required_count") != review_count
+        ):
             raise LigaFHistoryError(
                 f"season {season_end_year} profile coverage summary is inconsistent"
             )
+
+    provider_observations = _cross_season_observations(seasons)
+    name_observations = _cross_season_display_name_observations(seasons)
+    expected_identity_summary = {
+        "unique_display_names": len(name_observations),
+        "unique_provider_profile_ids": len(provider_observations),
+        "display_names_with_multiple_provider_ids": sum(
+            item["continuity_status"]
+            == "same_display_name_multiple_profile_ids_requires_review"
+            for item in name_observations
+        ),
+        "provider_ids_with_multiple_display_names": sum(
+            item["continuity_status"]
+            == "repeat_profile_id_with_label_change_requires_review"
+            for item in provider_observations
+        ),
+        "canonical_identity_assignments": 0,
+    }
+    if document.get("cross_season_provider_id_observations") != provider_observations:
+        raise LigaFHistoryError("cross-season provider-ID observations are inconsistent")
+    if document.get("cross_season_display_name_observations") != name_observations:
+        raise LigaFHistoryError("cross-season display-name observations are inconsistent")
+    if document.get("identity_audit_summary") != expected_identity_summary:
+        raise LigaFHistoryError("cross-season identity audit summary is inconsistent")
 
 
 def build_historical_team_profiles(
@@ -461,6 +586,23 @@ def build_historical_team_profiles(
             ),
         }
 
+    provider_observations = _cross_season_observations(season_documents)
+    name_observations = _cross_season_display_name_observations(season_documents)
+    identity_summary = {
+        "unique_display_names": len(name_observations),
+        "unique_provider_profile_ids": len(provider_observations),
+        "display_names_with_multiple_provider_ids": sum(
+            item["continuity_status"]
+            == "same_display_name_multiple_profile_ids_requires_review"
+            for item in name_observations
+        ),
+        "provider_ids_with_multiple_display_names": sum(
+            item["continuity_status"]
+            == "repeat_profile_id_with_label_change_requires_review"
+            for item in provider_observations
+        ),
+        "canonical_identity_assignments": 0,
+    }
     document = {
         "schema_version": 1,
         "provider": "LIGA_F",
@@ -476,9 +618,9 @@ def build_historical_team_profiles(
             "no canonical team identity or rename is inferred."
         ),
         "seasons": season_documents,
-        "cross_season_provider_id_observations": _cross_season_observations(
-            season_documents
-        ),
+        "cross_season_provider_id_observations": provider_observations,
+        "cross_season_display_name_observations": name_observations,
+        "identity_audit_summary": identity_summary,
         "training_eligibility": {
             "eligible": False,
             "reason": (

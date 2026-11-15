@@ -47,15 +47,12 @@ jobs:
           kini_engine/ligaf_team_profiles.py
           scripts/build_ligaf_team_profiles.py
           tests/test_ligaf_team_profiles.py
-          kini_engine/ligaf_history.py
-          scripts/import_ligaf_history.py
-          tests/test_ligaf_history.py
-          kini_engine/ligaf_team_profiles.py
-          scripts/build_ligaf_team_profiles.py
-          tests/test_ligaf_team_profiles.py
       - name: Verify formatting for Liga F evidence code
         run: >-
           ruff format --check
           kini_engine/ligaf_evidence.py
           tests/test_ligaf_evidence.py
+          kini_engine/ligaf_team_profiles.py
+          scripts/build_ligaf_team_profiles.py
+          tests/test_ligaf_team_profiles.py
       - run: pytest -q
