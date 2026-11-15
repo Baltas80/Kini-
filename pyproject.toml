@@ -32,6 +32,9 @@ kini = "kini_engine.cli:main"
 [tool.setuptools.packages.find]
 include = ["kini_engine*"]
 
+[tool.setuptools.package-data]
+kini_engine = ["data/*.json"]
+
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
