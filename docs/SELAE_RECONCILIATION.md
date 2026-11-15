@@ -180,7 +180,7 @@ The importer fails closed on:
 - Completed seasons without 240 final matches, 16 teams, 30 appearances per team and 15 home/15 away matches per team.
 - A current season without the expected number of scheduled fixtures or 16 scheduled teams.
 
-All imported records are explicitly `training_label_eligible=false`. The data is evidence-only and is not merged into Football-Data, not used by Dixon-Coles/ML/ensemble, and not used to create forecasts. Historical source aliases, season-scoped team identities, complete multi-season data validation and pre-kickoff feature availability must be reviewed before any training promotion.
+All imported records are explicitly `training_label_eligible=false`. The data is evidence-only and is not merged into Football-Data, not used by Dixon-Coles/ML/ensemble, and not used to create forecasts. The per-season integrity profile now includes an exact team-name inventory with observed display strings, scheduled/played appearances, home/away counts and first/last played kickoff. This inventory is an audit aid only: it groups names solely by the importer's conservative case-fold/whitespace normalization and does not infer aliases across punctuation, accents, renamed clubs or seasons. Historical source aliases, season-scoped team identities, complete multi-season data validation and pre-kickoff feature availability must be reviewed before any training promotion.
 
 ### Validation status
 
