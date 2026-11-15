@@ -34,7 +34,7 @@ def _required_text(value: object, field: str) -> str:
 def _parse_datetime(value: object, field: str) -> datetime:
     raw = _required_text(value, field)
     try:
-        parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(raw)
     except ValueError as exc:
         raise LigaFEvidenceError(f"{field} must be ISO-8601") from exc
     if parsed.tzinfo is None or parsed.utcoffset() is None:
