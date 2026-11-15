@@ -280,9 +280,7 @@ def inspect_workbook(
                     + "\n"
                 )
 
-                row_date_cells = sum(
-                    cell.ctype == xlrd.XL_CELL_DATE for cell in cells
-                )
+                row_date_cells = sum(cell.ctype == xlrd.XL_CELL_DATE for cell in cells)
                 date_cells += row_date_cells
                 date_rows += int(row_date_cells > 0)
                 nonempty_rows += 1
