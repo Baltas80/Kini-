@@ -209,3 +209,11 @@ El constructor de la ingesta consolida el DataFrame normalizado antes de añadir
 - PR #6 branch includes PR #5 as the second parent of the merge commit. For the cleanest eventual integration, merge PR #5 first and then PR #6.
 - No PR has been merged.
 - `master` remains at `ef331c3a3f50220b5d2b1a71900a2d7003b259c4` and has not been modified.
+
+## Execution checkpoint — 2026-11-15 01:15 CET
+
+- Branch HEAD before this checkpoint: `d3d9e46f35e790c8b2b61b36f02007e9116b66be`; this checkpoint is documentation-only and does not change model code.
+- Latest PR validation on that tree: CI run [43652911556](https://github.com/Baltas80/Kini-/actions/runs/43652911556) passed **44 tests**. Four warnings remain in the third-party `penaltyblog` Dixon-Coles implementation under NumPy 2.5.
+- Historical-data validation run [43652911550](https://github.com/Baltas80/Kini-/actions/runs/43652911550) completed successfully.
+- The calibrated historical backtest has still not been evidenced. The earlier 5,011-fixture comparison evaluates the pre-calibrator code and must not be presented as validation of the calibration experiment.
+- Next acceptance gate: execute `.github/workflows/historical-backtest.yml` against the current PR branch. It must produce non-empty predictions for all five model configurations, a non-empty calibrated/raw comparison on identical post-warm-up fixtures, successful prior-OOF fits, and a non-empty common-market sample. Calibration is not promoted unless both Brier and Log Loss improve on the same chronological sample.
