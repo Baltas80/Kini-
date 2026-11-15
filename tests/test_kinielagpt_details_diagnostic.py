@@ -69,9 +69,9 @@ def test_fixture_order_crosswalk_requires_exact_normalized_names_and_bijection()
     assert report["order_equals_percentage_num_for_all"] is True
     assert [item["matched_num"] for item in report["mapping"]] == [1, 2]
     assert report["unmatched_percentage_ids"] == []
-    assert report["mapping"][0]["provider_day"] == "MAR"
-    assert report["mapping"][0]["provider_local_time"] == "20:45"
-    assert report["mapping"][0]["timezone_aware_kickoff_fields"] == []
+    assert report["mapping"][0]["provider_day_label"] == "MAR"
+    assert report["mapping"][0]["provider_clock_time"] == "20:45"
+    assert report["mapping"][0]["timezone_aware_candidate_fields"] == []
 
 
 def test_fixture_order_crosswalk_rejects_order_when_names_point_to_another_num():
@@ -121,6 +121,6 @@ def test_fixture_crosswalk_exposes_timezone_aware_kickoff_candidates_without_inf
     report = reconcile_fixture_order(details, percentage_matches)
 
     assert report["status"] == "verified"
-    assert report["mapping"][0]["provider_day"] == "MAR"
-    assert report["mapping"][0]["provider_local_time"] == "20:45"
-    assert report["mapping"][0]["timezone_aware_kickoff_fields"] == ["fechaHora"]
+    assert report["mapping"][0]["provider_day_label"] == "MAR"
+    assert report["mapping"][0]["provider_clock_time"] == "20:45"
+    assert report["mapping"][0]["timezone_aware_candidate_fields"] == ["fechaHora"]
