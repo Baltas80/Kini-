@@ -16,7 +16,6 @@ from scripts.import_selae_results import (
     write_draws,
 )
 
-
 DRAW_DATE = date(2026, 11, 8)
 HOMES = [
     "Málaga (M)", "Osasuna (M)", "Valencia (M)", "Elche (M)",
