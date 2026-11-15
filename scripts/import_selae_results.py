@@ -261,6 +261,7 @@ def parse_selae_draw(
     source_url: str | None = None,
     source_retrieved_at_utc: str | None = None,
     raw_content: bytes | None = None,
+    fixture_overrides: list[dict[str, object]] | None = None,
 ) -> dict[str, object]:
     """Parse one completed SELAE escrutinio page and fail closed on structural drift."""
     parser = CouponPageParser()
@@ -272,13 +273,26 @@ def parse_selae_draw(
         raise ValueError(f"La página no confirma La Quiniela y la fecha esperada {date_phrase!r}")
 
     home, away, scores, signs, sign_end_index = _find_fixture_groups(parser.list_items)
+    overrides_by_position = {
+        int(override["position"]): override
+        for override in (fixture_overrides or [])
+        if override.get("draw_date") == draw_date.isoformat()
+    }
     fixtures: list[dict[str, object]] = []
     for position, (home_raw, away_raw, score_raw, sign) in enumerate(
         zip(home, away, scores, signs, strict=True), start=1
     ):
         home_goals, away_goals = _parse_score(score_raw)
         expected_sign = "1" if home_goals > away_goals else "2" if home_goals < away_goals else "X"
-        if sign != expected_sign:
+        override = overrides_by_position.get(position)
+        if override is not None and (
+            override.get("reported_score_raw") != _clean(score_raw)
+            or override.get("sign") != sign
+        ):
+            raise ValueError(
+                f"Partido {position}: marcador o signo no coincide con el manifiesto oficial"
+            )
+        if sign != expected_sign and override is None:
             raise ValueError(
                 f"Partido {position}: el signo {sign} no coincide con el marcador {score_raw} "
                 f"(esperado {expected_sign})"
@@ -350,7 +364,7 @@ def load_fixture_overrides(
         raise ValueError("Manifiesto de excepciones SELAE: provider debe ser SELAE")
     entries = document.get("overrides")
     if not isinstance(entries, list):
-        raise ValueError("Manifiesto de excepciones SELAE: overrides debe ser una lista")
+        raise TypeError("Manifiesto de excepciones SELAE: overrides debe ser una lista")
 
     required_fields = {
         "draw_date",
@@ -396,7 +410,7 @@ def load_fixture_overrides(
 
         checked_raw = str(raw["evidence_checked_at_utc"]).strip()
         try:
-            checked_at = datetime.fromisoformat(checked_raw.replace("Z", "+00:00"))
+            checked_at = datetime.fromisoformat(checked_raw)
         except ValueError as exc:
             raise ValueError(f"{location}.evidence_checked_at_utc no es ISO-8601") from exc
         if checked_at.tzinfo is None or checked_at.utcoffset() is None:
@@ -443,7 +457,7 @@ def apply_fixture_overrides(
             raise ValueError(f"Sorteo {override['draw_date']}: no contiene 14 partidos")
         fixture = fixtures[position - 1]
         if not isinstance(fixture, dict):
-            raise ValueError(f"Sorteo {override['draw_date']}, partido {position}: registro inválido")
+            raise TypeError(f"Sorteo {override['draw_date']}, partido {position}: registro inválido")
         if fixture.get("reported_score_raw", fixture.get("score_raw")) != override["reported_score_raw"]:
             raise ValueError(
                 f"Sorteo {override['draw_date']}, partido {position}: "
@@ -526,6 +540,7 @@ def fetch_draw(
     cache_ttl_hours: float = CACHE_TTL_HOURS,
     refresh: bool = False,
     session: requests.Session | None = None,
+    fixture_overrides: list[dict[str, object]] | None = None,
 ) -> dict[str, object]:
     if cache_ttl_hours < 0:
         raise ValueError("cache_ttl_hours no puede ser negativo")
@@ -546,6 +561,7 @@ def fetch_draw(
                 source_url=url,
                 source_retrieved_at_utc=metadata.get("source_retrieved_at_utc"),
                 raw_content=cached_bytes,
+                fixture_overrides=fixture_overrides,
             )
             age_hours = max(0.0, time.time() - cache_path.stat().st_mtime) / 3600
             if not refresh and age_hours <= cache_ttl_hours:
@@ -571,6 +587,7 @@ def fetch_draw(
             source_url=response_url,
             source_retrieved_at_utc=fetched_at,
             raw_content=raw_content,
+            fixture_overrides=fixture_overrides,
         )
         _atomic_write(cache_path, raw_content)
         metadata = {
@@ -591,7 +608,12 @@ def fetch_draw(
         raise RuntimeError(f"No se pudo obtener un escrutinio SELAE válido para {draw_date}: {exc}") from exc
 
 
-def load_local_draw(draw_date: date, html_dir: str | Path) -> dict[str, object]:
+def load_local_draw(
+    draw_date: date,
+    html_dir: str | Path,
+    *,
+    fixture_overrides: list[dict[str, object]] | None = None,
+) -> dict[str, object]:
     """Parse a page saved locally from the official SELAE site (useful when a runner is geo-blocked)."""
     html_path = Path(html_dir) / f"{draw_date.isoformat()}.html"
     if not html_path.is_file():
@@ -613,6 +635,7 @@ def load_local_draw(draw_date: date, html_dir: str | Path) -> dict[str, object]:
         source_url=source_url,
         source_retrieved_at_utc=str(retrieved_at),
         raw_content=raw_content,
+        fixture_overrides=fixture_overrides,
     )
 
 def parse_iso_date(value: str) -> date:
@@ -689,9 +712,8 @@ def _validate_draw_record(draw: dict[str, object]) -> bool:
             parsed_home, parsed_away = _parse_score(score_raw)
             if (parsed_home, parsed_away) != (home_goals, away_goals):
                 return False
-            if draw.get("schema_version") == 2:
-                if fixture.get("reported_score_raw") != score_raw:
-                    return False
+            if draw.get("schema_version") == 2 and fixture.get("reported_score_raw") != score_raw:
+                return False
         elif score_status == "not_played":
             if (
                 home_goals is not None
@@ -708,7 +730,7 @@ def _validate_draw_record(draw: dict[str, object]) -> bool:
                 return False
             checked_raw = str(fixture.get("sign_evidence_checked_at_utc", ""))
             try:
-                checked_at = datetime.fromisoformat(checked_raw.replace("Z", "+00:00"))
+                checked_at = datetime.fromisoformat(checked_raw)
             except ValueError:
                 return False
             if checked_at.tzinfo is None or checked_at.utcoffset() is None:
@@ -840,8 +862,12 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     args = _parse_args()
     dates = load_dates(args.dates, args.date_file)
+    overrides = load_fixture_overrides(args.fixture_overrides)
     if args.html_dir is not None:
-        draws = [load_local_draw(draw_date, args.html_dir) for draw_date in dates]
+        draws = [
+            load_local_draw(draw_date, args.html_dir, fixture_overrides=overrides)
+            for draw_date in dates
+        ]
     else:
         draws = [
             fetch_draw(
@@ -849,10 +875,10 @@ def main() -> None:
                 cache_dir=args.cache_dir,
                 cache_ttl_hours=args.cache_ttl_hours,
                 refresh=args.refresh,
+                fixture_overrides=overrides,
             )
             for draw_date in dates
         ]
-    overrides = load_fixture_overrides(args.fixture_overrides)
     applied_overrides = apply_fixture_overrides(draws, overrides)
     if applied_overrides:
         log.info("Aplicadas %s excepciones oficiales de partidos no disputados", applied_overrides)
