@@ -43,9 +43,7 @@ jobs:
           kini_engine/fixture_reconciliation.py
           scripts/reconcile_selae_fixtures.py
           scripts/inspect_selae_historical_calendar.py
-          tests/test_selae_historical_calendar.py
           tests/test_fixture_reconciliation.py
-          scripts/inspect_selae_historical_calendar.py
           tests/test_selae_historical_calendar.py
           kini_engine/ligaf_evidence.py
           tests/test_ligaf_evidence.py
@@ -62,9 +60,11 @@ jobs:
           scripts/diagnose_kinielagpt_details.py
           tests/test_sources.py
           tests/test_kinielagpt_details_diagnostic.py
-      - name: Verify formatting for Liga F evidence code
+      - name: Verify formatting for Liga F and SELAE evidence code
         run: >-
           ruff format --check
+          scripts/inspect_selae_historical_calendar.py
+          tests/test_selae_historical_calendar.py
           kini_engine/ligaf_evidence.py
           tests/test_ligaf_evidence.py
           kini_engine/ligaf_team_profiles.py
