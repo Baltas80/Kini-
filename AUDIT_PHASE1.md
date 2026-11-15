@@ -1486,4 +1486,4 @@ The first CI run that reached the new date-cell test exposed an API namespace mi
 - Historical-data validation [43764064913](https://github.com/Baltas80/Kini-/actions/runs/43764064913): pending.
 - The older full walk-forward [43763046836](https://github.com/Baltas80/Kini-/actions/runs/43763046836) remains in its historical-comparison step. No new model metrics are claimed from it.
 
-The current branch head is f171b54; PR #9 remains open as a draft. No merge or master change.
+The latest code commit is f171b54; documentation-only commit 8fab9ea records this status. PR #9 remains open as a draft. No merge or master change.
