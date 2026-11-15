@@ -429,14 +429,14 @@ Official source: SELAE, *Normas de la Quiniela y Elige 8* (October 2019), Anexo 
 
 ## SELAE official coupon and prize data availability — 2026-11-15
 
-A source investigation confirmed that SELAE publishes official, machine-indexable-by-date web records with the exact 14 coupon fixtures, home/away teams, full-time scores and 1/X/2 signs, plus the Pleno al 15 fixture and score. The official *escrutinios* pages also expose category winners and unit prizes. Verified examples:
+A source investigation confirmed that SELAE publishes official date-specific result pages for current-season draws with the exact 14 coupon fixtures, home/away teams, full-time scores and 1/X/2 signs, plus the Pleno al 15 fixture and score. The official *escrutinios* pages also expose category winners and unit prizes. Verified examples:
 
 - [18 October 2026](https://www.loteriasyapuestas.es/es/la-quiniela/escrutinios/la-quiniela-premios-y-ganadores-del-18-de-octubre-de-2026): 14 fixtures, including four women's fixtures, Pleno al 15 and six prize categories.
 - [1 November 2026](https://www.loteriasyapuestas.es/es/la-quiniela/escrutinios/la-quiniela-premios-y-ganadores-del-01-de-noviembre-de-2026): 14 fixtures, scores/signs, Pleno al 15, winners and unit prizes.
 - [4 November 2026](https://www.loteriasyapuestas.es/es/la-quiniela/escrutinios/la-quiniela-premios-y-ganadores-del-04-de-noviembre-de-2026): 14 European men's fixtures, showing that coupon composition is not limited to LaLiga/Segunda.
 - [8 November 2026](https://www.loteriasyapuestas.es/es/la-quiniela/escrutinios/la-quiniela-premios-y-ganadores-del-08-de-noviembre-de-2026): 10 men's fixtures and four Liga F fixtures, with Pleno al 15 and prize distribution.
 
-SELAE's [official result detail page](https://www.loteriasyapuestas.es/es/resultados?drawId=1116207004) also exposes, for the 8 November 2026 result page, bets received, advertised jackpot, total collection and total prizes. SELAE's [official press-release PDF for 8 November 2026](https://www.loteriasyapuestas.es/f/loterias/documentos/Quiniela/Notas%20de%20prensa/NOTA_DE_PRENSA_LA_QUINIELA_08_11_26.pdf) independently confirms the collection and category results. The official [historical results search](https://www.loteriasyapuestas.es/es/resultados/quiniela) exposes date-range controls, but its results are loaded dynamically; the underlying request/response contract and reliable historical pagination have not yet been established. No automated historical ingestion is claimed at this stage.
+SELAE's [official result detail page](https://www.loteriasyapuestas.es/es/resultados?drawId=1116207004) also exposes, for the 8 November 2026 result page, bets received, advertised jackpot, total collection and total prizes. SELAE's [official press-release PDF for 8 November 2026](https://www.loteriasyapuestas.es/f/loterias/documentos/Quiniela/Notas%20de%20prensa/NOTA_DE_PRENSA_LA_QUINIELA_08_11_26.pdf) independently confirms the collection and category results. The official [historical results search](https://www.loteriasyapuestas.es/es/resultados/quiniela) exposes date-range controls, but its results are loaded dynamically; the underlying request/response contract and reliable historical pagination have not yet been established. Directly guessing older date-slugged escrutinio URLs did not resolve reliably. The evidence therefore confirms current-season pages and official historical press-release PDFs, not a complete machine-retrievable historical coupon archive. No automated historical ingestion is claimed at this stage.
 
 ### Scope consequence
 
@@ -453,3 +453,17 @@ Next P6/P1 work:
 `TicketOptimizer.joint_coverage` remains the independent-match probability that at least one direct-system column covers all 14 1/X/2 outcomes. `KiniEngine.quiniela` now additionally reports `estimated_full_coupon_coverage_independent`, multiplying the 14-match coverage by the probability of the selected Pleno al 15 category. The output explicitly records `independent_all_14_matches_and_pleno15`; it is an approximation, not a correlation-aware estimate or an expected-payout metric.
 
 The change is metadata/reporting only: it does not modify any model probability, optimizer selection, budget or historical benchmark.
+
+
+## Latest coverage-reporting validation — 2026-11-15
+
+The public `KiniEngine.quiniela` result now includes `estimated_full_coupon_coverage_independent`: the 14-match direct-system coverage estimate multiplied by the probability of the selected Pleno al 15 category. It also emits the explicit assumption identifier `independent_all_14_matches_and_pleno15`. The existing `ticket.joint_coverage` remains unchanged and continues to describe the 14-match system only. This output is not correlation-aware and does not estimate prize payout or profitability.
+
+- Implementation: [`01fe0cf`](https://github.com/Baltas80/Kini-/commit/01fe0cfdb932edd9b24b45e0d6eed5e88f68910d).
+- Regression test: [`83bc72f`](https://github.com/Baltas80/Kini-/commit/83bc72f6b3488bc558dc09d88c091b5026f0c8e9).
+- Documentation/source audit: [`0703b3c`](https://github.com/Baltas80/Kini-/commit/0703b3c7e4ea25ad26cedd4eae4ea2a702c63b47).
+- CI on the updated branch head: **58 passed, 4 third-party warnings** ([run 43675732172](https://github.com/Baltas80/Kini-/actions/runs/43675732172)).
+- Historical-data validation triggered on the same head is still running ([run 43675732192](https://github.com/Baltas80/Kini-/actions/runs/43675732192)); no new integrity result is claimed yet.
+- The accepted predictive benchmark remains [run 43666544162](https://github.com/Baltas80/Kini-/actions/runs/43666544162). This change only adds a clearly labelled derived coverage field; it does not change model probabilities, the 14-match DP objective or benchmark forecasts.
+
+PR #5 remains open and is still the prerequisite for integrating PR #6. PR #6 remains draft. No PR has been merged and `master` remains untouched.
