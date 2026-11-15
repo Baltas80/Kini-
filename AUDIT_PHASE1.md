@@ -1481,9 +1481,10 @@ Prequential calibration used only prior out-of-sample forecasts and excluded sam
 
 The first CI run that reached the new date-cell test exposed an API namespace mistake: xlrd's date conversion functions are provided by the xlrd.xldate module, not as top-level xlrd attributes. The parser and test now import that module explicitly in commit f171b54. This was a test/API integration failure, not a failure of the historical workbook parser against source data; the official workbook remains inaccessible from the hosted runner as documented above.
 
-- Previous CI [43763909260](https://github.com/Baltas80/Kini-/actions/runs/43763909260): Ruff and formatting passed; 185 tests passed and one date-serialization test failed on the incorrect xlrd attribute.
-- Current CI [43764064931](https://github.com/Baltas80/Kini-/actions/runs/43764064931): running against the corrected code at f171b54; do not report it green until its pytest step completes.
+- CI [43763909260](https://github.com/Baltas80/Kini-/actions/runs/43763909260): Ruff and formatting passed; 185 tests passed and one date-serialization test failed on the incorrect xlrd attribute.
+- CI [43764064931](https://github.com/Baltas80/Kini-/actions/runs/43764064931): exposed an import-order issue after the xlrd namespace correction.
+- The import order was corrected in `823a0cb`; latest PR CI [43764223973](https://github.com/Baltas80/Kini-/actions/runs/43764223973) is green: actionlint passed on six workflows, Ruff lint/format passed, and **186 tests passed with four upstream warnings**.
 - Historical-data validation [43764064913](https://github.com/Baltas80/Kini-/actions/runs/43764064913): pending.
 - The older full walk-forward [43763046836](https://github.com/Baltas80/Kini-/actions/runs/43763046836) remains in its historical-comparison step. No new model metrics are claimed from it.
 
-The latest code commit is f171b54; documentation-only commit 8fab9ea records this status. PR #9 remains open as a draft. No merge or master change.
+The latest code commit is `823a0cb`; this audit entry records its completed CI result. PR #9 remains open as a draft. No merge or master change.
