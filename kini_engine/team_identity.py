@@ -200,8 +200,14 @@ class TeamIdentityRegistry:
                 raise ValueError(f"gender must be one of {sorted(SUPPORTED_GENDERS)}")
             normalized_gender = gender.strip().casefold()
 
-        normalized_competition = competition_id.strip().upper() if competition_id else None
-        normalized_season = season.strip() if season else None
+        if competition_id is not None and (
+            not isinstance(competition_id, str) or not competition_id.strip()
+        ):
+            raise ValueError("competition_id must be a non-empty string when provided")
+        if season is not None and (not isinstance(season, str) or not season.strip()):
+            raise ValueError("season must be a non-empty string when provided")
+        normalized_competition = competition_id.strip().upper() if competition_id is not None else None
+        normalized_season = season.strip() if season is not None else None
         candidates: dict[str, TeamIdentity] = {}
 
         for binding in self._bindings.get((normalized_source, normalized_name), []):
