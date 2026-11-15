@@ -116,11 +116,14 @@ def parse_team_profile_page(
         raise LigaFHistoryError(
             f"official profile page has no recognizable team heading: {profile_url}"
         )
-    if re.search(
-        r"Clasificación\s+Jornada\s+\d+",
-        document.text,
-        flags=re.IGNORECASE,
-    ) is None:
+    if (
+        re.search(
+            r"Clasificación\s+Jornada\s+\d+",
+            document.text,
+            flags=re.IGNORECASE,
+        )
+        is None
+    ):
         raise LigaFHistoryError(
             f"official profile page has no season standings: {profile_url}"
         )
@@ -192,9 +195,7 @@ def _cross_season_display_name_observations(
     summaries = []
     for normalized_name, rows in sorted(observed.items()):
         season_years = sorted({row["season_end_year"] for row in rows})
-        profile_ids = sorted(
-            {row["provider_team_profile_id"] for row in rows}
-        )
+        profile_ids = sorted({row["provider_team_profile_id"] for row in rows})
         labels = sorted({row["team_name_in_match"] for row in rows})
         if len(season_years) < 2:
             status = "single_season_observation"
@@ -307,9 +308,7 @@ def validate_historical_team_profiles(document: dict[str, Any]) -> None:
                 entry.get("match_detail_profile_link_url", ""),
                 f"{location}.match_detail_profile_link_url",
             )
-            profile_link_path = PROFILE_PATH.fullmatch(
-                urlparse(profile_link_url).path
-            )
+            profile_link_path = PROFILE_PATH.fullmatch(urlparse(profile_link_url).path)
             if (
                 profile_link_path is None
                 or profile_link_path.group("profile_id") != profile_id
@@ -335,9 +334,7 @@ def validate_historical_team_profiles(document: dict[str, Any]) -> None:
             if not isinstance(name_match_exact, bool) or not isinstance(
                 review_required, bool
             ):
-                raise LigaFHistoryError(
-                    f"{location} has invalid identity-review flags"
-                )
+                raise LigaFHistoryError(f"{location} has invalid identity-review flags")
             if review_required != (not name_match_exact):
                 raise LigaFHistoryError(
                     f"{location} has inconsistent identity-review status"
@@ -347,9 +344,10 @@ def validate_historical_team_profiles(document: dict[str, Any]) -> None:
                 "profile_page_sha256",
             ):
                 digest = entry.get(digest_field)
-                if not isinstance(digest, str) or re.fullmatch(
-                    r"[0-9a-f]{64}", digest
-                ) is None:
+                if (
+                    not isinstance(digest, str)
+                    or re.fullmatch(r"[0-9a-f]{64}", digest) is None
+                ):
                     raise LigaFHistoryError(
                         f"{location}.{digest_field} must be a SHA-256 hex digest"
                     )
@@ -358,12 +356,8 @@ def validate_historical_team_profiles(document: dict[str, Any]) -> None:
                 "manual_review_required",
             }:
                 raise LigaFHistoryError(f"{location} has an invalid identity status")
-        exact_matches = sum(
-            entry["name_match_exact"] for entry in entries
-        )
-        review_count = sum(
-            entry["identity_review_required"] for entry in entries
-        )
+        exact_matches = sum(entry["name_match_exact"] for entry in entries)
+        review_count = sum(entry["identity_review_required"] for entry in entries)
         if (
             season.get("team_count") != 16
             or season.get("unique_profile_ids") != 16
@@ -509,9 +503,7 @@ def build_historical_team_profiles(
                 f"season {season_end_year} final round resolves {len(teams)} "
                 "distinct teams; expected 16"
             )
-        profile_ids = {
-            item["provider_team_profile_id"] for item in teams.values()
-        }
+        profile_ids = {item["provider_team_profile_id"] for item in teams.values()}
         if len(profile_ids) != 16:
             raise LigaFHistoryError(
                 f"season {season_end_year} does not resolve 16 unique provider IDs"
@@ -557,9 +549,7 @@ def build_historical_team_profiles(
                     "team_profile_url": profile_url,
                     "match_evidence_url": item["match_evidence_url"],
                     "match_evidence_sha256": item["match_evidence_sha256"],
-                    "profile_page_retrieved_at_utc": profile_meta[
-                        "retrieved_at_utc"
-                    ],
+                    "profile_page_retrieved_at_utc": profile_meta["retrieved_at_utc"],
                     "profile_page_sha256": profile_meta["content_sha256"],
                     "name_match_exact": exact_name_match,
                     "identity_review_required": not exact_name_match,
@@ -580,9 +570,7 @@ def build_historical_team_profiles(
             "team_count": len(entries),
             "unique_profile_ids": len(profile_ids),
             "verified_profile_pages": len(entries),
-            "exact_name_matches": sum(
-                entry["name_match_exact"] for entry in entries
-            ),
+            "exact_name_matches": sum(entry["name_match_exact"] for entry in entries),
             "review_required_count": sum(
                 entry["identity_review_required"] for entry in entries
             ),

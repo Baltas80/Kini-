@@ -762,3 +762,9 @@ Commit `02b761fc80c81591cfe1cea7381ee5476bda8f90` excludes `kini_engine/ligaf_te
 ### Next priority
 
 The historical provider-profile extraction is implemented and live-validated. The next unresolved acceptance item is a point-in-time audit of every candidate Liga F feature: source publication time, observation time, transformation window, and whether the value existed before the fixture's kickoff. Historical team labels and results remain excluded from model training until that audit and the separate canonical identity review are complete.
+
+### Exact comparison with the current-season registry
+
+A separate exact-label comparison between the 2025/26 historical profile evidence and the current 2026/27 profile crosswalk found 14 shared team labels and 14 identical provider profile IDs, with zero ID mismatches. Relative to 2025/26, the current season contains Deportivo Alavés and VCF Femenino where Alhama CF ElPozo and Levante UD were present previously. The Alavés provider ID is independently observed in 2022/23; the VCF Femenino ID is observed in 2022/23–2024/25. These are season-membership differences, not evidence of a new club identity or an alias; no canonical identity is inferred.
+
+CI follow-up: the first lint/format run exposed only Ruff import-order, set-comprehension and formatting issues in the new evidence collector/tests. Those are being corrected before the final CI acceptance; the live source/profile validation itself passed in run 43716043929.

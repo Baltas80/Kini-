@@ -8,7 +8,6 @@ on:
       - "kini_engine/ligaf_history.py"
       - "kini_engine/ligaf_team_profiles.py"
       - "scripts/build_ligaf_team_profiles.py"
-      - "tests/test_ligaf_team_profiles.py"
       - ".github/workflows/ligaf-history-validation.yml"
   workflow_dispatch:
     inputs:

@@ -11,9 +11,7 @@ from kini_engine.ligaf_team_profiles import (
     validate_historical_team_profiles,
 )
 
-MATCH_URL = (
-    "https://ligaf.es/partido/team-a/team-b/2023310001/detalle"
-)
+MATCH_URL = "https://ligaf.es/partido/team-a/team-b/2023310001/detalle"
 PROFILE_URL = "https://ligaf.es/equipo/team-a/123/plantilla/2023"
 
 
@@ -125,8 +123,7 @@ def _crosswalk_document() -> dict:
                     f"team-{index:02d}/{1000 + index}/plantilla/2023"
                 ),
                 "match_evidence_url": (
-                    "https://ligaf.es/partido/home/away/"
-                    f"{2023310000 + index}/detalle"
+                    f"https://ligaf.es/partido/home/away/{2023310000 + index}/detalle"
                 ),
                 "match_detail_profile_link_url": (
                     "https://ligaf.es/equipo/"
