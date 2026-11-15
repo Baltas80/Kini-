@@ -46,7 +46,9 @@ def _official_url(value: object, field: str) -> str:
     raw = _required_text(value, field)
     parsed = urlparse(raw)
     if parsed.scheme != "https" or parsed.hostname not in OFFICIAL_HOSTS:
-        raise LigaFEvidenceError(f"{field} must be an HTTPS URL on the official Liga F domain")
+        raise LigaFEvidenceError(
+            f"{field} must be an HTTPS URL on the official Liga F domain"
+        )
     return raw
 
 
@@ -68,7 +70,9 @@ def _resolve_team(
             gender="women",
         )
     except AmbiguousTeamIdentityError as exc:
-        raise LigaFEvidenceError(f"{field} is ambiguous in the Liga F identity registry") from exc
+        raise LigaFEvidenceError(
+            f"{field} is ambiguous in the Liga F identity registry"
+        ) from exc
     if identity is None or identity.team_id != expected_team_id:
         raise LigaFEvidenceError(f"{field} does not resolve to {expected_team_id!r}")
 
@@ -89,7 +93,9 @@ def load_ligaf_fixture_evidence(
     try:
         document = json.loads(evidence_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
-        raise LigaFEvidenceError(f"cannot read Liga F evidence {evidence_path}: {exc}") from exc
+        raise LigaFEvidenceError(
+            f"cannot read Liga F evidence {evidence_path}: {exc}"
+        ) from exc
 
     if not isinstance(document, dict) or document.get("schema_version") != 1:
         raise LigaFEvidenceError("Liga F evidence schema_version must equal 1")
@@ -102,7 +108,9 @@ def load_ligaf_fixture_evidence(
 
     season = _required_text(document.get("season"), "season")
     try:
-        draw_date = date.fromisoformat(_required_text(document.get("draw_date"), "draw_date"))
+        draw_date = date.fromisoformat(
+            _required_text(document.get("draw_date"), "draw_date")
+        )
     except ValueError as exc:
         raise LigaFEvidenceError("draw_date must be an ISO date") from exc
 
@@ -154,8 +162,14 @@ def load_ligaf_fixture_evidence(
             )
 
         position = raw["coupon_position"]
-        if isinstance(position, bool) or not isinstance(position, int) or not 1 <= position <= 14:
-            raise LigaFEvidenceError(f"{location}.coupon_position must be an integer from 1 to 14")
+        if (
+            isinstance(position, bool)
+            or not isinstance(position, int)
+            or not 1 <= position <= 14
+        ):
+            raise LigaFEvidenceError(
+                f"{location}.coupon_position must be an integer from 1 to 14"
+            )
         if position in seen_positions:
             raise LigaFEvidenceError(f"duplicate Liga F coupon position: {position}")
         seen_positions.add(position)
@@ -173,7 +187,9 @@ def load_ligaf_fixture_evidence(
 
         kickoff = _parse_datetime(raw["kickoff_at"], f"{location}.kickoff_at")
         if kickoff.date() > draw_date:
-            raise LigaFEvidenceError(f"{location}.kickoff_at occurs after the SELAE draw date")
+            raise LigaFEvidenceError(
+                f"{location}.kickoff_at occurs after the SELAE draw date"
+            )
 
         checked_at = _parse_datetime(
             raw["evidence_checked_at_utc"],
@@ -184,7 +200,9 @@ def load_ligaf_fixture_evidence(
 
         match_url = _official_url(raw["match_url"], f"{location}.match_url")
         if f"/{match_id}/" not in urlparse(match_url).path:
-            raise LigaFEvidenceError(f"{location}.match_url does not contain its match_id")
+            raise LigaFEvidenceError(
+                f"{location}.match_url does not contain its match_id"
+            )
         home_profile_url = _official_url(
             raw["home_team_profile_url"],
             f"{location}.home_team_profile_url",
@@ -194,8 +212,12 @@ def load_ligaf_fixture_evidence(
             f"{location}.away_team_profile_url",
         )
 
-        home_team_name = _required_text(raw["home_team_name"], f"{location}.home_team_name")
-        away_team_name = _required_text(raw["away_team_name"], f"{location}.away_team_name")
+        home_team_name = _required_text(
+            raw["home_team_name"], f"{location}.home_team_name"
+        )
+        away_team_name = _required_text(
+            raw["away_team_name"], f"{location}.away_team_name"
+        )
         home_team_id = _required_text(raw["home_team_id"], f"{location}.home_team_id")
         away_team_id = _required_text(raw["away_team_id"], f"{location}.away_team_id")
         if home_team_id == away_team_id:
@@ -219,7 +241,9 @@ def load_ligaf_fixture_evidence(
         )
         _resolve_team(
             team_registry,
-            _required_text(raw["selae_home_display_name"], f"{location}.selae_home_display_name"),
+            _required_text(
+                raw["selae_home_display_name"], f"{location}.selae_home_display_name"
+            ),
             source="selae",
             season=season,
             expected_team_id=home_team_id,
@@ -227,7 +251,9 @@ def load_ligaf_fixture_evidence(
         )
         _resolve_team(
             team_registry,
-            _required_text(raw["selae_away_display_name"], f"{location}.selae_away_display_name"),
+            _required_text(
+                raw["selae_away_display_name"], f"{location}.selae_away_display_name"
+            ),
             source="selae",
             season=season,
             expected_team_id=away_team_id,
@@ -252,7 +278,9 @@ def load_ligaf_fixture_evidence(
             "1" if home_goals > away_goals else "2" if home_goals < away_goals else "X"
         )
         if coupon_sign != expected_sign:
-            raise LigaFEvidenceError(f"{location}.coupon_sign conflicts with the official score")
+            raise LigaFEvidenceError(
+                f"{location}.coupon_sign conflicts with the official score"
+            )
 
         fixture_key = (
             kickoff.astimezone(UTC),
@@ -260,7 +288,9 @@ def load_ligaf_fixture_evidence(
             away_team_id,
         )
         if fixture_key in seen_fixtures:
-            raise LigaFEvidenceError(f"{location} duplicates a canonical Liga F fixture")
+            raise LigaFEvidenceError(
+                f"{location} duplicates a canonical Liga F fixture"
+            )
         seen_fixtures.add(fixture_key)
 
         validated.append(
