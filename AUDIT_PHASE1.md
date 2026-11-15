@@ -1183,3 +1183,18 @@ The live details workflow now checks the files changed in the latest PR commit b
 - The expensive historical backtest [run 43746039920](https://github.com/Baltas80/Kini-/actions/runs/43746039920) was skipped by the scope gate because the commit only changed documentation.
 
 No changes were made to model code or historical features in this unit. The last full walk-forward metrics remain those recorded above. The PR remains open as a draft and `master` is unchanged.
+
+
+### Final workflow-filter validation — 2026-11-15
+
+The live diagnostic workflow's latest-commit filter was repaired after two workflow-only attempts exposed a malformed shell regex/duplicated YAML tail. The final workflow file was replaced as a complete block in commit `0bf4f7a`; the filter now uses a bounded latest-commit diff and a literal-dot regex. This prevents audit-only commits from repeating the external provider GET.
+
+Validation on `0bf4f7a7c17b5f78550cc3be1564f7fa498081f9`:
+
+- CI [run 43746288126](https://github.com/Baltas80/Kini-/actions/runs/43746288126): Ruff passed, formatting passed, **156 tests passed**, four upstream deprecation warnings.
+- Live diagnostic [run 43746288146](https://github.com/Baltas80/Kini-/actions/runs/43746288146): both `changes` and `inspect` jobs passed; provider GET and artifact upload succeeded. Artifact [ID 14173922579](https://github.com/Baltas80/Kini-/actions/runs/43746288146/artifacts/14173922579), 2,569 bytes; SHA-256 `12bec2b30f1a32bffb6565b9261921ee7daff45b2a0c3b0ea6801d6b479dfd9d`.
+- Historical workflow [run 43746288169](https://github.com/Baltas80/Kini-/actions/runs/43746288169): change-scope gate succeeded and skipped the expensive walk-forward because only diagnostic/workflow code changed.
+
+The current endpoint still returns `dia=MAR` and `hora=20:45`, with no calendar date or timezone. LAE remains fail-closed. The last full historical model comparison remains run 43740951689 as documented above.
+
+Next verification: make a documentation-only audit commit and confirm that the new filter runs the `changes` job but skips `inspect`. This validates that routine documentation updates no longer trigger a redundant live fetch.
