@@ -6,15 +6,15 @@ Working branch: `audit/phase-1-temporal-validation`
 Base branch: `master`  
 Backtest code commit evaluated: `a21aedd7eb42f0e5f3d19238a4106909448136a2`  
 Latest fully validated model-code baseline: `a21aedd7eb42f0e5f3d19238a4106909448136a2`  
-Latest validated code/test head: `491b40aa6a399f7535284c1562d8784606035b6d` (47 tests passed; historical-data validation passed; full backtest passed on the model-code commit; later commits only update documentation/workflows)
+Latest validated CI/data head: `de49624a97567237ba789a3d39dc2f2eab543aca` (54 tests passed; historical-data validation passed on 5,311 rows; conservative market-timing backtest is pending in run [43666544162](https://github.com/Baltas80/Kini-/actions/runs/43666544162)). The previous fully validated model-metric baseline remains `a21aedd7eb42f0e5f3d19238a4106909448136a2` until the new full backtest is accepted.
 
 ## Executive status
 
 - **P0 backtesting:** validated. Dixon-Coles, ML, the market-assisted ensemble, fixed DC/ML-only ensemble and adaptive DC/ML-only ensemble each generated 5,011/5,011 predictions with zero prediction errors.
 - **P1 historical ingestion:** validated on 5,311 completed matches, with the integrity profile passing.
-- **P2 temporal validation:** same-calendar-day exclusion, date-based refit cadence and strictly pre-match ML feature history are implemented and tested.
+- **P2 temporal validation:** same-calendar-day exclusion, date-based refit cadence and strictly pre-match ML feature history are implemented and tested. The market snapshot screen now fails closed for all Friday/Tuesday fixtures because Football-Data's `Time` field has no documented timezone; the same eligibility predicate gates market use in forecasts and comparisons. The full backtest is pending.
 - **P6 ticket optimizer:** probability validation, budget constraints, exhaustive small-budget DP comparison, minimum stake and Pleno al 15 aggregation are implemented and CI-tested.
-- **Predictive performance:** the multi-book pre-closing market benchmark remains materially better than every model configuration on accuracy, Brier and Log Loss.
+- **Predictive performance:** the last fully validated multi-book pre-closing benchmark remains materially better than every model configuration. The conservative Friday/Tuesday exclusion changes the market-assisted ensemble sample and is awaiting a new full comparison.
 - **Ensemble weighting:** fixed and rolling prequential DC/ML-only comparisons are now evaluated. The adaptive variant did not improve Brier or Log Loss over the fixed DC/ML blend and is not selected as the default.
 - **Calibration diagnostics:** one-vs-rest reliability, prevalence, mean predicted probability, binary Brier/Log Loss and ECE by 1/X/2 class and football season are implemented on out-of-sample forecasts.
 - **Pinnacle data quality:** PSH/PSD/PSA are excluded from market inputs for match dates on/after 2025-07-23, following the provider's stale-feed warning; the full backtest passed with unchanged market coverage.
@@ -292,15 +292,19 @@ Impact against the immediately preceding backtest with Pinnacle included:
 The market benchmark remains a multi-book average of per-book no-vig probabilities, not Football-Data's AvgH/AvgD/AvgA consensus columns. Comparing that provider consensus separately is still open research.
 
 
-## Market timestamp conservatism — implementation in progress (2026-11-15)
+## Market timestamp conservatism — fail-closed correction (2026-11-15)
 
-The loader now preserves Football-Data's raw `Time` value as `Match.detail.kickoff_time` and records its timezone as `unspecified`; it does not silently interpret the field as UTC or BST. It classifies a market row as:
+The loader preserves Football-Data's raw `Time` value as `Match.detail.kickoff_time` and records its timezone as `unspecified`; it does not interpret the field as UTC, BST or local Spanish time. The official glossary defines `Time` only as the match kickoff time, while the provider states that weekend odds are collected on Fridays and midweek odds on Tuesdays. Because the CSV does not document the kickoff timezone, comparing the raw value directly with a BST collection cutoff would assume a timezone that the source does not provide.
 
-- `ambiguous` when a Friday kickoff is at or before 17:00, or a Tuesday kickoff is at or before 13:00, matching the provider's published snapshot cutoffs.
-- `schedule_compatible` when a valid kickoff time is later than the relevant published cutoff (or falls on another weekday).
-- `unknown` when kickoff time/date cannot be parsed.
-- `unavailable` when no valid pre-closing market probabilities exist.
+The classifier therefore uses a stricter rule:
 
-Only rows carrying both `market_pre_match_eligible=true` and `market_temporal_status=schedule_compatible` enter the strict market benchmark, market calibrator, and model-versus-market common sample. All odds-bearing rows remain available in the explicitly labelled `market_unfiltered_snapshot` diagnostic. The backtest reports counts and examples for excluded rows.
+- `ambiguous`: every Friday or Tuesday fixture with valid odds and a parseable kickoff time, regardless of the displayed hour, because the snapshot may be collected on the same calendar day and the two clocks cannot be compared safely.
+- `schedule_compatible`: fixtures on other weekdays with a parseable kickoff time, where the published collection day precedes the fixture date. This remains a schedule screen, not an exact timestamp guarantee.
+- `unknown`: kickoff time/date cannot be parsed.
+- `unavailable`: no valid pre-closing market probabilities exist.
 
-This is a conservative schedule-based screen, **not proof of the exact capture time**: Football-Data does not provide per-fixture capture timestamps, and the timezone of its CSV `Time` field is unspecified. The full historical workflow must confirm the expected seven ambiguous Friday fixtures and report the resulting strict common-sample size before the change is considered validated. Until then, the existing 5,011-row model metrics remain the last fully validated model baseline; no new market metrics are claimed.
+A single `Match.has_temporally_eligible_market` predicate now gates market use in the main ensemble, explicit market mode, surprise diagnostics, market baseline and strict benchmark. Raw odds remain attached to the match only so the unfiltered diagnostic can report them; ambiguous odds cannot influence a prediction. CI also rejects non-zero prediction-error counters and checks that all five model configurations and the strict market benchmark use exactly the same eligible fixture sample.
+
+Validation on commit `de49624a97567237ba789a3d39dc2f2eab543aca`: CI **54 passed, 4 dependency deprecation warnings** ([run 43666547677](https://github.com/Baltas80/Kini-/actions/runs/43666547677)); historical data validation **5,311 completed fixtures, integrity_passed=true, zero duplicates** ([run 43666547684](https://github.com/Baltas80/Kini-/actions/runs/43666547684)). The full walk-forward backtest is still running ([run 43666544162](https://github.com/Baltas80/Kini-/actions/runs/43666544162)); its strict market sample and new metrics are intentionally not reported until the workflow completes.
+
+This conservative rule removes the prior assumption that a kickoff time without timezone can be compared directly with the provider's BST cutoff. Exact per-fixture odds-capture timestamps are still unavailable, so the market benchmark remains schedule-screened rather than timestamp-verified.
