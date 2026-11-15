@@ -66,6 +66,93 @@ jobs:
               except requests.RequestException as exc:
                   print({"requested": url, "error": str(exc)})
           PY
+      - name: Inspect the accessible secondary history page and robots policy
+        run: |
+          python - <<'PY'
+          from html.parser import HTMLParser
+          import requests
+
+          base = "https://www.historicoquiniela.com"
+          headers = {
+              "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
+              "Accept-Language": "es-ES,es;q=0.9",
+          }
+          robots = requests.get(base + "/robots.txt", headers=headers, timeout=(5, 20))
+          print("ROBOTS_STATUS", robots.status_code)
+          print("ROBOTS_BODY_START")
+          print(robots.text)
+          print("ROBOTS_BODY_END")
+
+          class Structure(HTMLParser):
+              def __init__(self):
+                  super().__init__(convert_charrefs=True)
+                  self.rows = []
+                  self.row = None
+                  self.cell = None
+                  self.items = []
+                  self.item = None
+                  self.headings = []
+                  self.heading = None
+                  self.jsonld = []
+                  self.script = False
+                  self.script_type = ""
+
+              def handle_starttag(self, tag, attrs):
+                  attrs = dict(attrs)
+                  if tag == "tr":
+                      self.row = []
+                  elif tag in {"td", "th"}:
+                      self.cell = []
+                  elif tag == "li":
+                      self.item = []
+                  elif tag in {"h1", "h2", "h3"}:
+                      self.heading = []
+                  elif tag == "script":
+                      self.script = True
+                      self.script_type = attrs.get("type", "")
+
+              def handle_data(self, data):
+                  value = " ".join(data.split())
+                  if not value:
+                      return
+                  if self.cell is not None:
+                      self.cell.append(value)
+                  if self.item is not None:
+                      self.item.append(value)
+                  if self.heading is not None:
+                      self.heading.append(value)
+                  if self.script and self.script_type == "application/ld+json":
+                      self.jsonld.append(value)
+
+              def handle_endtag(self, tag):
+                  if tag in {"td", "th"} and self.cell is not None:
+                      if self.row is not None:
+                          self.row.append(" ".join(self.cell))
+                      self.cell = None
+                  elif tag == "tr" and self.row is not None:
+                      self.rows.append(self.row)
+                      self.row = None
+                  elif tag == "li" and self.item is not None:
+                      self.items.append(" ".join(self.item))
+                      self.item = None
+                  elif tag in {"h1", "h2", "h3"} and self.heading is not None:
+                      self.headings.append(" ".join(self.heading))
+                      self.heading = None
+                  elif tag == "script":
+                      self.script = False
+                      self.script_type = ""
+
+          url = base + "/historico/2026-2027/20"
+          response = requests.get(url, headers=headers, timeout=(5, 20))
+          response.raise_for_status()
+          parser = Structure()
+          parser.feed(response.text)
+          print("SECONDARY_STATUS", response.status_code, "BYTES", len(response.content))
+          print("HEADINGS", parser.headings)
+          print("TABLE_ROWS", parser.rows[:30])
+          print("LIST_ITEMS", parser.items[:80])
+          print("JSONLD", parser.jsonld[:5])
+          PY
       - name: Fetch one known completed draw from the official source
         run: |
           python scripts/import_selae_results.py \
