@@ -2,7 +2,25 @@ name: ci
 
 on:
   push:
+    paths:
+      - "kini_engine/**"
+      - "scripts/**"
+      - "tests/**"
+      - "data/**"
+      - "pyproject.toml"
+      - "requirements*.txt"
   pull_request:
+    paths:
+      - "kini_engine/**"
+      - "scripts/**"
+      - "tests/**"
+      - "data/**"
+      - "pyproject.toml"
+      - "requirements*.txt"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
 
 jobs:
   test:
