@@ -1088,3 +1088,43 @@ The live KinielaGPT adapter was hardened in commits [b61d147](https://github.com
 - The current production limitation remains: LAE-based surprise detection is not active until a verified kickoff timestamp is available. The fail-closed behavior is intentional.
 
 Next priority: inspect the live `detallePartido` response schema through a controlled, non-mutating source diagnostic; map its exact match identifier and timezone-aware kickoff field only if the provider supplies them. If it supplies only local date/time without timezone semantics, keep LAE ineligible until that contract is verified.
+
+
+## Historical backtest after live-adapter changes — 2026-11-15
+
+The PR-triggered historical workflow [run 43740951689](https://github.com/Baltas80/Kini-/actions/runs/43740951689) completed successfully on branch head `1085401288f479f764a182d86a357dfe67c2ebc2`. This run did execute the full comparison; it was not merely a path-filter skip.
+
+- Generated history: 5,311 completed fixtures.
+- Test period: 2020-12-11 through 2026-11-09.
+- Initial training sample: 300.
+- All five model configurations generated 5,011/5,011 forecasts with zero recorded prediction errors.
+- Schedule-screened market sample: 4,424; 587 ambiguous odds rows excluded.
+- Artifact: [historical-backtest, ID 14173302990](https://github.com/Baltas80/Kini-/actions/runs/43740951689/artifacts/14173302990), 169,354 bytes; ZIP SHA-256 `c2d52c6fa9403fe9b48b8b4dc3ef2a770e770b12550507a186274679d53cdff1`.
+
+Paired model/market metrics on the same 4,424 fixtures:
+
+| Candidate | Accuracy | Multiclass Brier | Log Loss |
+|---|---:|---:|---:|
+| Dixon–Coles | 0.4806 | 0.616357 | 1.027499 |
+| ML (12 features) | 0.4378 | 0.647471 | 1.074246 |
+| Market-assisted ensemble | 0.4781 | 0.613563 | 1.023018 |
+| Fixed DC/ML-only | 0.4740 | 0.616095 | 1.026842 |
+| Adaptive DC/ML-only | 0.4749 | 0.616305 | 1.027133 |
+| Market | **0.5072** | **0.597504** | **0.999444** |
+
+Prequential calibration retained 3,847 common post-warm-up fixtures. On that same sample, the calibrated market scored Brier 0.596714 / Log Loss 0.998094; the best calibrated model candidate (market-assisted ensemble) scored 0.611522 / 1.019966. Calibration did not close the gap. No model is promoted.
+
+The successful run confirms that the live-adapter-only changes did not break the historical model pipeline. It does not validate the provider's live details schema or make LAE eligible for production predictions.
+
+## Controlled live details-schema diagnostic — implementation
+
+The adapter now exposes `details_payload()`, which returns the provider JSON object unchanged together with the local UTC response-receipt timestamp. The compatibility `details()` method now fails explicitly if `detallePartidos` is missing, is not an array, or contains non-object records; it no longer silently converts an unexpected response shape into an empty list.
+
+A read-only GitHub Actions diagnostic has been added. It fetches the current jornada and its details, then stores only bounded schema evidence: root keys, record keys, candidate match/date/time fields, scalar samples and whether an ISO datetime explicitly carries a timezone. It does not upload the raw provider response and performs no write operation.
+
+- Unit tests cover payload preservation, receipt timestamp, request parameters, strict response shape and timezone-aware versus local date/time detection.
+- CI lint and formatting explicitly include the diagnostic script and tests.
+- Dedicated workflow: `.github/workflows/kinielagpt-live-details-diagnostic.yml`.
+- Live workflow result and artifact: pending this commit's PR-triggered execution.
+
+Production LAE eligibility remains fail-closed. A timezone-aware kickoff is not inferred from a local date/time string; a field must be tied to the same provider match ID before it can be passed into `Match`.

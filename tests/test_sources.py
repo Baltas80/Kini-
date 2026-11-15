@@ -98,3 +98,84 @@ def test_invalid_source_vector_is_not_normalized_or_used_in_blended_output(monke
     assert {sign: row[sign] for sign in SIGNS} == pytest.approx(
         {"1": 0.2, "X": 0.3, "2": 0.5}
     )
+
+
+
+class FakeJsonResponse:
+    def __init__(self, payload: dict) -> None:
+        self.payload = payload
+
+    def raise_for_status(self) -> None:
+        return None
+
+    def json(self) -> dict:
+        return self.payload
+
+
+class FakeDetailsSession:
+    def __init__(self, payload: dict) -> None:
+        self.payload = payload
+        self.details_call = None
+
+    def get(self, url: str, **kwargs):
+        if url == KinielaGPTSource.HOME:
+            return FakeResponse(b"home")
+        if url == KinielaGPTSource.DETAILS:
+            self.details_call = kwargs
+            return FakeJsonResponse(self.payload)
+        raise AssertionError(f"Unexpected URL: {url}")
+
+
+def test_details_payload_preserves_provider_schema_and_receipt_timestamp(monkeypatch):
+    fixed = datetime(2026, 11, 15, 18, 0, tzinfo=UTC)
+
+    class FrozenDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return fixed.astimezone(tz) if tz else fixed.replace(tzinfo=None)
+
+    monkeypatch.setattr(source_module, "datetime", FrozenDateTime)
+    payload = {
+        "detallePartidos": [
+            {
+                "idPartido": 123,
+                "fechaHora": "2026-11-21T20:00:00+01:00",
+            }
+        ],
+        "metadata": {"season": 2026},
+    }
+    source = KinielaGPTSource()
+    fake_session = FakeDetailsSession(payload)
+    source.session = fake_session
+
+    actual, captured_at = source.details_payload(12, 2026)
+
+    assert actual == payload
+    assert captured_at == "2026-11-15T18:00:00+00:00"
+    assert fake_session.details_call["params"]["jornada"] == 12
+    assert fake_session.details_call["params"]["temporada"] == 2026
+    assert "uts" in fake_session.details_call["params"]
+
+
+def test_details_returns_provider_records_without_changing_the_schema():
+    payload = {"detallePartidos": [{"idPartido": 123, "hora": "20:00"}]}
+    source = KinielaGPTSource()
+    source.session = FakeDetailsSession(payload)
+
+    assert source.details(12, 2026) == payload["detallePartidos"]
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"metadata": {}},
+        {"detallePartidos": {"idPartido": 123}},
+        {"detallePartidos": [None]},
+    ],
+)
+def test_details_rejects_unknown_or_malformed_provider_schema(payload):
+    source = KinielaGPTSource()
+    source.session = FakeDetailsSession(payload)
+
+    with pytest.raises(ValueError, match="KinielaGPT"):
+        source.details(12, 2026)

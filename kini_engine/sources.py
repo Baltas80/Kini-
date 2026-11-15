@@ -196,7 +196,14 @@ class KinielaGPTSource:
             )
         return out
 
-    def details(self, jornada: int, temporada: int) -> list[dict[str, Any]]:
+    def details_payload(
+        self, jornada: int, temporada: int
+    ) -> tuple[dict[str, Any], str]:
+        """Return the provider JSON unchanged plus its local response-receipt time.
+
+        The timestamp is when this client received the HTTP response. It is not
+        evidence of the provider's publication time or of a fixture's kickoff.
+        """
         self.session.get(
             self.HOME, headers=self.headers, timeout=self.timeout
         ).raise_for_status()
@@ -211,7 +218,23 @@ class KinielaGPTSource:
             timeout=self.timeout,
         )
         response.raise_for_status()
-        return response.json().get("detallePartidos", [])
+        captured_at = datetime.now(UTC).isoformat()
+        payload = response.json()
+        if not isinstance(payload, dict):
+            raise ValueError("KinielaGPT details response must be a JSON object")
+        return payload, captured_at
+
+    def details(self, jornada: int, temporada: int) -> list[dict[str, Any]]:
+        """Return the provider's detail records, failing on an unknown schema."""
+        payload, _ = self.details_payload(jornada, temporada)
+        if "detallePartidos" not in payload:
+            raise ValueError("KinielaGPT details response is missing 'detallePartidos'")
+        records = payload["detallePartidos"]
+        if not isinstance(records, list):
+            raise ValueError("KinielaGPT 'detallePartidos' must be a JSON array")
+        if any(not isinstance(record, dict) for record in records):
+            raise ValueError("KinielaGPT detail records must be JSON objects")
+        return records
 
 
 class SelaeSource:

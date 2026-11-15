@@ -53,7 +53,9 @@ jobs:
           tests/test_core.py
           kini_engine/sources.py
           kini_engine/mcp_server.py
+          scripts/diagnose_kinielagpt_details.py
           tests/test_sources.py
+          tests/test_kinielagpt_details_diagnostic.py
       - name: Verify formatting for Liga F evidence code
         run: >-
           ruff format --check
@@ -64,5 +66,7 @@ jobs:
           tests/test_ligaf_team_profiles.py
           kini_engine/sources.py
           kini_engine/mcp_server.py
+          scripts/diagnose_kinielagpt_details.py
           tests/test_sources.py
+          tests/test_kinielagpt_details_diagnostic.py
       - run: pytest -q
