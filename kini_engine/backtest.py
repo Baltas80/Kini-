@@ -384,10 +384,10 @@ def baseline_probabilities(
     matches: list[Match],
     source: str = "uniform",
 ) -> list[tuple[dict[str, float], str]]:
-    """Build leakage-free simple baselines from each match's available fields."""
+    """Build baselines only from source vectors that pass temporal eligibility gates."""
     out = []
     for m in matches:
-        if source == "lae" and m.lae:
+        if source == "lae" and m.has_temporally_eligible_lae:
             p = {s: float(m.lae.get(s, 0.0)) for s in SIGNS}
         elif source == "market" and m.has_temporally_eligible_market:
             p = {s: float(m.market.get(s, 0.0)) for s in SIGNS}

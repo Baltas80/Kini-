@@ -1488,3 +1488,18 @@ The first CI run that reached the new date-cell test exposed an API namespace mi
 - The older full walk-forward [43763046836](https://github.com/Baltas80/Kini-/actions/runs/43763046836) remains in its historical-comparison step. No new model metrics are claimed from it.
 
 The latest code commit is `823a0cb`; this audit entry records its completed CI result. PR #9 remains open as a draft. No merge or master change.
+
+
+## LAE baseline temporal-eligibility correction — 2026-11-15
+
+A point-in-time review of the public `baseline_probabilities(source="lae")` helper found that it read `Match.lae` whenever the raw field was non-empty. Unlike the live `KiniEngine` path and the market baseline, this helper did not require verified fixture identity, source provenance, fresh timezone-aware kickoff evidence, a strictly pre-kickoff capture, or a valid normalized 1/X/2 vector. Unverified LAE data could therefore enter a diagnostic baseline even though it was excluded from live forecasts.
+
+The helper now requires `Match.has_temporally_eligible_lae` before using LAE. Ineligible or malformed source rows fall back to the uniform baseline; the gate does not repair or normalize untrusted LAE values. A regression test covers an unverified high-confidence vector, a valid timezone-verified pre-kickoff vector, and an invalid probability sum.
+
+The latest pre-fix head `11ff4867562c852a4052cf73c8b36d3a35c81b8a` had green CI [43764494736](https://github.com/Baltas80/Kini-/actions/runs/43764494736): Ruff/actionlint passed and 186 tests passed (four upstream penaltyblog/NumPy warnings). Historical-data validation [43764494726](https://github.com/Baltas80/Kini-/actions/runs/43764494726) passed on 5,311 completed fixtures with zero duplicates, conflicts, invalid result labels or score/result mismatches. The historical-backtest workflow [43764494708](https://github.com/Baltas80/Kini-/actions/runs/43764494708) completed successfully but correctly skipped its expensive model job because this preceding commit changed only documentation/evidence paths; no new predictive metrics are claimed from that run.
+
+This correction affects the public diagnostic baseline helper, not the walk-forward model path or its previously accepted metrics. CI is required for the new regression test; the full historical model benchmark is not required unless predictive model/data inputs change.
+
+### Next action
+
+Continue the point-in-time audit across any remaining public source-derived baseline or diagnostic helpers. Keep official historical Quiniela scenario acquisition blocked and explicit until the official SELAE workbook/result bytes can be retrieved through a non-geoblocked source session; do not fabricate draw IDs or derive joint scenarios from independent fixture rows.

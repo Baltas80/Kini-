@@ -4,7 +4,7 @@ import numpy as np
 
 import kini_engine.backtest as backtest
 from kini_engine.backtest import multiclass_metrics
-from kini_engine.core import Match
+from kini_engine.core import LAE_SOURCE_ID, Match
 
 
 def test_metrics_are_bounded():
@@ -128,6 +128,51 @@ def test_market_baseline_uses_only_schedule_screened_rows():
 
     assert baseline[0][0] == {"1": 1 / 3, "X": 1 / 3, "2": 1 / 3}
     assert baseline[1][0] == {"1": 0.20, "X": 0.30, "2": 0.50}
+
+
+def test_lae_baseline_uses_only_temporally_verified_source_vectors():
+    valid_lae = {"1": 0.20, "X": 0.30, "2": 0.50}
+    unverified_lae = {"1": 0.99, "X": 0.005, "2": 0.005}
+    invalid_lae = {"1": 0.40, "X": 0.30, "2": 0.20}
+    date = datetime(2025, 1, 3)
+    verified_detail = {
+        "lae_source": LAE_SOURCE_ID,
+        "fixture_identity_status": "verified",
+        "lae_captured_at": "2025-01-03T09:00:00+00:00",
+        "kickoff_evidence_checked_at_utc": "2025-01-03T08:30:00+00:00",
+        "kickoff_evidence_url": "https://www.uefa.com/test-schedule/",
+        "kickoff_at": "2025-01-03T20:00:00+00:00",
+    }
+    matches = [
+        Match(date, "Unverified", "A", 1, 0, "1", lae=unverified_lae),
+        Match(
+            date,
+            "Verified",
+            "B",
+            0,
+            1,
+            "2",
+            lae=valid_lae,
+            detail=verified_detail,
+        ),
+        Match(
+            date,
+            "Invalid",
+            "C",
+            0,
+            0,
+            "X",
+            lae=invalid_lae,
+            detail=verified_detail,
+        ),
+    ]
+
+    baseline = backtest.baseline_probabilities(matches, source="lae")
+
+    uniform = {"1": 1 / 3, "X": 1 / 3, "2": 1 / 3}
+    assert baseline[0][0] == uniform
+    assert baseline[1][0] == valid_lae
+    assert baseline[2][0] == uniform
 
 
 def test_compare_reports_market_metrics_on_same_fixture_sample(monkeypatch):
