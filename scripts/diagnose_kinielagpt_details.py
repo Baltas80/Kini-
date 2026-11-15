@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import unicodedata
 from collections import Counter
 from collections.abc import Mapping
@@ -311,6 +312,103 @@ def reconcile_fixture_order(details: Any, percentage_matches: Any) -> dict[str, 
     }
 
 
+def _parse_aware_datetime(value: Any) -> datetime | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.strip())
+    except ValueError:
+        return None
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        return None
+    return parsed
+
+
+def _valid_three_way_vector(value: Any) -> bool:
+    if not isinstance(value, Mapping):
+        return False
+    probabilities = []
+    for sign in ("1", "X", "2"):
+        probability = value.get(sign)
+        if (
+            isinstance(probability, bool)
+            or not isinstance(probability, (int, float))
+            or not math.isfinite(float(probability))
+            or not 0.0 <= float(probability) <= 1.0
+        ):
+            return False
+        probabilities.append(float(probability))
+    return math.isclose(sum(probabilities), 1.0, rel_tol=0.0, abs_tol=1e-6)
+
+
+def summarize_kickoff_attachment(
+    rows: Any, lae_source: str
+) -> dict[str, Any]:
+    """Summarize only fixture identity, timestamp ordering and LAE vector validity."""
+    records = rows if isinstance(rows, list) else []
+    fixtures = []
+    for row in records:
+        if not isinstance(row, Mapping):
+            continue
+        captured_at = _parse_aware_datetime(row.get("lae_captured_at"))
+        kickoff_at = _parse_aware_datetime(row.get("kickoff_at"))
+        evidence_checked_at = _parse_aware_datetime(
+            row.get("kickoff_evidence_checked_at_utc")
+        )
+        vector_valid = _valid_three_way_vector(row.get("lae"))
+        evidence_before_capture = (
+            evidence_checked_at is not None
+            and captured_at is not None
+            and evidence_checked_at <= captured_at
+        )
+        capture_before_kickoff = (
+            captured_at is not None
+            and kickoff_at is not None
+            and captured_at < kickoff_at
+        )
+        eligible = (
+            row.get("fixture_identity_status") == "verified"
+            and row.get("lae_source") == lae_source
+            and vector_valid
+            and evidence_before_capture
+            and capture_before_kickoff
+        )
+        fixtures.append(
+            {
+                "id": row.get("id"),
+                "fixture_identity_status": row.get("fixture_identity_status"),
+                "kickoff_at": row.get("kickoff_at"),
+                "lae_vector_valid": vector_valid,
+                "evidence_before_capture": evidence_before_capture,
+                "capture_before_kickoff": capture_before_kickoff,
+                "temporally_eligible_lae": eligible,
+            }
+        )
+
+    return {
+        "rows_count": len(records),
+        "kickoff_mapped_count": sum(
+            _parse_aware_datetime(row.get("kickoff_at")) is not None
+            for row in records
+            if isinstance(row, Mapping)
+        ),
+        "lae_source_rows_count": sum(
+            row.get("lae_source") == lae_source
+            for row in records
+            if isinstance(row, Mapping)
+        ),
+        "valid_lae_vector_count": sum(
+            _valid_three_way_vector(row.get("lae"))
+            for row in records
+            if isinstance(row, Mapping)
+        ),
+        "temporally_eligible_lae_count": sum(
+            fixture["temporally_eligible_lae"] for fixture in fixtures
+        ),
+        "fixtures": fixtures[:30],
+    }
+
+
 def collect_live_diagnostic() -> dict[str, Any]:
     report: dict[str, Any] = {
         "diagnostic": "kinielagpt_detalle_partido_schema",
@@ -327,6 +425,10 @@ def collect_live_diagnostic() -> dict[str, Any]:
     report["schema"] = summarize_payload(payload)
     details = payload.get("detallePartidos")
     report["fixture_crosswalk"] = reconcile_fixture_order(details, percentage_matches)
+    probability_rows = source.probabilities(jornada, temporada)
+    report["kickoff_attachment"] = summarize_kickoff_attachment(
+        probability_rows, source.LAE_SOURCE
+    )
     report["status"] = (
         "ok"
         if report["schema"]["details_key_present"]
