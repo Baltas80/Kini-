@@ -1,0 +1,124 @@
+{
+  "schema_version": 1,
+  "provider": "LIGA_F",
+  "competition_id": "LIGA_F",
+  "gender": "women",
+  "season": "2026-27",
+  "verified_on": "2026-11-15",
+  "source_archive_url": "https://ligaf.es/resultados/primera_division_femenina/10/2027",
+  "verification_method": "Each profile URL was opened by following the corresponding home/away team link on an official Liga F match-detail page linked from the official matchday-10 archive. The provider profile ID is the numeric segment in that official profile URL.",
+  "entries": [
+    {
+      "team_id": "team:ligaf:athletic-club",
+      "canonical_name": "Athletic Club",
+      "provider_team_profile_id": "8845",
+      "team_profile_url": "https://ligaf.es/equipo/athletic-club-femenino/8845/plantilla/2027",
+      "match_evidence_url": "https://ligaf.es/partido/athletic-club-femenino/real-madrid-cf-femenino/202723868/detalle"
+    },
+    {
+      "team_id": "team:ligaf:atletico-de-madrid",
+      "canonical_name": "Atlético de Madrid",
+      "provider_team_profile_id": "12279",
+      "team_profile_url": "https://ligaf.es/equipo/club-atletico-de-madrid-femenino/12279/plantilla/2027",
+      "match_evidence_url": "https://ligaf.es/partido/club-atletico-de-madrid-femenino/badalona/202723870/detalle"
+    },
+    {
+      "team_id": "team:ligaf:costa-adeje-tenerife",
+      "canonical_name": "Costa Adeje Tenerife",
+      "provider_team_profile_id": "12369",
+      "team_profile_url": "https://ligaf.es/equipo/udg-tenerife-femenino/12369/plantilla/2027",
+      "match_evidence_url": "https://ligaf.es/partido/udg-tenerife-femenino/deportivo-alaves-femenino/202723865/detalle"
+    },
+    {
+      "team_id": "team:ligaf:deportivo-abanca",
+      "canonical_name": "Deportivo Abanca",
+      "provider_team_profile_id": "8870",
+      "team_profile_url": "https://ligaf.es/equipo/deportivo-femenino/8870/plantilla/2027",
+      "match_evidence_url": "https://ligaf.es/partido/deportivo-femenino/valencia-cf-femenino/202723869/detalle"
+    },
+    {
+      "team_id": "team:ligaf:deportivo-alaves",
+      "canonical_name": "Deportivo Alavés",
+      "provider_team_profile_id": "112292",
+      "team_profile_url": "https://ligaf.es/equipo/deportivo-alaves-femenino/112292/plantilla/2027",
+      "match_evidence_url": "https://ligaf.es/partido/udg-tenerife-femenino/deportivo-alaves-femenino/202723865/detalle"
+    },
+    {
+      "team_id": "team:ligaf:fc-badalona-women",
+      "canonical_name": "FC Badalona Women",
+      "provider_team_profile_id": "20435",
+      "team_profile_url": "https://ligaf.es/equipo/badalona/20435/plantilla/2027",
+      "match_evidence_url": "https://ligaf.es/partido/club-atletico-de-madrid-femenino/badalona/202723870/detalle"
+    },
+    {
+      "team_id": "team:ligaf:fc-barcelona",
+      "canonical_name": "FC Barcelona",
+      "provider_team_profile_id": "8852",
+      "team_profile_url": "https://ligaf.es/equipo/fc-barcelona-femenino/8852/plantilla/2027",
+      "match_evidence_url": "https://ligaf.es/partido/fc-barcelona-femenino/madrid-cf-femenino/202723871/detalle"
+    },
+    {
+      "team_id": "team:ligaf:granada-cf",
+      "canonical_name": "Granada CF",
+      "provider_team_profile_id": "8909",
+      "team_profile_url": "https://ligaf.es/equipo/granada-cf-femenino/8909/plantilla/2027",
+      "match_evidence_url": "https://ligaf.es/partido/granada-cf-femenino/rcd-espanyol-femenino/202723867/detalle"
+    },
+    {
+      "team_id": "team:ligaf:logrono-united",
+      "canonical_name": "Logroño United",
+      "provider_team_profile_id": "51737",
+      "team_profile_url": "https://ligaf.es/equipo/logrono/51737/plantilla/2027",
+      "match_evidence_url": "https://ligaf.es/partido/logrono/sevilla-fc-femenino/202723864/detalle"
+    },
+    {
+      "team_id": "team:ligaf:madrid-cff",
+      "canonical_name": "Madrid CFF",
+      "provider_team_profile_id": "12358",
+      "team_profile_url": "https://ligaf.es/equipo/madrid-cf-femenino/12358/plantilla/2027",
+      "match_evidence_url": "https://ligaf.es/partido/fc-barcelona-femenino/madrid-cf-femenino/202723871/detalle"
+    },
+    {
+      "team_id": "team:ligaf:rcd-espanyol",
+      "canonical_name": "RCD Espanyol",
+      "provider_team_profile_id": "8847",
+      "team_profile_url": "https://ligaf.es/equipo/rcd-espanyol-femenino/8847/plantilla/2027",
+      "match_evidence_url": "https://ligaf.es/partido/granada-cf-femenino/rcd-espanyol-femenino/202723867/detalle"
+    },
+    {
+      "team_id": "team:ligaf:real-madrid-cf",
+      "canonical_name": "Real Madrid CF",
+      "provider_team_profile_id": "12364",
+      "team_profile_url": "https://ligaf.es/equipo/real-madrid-cf-femenino/12364/plantilla/2027",
+      "match_evidence_url": "https://ligaf.es/partido/athletic-club-femenino/real-madrid-cf-femenino/202723868/detalle"
+    },
+    {
+      "team_id": "team:ligaf:real-sociedad",
+      "canonical_name": "Real Sociedad",
+      "provider_team_profile_id": "8843",
+      "team_profile_url": "https://ligaf.es/equipo/real-sociedad-futbol-femenino/8843/plantilla/2027",
+      "match_evidence_url": "https://ligaf.es/partido/eibar-femenino/real-sociedad-futbol-femenino/202723866/detalle"
+    },
+    {
+      "team_id": "team:ligaf:sd-eibar",
+      "canonical_name": "SD Eibar",
+      "provider_team_profile_id": "66085",
+      "team_profile_url": "https://ligaf.es/equipo/eibar-femenino/66085/plantilla/2027",
+      "match_evidence_url": "https://ligaf.es/partido/eibar-femenino/real-sociedad-futbol-femenino/202723866/detalle"
+    },
+    {
+      "team_id": "team:ligaf:sevilla-fc",
+      "canonical_name": "Sevilla FC",
+      "provider_team_profile_id": "12280",
+      "team_profile_url": "https://ligaf.es/equipo/sevilla-fc-femenino/12280/plantilla/2027",
+      "match_evidence_url": "https://ligaf.es/partido/logrono/sevilla-fc-femenino/202723864/detalle"
+    },
+    {
+      "team_id": "team:ligaf:vcf-femenino",
+      "canonical_name": "VCF Femenino",
+      "provider_team_profile_id": "8842",
+      "team_profile_url": "https://ligaf.es/equipo/valencia-cf-femenino/8842/plantilla/2027",
+      "match_evidence_url": "https://ligaf.es/partido/deportivo-femenino/valencia-cf-femenino/202723869/detalle"
+    }
+  ]
+}
