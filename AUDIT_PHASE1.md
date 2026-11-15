@@ -531,3 +531,23 @@ Official match pages:
 - https://ligaf.es/partido/eibar-femenino/real-sociedad-futbol-femenino/202723866/detalle
 
 Validation: CI run [43701107837](https://github.com/Baltas80/Kini-/actions/runs/43701107837) passed on the completed implementation. Ruff checks passed; the two new Liga F Python files passed `ruff format --check`; pytest reported 101 passed and 4 upstream NumPy/penaltyblog deprecation warnings. The historical-data rebuild and full model backtest were excluded because these files are evidence-only and do not change the Football-Data dataset or model inputs. No model code, training data or forecast probabilities were changed.
+
+
+## Next source discovery — Liga F historical archive (2026-11-15)
+
+The official Liga F site exposes season/round result pages using the route pattern `/resultados/primera_division_femenina/{round}/{season_end_year}`. I verified official pages for:
+- 2022/23: `/1/2023` (round 1 page; results dated 1–3 November 2022).
+- 2023/24: `/1/2024` (round 1 page; results dated 3–5 October 2023).
+- 2024/25: `/1/2025` (round 1 page; results dated 6–8 September 2024).
+- 2025/26: `/1/2026` and `/30/2026` (round 30 page contains all eight final-round results dated 31 May 2026).
+- 2026/27: `/10/2027` (current-season round 10; includes the three match pages recorded above).
+
+These pages expose match-result links; the match-detail pages expose stable Liga F match IDs and kickoff details. This is a viable primary-source candidate for a multi-season Liga F dataset. It has **not** yet been bulk-downloaded, parsed, reconciled across seasons, or admitted to model training. The next implementation unit is to inspect the official page markup/data endpoint, create a rate-limited and cacheable importer with saved HTML fixtures, validate expected match counts and duplicates per season, and retain all source URLs and match IDs. Team promotion/relegation, club renames and historical identity changes must be represented by season-scoped aliases rather than current-team assumptions.
+
+Example official archive URLs:
+- https://ligaf.es/resultados/primera_division_femenina/1/2023
+- https://ligaf.es/resultados/primera_division_femenina/1/2024
+- https://ligaf.es/resultados/primera_division_femenina/1/2025
+- https://ligaf.es/resultados/primera_division_femenina/1/2026
+- https://ligaf.es/resultados/primera_division_femenina/30/2026
+- https://ligaf.es/resultados/primera_division_femenina/10/2027
