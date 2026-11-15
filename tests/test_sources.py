@@ -62,7 +62,9 @@ def test_probabilities_preserve_separate_source_vectors_and_capture_times(monkey
     assert row["id"] == 1
     assert row["lae"] == pytest.approx({"1": 0.6, "X": 0.2, "2": 0.2})
     assert row["quinielista"] == pytest.approx({"1": 0.2, "X": 0.3, "2": 0.5})
-    assert {sign: row[sign] for sign in SIGNS} == pytest.approx({"1": 0.4, "X": 0.25, "2": 0.35})
+    assert {sign: row[sign] for sign in SIGNS} == pytest.approx(
+        {"1": 0.4, "X": 0.25, "2": 0.35}
+    )
     assert row["lae_source"] == KinielaGPTSource.LAE_SOURCE
     assert row["quinielista_source"] == KinielaGPTSource.QUINIELISTA_SOURCE
     assert row["lae_captured_at"] == "2026-11-15T16:00:00+00:00"
@@ -93,4 +95,6 @@ def test_invalid_source_vector_is_not_normalized_or_used_in_blended_output(monke
     assert row["lae_source"] == KinielaGPTSource.LAE_SOURCE
     assert row["lae_captured_at"] == "2026-11-15T16:00:00+00:00"
     assert row["quinielista"] == pytest.approx({"1": 0.2, "X": 0.3, "2": 0.5})
-    assert {sign: row[sign] for sign in SIGNS} == pytest.approx({"1": 0.2, "X": 0.3, "2": 0.5})
+    assert {sign: row[sign] for sign in SIGNS} == pytest.approx(
+        {"1": 0.2, "X": 0.3, "2": 0.5}
+    )
