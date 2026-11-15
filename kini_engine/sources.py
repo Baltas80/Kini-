@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import json
 import logging
 import math
 import time
-from datetime import UTC, datetime
+import unicodedata
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Any
 
 import pandas as pd
@@ -17,6 +20,31 @@ from .core import SIGNS
 log = logging.getLogger(__name__)
 
 
+def _normalize_fixture_name(value: Any) -> str | None:
+    if not isinstance(value, str):
+        return None
+    decomposed = unicodedata.normalize("NFKD", value.casefold())
+    without_marks = "".join(
+        character for character in decomposed if not unicodedata.combining(character)
+    )
+    normalized = " ".join(
+        "".join(character if character.isalnum() else " " for character in without_marks).split()
+    )
+    return normalized or None
+
+
+def _parse_aware_timestamp(value: Any) -> datetime | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        return None
+    return parsed
+
+
 class KinielaGPTSource:
     """KinielaGPT-compatible source adapter for LAE/Quinielista percentages and details."""
 
@@ -27,6 +55,11 @@ class KinielaGPTSource:
     HOME = "https://www.eduardolosilla.es/"
     LAE_SOURCE = "quinielista.es:porcentajes_lae.asp"
     QUINIELISTA_SOURCE = "quinielista.es:porcentajes.asp"
+    KICKOFF_CROSSWALK_PATH = (
+        Path(__file__).resolve().parent.parent
+        / "data"
+        / "kinielagpt_fixture_kickoffs.json"
+    )
 
     def __init__(self, timeout: int = 15) -> None:
         self.session = requests.Session()
@@ -146,6 +179,122 @@ class KinielaGPTSource:
         ]
         return jornada, temporada, matches
 
+    @classmethod
+    def _load_kickoff_crosswalk(
+        cls, jornada: int, temporada: int
+    ) -> dict[tuple[int, str, str], dict[str, str]]:
+        """Load only a fully verified, timezone-aware fixture schedule."""
+        try:
+            payload = json.loads(
+                cls.KICKOFF_CROSSWALK_PATH.read_text(encoding="utf-8")
+            )
+        except (OSError, json.JSONDecodeError) as exc:
+            log.warning("Kickoff crosswalk unavailable: %s", exc)
+            return {}
+
+        if (
+            not isinstance(payload, dict)
+            or payload.get("schema_version") != 1
+            or payload.get("jornada") != jornada
+            or payload.get("temporada") != temporada
+        ):
+            return {}
+
+        fixtures = payload.get("fixtures")
+        evidence = payload.get("crosswalk_evidence")
+        raw_sources = payload.get("schedule_sources")
+        if (
+            not isinstance(fixtures, list)
+            or not fixtures
+            or not isinstance(evidence, dict)
+            or not isinstance(raw_sources, list)
+            or evidence.get("status") != "verified"
+            or any(
+                evidence.get(field) != len(fixtures)
+                for field in (
+                    "details_count",
+                    "percentage_matches_count",
+                    "verified_count",
+                )
+            )
+        ):
+            log.warning("Kickoff crosswalk has incomplete verification evidence")
+            return {}
+
+        checked_at = _parse_aware_timestamp(evidence.get("checked_at_utc"))
+        if checked_at is None:
+            log.warning("Kickoff crosswalk evidence timestamp is not timezone-aware")
+            return {}
+
+        sources: dict[str, dict[str, Any]] = {}
+        for source in raw_sources:
+            if not isinstance(source, dict):
+                return {}
+            source_id = source.get("id")
+            url = source.get("url")
+            if (
+                not isinstance(source_id, str)
+                or not source_id
+                or source_id in sources
+                or not isinstance(url, str)
+                or not url.startswith("https://www.uefa.com/")
+                or source.get("timezone") != "CET"
+                or not isinstance(source.get("competition"), str)
+            ):
+                log.warning("Kickoff crosswalk contains an untrusted schedule source")
+                return {}
+            sources[source_id] = source
+
+        weekday_numbers = {
+            "LUN": 0,
+            "MAR": 1,
+            "MIE": 2,
+            "JUE": 3,
+            "VIE": 4,
+            "SAB": 5,
+            "DOM": 6,
+        }
+        mapping: dict[tuple[int, str, str], dict[str, str]] = {}
+        seen_numbers: set[int] = set()
+
+        for fixture in fixtures:
+            if not isinstance(fixture, dict):
+                return {}
+            number = fixture.get("num")
+            if isinstance(number, bool) or not isinstance(number, int) or number < 1:
+                return {}
+            home = _normalize_fixture_name(fixture.get("home_provider_name"))
+            away = _normalize_fixture_name(fixture.get("away_provider_name"))
+            kickoff = _parse_aware_timestamp(fixture.get("kickoff_at"))
+            source = sources.get(fixture.get("schedule_source_id"))
+            day_label = fixture.get("provider_day_label")
+            clock_time = fixture.get("provider_clock_time")
+
+            if (
+                number in seen_numbers
+                or home is None
+                or away is None
+                or kickoff is None
+                or kickoff.utcoffset() != timedelta(hours=1)
+                or kickoff <= checked_at
+                or source is None
+                or weekday_numbers.get(day_label) != kickoff.weekday()
+                or clock_time != kickoff.strftime("%H:%M")
+            ):
+                log.warning("Kickoff crosswalk contains an invalid fixture row")
+                return {}
+
+            seen_numbers.add(number)
+            mapping[(number, home, away)] = {
+                "kickoff_at": kickoff.isoformat(),
+                "kickoff_source": source["competition"],
+                "kickoff_evidence_url": source["url"],
+                "kickoff_evidence_checked_at_utc": checked_at.isoformat(),
+                "kickoff_timezone": "CET",
+            }
+
+        return mapping
+
     def probabilities(self, jornada: int, temporada: int) -> list[dict[str, Any]]:
         """Return the legacy blend plus separate, timestamped source vectors.
 
@@ -161,6 +310,7 @@ class KinielaGPTSource:
         )
         lae_rows = self._probability_map(lae_payload)
         quinielista_rows = self._probability_map(quinielista_payload)
+        kickoff_map = self._load_kickoff_crosswalk(jornada, temporada)
 
         out = []
         for match_id in sorted(set(lae_rows) | set(quinielista_rows)):
@@ -174,26 +324,73 @@ class KinielaGPTSource:
                 lae_probabilities, quinielista_probabilities
             )
             preferred = lae_row or quinielista_row or {}
+            result_row = {
+                "id": match_id,
+                "local": preferred.get("local", ""),
+                "visitante": preferred.get("visitante", ""),
+                **combined,
+                "lae": lae_probabilities,
+                "lae_source": self.LAE_SOURCE if lae_row else None,
+                "lae_captured_at": lae_captured_at if lae_row else None,
+                "quinielista": quinielista_probabilities,
+                "quinielista_source": self.QUINIELISTA_SOURCE
+                if quinielista_row
+                else None,
+                "quinielista_captured_at": quinielista_captured_at
+                if quinielista_row
+                else None,
+                "probability_method": "equal_weight_mean_of_available_source_vectors",
+                "kickoff_at": None,
+                "kickoff_source": None,
+                "kickoff_evidence_url": None,
+                "kickoff_evidence_checked_at_utc": None,
+                "kickoff_timezone": None,
+                "fixture_identity_status": "unverified",
+            }
 
-            out.append(
-                {
-                    "id": match_id,
-                    "local": preferred.get("local", ""),
-                    "visitante": preferred.get("visitante", ""),
-                    **combined,
-                    "lae": lae_probabilities,
-                    "lae_source": self.LAE_SOURCE if lae_row else None,
-                    "lae_captured_at": lae_captured_at if lae_row else None,
-                    "quinielista": quinielista_probabilities,
-                    "quinielista_source": self.QUINIELISTA_SOURCE
-                    if quinielista_row
-                    else None,
-                    "quinielista_captured_at": quinielista_captured_at
-                    if quinielista_row
-                    else None,
-                    "probability_method": "equal_weight_mean_of_available_source_vectors",
-                }
-            )
+            if quinielista_row is not None:
+                home = _normalize_fixture_name(quinielista_row.get("local"))
+                away = _normalize_fixture_name(quinielista_row.get("visitante"))
+                candidate = (
+                    kickoff_map.get((match_id, home, away))
+                    if home is not None and away is not None
+                    else None
+                )
+                source_rows = [quinielista_row]
+                if lae_row is not None:
+                    source_rows.append(lae_row)
+                names_match = candidate is not None and all(
+                    _normalize_fixture_name(source_row.get("local")) == home
+                    and _normalize_fixture_name(source_row.get("visitante")) == away
+                    for source_row in source_rows
+                )
+                evidence_checked_at = (
+                    _parse_aware_timestamp(
+                        candidate.get("kickoff_evidence_checked_at_utc")
+                    )
+                    if candidate is not None
+                    else None
+                )
+                lae_received_at = _parse_aware_timestamp(lae_captured_at)
+                evidence_precedes_capture = (
+                    lae_row is None
+                    or (
+                        evidence_checked_at is not None
+                        and lae_received_at is not None
+                        and evidence_checked_at <= lae_received_at
+                    )
+                )
+                if names_match and evidence_precedes_capture:
+                    result_row.update(candidate)
+                    result_row["fixture_identity_status"] = "verified"
+                elif candidate is not None and names_match:
+                    result_row["fixture_identity_status"] = (
+                        "schedule_evidence_after_lae_capture"
+                    )
+                elif candidate is not None:
+                    result_row["fixture_identity_status"] = "source_name_mismatch"
+
+            out.append(result_row)
         return out
 
     def details_payload(
