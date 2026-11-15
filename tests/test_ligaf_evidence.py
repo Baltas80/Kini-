@@ -133,7 +133,9 @@ def test_ligaf_profile_crosswalk_covers_all_sixteen_current_season_teams():
         profile_url = urlparse(entry["team_profile_url"])
         assert profile_url.scheme == "https"
         assert profile_url.hostname == "ligaf.es"
-        assert f"/{entry['provider_team_profile_id']}/plantilla/2027" in profile_url.path
+        assert (
+            f"/{entry['provider_team_profile_id']}/plantilla/2027" in profile_url.path
+        )
 
         match_url = urlparse(entry["match_evidence_url"])
         assert match_url.scheme == "https"
