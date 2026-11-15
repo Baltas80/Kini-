@@ -115,3 +115,12 @@ Official match evidence:
 - [Athletic Club – Real Madrid CF](https://ligaf.es/partido/athletic-club-femenino/real-madrid-cf-femenino/202723868/detalle)
 - [Logroño United – Sevilla FC](https://ligaf.es/partido/logrono/sevilla-fc-femenino/202723864/detalle)
 - [SD Eibar – Real Sociedad](https://ligaf.es/partido/eibar-femenino/real-sociedad-futbol-femenino/202723866/detalle)
+
+
+### Validation of the Liga F evidence layer
+
+- [CI run 43701107837](https://github.com/Baltas80/Kini-/actions/runs/43701107837): passed.
+- Ruff: all selected checks passed.
+- Ruff format: both new Liga F Python files already formatted.
+- Pytest: 101 passed, 4 upstream NumPy/penaltyblog deprecation warnings.
+- No historical dataset rebuild or model backtest was run; the evidence-only paths are explicitly excluded from those expensive workflows.
