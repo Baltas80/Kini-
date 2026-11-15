@@ -185,6 +185,40 @@ def _record(
     }
 
 
+def test_validate_history_accepts_complete_16_team_double_round_robin():
+    teams = [f"Team {index:02d}" for index in range(16)]
+    rotation = teams[:]
+    first_half = []
+    for _ in range(15):
+        first_half.append([(rotation[index], rotation[15 - index]) for index in range(8)])
+        rotation = [rotation[0], rotation[-1], *rotation[1:-1]]
+
+    records = []
+    match_id = 1000
+    for matchday, fixtures in enumerate(first_half, start=1):
+        for home, away in fixtures:
+            records.append(
+                _record(match_id, matchday=matchday, home=home, away=away)
+            )
+            match_id += 1
+    for matchday, fixtures in enumerate(first_half, start=16):
+        for home, away in fixtures:
+            records.append(
+                _record(match_id, matchday=matchday, home=away, away=home)
+            )
+            match_id += 1
+
+    profile = validate_history(
+        records,
+        completed_seasons={2023},
+        requested_rounds={2023: 30},
+    )
+    assert profile["total_scheduled_fixtures"] == 240
+    assert profile["total_played_fixtures"] == 240
+    assert profile["season_profiles"]["2023"]["team_count_in_played_fixtures"] == 16
+    assert profile["training_eligibility"]["eligible"] is False
+
+
 def test_validate_history_rejects_duplicate_match_ids():
     first = _record(1)
     second = _record(1, matchday=2, home="Away", away="Home")
