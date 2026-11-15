@@ -1,9 +1,10 @@
 name: historical-backtest
 
 on:
+  # Run after a model/data change is pushed to master. Feature branches are
+  # validated by the PR event below, avoiding duplicate push + PR backtests.
   push:
-    # The full walk-forward run is expensive. Documentation-only and workflow-only
-    # commits are covered by CI; run this benchmark when its inputs or code change.
+    branches: [master]
     paths:
       - "kini_engine/**"
       - "!kini_engine/team_identity.py"
@@ -23,34 +24,60 @@ on:
       - "pyproject.toml"
       - "requirements*.txt"
   pull_request:
-    paths:
-      - "kini_engine/**"
-      - "!kini_engine/team_identity.py"
-      - "!kini_engine/fixture_reconciliation.py"
-      - "!kini_engine/ligaf_evidence.py"
-      - "!kini_engine/ligaf_history.py"
-      - "!kini_engine/ligaf_team_profiles.py"
-      - "!kini_engine/data/**"
-      - "scripts/build_history.py"
-      - "scripts/diagnose_ml.py"
-      - "data/**"
-      - "!data/selae_fixture_crosswalk.json"
-      - "!data/ligaf_fixture_evidence.json"
-      - "!data/ligaf_history.jsonl"
-      - "!data/ligaf_history.profile.json"
-      - "!data/ligaf_team_profile_crosswalk.json"
-      - "pyproject.toml"
-      - "requirements*.txt"
+    types: [opened, reopened, synchronize]
   workflow_dispatch:
   schedule:
     - cron: "17 4 * * 1"
 
+# Do not cancel an expensive walk-forward run merely because a documentation
+# or evidence-only commit arrived. GitHub keeps one pending run per group.
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      run_backtest: ${{ steps.filter.outputs.run_backtest }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 2
+      - id: filter
+        shell: bash
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" != "pull_request" ]]; then
+            echo "run_backtest=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if git rev-parse HEAD^ >/dev/null 2>&1; then
+            changed_files="$(git diff --name-only HEAD^ HEAD)"
+          else
+            changed_files="$(git diff-tree --no-commit-id --name-only -r HEAD)"
+          fi
+
+          run_backtest=false
+          while IFS= read -r path; do
+            case "$path" in
+              AUDIT_PHASE1.md|tests/*|.github/workflows/*|              kini_engine/team_identity.py|              kini_engine/fixture_reconciliation.py|              kini_engine/ligaf_evidence.py|              kini_engine/ligaf_history.py|              kini_engine/ligaf_team_profiles.py|              kini_engine/data/*|              data/selae_fixture_crosswalk.json|              data/ligaf_fixture_evidence.json|              data/ligaf_history.jsonl|              data/ligaf_history.profile.json|              data/ligaf_team_profile_crosswalk.json)
+                ;;
+              kini_engine/*|scripts/build_history.py|scripts/diagnose_ml.py|data/*|pyproject.toml|requirements*.txt)
+                run_backtest=true
+                ;;
+            esac
+          done <<< "$changed_files"
+
+          echo "Changed files in latest PR commit:"
+          printf '%s\n' "$changed_files"
+          echo "run_backtest=$run_backtest" >> "$GITHUB_OUTPUT"
+          echo "Historical backtest required: $run_backtest"
+
   backtest:
+    needs: changes
+    if: needs.changes.outputs.run_backtest == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
