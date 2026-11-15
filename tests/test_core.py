@@ -852,3 +852,37 @@ def test_joint_scenario_coverage_deduplicates_columns_but_keeps_scenario_frequen
     assert result["covered_scenarios"] == 2
     assert result["scenario_joint_coverage"] == pytest.approx(2 / 3)
 
+def test_joint_scenario_coverage_scales_extreme_finite_weights_safely():
+    columns = [["1"] * 14]
+    scenarios = [["1"] * 14, ["2"] * 14]
+
+    for weights in ([1e-300, 1e-300], [1e200, 1e200]):
+        result = TicketOptimizer.evaluate_joint_scenario_coverage(
+            columns,
+            scenarios,
+            weights=weights,
+        )
+        assert result["scenario_joint_coverage"] == pytest.approx(0.5)
+        assert result["effective_sample_size"] == pytest.approx(2.0)
+
+    with pytest.raises(ValueError, match="finite positive total"):
+        TicketOptimizer.evaluate_joint_scenario_coverage(
+            columns,
+            scenarios,
+            weights=[1e308, 1e308],
+        )
+
+
+def test_joint_scenario_coverage_rejects_non_string_outcomes():
+    with pytest.raises(ValueError, match="invalid 1/X/2 sign"):
+        TicketOptimizer.evaluate_joint_scenario_coverage(
+            [[1] * 14],
+            [["1"] * 14],
+        )
+
+    with pytest.raises(ValueError, match="invalid 1/X/2 sign"):
+        TicketOptimizer.evaluate_joint_scenario_coverage(
+            [["1"] * 14],
+            [["1"] * 13 + [2]],
+        )
+

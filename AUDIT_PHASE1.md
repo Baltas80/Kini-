@@ -1354,3 +1354,7 @@ Acquire official historical Quiniela draw results with stable draw IDs and all 1
 
 Implementation and regression tests are committed separately from the model benchmark. No model probabilities or historical benchmark metrics were changed by this unit.
 
+### Numerical edge-case hardening
+
+The weighted evaluator now scales weights before the sum-of-squares calculation, avoiding underflow/overflow for very small or large finite weights. It rejects a non-finite aggregate weight total and rejects non-string sign labels explicitly. Regression tests cover weights of 1e-300 and 1e200, aggregate overflow, and non-string outcomes.
+

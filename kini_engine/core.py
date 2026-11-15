@@ -845,7 +845,7 @@ class TicketOptimizer:
                 ) from exc
             if len(column) != 14:
                 raise ValueError(f"column {index} must contain exactly 14 signs")
-            if any(sign not in SIGNS for sign in column):
+            if any(not isinstance(sign, str) or sign not in SIGNS for sign in column):
                 raise ValueError(f"column {index} contains an invalid 1/X/2 sign")
             validated_columns.add(column)
 
@@ -868,7 +868,7 @@ class TicketOptimizer:
                 ) from exc
             if len(scenario) != 14:
                 raise ValueError(f"scenario {index} must contain exactly 14 signs")
-            if any(sign not in SIGNS for sign in scenario):
+            if any(not isinstance(sign, str) or sign not in SIGNS for sign in scenario):
                 raise ValueError(f"scenario {index} contains an invalid 1/X/2 sign")
             validated_scenarios.append(scenario)
 
@@ -906,17 +906,26 @@ class TicketOptimizer:
             weighting = "explicit"
 
         total_weight = float(scenario_weights.sum())
-        squared_weight_sum = float(np.dot(scenario_weights, scenario_weights))
-        if total_weight <= 0.0 or squared_weight_sum <= 0.0:
-            raise ValueError("scenario weights must have a positive total")
+        if not np.isfinite(total_weight) or total_weight <= 0.0:
+            raise ValueError("scenario weights must have a finite positive total")
+
+        # Scale before squaring so very small/large finite weights do not
+        # underflow or overflow the effective-sample-size calculation.
+        weight_scale = float(scenario_weights.max())
+        scaled_weights = scenario_weights / weight_scale
+        scaled_total = float(scaled_weights.sum())
+        squared_scaled_weight_sum = float(np.dot(scaled_weights, scaled_weights))
+        if scaled_total <= 0.0 or squared_scaled_weight_sum <= 0.0:
+            raise ValueError("scenario weights must have a finite positive total")
 
         covered = np.asarray(
             [scenario in validated_columns for scenario in validated_scenarios],
             dtype=bool,
         )
         covered_count = int(covered.sum())
-        covered_weight = float(scenario_weights[covered].sum())
-        effective_sample_size = total_weight**2 / squared_weight_sum
+        covered_scaled_weight = float(scaled_weights[covered].sum())
+        covered_weight = covered_scaled_weight * weight_scale
+        effective_sample_size = scaled_total**2 / squared_scaled_weight_sum
 
         return {
             "scenario_count": len(validated_scenarios),
@@ -929,7 +938,7 @@ class TicketOptimizer:
             "scenario_weight_sum": total_weight,
             "covered_scenario_weight": covered_weight,
             "effective_sample_size": float(effective_sample_size),
-            "scenario_joint_coverage": covered_weight / total_weight,
+            "scenario_joint_coverage": covered_scaled_weight / scaled_total,
             "coverage_basis": "caller_supplied_joint_scenarios",
             "scenario_weighting": weighting,
             "scope": "14_main_matches_only",
