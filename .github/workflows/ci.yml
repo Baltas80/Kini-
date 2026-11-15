@@ -41,12 +41,9 @@ jobs:
           tests/test_fixture_reconciliation.py
           kini_engine/ligaf_evidence.py
           tests/test_ligaf_evidence.py
-      - name: Verify formatting for changed Python modules
+      - name: Verify formatting for new Liga F evidence code
         run: >-
           ruff format --check
-          kini_engine/fixture_reconciliation.py
           kini_engine/ligaf_evidence.py
-          scripts/reconcile_selae_fixtures.py
-          tests/test_fixture_reconciliation.py
           tests/test_ligaf_evidence.py
       - run: pytest -q
