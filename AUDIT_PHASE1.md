@@ -1329,3 +1329,28 @@ The market temporal audit still excludes 587 of 5,011 odds-bearing fixtures beca
 4. Continue correlation-aware ticket-coverage work. The current ticket coverage objective still uses an independence approximation; do not describe it as a joint-probability optimizer until a validated joint scenario source is available.
 
 PR #9 remains open as a draft against \`feat/canonical-team-identity-registry\`. No changes were made to \`master\`, and no PR was merged.
+
+## Correlation-aware ticket coverage evaluator — 2026-11-15
+
+### Implemented
+
+- Added `TicketOptimizer.evaluate_joint_scenario_coverage(columns, scenarios, weights=None)`.
+- It evaluates complete 14-outcome scenarios against exact 14-sign ticket columns. A scenario counts as covered only if the full ordered outcome vector matches one submitted column; marginal per-match sign unions are not mistaken for a winning column.
+- Optional non-negative scenario weights are supported. The result reports weighted empirical coverage, scenario/column counts, duplicate columns, covered weight and effective sample size.
+- Inputs fail closed on malformed columns/scenarios, invalid 1/X/2 labels, mismatched weight lengths, booleans, negative/non-finite weights and zero total weight.
+- The method explicitly excludes Pleno al 15 and makes no independence assumption.
+
+### Independence boundary retained
+
+The existing optimizer still chooses doubles/triples using the product of selected marginal sign masses. Its legacy `joint_coverage` response field is retained for compatibility, but the response now also exposes `independent_coverage_estimate` and `coverage_method=product_of_marginal_selected_sign_masses`. This is not empirical joint coverage and is not expected payout.
+
+### Data limitation
+
+The repository currently contains `data/matches.csv` with one fixture per row and columns `Date,HomeTeam,AwayTeam,FTHG,FTAG,FTR`; it does not contain a draw identifier or a complete, ordered 14-match Quiniela coupon outcome per round. The current SELAE fixture crosswalk is not a historical joint-outcome dataset. Therefore no historical joint-coverage score or correlation-aware optimization result is claimed. Constructing scenarios by independently sampling the existing fixture rows would destroy the cross-match dependence this evaluator is intended to measure.
+
+### Next acceptance step
+
+Acquire official historical Quiniela draw results with stable draw IDs and all 14 main-match outcomes, reconcile each coupon slot to a dated fixture without fuzzy identity inference, and then compare the existing independence estimate with this exact scenario evaluator on a held-out set of complete draws. Only after that evidence exists should the optimizer objective be changed.
+
+Implementation and regression tests are committed separately from the model benchmark. No model probabilities or historical benchmark metrics were changed by this unit.
+

@@ -789,6 +789,7 @@ class TicketOptimizer:
         if len(columns) != used:
             raise RuntimeError("ticket column count does not match the optimizer state")
 
+        independent_coverage = float(np.exp(log_mass))
         return {
             "budget": budget,
             "budget_unit": "columns",
@@ -797,8 +798,11 @@ class TicketOptimizer:
             "double_count": double_count,
             "triple_count": triple_count,
             "shape": tuple(len(x) for x in picks),
-            "joint_coverage": float(np.exp(log_mass)),
+            # Legacy field retained for API compatibility; this is an independence product.
+            "joint_coverage": independent_coverage,
+            "independent_coverage_estimate": independent_coverage,
             "coverage_assumption": "independent_matches",
+            "coverage_method": "product_of_marginal_selected_sign_masses",
             "system_method": "multiple_direct",
             "maximum_authorized_columns": self.MAX_AUTHORIZED_COLUMNS,
             "minimum_columns": self.minimum_columns,
@@ -807,6 +811,129 @@ class TicketOptimizer:
             "cost_eur": round(len(columns) * self.price_per_column_eur, 2),
         }
 
+
+    @staticmethod
+    def evaluate_joint_scenario_coverage(
+        columns: Iterable[Iterable[str]],
+        scenarios: Iterable[Iterable[str]],
+        weights: Iterable[float] | None = None,
+    ) -> dict[str, Any]:
+        """Measure exact 14-match coverage against caller-supplied joint scenarios.
+
+        Each scenario is one complete 14-match outcome vector. A scenario is
+        covered only when that exact vector is present as a ticket column.
+        Unlike optimize(), this evaluator makes no independence assumption.
+        It excludes Pleno al 15 and never assembles scenarios from per-match
+        marginal observations.
+        """
+        try:
+            raw_columns = list(columns)
+        except TypeError as exc:
+            raise TypeError("columns must be an iterable of 14-sign columns") from exc
+        if not raw_columns:
+            raise ValueError("at least one ticket column is required")
+
+        validated_columns: set[tuple[str, ...]] = set()
+        for index, raw_column in enumerate(raw_columns, start=1):
+            if isinstance(raw_column, (str, bytes)):
+                raise TypeError(f"column {index} must be an iterable of 14 signs")
+            try:
+                column = tuple(raw_column)
+            except TypeError as exc:
+                raise TypeError(
+                    f"column {index} must be an iterable of 14 signs"
+                ) from exc
+            if len(column) != 14:
+                raise ValueError(f"column {index} must contain exactly 14 signs")
+            if any(sign not in SIGNS for sign in column):
+                raise ValueError(f"column {index} contains an invalid 1/X/2 sign")
+            validated_columns.add(column)
+
+        try:
+            raw_scenarios = list(scenarios)
+        except TypeError as exc:
+            raise TypeError("scenarios must be an iterable of 14-outcome vectors") from exc
+        if not raw_scenarios:
+            raise ValueError("at least one joint scenario is required")
+
+        validated_scenarios: list[tuple[str, ...]] = []
+        for index, raw_scenario in enumerate(raw_scenarios, start=1):
+            if isinstance(raw_scenario, (str, bytes)):
+                raise TypeError(f"scenario {index} must be an iterable of 14 signs")
+            try:
+                scenario = tuple(raw_scenario)
+            except TypeError as exc:
+                raise TypeError(
+                    f"scenario {index} must be an iterable of 14 signs"
+                ) from exc
+            if len(scenario) != 14:
+                raise ValueError(f"scenario {index} must contain exactly 14 signs")
+            if any(sign not in SIGNS for sign in scenario):
+                raise ValueError(f"scenario {index} contains an invalid 1/X/2 sign")
+            validated_scenarios.append(scenario)
+
+        if weights is None:
+            scenario_weights = np.ones(len(validated_scenarios), dtype=float)
+            weighting = "uniform"
+        else:
+            try:
+                raw_weights = list(weights)
+            except TypeError as exc:
+                raise TypeError(
+                    "weights must be an iterable of finite non-negative numbers"
+                ) from exc
+            if len(raw_weights) != len(validated_scenarios):
+                raise ValueError("weights length must match the number of scenarios")
+
+            parsed_weights: list[float] = []
+            for index, raw_weight in enumerate(raw_weights, start=1):
+                if isinstance(raw_weight, (bool, np.bool_)):
+                    raise TypeError(
+                        f"weight {index} must be a finite non-negative number"
+                    )
+                try:
+                    weight = float(raw_weight)
+                except (TypeError, ValueError) as exc:
+                    raise ValueError(
+                        f"weight {index} must be a finite non-negative number"
+                    ) from exc
+                if not np.isfinite(weight) or weight < 0.0:
+                    raise ValueError(
+                        f"weight {index} must be finite and non-negative"
+                    )
+                parsed_weights.append(weight)
+            scenario_weights = np.asarray(parsed_weights, dtype=float)
+            weighting = "explicit"
+
+        total_weight = float(scenario_weights.sum())
+        squared_weight_sum = float(np.dot(scenario_weights, scenario_weights))
+        if total_weight <= 0.0 or squared_weight_sum <= 0.0:
+            raise ValueError("scenario weights must have a positive total")
+
+        covered = np.asarray(
+            [scenario in validated_columns for scenario in validated_scenarios],
+            dtype=bool,
+        )
+        covered_count = int(covered.sum())
+        covered_weight = float(scenario_weights[covered].sum())
+        effective_sample_size = total_weight**2 / squared_weight_sum
+
+        return {
+            "scenario_count": len(validated_scenarios),
+            "unique_scenario_count": len(set(validated_scenarios)),
+            "ticket_column_count": len(raw_columns),
+            "unique_ticket_column_count": len(validated_columns),
+            "duplicate_ticket_columns": len(raw_columns) - len(validated_columns),
+            "covered_scenarios": covered_count,
+            "uncovered_scenarios": len(validated_scenarios) - covered_count,
+            "scenario_weight_sum": total_weight,
+            "covered_scenario_weight": covered_weight,
+            "effective_sample_size": float(effective_sample_size),
+            "scenario_joint_coverage": covered_weight / total_weight,
+            "coverage_basis": "caller_supplied_joint_scenarios",
+            "scenario_weighting": weighting,
+            "scope": "14_main_matches_only",
+        }
 
 
 class KiniEngine:
