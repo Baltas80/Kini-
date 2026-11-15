@@ -11,6 +11,29 @@ from scipy.stats import poisson
 SIGNS = ("1", "X", "2")
 
 
+def _validated_probability_vector(probabilities: Any) -> np.ndarray | None:
+    """Return a valid 1/X/2 vector without silently repairing bad source data."""
+    if not isinstance(probabilities, dict):
+        return None
+
+    values: list[float] = []
+    for sign in SIGNS:
+        raw = probabilities.get(sign)
+        if isinstance(raw, (bool, np.bool_)):
+            return None
+        try:
+            value = float(raw)
+        except (TypeError, ValueError):
+            return None
+        if not np.isfinite(value) or not 0.0 <= value <= 1.0:
+            return None
+        values.append(value)
+
+    if not np.isclose(sum(values), 1.0, rtol=0.0, atol=1e-6):
+        return None
+    return np.asarray(values, dtype=float)
+
+
 @dataclass(frozen=True)
 class Match:
     date: datetime | str
@@ -32,11 +55,11 @@ class Match:
 
     @property
     def has_temporally_eligible_market(self) -> bool:
-        """Return true only when odds passed the explicit schedule-based screen."""
+        """Require the schedule screen and a valid normalized 1/X/2 vector."""
         return (
-            self.market is not None
-            and self.detail.get("market_temporal_status") == "schedule_compatible"
+            self.detail.get("market_temporal_status") == "schedule_compatible"
             and self.detail.get("market_pre_match_eligible") is True
+            and _validated_probability_vector(self.market) is not None
         )
 
     @property
@@ -54,20 +77,7 @@ class Match:
         if captured_at is None or kickoff_at is None or captured_at >= kickoff_at:
             return False
 
-        values = []
-        for sign in SIGNS:
-            raw = self.lae.get(sign)
-            if isinstance(raw, (bool, np.bool_)):
-                return False
-            try:
-                value = float(raw)
-            except (TypeError, ValueError):
-                return False
-            if not np.isfinite(value) or not 0.0 <= value <= 1.0:
-                return False
-            values.append(value)
-
-        return bool(np.isclose(sum(values), 1.0, rtol=0.0, atol=1e-6))
+        return _validated_probability_vector(self.lae) is not None
 
 
 @dataclass(frozen=True)
@@ -558,10 +568,20 @@ def surprise_signal(
     current: Match,
     history: list[Match],
 ) -> dict[str, Any] | None:
+    """Compare against Match-attached sources only after their own eligibility checks.
+
+    The legacy lae and market arguments remain as source-selection flags;
+    their values are never trusted. The authoritative vectors come from current.
+    """
     refs = []
-    for name, probs in (("LAE", lae), ("mercado", market)):
-        if probs:
-            refs.append((name, np.array([probs.get(s, 0.0) for s in SIGNS])))
+    if lae is not None and current.has_temporally_eligible_lae:
+        vector = _validated_probability_vector(current.lae)
+        if vector is not None:
+            refs.append(("LAE", vector))
+    if market is not None and current.has_temporally_eligible_market:
+        vector = _validated_probability_vector(current.market)
+        if vector is not None:
+            refs.append(("mercado", vector))
     if not refs:
         return None
     m = np.array([model[s] for s in SIGNS])

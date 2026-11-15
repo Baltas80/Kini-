@@ -108,6 +108,83 @@ def test_context_and_surprise_signals_ignore_same_day_and_future_results():
     assert contaminated_signal == baseline_signal
 
 
+def test_surprise_signal_rejects_unverified_external_reference_vectors():
+    current = Match(datetime(2025, 4, 1), "A", "B")
+    model = {"1": 0.80, "X": 0.10, "2": 0.10}
+    opposing_reference = {"1": 0.05, "X": 0.05, "2": 0.90}
+
+    assert surprise_signal(model, opposing_reference, opposing_reference, current, []) is None
+
+
+def test_surprise_signal_uses_verified_match_lae_not_external_override():
+    model = {"1": 0.80, "X": 0.10, "2": 0.10}
+    verified_lae = {"1": 0.05, "X": 0.05, "2": 0.90}
+    fixture = Match(
+        datetime(2025, 4, 1),
+        "A",
+        "B",
+        lae=verified_lae,
+        detail={
+            "lae_source": "SELAE",
+            "lae_captured_at": "2025-04-01T09:00:00+02:00",
+            "kickoff_at": "2025-04-01T20:00:00+02:00",
+        },
+    )
+
+    signal = surprise_signal(model, model, None, fixture, [])
+
+    assert signal is not None
+    assert signal["reference"] == "LAE"
+    assert signal["score"] == pytest.approx(1.0)
+
+
+def test_market_surprise_requires_valid_match_attached_probabilities():
+    model = {"1": 0.80, "X": 0.10, "2": 0.10}
+    opposing_reference = {"1": 0.05, "X": 0.05, "2": 0.90}
+    unverified = Match(
+        datetime(2025, 4, 1),
+        "A",
+        "B",
+        market=opposing_reference,
+    )
+    assert unverified.has_temporally_eligible_market is False
+    assert surprise_signal(model, None, opposing_reference, unverified, []) is None
+
+    invalid = Match(
+        datetime(2025, 4, 1),
+        "A",
+        "B",
+        market={"1": 0.80, "X": 0.10, "2": 0.05},
+        detail={
+            "market_temporal_status": "schedule_compatible",
+            "market_pre_match_eligible": True,
+        },
+    )
+    assert invalid.has_temporally_eligible_market is False
+    assert surprise_signal(model, None, opposing_reference, invalid, []) is None
+
+
+def test_surprise_signal_uses_verified_match_market_not_external_override():
+    model = {"1": 0.80, "X": 0.10, "2": 0.10}
+    verified_market = {"1": 0.05, "X": 0.05, "2": 0.90}
+    fixture = Match(
+        datetime(2025, 4, 1),
+        "A",
+        "B",
+        market=verified_market,
+        detail={
+            "market_temporal_status": "schedule_compatible",
+            "market_pre_match_eligible": True,
+        },
+    )
+
+    signal = surprise_signal(model, None, model, fixture, [])
+
+    assert signal is not None
+    assert signal["reference"] == "mercado"
+    assert signal["score"] == pytest.approx(1.0)
+
+
 def test_dc_forecast_does_not_train_optional_ml_model():
     class ExplodingML:
         def fit_predict_proba(self, history, current):
