@@ -31,7 +31,16 @@ _KEY_HINTS = (
     "temporada",
     "caducidad",
 )
-_TIME_HINTS = ("fecha", "date", "hora", "time", "inicio", "kickoff")
+_TIME_HINTS = (
+    "fecha",
+    "date",
+    "hora",
+    "time",
+    "inicio",
+    "kickoff",
+    "dia",
+    "caducidad",
+)
 _MAX_CANDIDATES = 80
 
 
@@ -56,7 +65,9 @@ def _safe_sample(value: Any) -> Any:
     return {"type": type(value).__name__}
 
 
-def _candidate_fields(value: Any, path: str = "", depth: int = 0) -> list[dict[str, Any]]:
+def _candidate_fields(
+    value: Any, path: str = "", depth: int = 0
+) -> list[dict[str, Any]]:
     found: list[dict[str, Any]] = []
     if depth > 4 or len(found) >= _MAX_CANDIDATES:
         return found

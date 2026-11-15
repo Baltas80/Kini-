@@ -100,7 +100,6 @@ def test_invalid_source_vector_is_not_normalized_or_used_in_blended_output(monke
     )
 
 
-
 class FakeJsonResponse:
     def __init__(self, payload: dict) -> None:
         self.payload = payload

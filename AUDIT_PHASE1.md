@@ -1141,3 +1141,21 @@ The read-only diagnostic [run 43745525438](https://github.com/Baltas80/Kini-/act
 - The first five records include international team fixtures; their team provider IDs are available, but the separate percentage XML uses a match number and display names. A join must be explicitly verified rather than assuming that `orden` and XML `num` are interchangeable.
 
 This is sufficient to keep the LAE gate disabled: the response does not currently prove an exact, timezone-aware kickoff. The diagnostic has been extended to expose the actual `dia`, `orden`, jornada/season and cache-expiry samples so the date semantics and any safe match-number crosswalk can be checked. No timezone will be inferred from the Spanish-language site or from the local clock string.
+
+
+### Live details field semantics — run 43745730824
+
+The second read-only diagnostic [run 43745730824](https://github.com/Baltas80/Kini-/actions/runs/43745730824) completed successfully for jornada 22 / temporada 2027. Artifact [kinielagpt-details-diagnostic, ID 14174126247](https://github.com/Baltas80/Kini-/actions/runs/43745730824/artifacts/14174126247), 2,558 bytes; SHA-256 `56801dde0d3d52486f36923ecb872270cbd79273bea2828d29b30dc6525ec2dd`.
+
+Observed field semantics:
+
+- `dia` is a weekday abbreviation (`MAR`), not a calendar date.
+- `hora` is a local clock string (`20:45` in the sampled records); it carries no timezone offset.
+- `orden` is a sequence from 1 onward; the provider detail records do not expose a fixture-level `idPartido`.
+- `idEquipoLocal` and `idEquipoVisitante` are present, but the percentage XML exposes team display names and its own `num`; no provider fixture ID is shared in the inspected payload.
+- Root `caducidad=1794783600` converts to 2026-11-15 23:00 UTC. It is a cache-expiry-like field, not a kickoff field, and is not used for eligibility.
+- The detail payload contains 15 records, but no calendar date or timezone-aware kickoff in the sampled records.
+
+The evidence rules out deriving kickoff from `dia` + `hora` or treating `caducidad` as match time. LAE therefore remains ineligible for live surprise detection. The diagnostic now explicitly flags `dia` as a date/time candidate and verifies that weekday-only and local-clock strings are not timezone-aware ISO timestamps.
+
+The next safe investigation is a strict crosswalk check between `orden` and the percentage XML's `num`, using exact normalized home/away names as an independent guard. Even a successful crosswalk will not solve the missing calendar date/timezone; a separate source with a documented, timezone-aware kickoff is still required.
