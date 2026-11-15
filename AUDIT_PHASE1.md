@@ -467,3 +467,23 @@ The public `KiniEngine.quiniela` result now includes `estimated_full_coupon_cove
 - The accepted predictive benchmark remains [run 43666544162](https://github.com/Baltas80/Kini-/actions/runs/43666544162). This change only adds a clearly labelled derived coverage field; it does not change model probabilities, the 14-match DP objective or benchmark forecasts.
 
 PR #5 remains open and is still the prerequisite for integrating PR #6. PR #6 remains draft. No PR has been merged and `master` remains untouched.
+
+
+## Canonical team identity registry — 2026-11-15
+
+A strict provider-scoped identity registry has been added on branch `feat/canonical-team-identity-registry`.
+
+- Registry: `kini_engine/data/team_identity_registry.json`.
+- Source artifact: historical-data-validation run [43672336819](https://github.com/Baltas80/Kini-/actions/runs/43672336819); artifact SHA-256 `c194edf11b0733a203a9559e20e8a2b7e43a8d35a4108eacd2c4da6dae49174d`.
+- Consolidated CSV SHA-256: `a01a68393de69c7ad37d2088864093a50108df9e299f1993d855cad87147acab`.
+- Coverage in the source artifact: 5,311 fixtures, 56 exact Football-Data team labels and 10,622 home/away references across SP1/SP2 and seven season codes.
+- Stable internal IDs are generated from the source labels. Each alias is scoped to Football-Data and the exact observed competition/season pairs.
+- Matching uses Unicode NFKC, case folding and whitespace collapse only. Accents and punctuation are preserved. No fuzzy match or cross-provider inference is permitted.
+- SELAE aliases are deliberately not seeded. The importer’s (M)/(F) category markers do not by themselves identify a competition or a verified canonical club identity.
+- The registry is not wired into model features or training joins; it is an isolated identity layer.
+
+The validator `python -m scripts.validate_team_identity_registry --csv data/historical_spain.csv` resolved **10,622/10,622** team references to 56 unique IDs, with zero unresolved and zero ambiguous references on the exact historical artifact.
+
+Deterministic tests: **11 passed** locally. The historical-data-validation workflow now runs the registry validator against freshly built data and uploads its report. The expensive historical-backtest path filter has been narrowed to forecast/data inputs so identity-only changes do not trigger a full model backtest.
+
+Open limitation: the registry covers only Football-Data SP1/SP2 labels. SELAE coupon teams, Liga F, cup and European fixtures remain unresolved until independently verified aliases, competition IDs and kickoff dates are available. No model probabilities or backtest metrics were changed by this identity-layer work.
