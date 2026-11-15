@@ -7,7 +7,7 @@ from .sources import KinielaGPTSource
 
 try:
     from mcp.server.fastmcp import FastMCP
-except Exception:
+except ImportError:
     FastMCP = None  # type: ignore[assignment]
 
 
@@ -79,7 +79,6 @@ def create_server(engine: KiniEngine | None = None):
     def detect_surprises(jornada: int, temporada: int) -> list[dict[str, Any]]:
         rows = source.probabilities(jornada, temporada)
         out = []
-        history = getattr(model, "history", [])
         for row in rows:
             home = row.get("local", "")
             away = row.get("visitante", "")
