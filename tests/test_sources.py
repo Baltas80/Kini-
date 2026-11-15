@@ -1,3 +1,4 @@
+import json
 from datetime import UTC, datetime
 
 import pytest
@@ -178,3 +179,145 @@ def test_details_rejects_unknown_or_malformed_provider_schema(payload, error):
 
     with pytest.raises(error, match="KinielaGPT"):
         source.details(12, 2026)
+
+
+
+def _kickoff_crosswalk_payload(
+    *, checked_at: str = "2026-11-15T19:00:00Z"
+) -> dict:
+    return {
+        "schema_version": 1,
+        "jornada": 12,
+        "temporada": 2026,
+        "timezone": "CET",
+        "crosswalk_evidence": {
+            "status": "verified",
+            "details_count": 1,
+            "percentage_matches_count": 1,
+            "verified_count": 1,
+            "checked_at_utc": checked_at,
+        },
+        "schedule_sources": [
+            {
+                "id": "official",
+                "competition": "UEFA test schedule",
+                "url": "https://www.uefa.com/test-schedule/",
+                "timezone": "CET",
+            }
+        ],
+        "fixtures": [
+            {
+                "num": 1,
+                "home_provider_name": "Local",
+                "away_provider_name": "Visitante",
+                "provider_day_label": "MAR",
+                "provider_clock_time": "20:45",
+                "kickoff_at": "2026-11-17T20:45:00+01:00",
+                "schedule_source_id": "official",
+            }
+        ],
+    }
+
+
+def _freeze_source_clock(monkeypatch, fixed: datetime) -> None:
+    class FrozenDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return fixed.astimezone(tz) if tz else fixed.replace(tzinfo=None)
+
+    monkeypatch.setattr(source_module, "datetime", FrozenDateTime)
+
+
+def test_probabilities_attach_official_kickoff_after_verified_identity_and_evidence(
+    monkeypatch, tmp_path
+):
+    fixed = datetime(2026, 11, 15, 19, 30, tzinfo=UTC)
+    _freeze_source_clock(monkeypatch, fixed)
+    path = tmp_path / "kinielagpt_fixture_kickoffs.json"
+    path.write_text(json.dumps(_kickoff_crosswalk_payload()), encoding="utf-8")
+    monkeypatch.setattr(KinielaGPTSource, "KICKOFF_CROSSWALK_PATH", path)
+
+    source = KinielaGPTSource()
+    source.session = FakeSession(
+        {
+            "porcentajes_lae.asp": xml_fixture("Local", "Visitante", (60, 20, 20)),
+            "porcentajes.asp?": xml_fixture("Local", "Visitante", (20, 30, 50)),
+        }
+    )
+
+    row = source.probabilities(12, 2026)[0]
+
+    assert row["fixture_identity_status"] == "verified"
+    assert row["kickoff_at"] == "2026-11-17T20:45:00+01:00"
+    assert row["kickoff_source"] == "UEFA test schedule"
+    assert row["kickoff_evidence_url"] == "https://www.uefa.com/test-schedule/"
+    assert row["kickoff_evidence_checked_at_utc"] == "2026-11-15T19:00:00+00:00"
+    assert row["kickoff_timezone"] == "CET"
+
+
+def test_probabilities_do_not_attach_kickoff_when_lae_fixture_names_disagree(
+    monkeypatch, tmp_path
+):
+    fixed = datetime(2026, 11, 15, 19, 30, tzinfo=UTC)
+    _freeze_source_clock(monkeypatch, fixed)
+    path = tmp_path / "kinielagpt_fixture_kickoffs.json"
+    path.write_text(json.dumps(_kickoff_crosswalk_payload()), encoding="utf-8")
+    monkeypatch.setattr(KinielaGPTSource, "KICKOFF_CROSSWALK_PATH", path)
+
+    source = KinielaGPTSource()
+    source.session = FakeSession(
+        {
+            "porcentajes_lae.asp": xml_fixture("Other", "Visitante", (60, 20, 20)),
+            "porcentajes.asp?": xml_fixture("Local", "Visitante", (20, 30, 50)),
+        }
+    )
+
+    row = source.probabilities(12, 2026)[0]
+
+    assert row["fixture_identity_status"] == "source_name_mismatch"
+    assert row["kickoff_at"] is None
+    assert row["lae"] == pytest.approx({"1": 0.6, "X": 0.2, "2": 0.2})
+
+
+def test_probabilities_do_not_use_schedule_evidence_checked_after_lae_capture(
+    monkeypatch, tmp_path
+):
+    fixed = datetime(2026, 11, 15, 19, 0, tzinfo=UTC)
+    _freeze_source_clock(monkeypatch, fixed)
+    path = tmp_path / "kinielagpt_fixture_kickoffs.json"
+    path.write_text(
+        json.dumps(
+            _kickoff_crosswalk_payload(checked_at="2026-11-15T19:30:00Z")
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(KinielaGPTSource, "KICKOFF_CROSSWALK_PATH", path)
+
+    source = KinielaGPTSource()
+    source.session = FakeSession(
+        {
+            "porcentajes_lae.asp": xml_fixture("Local", "Visitante", (60, 20, 20)),
+            "porcentajes.asp?": xml_fixture("Local", "Visitante", (20, 30, 50)),
+        }
+    )
+
+    row = source.probabilities(12, 2026)[0]
+
+    assert row["fixture_identity_status"] == "schedule_evidence_after_lae_capture"
+    assert row["kickoff_at"] is None
+
+
+def test_curated_jornada_22_kickoff_crosswalk_loads_all_fifteen_verified_fixtures():
+    mapping = KinielaGPTSource._load_kickoff_crosswalk(22, 2027)
+
+    assert len(mapping) == 15
+    assert mapping[(1, "bosnia herzegovina", "rumania")]["kickoff_at"] == (
+        "2026-11-17T20:45:00+01:00"
+    )
+    assert mapping[(7, "r madrid f", "inter f")]["kickoff_at"] == (
+        "2026-11-18T18:45:00+01:00"
+    )
+    assert mapping[(11, "austria wien f", "b munich f")]["kickoff_at"] == (
+        "2026-11-19T18:45:00+01:00"
+    )
+    assert KinielaGPTSource._load_kickoff_crosswalk(21, 2027) == {}
