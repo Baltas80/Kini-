@@ -288,7 +288,7 @@ def extract_match_links(html: str, *, page_url: str) -> list[dict[str, str]]:
         absolute = urljoin(page_url, href)
         parsed = urlparse(absolute)
         match = MATCH_PATH.fullmatch(parsed.path)
-        if match is None:
+        if match is None or parsed.hostname not in OFFICIAL_HOSTS:
             continue
         _official_url(absolute, "match_url")
         match_id = match.group(1)
@@ -499,9 +499,8 @@ def parse_match_detail(
             f"match {match_id} has an unknown or missing official status"
         )
 
-    if kickoff is not None and kickoff.date() > date.today():
-        if status == "played":
-            raise LigaFHistoryError(f"finished match {match_id} has a future kickoff")
+    if kickoff is not None and kickoff.date() > date.today() and status == "played":
+        raise LigaFHistoryError(f"finished match {match_id} has a future kickoff")
 
     season = f"{season_end_year - 1}-{str(season_end_year)[-2:]}"
     return {
