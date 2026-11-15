@@ -54,3 +54,14 @@ The canonical registry deliberately contains no inferred SELAE aliases. A separa
 The reconciliation contract and CLI are documented in [SELAE_RECONCILIATION.md](SELAE_RECONCILIATION.md). Every played coupon fixture must match an exact SELAE display-name pair and resolve both Football-Data labels under an explicit competition, season and gender. The crosswalk must also contain a timezone-aware kickoff timestamp and independent HTTPS schedule evidence. Unknown, ambiguous, out-of-scope or mismatched records are excluded and reported; no fuzzy matching is used.
 
 The current crosswalk contains ten independently verified mappings from the 8 November 2026 coupon (positions 1–10), each supported by an official club schedule page and an exact SP1/2627 or SP2/2627 Football-Data row. Only the three women's fixtures remain unresolved; the postponed public-draw fixture is excluded. No full-coupon training-label export is permitted while any played fixture remains unresolved. Even after reconciliation, goals and 1/X/2 are target labels only, and downstream features must be computed strictly before kickoff.
+
+
+## Liga F women's identities — current-season scope
+
+The separate registry `kini_engine/data/ligaf_team_identity_registry.json` now contains all 16 exact official team labels observed in the validated 2026/27 Liga F archive rounds 1–10. Six of those identities also carry the independently checked SELAE aliases used by coupon positions 11–13; the other ten have only the official Liga F source alias. This is not a historical continuity claim: no identity is propagated into earlier seasons merely because its display name looks similar.
+
+The file `data/ligaf_team_profile_crosswalk.json` maps each of the 16 internal IDs to the official Liga F team-profile URL and numeric provider profile ID. Each profile URL was reached through a home/away team link on an official match-detail page linked from the official matchday-10 archive. The crosswalk records the supporting match-detail URL. Its regression test checks source host, unique internal/provider IDs, season scope and exact registry resolution:
+
+    pytest -q tests/test_ligaf_evidence.py
+
+The 2026/27 profile IDs are source-specific evidence for this season. Historical profile IDs and club continuity across 2022/23–2025/26 still require independent extraction and review before historical joins or model training.
