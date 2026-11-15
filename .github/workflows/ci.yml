@@ -18,7 +18,6 @@ on:
       - "data/**"
       - "pyproject.toml"
       - "requirements*.txt"
-      - "AUDIT_PHASE1.md"
       - ".github/workflows/**"
 
 concurrency:

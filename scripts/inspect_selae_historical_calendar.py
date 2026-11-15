@@ -88,9 +88,7 @@ def _validate_xls_payload(payload: bytes) -> None:
     if len(payload) < 512:
         raise ValueError(f"SELAE XLS response is too small: {len(payload)} bytes")
     if len(payload) > MAX_DOWNLOAD_BYTES:
-        raise ValueError(
-            f"SELAE XLS response exceeds {MAX_DOWNLOAD_BYTES} bytes"
-        )
+        raise ValueError(f"SELAE XLS response exceeds {MAX_DOWNLOAD_BYTES} bytes")
     if not payload.startswith(XLS_SIGNATURE):
         preview = payload[:80].decode("utf-8", errors="replace")
         raise ValueError(
