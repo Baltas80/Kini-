@@ -473,9 +473,15 @@ class TicketOptimizer:
         for index, prediction in enumerate(predictions, start=1):
             if not isinstance(prediction, dict):
                 raise ValueError(f"match {index}: probabilities must be a mapping")
+            missing_signs = [sign for sign in SIGNS if sign not in prediction]
+            if missing_signs:
+                raise ValueError(
+                    f"match {index}: missing probability for sign(s): {', '.join(missing_signs)}"
+                )
+
             values: dict[str, float] = {}
             for sign in SIGNS:
-                raw = prediction.get(sign, 0.0)
+                raw = prediction[sign]
                 if isinstance(raw, (bool, np.bool_)):
                     raise ValueError(f"match {index}: invalid probability for sign {sign}")
                 try:
