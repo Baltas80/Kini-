@@ -1,6 +1,12 @@
 name: ligaf-history-validation
 
 on:
+  pull_request:
+    paths:
+      - "kini_engine/ligaf_history.py"
+      - "scripts/import_ligaf_history.py"
+      - "tests/test_ligaf_history.py"
+      - ".github/workflows/ligaf-history-validation.yml"
   workflow_dispatch:
     inputs:
       max_current_matchday:
@@ -45,11 +51,11 @@ jobs:
           args=(
             --seasons 2023 2024 2025 2026 2027
             --current-season 2027
-            --max-current-matchday "${{ inputs.max_current_matchday }}"
+            --max-current-matchday "${{ inputs.max_current_matchday || 10 }}"
             --cache-ttl-hours 168
             --request-delay 0.35
           )
-          if [[ "${{ inputs.refresh }}" == "true" ]]; then
+          if [[ "${{ inputs.refresh || false }}" == "true" ]]; then
             args+=(--refresh)
           fi
           python scripts/import_ligaf_history.py "${args[@]}"
