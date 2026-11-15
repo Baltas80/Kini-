@@ -85,7 +85,7 @@ python scripts/import_selae_results.py --dates 2026-11-08 --refresh
 Si el HTML se ha guardado manualmente desde la página oficial, nombrar los archivos por fecha ISO (`2026-11-08.html`) y ejecutar:
 
 ```powershell
-python scripts/import_selae_results.py --dates 2026-11-08 --html-dir .\\data\\selae-html
+python scripts/import_selae_results.py --dates 2026-11-08 --html-dir .\data\selae-html
 ```
 
 El importador combina las nuevas fechas con el JSONL existente. Repetir la misma importación (mismo SHA-256) es idempotente. Si SELAE corrige una página ya importada y cambia su SHA-256, el proceso se detiene; solo se sustituye el registro después de revisar el cambio y pasar `--replace-existing`.
