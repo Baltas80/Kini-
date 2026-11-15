@@ -1,8 +1,8 @@
 from scripts.diagnose_kinielagpt_details import (
     reconcile_fixture_order,
     summarize_kickoff_attachment,
-    summarize_probability_payload,
     summarize_payload,
+    summarize_probability_payload,
 )
 
 
