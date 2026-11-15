@@ -105,3 +105,32 @@ def test_dataset_profile_records_coverage_quality_and_sources():
     assert profile["date_coverage"]["invalid_or_missing"] == 1
     assert profile["score_result_mismatches"] == 1
     assert profile["source_urls"] == ["https://example.test/SP1.csv"]
+
+def test_market_averages_preclosing_bookmakers_and_ignores_closing_columns(tmp_path: Path):
+    p = tmp_path / "preclosing.csv"
+    p.write_text(
+        "Date,HomeTeam,AwayTeam,FTHG,FTAG,FTR,"
+        "B365H,B365D,B365A,WHH,WHD,WHA,B365CH,B365CD,B365CA\\n"
+        "2025-01-01,A,B,1,0,H,2.0,3.5,4.0,3.0,3.0,3.0,1.2,8.0,15.0\\n",
+        encoding="utf-8",
+    )
+    match = load_matches_csv(p)[0]
+    b365 = [1 / 2.0, 1 / 3.5, 1 / 4.0]
+    b365 = [value / sum(b365) for value in b365]
+    william_hill = [1 / 3.0, 1 / 3.0, 1 / 3.0]
+    expected = [
+        (b365[index] + william_hill[index]) / 2
+        for index in range(3)
+    ]
+    assert match.market is not None
+    assert list(match.market.values()) == pytest.approx(expected)
+
+
+def test_market_is_unavailable_when_only_closing_odds_exist(tmp_path: Path):
+    p = tmp_path / "closing_only.csv"
+    p.write_text(
+        "Date,HomeTeam,AwayTeam,FTHG,FTAG,FTR,B365CH,B365CD,B365CA\\n"
+        "2025-01-01,A,B,1,0,H,1.5,4.0,8.0\\n",
+        encoding="utf-8",
+    )
+    assert load_matches_csv(p)[0].market is None
