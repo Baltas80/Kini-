@@ -99,16 +99,20 @@ def create_server(engine: KiniEngine | None = None):
             )
             prediction = model.predict(current)
             if prediction.surprise:
-                out.append({
-                    "id": row.get("id"),
-                    "home": home,
-                    "away": away,
-                    "prediction": prediction.__dict__,
-                })
+                out.append(
+                    {
+                        "id": row.get("id"),
+                        "home": home,
+                        "away": away,
+                        "prediction": prediction.__dict__,
+                    }
+                )
         return out
 
     @mcp.tool()
-    def predict_quiniela(fixtures: list[dict[str, str]], budget: int = 8) -> dict[str, Any]:
+    def predict_quiniela(
+        fixtures: list[dict[str, str]], budget: int = 8
+    ) -> dict[str, Any]:
         ms = [Match("", x["home"], x["away"]) for x in fixtures]
         return model.quiniela(ms, budget)
 
