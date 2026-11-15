@@ -202,6 +202,7 @@ def _kickoff_crosswalk_payload(
                 "id": "official",
                 "competition": "UEFA test schedule",
                 "url": "https://www.uefa.com/test-schedule/",
+                "published_date": "2026-11-15",
                 "timezone": "CET",
             }
         ],
