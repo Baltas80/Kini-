@@ -240,9 +240,9 @@ def reconcile_fixture_order(details: Any, percentage_matches: Any) -> dict[str, 
                 else False,
                 "local": str(record.get("local", ""))[:100],
                 "visitante": str(record.get("visitante", ""))[:100],
-                "provider_day": str(record.get("dia", ""))[:20] or None,
-                "provider_local_time": str(record.get("hora", ""))[:20] or None,
-                "timezone_aware_kickoff_fields": [
+                "provider_day_label": str(record.get("dia") or "")[:20] or None,
+                "provider_clock_time": str(record.get("hora") or "")[:20] or None,
+                "timezone_aware_candidate_fields": [
                     field["path"]
                     for field in _candidate_fields(record)
                     if field.get("timezone_aware_iso") is True
