@@ -720,9 +720,19 @@ class KiniEngine:
             fixtures[14].home,
             fixtures[14].away,
         )
+        pleno_best = pleno_distribution[0]
+        coverage_14 = float(ticket["joint_coverage"])
+        pleno15_probability = float(pleno_best["probability"])
+
         return {
             "predictions": [p.__dict__ for p in preds],
             "ticket": ticket,
             "pleno_al_15": pleno_distribution,
-            "pleno_al_15_best": pleno_distribution[0],
+            "pleno_al_15_best": pleno_best,
+            "estimated_full_coupon_coverage_independent": (
+                coverage_14 * pleno15_probability
+            ),
+            "full_coupon_coverage_assumption": (
+                "independent_all_14_matches_and_pleno15"
+            ),
         }
