@@ -4,9 +4,9 @@ Date: 2026-11-15
 Repository: Baltas80/Kini-  
 Working branch: `audit/phase-1-temporal-validation`  
 Base branch: `master`  
-Backtest code commit evaluated: `fbffca8b1600346ca728e19f010ab3f61f35f198`  
-Latest fully validated baseline: `2963e7dcbc3f0aca6680011e9c347367c79af44e`  
-Latest model-code HEAD: `3fff53c52d4b60efe851eba18d9bd4e85a463f88` (44 tests, historical-data validation and prequential calibration backtest passed)
+Backtest code commit evaluated: `a21aedd7eb42f0e5f3d19238a4106909448136a2`  
+Latest fully validated model-code baseline: `a21aedd7eb42f0e5f3d19238a4106909448136a2`  
+Latest branch head: `491b40aa6a399f7535284c1562d8784606035b6d` (47 tests passed; historical-data validation passed; full backtest passed on the model-code commit)
 
 ## Executive status
 
@@ -14,10 +14,10 @@ Latest model-code HEAD: `3fff53c52d4b60efe851eba18d9bd4e85a463f88` (44 tests, hi
 - **P1 historical ingestion:** validated on 5,311 completed matches, with the integrity profile passing.
 - **P2 temporal validation:** same-calendar-day exclusion, date-based refit cadence and strictly pre-match ML feature history are implemented and tested.
 - **P6 ticket optimizer:** probability validation, budget constraints, exhaustive small-budget DP comparison, minimum stake and Pleno al 15 aggregation are implemented and CI-tested.
-- **Predictive performance:** the market remains materially better than every model configuration on accuracy, Brier and Log Loss.
+- **Predictive performance:** the multi-book pre-closing market benchmark remains materially better than every model configuration on accuracy, Brier and Log Loss.
 - **Ensemble weighting:** fixed and rolling prequential DC/ML-only comparisons are now evaluated. The adaptive variant did not improve Brier or Log Loss over the fixed DC/ML blend and is not selected as the default.
 - **Calibration diagnostics:** one-vs-rest reliability, prevalence, mean predicted probability, binary Brier/Log Loss and ECE by 1/X/2 class and football season are implemented on out-of-sample forecasts.
-- **Prequential calibration experiment:** a regularized multinomial vector-bias/shared-scale calibrator is implemented for every model and the market. It is fitted only on prior OOF forecasts, with a 500-row warm-up, 1,500-row rolling window, minimum 20 observations per class and refits every 30 forecast dates. Same-day outcomes are appended only after the entire date has been forecast. Its full walk-forward evaluation completed in run [43652723196](https://github.com/Baltas80/Kini-/actions/runs/43652723196): 4,480 post-warm-up forecasts per model and 33 successful refits. It remains experimental because results vary by model and season; it is not selected as a production default.
+- **Prequential calibration experiment:** a regularized multinomial vector-bias/shared-scale calibrator is implemented for every model and the market. It is fitted only on prior OOF forecasts, with a 500-row warm-up, 1,500-row rolling window, minimum 20 observations per class and refits every 30 forecast dates. Same-day outcomes are appended only after the entire date has been forecast. Its updated full walk-forward evaluation completed in run [43657960317](https://github.com/Baltas80/Kini-/actions/runs/43657960317): 4,480 post-warm-up forecasts per model and 33 successful refits after the Pinnacle data-quality correction. It remains experimental because results vary by model and season; it is not selected as a production default.
 - **Not complete:** timestamped odds provenance, canonical team identity, correlation-aware ticket coverage and expected-payout modelling.
 
 ## P0/P2 — walk-forward and ML integrity
@@ -61,8 +61,8 @@ The profile records source URLs, cache timestamps/age, missingness, date coverag
 
 ## Current model backtest — validated
 
-GitHub Actions run: [43641695219](https://github.com/Baltas80/Kini-/actions/runs/43641695219)  
-Code commit evaluated: `fbffca8b1600346ca728e19f010ab3f61f35f198`
+GitHub Actions run: [43657960317](https://github.com/Baltas80/Kini-/actions/runs/43657960317)  
+Code commit evaluated: `a21aedd7eb42f0e5f3d19238a4106909448136a2`
 
 - Generated history: 5,311 completed fixtures.
 - Initial training sample: 300 matches.
@@ -80,7 +80,7 @@ Code commit evaluated: `fbffca8b1600346ca728e19f010ab3f61f35f198`
 | Ensemble (DC/ML/LAE/market) | 0.4825 | 0.6134 | 1.0226 | 0.2069 | 0.0117 |
 | Fixed DC/ML-only | 0.4772 | 0.6158 | 1.0264 | 0.2080 | 0.0108 |
 | Adaptive DC/ML-only | 0.4777 | 0.6160 | 1.0267 | 0.2080 | 0.0100 |
-| multi-book pre-closing | **0.5085** | **0.5980** | **1.0002** | **0.2002** | 0.0261 |
+| multi-book pre-closing | **0.5081** | **0.5980** | **1.0002** | **0.2002** | 0.0257 |
 
 * RPS is secondary because 1/X/2 are nominal outcomes rather than a naturally ordinal scale.  
 ** ECE is maximum-confidence expected calibration error with 10 equal-width bins; it is not a complete class-wise calibration assessment.
@@ -148,7 +148,7 @@ The evaluator selects one weight before each calendar date and appends that date
 
 The official Football-Data notes define `B365H/D/A` as **pre-closing** Bet365 odds; the closing equivalents are `B365CH/CD/CA` (the additional `C` marks closing). The current parser in `kini_engine/dataio.py::_market_from_row` averages normalized implied probabilities from the pre-closing triples `B365H/D/A`, `WHH/WHD/WHA`, `VCH/VCD/VCA` and `PSH/PSD/PSA` when available. It does not use the corresponding closing columns (`B365CH/CD/CA`, `WHCH/WHCD/WHCA`, `VCCH/VCCD/VCCA`, `PSCH/PSCD/PSCA`). Therefore every result labelled “market” in the current backtests is a **multi-book pre-closing snapshot benchmark**, not a closing-odds benchmark.
 
-Football-Data states that since 2019/20 it publishes two sets: an initial set collected after market opening at scheduled times, and a separate closing set. Its fixtures page specifies that weekend odds are collected on Fridays generally no later than 17:00 British Standard Time, and midweek odds on Tuesdays no later than 13:00 British Standard Time. The historical match CSV does not store a per-fixture capture timestamp. The scheduled policy supports treating these pre-closing bookmaker triples as a pre-match snapshot reference, but does not prove the exact capture time for every fixture, reschedule or operational cutoff, nor guarantee an executable price.
+Football-Data states that since 2019/20 it publishes two sets: an initial set collected after market opening at scheduled times, and a separate closing set. Its fixtures page specifies that weekend odds are collected on Fridays generally no later than 17:00 British Standard Time, and midweek odds on Tuesdays no later than 13:00 British Standard Time. The historical match CSV does not store a per-fixture capture timestamp. The scheduled policy supports treating these pre-closing bookmaker triples as a pre-match snapshot reference, but does not prove the exact capture time for every fixture, reschedule or operational cutoff, nor guarantee an executable price. Football-Data also warns that its Pinnacle public feed has been systematically stale since 2025-07-23. The parser now excludes PSH/PSD/PSA on and after that date; the current data contains 1,101 post-cutoff fixtures, 385 with a complete Pinnacle triple, while Bet365 odds remain available for all 1,101.
 
 A raw audit of the 5,311-row dataset found 7 Friday fixtures whose `Time` field is earlier than 17:00 and no Tuesday fixtures earlier than 13:00. The timezone of the CSV `Time` field is not specified in the glossary, and the collection time is only an upper bound; these 7 fixtures are therefore **temporally ambiguous**, not proven leakage and not proven safe. The current loader also drops `Time` from `Match.detail`. Next implementation: preserve kickoff time/timezone metadata, add an explicit market-availability flag, and exclude ambiguous rows from strict market-feature comparisons unless capture evidence resolves them.
 
@@ -182,18 +182,20 @@ Rule and price references are documented in `docs/QUINIELA_RULES.md`. The price/
 
 ## CI
 
-Baseline validado: `2963e7dcbc3f0aca6680011e9c347367c79af44e`. Último HEAD: `3fff53c52d4b60efe851eba18d9bd4e85a463f88`.
+Código predictivo validado: `a21aedd7eb42f0e5f3d19238a4106909448136a2`. HEAD de la rama: `491b40aa6a399f7535284c1562d8784606035b6d`.
 
-- [CI del último HEAD — 44 tests superados](https://github.com/Baltas80/Kini-/actions/runs/43652728930). Permanecen cuatro advertencias deprecatorias de `penaltyblog` 1.13.1 al asignar la forma de un array bajo NumPy 2.5.
-- [Validación histórica del último HEAD](https://github.com/Baltas80/Kini-/actions/runs/43652728953): 5.311 partidos, `integrity_passed: true`, cero duplicados; LaLiga 2026/27: 119 partidos y Segunda 2026/27: 140.
-- [Backtest histórico con calibración prequential](https://github.com/Baltas80/Kini-/actions/runs/43652723196): 5.011 predicciones para cada una de las cinco configuraciones, cero errores, 4.480 comparaciones calibradas/raw por configuración, 33 ajustes por calibrador y `PREQUENTIAL_CALIBRATION_OK`.
+- [CI del HEAD de la rama](https://github.com/Baltas80/Kini-/actions/runs/43658147899): **47 tests superados**, cuatro advertencias deprecatorias de penaltyblog 1.13.1 bajo NumPy 2.5.
+- [Validación histórica del HEAD de la rama](https://github.com/Baltas80/Kini-/actions/runs/43658147908): 5.311 partidos, integrity_passed true, cero duplicados y cobertura de temporada actual.
+- [Backtest histórico tras excluir Pinnacle obsoleto](https://github.com/Baltas80/Kini-/actions/runs/43657960317): 5.011 predicciones para cada una de las cinco configuraciones, cero errores, 4.480 comparaciones calibradas/raw por configuración, 33 ajustes por calibrador y PREQUENTIAL_CALIBRATION_OK.
+
+Los tres workflows usan filtros por rutas y concurrencia por rama: CI cubre código, tests, datos, dependencias y cambios de workflows; validación de datos cubre sus entradas reales; el backtest completo solo se ejecuta ante cambios de modelo/datos/dependencias, además de su ejecución manual y semanal. Esto evita repetir validaciones costosas por cambios documentales y cancela ejecuciones duplicadas push/PR.
 
 El constructor de la ingesta consolida el DataFrame normalizado antes de añadir `_ParsedDate` y concatena `League`, `Season` y `SourceURL` como un único bloque de metadatos. CI detectó que el primer intento había comentado accidentalmente la asignación de la fecha parseada; el commit `2963e7d` la restauró. La implementación corregida conserva las 5.311 filas y elimina los avisos de fragmentación de pandas.
 
 ## Remaining work — priority order
 
-1. **Calibration correction:** evaluate the new prequential vector-bias/shared-scale calibrator against raw forecasts on its identical post-warm-up sample. Promote it only if Brier and Log Loss improve on the same chronological evaluation; otherwise retain raw probabilities and document the result.
-2. **Odds provenance:** the current benchmark is multi-book pre-closing, not closing. Add separate pre-closing and closing benchmark fields and verify match-level timing/reschedule handling before making a strict operational-cutoff claim.
+1. **Calibration correction:** completed. The prequential calibrator is validated but not promoted to the main ensemble because the primary ensemble does not improve both proper scores and seasonal effects are mixed.
+2. **Odds provenance:** the benchmark is multi-book pre-closing. Pinnacle is excluded from 2025-07-23 onward; 7 early-Friday fixtures remain temporally ambiguous because the CSV does not state the timezone or exact capture timestamp. Preserve Time, add a market-availability flag, and separately evaluate provider consensus and closing columns without feeding closing prices into an earlier forecast.
 3. **Data identity:** audit aliases, renamed clubs and cross-season continuity; profile checks currently normalize text but do not maintain a canonical team-identity registry.
 4. **Ticket economics:** test cross-match dependence and realistic system/reduced-bet constraints. Do not claim expected payout or profitability without a defensible payout model and prize-pool data.
 5. **Model research:** retain the adaptive DC/ML weighting as an experiment; do not promote it unless a prequential or nested temporal evaluation demonstrates improvement in proper scoring rules.
@@ -218,17 +220,18 @@ El constructor de la ingesta consolida el DataFrame normalizado antes de añadir
 - No PR has been merged.
 - `master` remains at `ef331c3a3f50220b5d2b1a71900a2d7003b259c4` and has not been modified.
 
-## Execution checkpoint — 2026-11-15 01:15 CET
+## Execution checkpoint — 2026-11-15
 
-- Branch HEAD before this checkpoint: `d3d9e46f35e790c8b2b61b36f02007e9116b66be`; this checkpoint is documentation-only and does not change model code.
-- Latest PR validation on that tree: CI run [43652911556](https://github.com/Baltas80/Kini-/actions/runs/43652911556) passed **44 tests**. Four warnings remain in the third-party `penaltyblog` Dixon-Coles implementation under NumPy 2.5.
-- Historical-data validation run [43652911550](https://github.com/Baltas80/Kini-/actions/runs/43652911550) completed successfully.
-- The calibrated historical backtest is now evidenced by run [43652723196](https://github.com/Baltas80/Kini-/actions/runs/43652723196), on code HEAD `3fff53c`. It evaluated the calibrator on the same post-warm-up fixtures as raw forecasts.
-- Acceptance passed: all five model configurations produced 5,011/5,011 predictions; each calibration comparison used 4,480 identical raw/calibrated fixtures; all calibrators had 33 valid fits and a 1,500-row final training window. The next priority is independent temporal stability/uncertainty analysis and the unresolved timestamped-odds provenance. No global calibrator promotion is justified.
+- Model-code commit: `a21aedd7eb42f0e5f3d19238a4106909448136a2`; latest branch head after test/workflow-only commits: `491b40aa6a399f7535284c1562d8784606035b6d`.
+- CI: 47 tests passed on the current branch head; four third-party NumPy/penaltyblog deprecation warnings remain.
+- Data validation: 5,311 completed fixtures, integrity passed, duplicate checks and current-season coverage passed.
+- Full walk-forward backtest: 5,011/5,011 predictions for all five model configurations, zero errors; calibrated/raw comparisons use 4,480 identical post-warm-up fixtures and 33 prior-OOF fits.
+- Pinnacle PSH/PSD/PSA is excluded from the market blend for match dates on/after 2025-07-23. The new backtest confirms that the market remains non-empty and all acceptance gates pass.
+- The primary ensemble remains uncalibrated; the experiment is retained for model-specific research only.
 
-## Prequential calibration results — run 43652723196
+## Prequential calibration results — run 43657960317
 
-The full workflow completed successfully on 2026-11-14/15 for model-code HEAD `3fff53c52d4b60efe851eba18d9bd4e85a463f88`. The subsequent branch commits were documentation-only. The run rebuilt the historical source, passed the first-ML diagnostic, produced all five model forecasts and passed both backtest acceptance gates.
+The full workflow completed successfully on 2026-11-15 for model-code HEAD `a21aedd7eb42f0e5f3d19238a4106909448136a2`. It rebuilt the historical source, passed the first-ML diagnostic, produced all five model forecasts and passed both backtest acceptance gates after the Pinnacle cutoff correction.
 
 - Source history: 5,311 completed matches.
 - Initial training: 300 matches.
@@ -245,13 +248,13 @@ The full workflow completed successfully on 2026-11-14/15 for model-code HEAD `3
 | Ensemble DC/ML/LAE/market | 4,480 | 0.612291 | 0.612432 | +0.000141 | 1.020870 | 1.021008 | +0.000138 |
 | Fixed DC/ML-only | 4,480 | 0.614517 | 0.614567 | +0.000050 | 1.024162 | 1.024174 | +0.000012 |
 | Adaptive DC/ML-only | 4,480 | 0.614591 | 0.614550 | -0.000041 | 1.024310 | 1.024157 | -0.000153 |
-| multi-book pre-closing | 4,480 | 0.598952 | 0.598058 | -0.000894 | 1.001505 | 1.000017 | -0.001488 |
+| multi-book pre-closing | 4,480 | 0.598956 | 0.598057 | -0.000899 | 1.001482 | 0.999976 | -0.001506 |
 
-Negative deltas indicate improvement. The multi-book pre-closing benchmark remains materially better than every calibrated model on both proper scoring rules. On the same 4,480 common fixtures, the calibrated market scores 0.598058 Brier / 1.000017 Log Loss; the best calibrated model configuration is the raw market-assisted ensemble at 0.612432 / 1.021008.
+Negative deltas indicate improvement. The multi-book pre-closing benchmark remains materially better than every calibrated model on both proper scoring rules. On the same 4,480 common fixtures, the calibrated market scores 0.598057 Brier / 0.999976 Log Loss; the best calibrated model configuration is the raw market-assisted ensemble at 0.612432 / 1.021008.
 
 ### Promotion decision
 
-**Do not promote the calibrator as the default prediction layer.** The primary market-assisted ensemble becomes slightly worse on both Brier and Log Loss after calibration. The fixed model-only blend also becomes marginally worse. Standalone Dixon-Coles and ML improve overall, but the improvement is not seasonally stable: in 2026/27 (259 forecasts), the classwise-summed multiclass Brier changes from 0.596009 to 0.598636 for DC, from 0.592878 to 0.594151 for the main ensemble, and from 0.595670 to 0.597484 for the fixed DC/ML blend. The market improves from 0.574361 to 0.572488 in that season. The adaptive blend's overall gain is negligible and its 2026/27 Brier also worsens (0.596068 to 0.598392).
+**Do not promote the calibrator as the default prediction layer.** The primary market-assisted ensemble becomes slightly worse on both Brier and Log Loss after calibration. The fixed model-only blend also becomes marginally worse. Standalone Dixon-Coles and ML improve overall, but the improvement is not seasonally stable: in 2026/27 (259 forecasts), the classwise-summed multiclass Brier changes from 0.596009 to 0.598636 for DC, from 0.592878 to 0.594152 for the main ensemble, and from 0.595670 to 0.597484 for the fixed DC/ML blend. The market improves from 0.574361 to 0.572479 in that season. The adaptive blend's overall gain is negligible and its 2026/27 Brier also worsens (0.596068 to 0.598392).
 
 The result validates the prequential implementation and the experiment, not a universal calibration benefit. Keep raw probabilities as the production default; retain the calibrator behind the experiment/backtest path until an independent later holdout or nested temporal selection demonstrates a stable gain for a specific model.
 
@@ -263,7 +266,7 @@ The historical-backtest workflow now runs on pushes that change `kini_engine/**`
 
 ### Exact backtest reproducibility
 
-A second full execution, [run 43657293261](https://github.com/Baltas80/Kini-/actions/runs/43657293261), completed successfully on a documentation-only commit with the same model code and source data. It reproduced **exactly** every aggregate metric for Dixon-Coles, ML, all three ensembles and the multi-book pre-closing benchmark, as well as every prequential-calibration summary (4,480-row samples, 33 fits, 1,500-row final fit, 2026-10-26 fit date). All numerical deltas between the two artifacts were zero. This demonstrates deterministic reproducibility for the pinned code/data run; it is not an independent holdout.
+A second full execution, [run 43657293261](https://github.com/Baltas80/Kini-/actions/runs/43657293261), completed successfully on a documentation-only commit before the Pinnacle cutoff correction. It reproduced **exactly** every aggregate metric and calibration summary from run 43652723196, demonstrating deterministic reproducibility for that pre-correction code/data pair. The current authoritative market baseline is run 43657960317; the older reproducibility result is retained as historical evidence, not as the current odds definition.
 
 ### Football-Data team labels
 
@@ -275,3 +278,14 @@ A direct audit of the 5,311-row artifact found:
 - No obvious alias variants within this Football-Data sample. Reserve teams such as `Sociedad B`, `Celta B` and `Villarreal B` remain distinct labels.
 
 This closes the immediate alias-variant check for the current source sample, but not canonical identity management across external providers or future renamed clubs. A persistent team-ID registry remains pending before adding other data sources.
+ 
+## Pinnacle feed quality correction — run 43657960317
+
+Football-Data's official data page warns that its public Pinnacle odds feed has been systematically out of date since 2025-07-23. The parser now excludes the Pinnacle pre-closing triple from that date onward while retaining it before the cutoff. A regression test checks both 2025-07-22 and 2025-07-23. The source dataset has 1,101 fixtures on/after the cutoff, 385 with a complete Pinnacle triple; Bet365 pre-closing odds are present for all 1,101, so the market sample remains 5,011/5,011.
+
+Impact against the immediately preceding backtest with Pinnacle included:
+- Multi-book market: Brier 0.598036 → 0.598040; Log Loss 1.000186 → 1.000165; accuracy 0.508481 → 0.508082.
+- Main ensemble: Brier 0.613354 → 0.613356; Log Loss 1.022650 → 1.022649; accuracy unchanged at 0.482538.
+- No material predictive improvement is claimed. The exclusion is justified by provider-quality evidence; its measured score impact is negligible.
+
+The market benchmark remains a multi-book average of per-book no-vig probabilities, not Football-Data's AvgH/AvgD/AvgA consensus columns. Comparing that provider consensus separately is still open research.
