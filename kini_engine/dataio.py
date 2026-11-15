@@ -42,13 +42,26 @@ def _optional_goal(value: object, row_number: int, column: str) -> int | None:
     return int(numeric)
 
 
-def _market_from_row(row: pd.Series) -> dict[str, float] | None:
+def _market_from_row(
+    row: pd.Series,
+    match_date: datetime | str | None = None,
+) -> dict[str, float] | None:
     books = (
         ("B365H", "B365D", "B365A"),
         ("WHH", "WHD", "WHA"),
         ("VCH", "VCD", "VCA"),
         ("PSH", "PSD", "PSA"),
     )
+    # Football-Data warns that Pinnacle's public odds feed has been stale
+    # since 2025-07-23. Do not blend PSH/PSD/PSA into later market features.
+    if match_date is not None:
+        try:
+            odds_date = _parse_match_date(match_date).date()
+        except (TypeError, ValueError):
+            odds_date = None
+        if odds_date is not None and odds_date >= datetime(2025, 7, 23).date():
+            books = tuple(book for book in books if book[0] != "PSH")
+
     estimates: list[dict[str, float]] = []
     for h_col, d_col, a_col in books:
         if not all(col in row.index for col in (h_col, d_col, a_col)):
@@ -105,7 +118,7 @@ def load_matches_csv(path: str | Path) -> list[Match]:
             for k in ("League", "Season", "Div")
             if k in row.index and pd.notna(row[k])
         }
-        market = _market_from_row(row)
+        market = _market_from_row(row, row["Date"])
 
         out.append(
             Match(
