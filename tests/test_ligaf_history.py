@@ -10,6 +10,7 @@ from kini_engine.ligaf_history import (
     LigaFHistoryError,
     _cache_paths,
     extract_match_links,
+    extract_round_dates,
     fetch_html,
     parse_match_detail,
     validate_history,
@@ -68,6 +69,34 @@ def test_extract_match_links_rejects_empty_or_non_official_archive():
         extract_match_links("<html><body>No matches</body></html>", page_url=ROUND_URL)
     with pytest.raises(LigaFHistoryError, match="official ligaf.es"):
         extract_match_links(ROUND_HTML, page_url="https://outside.example/archive")
+
+
+def test_extract_round_dates_uses_explicit_archive_dates_and_season_bounds():
+    html = """
+    <html><body>
+    <h3>19 MAY 2023</h3>
+    <h3>20 MAY 2023</h3>
+    <h3>14 NOV 2026</h3>
+    </body></html>
+    """
+    assert extract_round_dates(html, season_end_year=2023) == {
+        datetime(2023, 5, 19).date(),
+        datetime(2023, 5, 20).date(),
+    }
+
+
+def test_parse_match_detail_rejects_kickoff_absent_from_round_archive():
+    with pytest.raises(LigaFHistoryError, match="absent from the official round archive"):
+        parse_match_detail(
+            MATCH_HTML,
+            match_url=MATCH_URL,
+            season_end_year=2027,
+            expected_matchday=10,
+            round_url=ROUND_URL,
+            match_source_metadata=source_metadata(MATCH_HTML, MATCH_URL),
+            round_source_metadata=source_metadata(ROUND_HTML, ROUND_URL),
+            allowed_round_dates={datetime(2026, 11, 8).date()},
+        )
 
 
 def test_parse_match_detail_extracts_score_kickoff_and_source_provenance():
