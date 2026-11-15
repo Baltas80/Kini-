@@ -5,7 +5,7 @@ import logging
 import math
 import time
 import unicodedata
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -221,9 +221,16 @@ class KinielaGPTSource:
             log.warning("Kickoff crosswalk has incomplete verification evidence")
             return {}
 
-        checked_at = _parse_aware_timestamp(evidence.get("checked_at_utc"))
-        if checked_at is None:
-            log.warning("Kickoff crosswalk evidence timestamp is not timezone-aware")
+        checked_at = _parse_aware_timestamp(
+            payload.get("schedule_evidence_checked_at_utc")
+        )
+        crosswalk_checked_at = _parse_aware_timestamp(evidence.get("checked_at_utc"))
+        if (
+            checked_at is None
+            or crosswalk_checked_at is None
+            or checked_at < crosswalk_checked_at
+        ):
+            log.warning("Kickoff schedule evidence timestamp is missing or invalid")
             return {}
 
         sources: dict[str, dict[str, Any]] = {}
@@ -232,6 +239,10 @@ class KinielaGPTSource:
                 return {}
             source_id = source.get("id")
             url = source.get("url")
+            try:
+                published_date = date.fromisoformat(source.get("published_date", ""))
+            except (TypeError, ValueError):
+                return {}
             if (
                 not isinstance(source_id, str)
                 or not source_id
@@ -240,6 +251,7 @@ class KinielaGPTSource:
                 or not url.startswith("https://www.uefa.com/")
                 or source.get("timezone") != "CET"
                 or not isinstance(source.get("competition"), str)
+                or published_date > checked_at.date()
             ):
                 log.warning("Kickoff crosswalk contains an untrusted schedule source")
                 return {}
