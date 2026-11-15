@@ -331,8 +331,10 @@ def make_session() -> requests.Session:
     session.mount("https://", adapter)
     session.headers.update(
         {
-            "User-Agent": "Kini-QuinielaResearch/1.0 (+https://github.com/Baltas80/Kini-)",
-            "Accept": "text/html,application/xhtml+xml",
+            "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "es-ES,es;q=0.9,en;q=0.7",
+            "Referer": f"{BASE_URL}/es/la-quiniela/resultados",
         }
     )
     return session
