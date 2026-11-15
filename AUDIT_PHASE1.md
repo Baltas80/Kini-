@@ -1429,4 +1429,51 @@ Validation on this commit:
 - The workflow repair has been validated structurally: the repaired PR run creates a changes job and a backtest job instead of failing before job creation.
 
 Next action is to capture the completed walk-forward artifact and acceptance checks. The subsequent scheduled execution should continue from the latest successful backtest head rather than repeat this audit.
+## SELAE historical workbook access diagnostics — 2026-11-15
 
+### Reproducible inspection tooling
+
+- Added scripts/inspect_selae_historical_calendar.py to download the official HistoricoQuiniela.xls, verify the OLE/BIFF signature and size bounds, compute SHA-256, inspect every worksheet, and export every non-empty raw row with its original cell type to JSONL.
+- The report records retrieval time, HTTP metadata, workbook sheet dimensions, date-cell counts, first/last row samples, and the source-file hash. It explicitly does not infer draw IDs or row semantics before the workbook schema has been reviewed.
+- Added xlrd>=2.0.1 to development dependencies only, plus regression tests for text, numeric zero, Excel dates, booleans, errors, blank cells, empty-row detection, and HTML/truncated-file rejection.
+- Added a manual workflow_dispatch workflow, .github/workflows/selae-historical-calendar-inspection.yml. It is manual-only after the access test below so future code changes do not repeatedly hit a known provider block.
+- The main CI now runs Ruff lint and formatting checks on the inspector and its tests. Documentation-only changes no longer trigger the main CI workflow.
+
+### Official-source access result
+
+The inspection workflow [43763253282](https://github.com/Baltas80/Kini-/actions/runs/43763253282) attempted the official results index, a date-specific official result page, and the official XLS from a GitHub-hosted runner. All three requests returned HTTP 403 with an Akamai edgesuite.net Access Denied response. The diagnostic artifact [14181346104](https://github.com/Baltas80/Kini-/actions/runs/43763253282/artifacts/14181346104) contains the three response samples and structured status metadata.
+
+This is a source-network/WAF restriction on the hosted runner, not an XLS parsing failure: no workbook bytes were delivered, so the XLS schema remains unverified. The inspection workflow is now manual-only; repeated automatic retries would not add evidence. Do not substitute third-party result sites or datasets as the source of truth. Bulk scenario construction remains blocked until the official workbook or equivalent official export can be retrieved through a browser-capable session or supplied as a file.
+
+### Completed walk-forward baseline
+
+The repaired historical walk-forward [43757784652](https://github.com/Baltas80/Kini-/actions/runs/43757784652) completed successfully, including all workflow acceptance checks. Its artifact reports 5,011 test fixtures from 2020-12-11 through 2026-11-09. All five required model streams produced exactly 5,011 predictions with zero recorded prediction errors; the workflow explicitly rejects empty or partial model samples.
+
+On the 4,424 fixtures shared with the schedule-screened market sample:
+
+| Model | Accuracy | Brier | Log Loss |
+|---|---:|---:|---:|
+| Dixon-Coles | 48.06% | 0.616357 | 1.027499 |
+| ML | 43.78% | 0.647471 | 1.074246 |
+| Ensemble | 47.81% | 0.613563 | 1.023018 |
+| DC/ML fixed ensemble | 47.40% | 0.616095 | 1.026842 |
+| DC/ML adaptive ensemble | 47.49% | 0.616305 | 1.027133 |
+| Market | 50.72% | 0.597504 | 0.999444 |
+
+The market remains better on the identical 4,424-match sample. The market audit contains 5,011 odds-bearing fixtures, 4,424 schedule-compatible fixtures, and 587 excluded as ambiguous (Friday/Tuesday collection-day cases). This is a conservative schedule screen, not proof of exact per-fixture odds capture timestamps.
+
+Prequential calibration used only prior out-of-sample forecasts and excluded same-calendar-day outcomes. On its 3,847-match common market sample, the ensemble's Brier changed from 0.611315 to 0.611522 and Log Loss from 1.019753 to 1.019966 after calibration; ECE improved, but the proper scoring rules worsened slightly. The calibrated market remained better (Brier 0.596714; Log Loss 0.998094). Do not promote the calibrated ensemble on ECE alone.
+
+### Current validation and continuity
+
+- Historical-data validation [43763639957](https://github.com/Baltas80/Kini-/actions/runs/43763639957) passed on the current branch lineage.
+- The CI run for the current head is still in progress; earlier attempts exposed only Ruff formatting issues in the new inspector, which have been corrected in commit e3b1a50. Do not mark CI green until the current run completes.
+- A separate full walk-forward [43763046836](https://github.com/Baltas80/Kini-/actions/runs/43763046836), triggered by the development-only xlrd dependency change, is still in the historical-comparison step. It is not a new result until its model acceptance steps pass.
+- PR #9 remains open as a draft against feat/canonical-team-identity-registry. No PR was merged and master was not modified.
+
+### Next actions
+
+1. Confirm the current CI run and its 186-test suite.
+2. Capture and validate the result of the in-progress walk-forward only if it completes; do not launch another full run while it remains active.
+3. Continue the point-in-time audit. In particular, review all public baseline helpers for the same strict source-eligibility gates already used by the live prediction path.
+4. Resume joint-scenario dataset construction only after official SELAE calendar/results bytes are available. Until then, the optimizer must continue to label its current product-of-marginals estimate as an independence approximation.
