@@ -11,7 +11,6 @@ from pathlib import Path
 from typing import Any
 
 from kini_engine.core import LAE_KICKOFF_EVIDENCE_MAX_AGE
-
 from kini_engine.sources import KinielaGPTSource
 
 _KEY_HINTS = (

@@ -7,10 +7,10 @@ import numpy as np
 import pytest
 
 from kini_engine.core import (
+    LAE_SOURCE_ID,
     DixonColes,
     FeatureModel,
     KiniEngine,
-    LAE_SOURCE_ID,
     Match,
     TicketOptimizer,
     _date_num,
@@ -275,7 +275,9 @@ def test_lae_mode_and_ensemble_accept_timezone_verified_pre_match_input():
         verified_lae_detail(kickoff_evidence_url="http://www.uefa.com/test-schedule/"),
     ],
 )
-def test_lae_requires_fresh_verified_schedule_evidence_and_timezone_aware_capture_before_kickoff(detail):
+def test_lae_requires_fresh_verified_schedule_evidence_and_timezone_aware_capture_before_kickoff(
+    detail,
+):
     fixture = Match(
         datetime(2025, 4, 1),
         "A",
