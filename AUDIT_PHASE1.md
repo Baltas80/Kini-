@@ -990,3 +990,12 @@ Implementation is intentionally an input contract, not a new historical LAE data
 ### LAE gate lint correction — 2026-11-15
 
 The first CI attempt on the new LAE gate stopped at Ruff before pytest. It identified two Python 3.11+ modernization rules: `datetime.fromisoformat` already accepts the UTC `Z` suffix, and the timezone constant should use `datetime.UTC`. Both were corrected without changing the eligibility contract. The initial lint failure is [run 43728615705](https://github.com/Baltas80/Kini-/actions/runs/43728615705); the corrected head is queued for fresh CI and walk-forward validation.
+
+## LAE gate validation — corrected head — 2026-11-15
+
+- Corrected implementation commit: `081178e1d441ed70052e356f5a873f5ea4429322` (Python 3.11+ `datetime.fromisoformat`/`UTC` APIs; no change to the fail-closed eligibility semantics).
+- PR CI [run 43728777907](https://github.com/Baltas80/Kini-/actions/runs/43728777907) passed: Ruff reported **All checks passed** and pytest reported **143 passed, 4 upstream deprecation warnings**.
+- The first attempt [43728615705](https://github.com/Baltas80/Kini-/actions/runs/43728615705) stopped at Ruff before tests; its two findings were corrected in `081178e`.
+- The full walk-forward on the LAE-gate implementation commit `313496c` is still running as [43728615644](https://github.com/Baltas80/Kini-/actions/runs/43728615644). The corrected parser commit changes only equivalent ISO-8601 UTC parsing syntax; historical Football-Data rows contain no LAE inputs, so this gate does not alter the historical benchmark path. A final current-head backtest is queued as [43728777983](https://github.com/Baltas80/Kini-/actions/runs/43728777983).
+
+No LAE provider is currently marked eligible by the historical loader. Live callers must supply the source identifier and timezone-aware capture/kickoff timestamps required by the new contract.
