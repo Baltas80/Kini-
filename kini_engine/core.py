@@ -8,7 +8,6 @@ from typing import Any, ClassVar
 import numpy as np
 from scipy.stats import poisson
 
-
 SIGNS = ("1", "X", "2")
 
 
@@ -92,6 +91,47 @@ def _calendar_date_key(value: datetime | str) -> str:
             continue
 
     return datetime.fromtimestamp(_date_num(value)).date().isoformat()
+
+
+def _prior_completed_matches(history: list[Match], current: Match) -> list[Match]:
+    """Return completed matches strictly before the fixture's source calendar day."""
+    target_day = _calendar_date_key(current.date)
+    prior = [
+        match
+        for match in history
+        if _calendar_date_key(match.date) < target_day
+        and match.home_goals is not None
+        and match.away_goals is not None
+    ]
+    prior.sort(
+        key=lambda match: (_calendar_date_key(match.date), _date_num(match.date))
+    )
+    return prior
+
+
+def _team_form_features(
+    team: str,
+    matches: list[Match],
+) -> tuple[float, float, float]:
+    """Summarize the latest eight completed matches already scoped to a team."""
+    recent = matches[-8:]
+    if not recent:
+        return 0.0, 1.35, 1.05
+
+    points = goals_for = goals_against = 0.0
+    for match in recent:
+        if match.home == team:
+            scored, conceded = match.home_goals, match.away_goals
+        else:
+            scored, conceded = match.away_goals, match.home_goals
+        goals_for += scored
+        goals_against += conceded
+        points += 3 if scored > conceded else 1 if scored == conceded else 0
+    return (
+        points / len(recent),
+        goals_for / len(recent),
+        goals_against / len(recent),
+    )
 
 
 def _norm(p: Iterable[float]) -> np.ndarray:
@@ -261,17 +301,7 @@ class FeatureModel:
         Date-only inputs use a strict calendar-day cutoff: same-day results
         cannot become features for another fixture on that date.
         """
-        target_day = _calendar_date_key(m.date)
-        prior_history = [
-            match
-            for match in history
-            if _calendar_date_key(match.date) < target_day
-            and match.home_goals is not None
-            and match.away_goals is not None
-        ]
-        prior_history.sort(
-            key=lambda match: (_calendar_date_key(match.date), _date_num(match.date))
-        )
+        prior_history = _prior_completed_matches(history, m)
 
         def stats(team: str, venue: str | None = None) -> tuple[float, float, float]:
             xs = [
@@ -283,37 +313,13 @@ class FeatureModel:
                 xs = [match for match in xs if match.home == team]
             elif venue == "away":
                 xs = [match for match in xs if match.away == team]
-            xs = xs[-8:]
-            if not xs:
-                return 0.0, 1.35, 1.05
-
-            points = goals_for = goals_against = 0.0
-            for match in xs:
-                if match.home == team:
-                    goals_for += match.home_goals
-                    goals_against += match.away_goals
-                    won = match.home_goals > match.away_goals
-                else:
-                    goals_for += match.away_goals
-                    goals_against += match.home_goals
-                    won = match.away_goals > match.home_goals
-                points += (
-                    3
-                    if won
-                    else 1
-                    if match.home_goals == match.away_goals
-                    else 0
-                )
-            return (
-                points / len(xs),
-                goals_for / len(xs),
-                goals_against / len(xs),
-            )
+            return _team_form_features(team, xs)
 
         home_points, home_gf, home_ga = stats(m.home)
         away_points, away_gf, away_ga = stats(m.away)
         home_home_points, home_home_gf, home_home_ga = stats(m.home, "home")
         away_away_points, away_away_gf, away_away_ga = stats(m.away, "away")
+
         return np.asarray(
             [
                 home_points,
@@ -332,6 +338,70 @@ class FeatureModel:
             dtype=float,
         )
 
+    def _training_rows(
+        self,
+        training_history: list[Match],
+    ) -> tuple[list[np.ndarray], list[str]]:
+        """Build historical training rows in one chronological pass.
+
+        All fixtures on a calendar day are scored from the state accumulated
+        before that day; completed results are added only after the whole day.
+        This is equivalent to calling _features for every row, without the
+        quadratic repeated-history scans.
+        """
+        ordered = sorted(
+            training_history,
+            key=lambda match: (_calendar_date_key(match.date), _date_num(match.date)),
+        )
+        overall: dict[str, list[Match]] = {}
+        home_only: dict[str, list[Match]] = {}
+        away_only: dict[str, list[Match]] = {}
+        rows: list[np.ndarray] = []
+        outcomes: list[str] = []
+
+        start = 0
+        while start < len(ordered):
+            day = _calendar_date_key(ordered[start].date)
+            end = start + 1
+            while end < len(ordered) and _calendar_date_key(ordered[end].date) == day:
+                end += 1
+            group = ordered[start:end]
+
+            for match in group:
+                if match.home_goals is None or match.away_goals is None:
+                    continue
+                values = (
+                    *_team_form_features(match.home, overall.get(match.home, [])),
+                    *_team_form_features(match.away, overall.get(match.away, [])),
+                    *_team_form_features(match.home, home_only.get(match.home, [])),
+                    *_team_form_features(match.away, away_only.get(match.away, [])),
+                )
+                rows.append(np.asarray(values, dtype=float))
+                outcomes.append(match.outcome())
+
+            for match in group:
+                if match.home_goals is None or match.away_goals is None:
+                    continue
+                for team in {match.home, match.away}:
+                    recent = overall.setdefault(team, [])
+                    recent.append(match)
+                    if len(recent) > 8:
+                        del recent[:-8]
+
+                home_recent = home_only.setdefault(match.home, [])
+                home_recent.append(match)
+                if len(home_recent) > 8:
+                    del home_recent[:-8]
+
+                away_recent = away_only.setdefault(match.away, [])
+                away_recent.append(match)
+                if len(away_recent) > 8:
+                    del away_recent[:-8]
+
+            start = end
+
+        return rows, outcomes
+
     def fit_predict_proba(
         self,
         training_history: list[Match],
@@ -342,19 +412,7 @@ class FeatureModel:
         # between refits as new results become available.
         if self._history_ref is not training_history:
             self.model = None
-            rows, y = [], []
-            days = [_calendar_date_key(match.date) for match in training_history]
-            for i, match in enumerate(training_history):
-                if match.home_goals is None or match.away_goals is None:
-                    continue
-                # Date-only sources cannot order kickoffs: exclude every result
-                # from the same calendar day from that historical training row.
-                prior_history = [
-                    past for past, past_day in zip(training_history, days)
-                    if past_day < days[i]
-                ]
-                rows.append(self._features(prior_history, match))
-                y.append(match.outcome())
+            rows, y = self._training_rows(training_history)
 
             if len(rows) < 40 or len(set(y)) < 3:
                 self._history_ref = training_history
@@ -394,26 +452,22 @@ def context_adjust(
     current: Match,
     history: list[Match],
 ) -> tuple[dict[str, float], list[str]]:
+    prior_history = _prior_completed_matches(history, current)
     p = np.array([probs[s] for s in SIGNS], dtype=float)
     reasons: list[str] = []
 
-    def form(team: str) -> float:
-        xs = [m for m in history if (m.home == team or m.away == team) and m.home_goals is not None and m.away_goals is not None][-5:]
-        val = 0.0
-        for m in xs:
-            if m.home == team:
-                val += 3 if m.home_goals > m.away_goals else (1 if m.home_goals == m.away_goals else 0)
-            else:
-                val += 3 if m.away_goals > m.home_goals else (1 if m.home_goals == m.away_goals else 0)
-        return val / max(1, len(xs))
-
-    hf, af = form(current.home), form(current.away)
+    hf = _recent_form(prior_history, current.home)
+    af = _recent_form(prior_history, current.away)
     delta = float(np.clip((hf - af) * 0.025, -0.08, 0.08))
     if abs(delta) >= 0.025:
         p += np.array([delta, -abs(delta) * 0.25, -delta])
         reasons.append(f"forma reciente: {current.home} {hf:.2f} vs {current.away} {af:.2f}")
 
-    h2h = [m for m in history if {m.home, m.away} == {current.home, current.away} and m.home_goals is not None and m.away_goals is not None]
+    h2h = [
+        match
+        for match in prior_history
+        if {match.home, match.away} == {current.home, current.away}
+    ]
     if len(h2h) >= 5:
         current_home_wins = 0
         draws = 0
@@ -468,15 +522,22 @@ def surprise_signal(
     best_model = SIGNS[int(np.argmax(m))]
     ref_name = refs[int(np.argmax(divergences))][0]
     reasons = [f"divergencia modelo vs {ref_name}: {score:.1%}"]
-    hf = _recent_form(history, current.home)
-    af = _recent_form(history, current.away)
+    prior_history = _prior_completed_matches(history, current)
+    hf = _recent_form(prior_history, current.home)
+    af = _recent_form(prior_history, current.away)
     if abs(hf - af) >= 1.5:
         reasons.append("diferencia relevante de forma reciente")
     return {"score": min(score / 0.5, 1.0), "fav_model": best_model, "reference": ref_name, "reasons": reasons}
 
 
 def _recent_form(history: list[Match], team: str) -> float:
-    xs = [m for m in history if m.home == team or m.away == team][-5:]
+    xs = [
+        match
+        for match in history
+        if (match.home == team or match.away == team)
+        and match.home_goals is not None
+        and match.away_goals is not None
+    ][-5:]
     val = 0
     for m in xs:
         val += 3 if ((m.home == team and m.home_goals > m.away_goals) or (m.away == team and m.away_goals > m.home_goals)) else (1 if m.home_goals == m.away_goals else 0)
