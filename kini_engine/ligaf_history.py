@@ -653,7 +653,21 @@ def validate_history(
             if fixture_key in seen_fixtures:
                 raise LigaFHistoryError(f"duplicate canonical Liga F fixture: {fixture_key}")
             seen_fixtures.add(fixture_key)
-        elif status in {"postponed", "suspended", "in_progress"}:
+        elif status in {"postponed", "suspended", "in_progress", "scheduled"}:
+            kickoff_raw = row.get("kickoff_at")
+            if kickoff_raw is not None:
+                if not isinstance(kickoff_raw, str):
+                    raise LigaFHistoryError(f"{location}.kickoff_at must be ISO-8601")
+                try:
+                    kickoff = datetime.fromisoformat(kickoff_raw)
+                except ValueError as exc:
+                    raise LigaFHistoryError(f"{location}.kickoff_at is invalid") from exc
+                if kickoff.tzinfo is None or kickoff.utcoffset() is None:
+                    raise LigaFHistoryError(f"{location}.kickoff_at must include timezone")
+                season_start = date(season_end_year - 1, 7, 1)
+                season_end = date(season_end_year, 6, 30)
+                if not season_start <= kickoff.date() <= season_end:
+                    raise LigaFHistoryError(f"{location}.kickoff_at falls outside its season")
             if row.get("home_goals") is not None or row.get("away_goals") is not None or row.get("result_1x2") is not None:
                 raise LigaFHistoryError(f"{location} non-final fixture contains a football result")
         else:
