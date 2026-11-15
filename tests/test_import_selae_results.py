@@ -219,3 +219,34 @@ def test_write_draws_rejects_corrupt_existing_jsonl(tmp_path: Path) -> None:
     draw = parse_selae_draw(make_html(), DRAW_DATE)
     with pytest.raises(ValueError, match="corrupto"):
         write_draws([draw], output)
+
+
+def test_parse_selae_draw_preserves_bote_prize_rows() -> None:
+    html = make_html().replace("1.647.986,55 €", "BOTE")
+    draw = parse_selae_draw(html, DRAW_DATE)
+    pleno_prize = draw["prize_tiers"][0]
+    assert pleno_prize["prize_status"] == "bote"
+    assert pleno_prize["unit_prize_cents"] is None
+    assert len(draw["prize_tiers"]) == 6
+
+
+def test_load_local_draw_rejects_non_official_source_url(tmp_path: Path) -> None:
+    html_path = tmp_path / "2026-11-08.html"
+    html_path.write_bytes(make_html().encode("utf-8"))
+    html_path.with_suffix(".meta.json").write_text(
+        json.dumps({"source_url": "https://example.com/not-selae"}),
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="procedencia SELAE"):
+        load_local_draw(DRAW_DATE, tmp_path)
+
+
+def test_write_draws_rejects_existing_record_with_score_sign_conflict(tmp_path: Path) -> None:
+    draw = parse_selae_draw(make_html(), DRAW_DATE)
+    corrupted = dict(draw)
+    corrupted_fixtures = [dict(fixture) for fixture in draw["fixtures"]]
+    corrupted_fixtures[0]["sign"] = "1"
+    corrupted["fixtures"] = corrupted_fixtures
+    output = tmp_path / "selae.jsonl"
+    with pytest.raises(ValueError, match="integridad"):
+        write_draws([corrupted], output)
