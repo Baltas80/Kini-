@@ -40,7 +40,7 @@ El registro de identidades por proveedor está en `kini_engine/data/team_identit
 
     python -m scripts.validate_team_identity_registry --csv data/historical_spain.csv
 
-Los alias SELAE y las competiciones ajenas a SP1/SP2 siguen pendientes de verificación independiente. La reconciliación de cupones exige un crosswalk por partido con nombres exactos, competición, temporada, kickoff con zona horaria y evidencia independiente:
+Los cruces masculinos SELAE/Football-Data se limitan a las diez asociaciones exactas documentadas en el manifiesto. Los tres encuentros femeninos del cupón tienen evidencias oficiales independientes de Liga F, pero no se incorporan a Football-Data ni al entrenamiento. La reconciliación de cupones exige un crosswalk por partido con nombres exactos, competición, temporada, kickoff con zona horaria y evidencia independiente:
 
 ```bash
 python -m scripts.reconcile_selae_fixtures \
@@ -50,7 +50,22 @@ python -m scripts.reconcile_selae_fixtures \
   --output data/selae_fixture_reconciliation.json
 ```
 
-El manifiesto `data/selae_fixture_crosswalk.json` contiene diez asociaciones verificadas con horarios oficiales y coincidencia exacta en Football-Data. En el cupón del 8 de noviembre quedan pendientes los tres partidos femeninos de Liga F. Para ejecutar la reconciliación, primero genera `data/historical_spain.csv` con `python scripts/build_history.py` y pasa `--historical data/historical_spain.csv`. Los partidos no disputados con signo por sorteo público se excluyen de las etiquetas futbolísticas; los encuentros aún no reconciliados bloquean la exportación de etiquetas. Véanse `docs/TEAM_IDENTITY.md` y `docs/SELAE_RECONCILIATION.md`.
+El manifiesto `data/selae_fixture_crosswalk.json` contiene diez asociaciones verificadas con horarios oficiales y coincidencia exacta en Football-Data. Los tres encuentros femeninos se conservan en `data/ligaf_fixture_evidence.json` y siguen fuera del crosswalk masculino. Para ejecutar la reconciliación, primero genera `data/historical_spain.csv` con `python scripts/build_history.py` y pasa `--historical data/historical_spain.csv`. Los partidos no disputados con signo por sorteo público se excluyen de las etiquetas futbolísticas; los encuentros aún no reconciliados bloquean la exportación de etiquetas. Véanse `docs/TEAM_IDENTITY.md` y `docs/SELAE_RECONCILIATION.md`.
+
+
+## Histórico oficial de Liga F (evidence-only)
+
+El importador \`scripts/import_ligaf_history.py\` descarga las páginas oficiales de resultados por jornada y los detalles de cada encuentro. Por defecto cubre las temporadas 2022/23 a 2025/26 completas y las jornadas 1–10 de 2026/27:
+
+\`\`\`bash
+python scripts/import_ligaf_history.py
+\`\`\`
+
+El resultado se escribe en \`data/ligaf_history.jsonl\` y su perfil de integridad en \`data/ligaf_history.profile.json\`; ambos son artefactos locales ignorados por Git. Las páginas HTML originales y sus hashes se conservan en \`.cache/ligaf\`. Se puede usar \`--refresh\` para renovar la caché o \`--offline\` para reconstruir el resultado solo con fuentes previamente almacenadas.
+
+El importador exige ocho encuentros por jornada, identificadores oficiales únicos, fechas del partido coincidentes con la sección de resultados de la jornada, marcador y signo coherentes y, para temporadas completas, 240 partidos, 16 equipos y 15 encuentros como local y visitante por equipo. Los títulos de algunas fichas históricas muestran un año estático incorrecto; por eso el año de temporada se toma de la ruta oficial del archivo y la fecha del encabezado de la ficha se contrasta con las fechas de la jornada.
+
+**Límite de entrenamiento:** todos los registros llevan \`training_label_eligible=false\`. Todavía faltan el registro de identidades históricas por temporada, la auditoría completa de cambios de nombre/ascensos/descensos y una validación temporal de las variables prepartido. Este importador no modifica \`historical_spain.csv\`, los modelos ni las predicciones. Véase \`docs/SELAE_RECONCILIATION.md\`.
 
 ## Licencia y procedencia
 
