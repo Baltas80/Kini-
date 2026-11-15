@@ -48,7 +48,13 @@ def test_summary_does_not_claim_a_missing_details_schema_is_valid():
 
 def test_fixture_order_crosswalk_requires_exact_normalized_names_and_bijection():
     details = [
-        {"orden": 1, "local": "BOSNÍA-HERZEGOVINA", "visitante": "Rumanía"},
+        {
+            "orden": 1,
+            "local": "BOSNÍA-HERZEGOVINA",
+            "visitante": "Rumanía",
+            "dia": "MAR",
+            "hora": "20:45",
+        },
         {"orden": 2, "local": "Francia", "visitante": "Alemania"},
     ]
     percentage_matches = [
@@ -63,6 +69,9 @@ def test_fixture_order_crosswalk_requires_exact_normalized_names_and_bijection()
     assert report["order_equals_percentage_num_for_all"] is True
     assert [item["matched_num"] for item in report["mapping"]] == [1, 2]
     assert report["unmatched_percentage_ids"] == []
+    assert report["mapping"][0]["provider_day"] == "MAR"
+    assert report["mapping"][0]["provider_local_time"] == "20:45"
+    assert report["mapping"][0]["timezone_aware_kickoff_fields"] == []
 
 
 def test_fixture_order_crosswalk_rejects_order_when_names_point_to_another_num():
@@ -93,3 +102,25 @@ def test_fixture_order_crosswalk_rejects_ambiguous_duplicate_name_pairs():
     assert report["status"] == "not_verified"
     assert report["mapping"][0]["name_match_count"] == 2
     assert "home_away_name_pair_not_unique_or_unmatched" in report["reasons"]
+
+
+
+def test_fixture_crosswalk_exposes_timezone_aware_kickoff_candidates_without_inference():
+    details = [
+        {
+            "orden": 1,
+            "local": "Equipo A",
+            "visitante": "Equipo B",
+            "dia": "MAR",
+            "hora": "20:45",
+            "fechaHora": "2026-11-17T20:45:00+01:00",
+        }
+    ]
+    percentage_matches = [{"id": 1, "home": "Equipo A", "away": "Equipo B"}]
+
+    report = reconcile_fixture_order(details, percentage_matches)
+
+    assert report["status"] == "verified"
+    assert report["mapping"][0]["provider_day"] == "MAR"
+    assert report["mapping"][0]["provider_local_time"] == "20:45"
+    assert report["mapping"][0]["timezone_aware_kickoff_fields"] == ["fechaHora"]
