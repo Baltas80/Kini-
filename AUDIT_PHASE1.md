@@ -378,3 +378,34 @@ A final review found that `TicketOptimizer.optimize` used `prediction.get(sign, 
 - The full strict-market walk-forward benchmark remains the accepted result from [run 43666544162](https://github.com/Baltas80/Kini-/actions/runs/43666544162). The optimizer input-contract change does not alter model fitting, forecasts, market inputs or ticket coverage calculations.
 
 The optimizer still reports coverage only under its explicit independent-match approximation. Correlation-aware coverage and expected payout remain unvalidated until historical official coupon composition, outcome/pool data and applicable system rules are available.
+
+## Market consensus comparison — AvgH/AvgD/AvgA versus per-book no-vig mean — 2026-11-15
+
+A separate offline benchmark was run against the exact historical CSV artifact from data-validation run [43671694061](https://github.com/Baltas80/Kini-/actions/runs/43671694061). The test window was reconstructed as the 5,011 fixtures after the first 300 training rows (2020-12-11 through 2026-11-09). The same conservative schedule screen was applied: all Friday/Tuesday fixtures were excluded. Both methods were evaluated on the identical **4,424 fixtures**; all had valid odds for both definitions.
+
+Two distinct constructions were compared:
+
+1. **Current market:** calculate no-vig implied probabilities separately for each available pre-closing bookmaker triple (Bet365, William Hill, Victor Chandler and Pinnacle before 2025-07-23), then average the bookmaker probability vectors. Pinnacle is omitted on/after the documented stale-feed cutoff.
+2. **Football-Data AvgH/AvgD/AvgA:** invert the provider's average odds and normalize the three implied probabilities to remove the resulting overround.
+
+| Market construction | n | Accuracy | Multiclass Brier | Log Loss | RPS | ECE |
+|---|---:|---:|---:|---:|---:|---:|
+| Mean of per-book no-vig probabilities (current) | 4,424 | **0.50723** | **0.597504** | **0.999444** | **0.199876** | **0.024213** |
+| No-vig normalized AvgH/AvgD/AvgA | 4,424 | 0.50633 | 0.597761 | 0.999913 | 0.200033 | 0.025796 |
+
+The current per-book no-vig mean is marginally better on all five aggregate metrics. The absolute differences are small. A paired cluster bootstrap by calendar date (809 date clusters, 5,000 resamples, fixed seed 20261115) estimated AvgH/AvgD/AvgA minus the current method as:
+
+- Brier difference: **+0.000257**, 95% interval [-0.000042, +0.000556].
+- Log Loss difference: **+0.000470**, 95% interval [-0.000022, +0.000967].
+- Accuracy difference: **-0.000904**, 95% interval [-0.002713, +0.000892].
+
+All intervals include zero; the available sample does not establish a statistically reliable difference. Seasonal results are mixed, and the 2026/27 slice contains only 234 eligible fixtures. The experiment is raw (uncalibrated) and does not prove either construction is an executable price.
+
+**Decision:** retain the current mean of per-book no-vig probabilities as the production benchmark. Do not replace it with AvgH/AvgD/AvgA, and do not blend the two: the aggregate gain is negligible and unsupported by the paired uncertainty analysis. Keep AvgH/AvgD/AvgA as a documented alternative benchmark for future independent holdout evaluation.
+
+Reproduction input: artifact `kini-historical-data` from run 43671694061 (5,311 rows; source profile `integrity_passed=true`). The script was executed against that artifact with the 300-row initial-training boundary and the same 4,424 schedule-eligible fixtures; the reproduced current-market metrics match the accepted backtest run 43666544162 to floating-point precision.
+
+### Latest regression status for the same branch head
+
+- CI [run 43671814302](https://github.com/Baltas80/Kini-/actions/runs/43671814302): **55 passed**, four warnings (third-party NumPy/penaltyblog deprecation warnings).
+- Historical data validation [run 43671814249](https://github.com/Baltas80/Kini-/actions/runs/43671814249): **5,311 fixtures**, `integrity_passed=true`, validation marker `DATA_VALIDATION_OK`.
