@@ -134,3 +134,23 @@ def test_market_is_unavailable_when_only_closing_odds_exist(tmp_path: Path):
         encoding="utf-8",
     )
     assert load_matches_csv(p)[0].market is None
+
+def test_market_excludes_pinnacle_from_2025_07_23(tmp_path: Path):
+    p = tmp_path / "pinnacle_cutoff.csv"
+    p.write_text(
+        "Date,HomeTeam,AwayTeam,FTHG,FTAG,FTR,B365H,B365D,B365A,PSH,PSD,PSA\n"
+        "2025-07-22,A,B,1,0,H,2.0,3.5,4.0,2.2,3.2,3.6\n"
+        "2025-07-23,C,D,0,1,A,2.0,3.5,4.0,2.2,3.2,3.6\n",
+        encoding="utf-8",
+    )
+    before, after = load_matches_csv(p)
+    b365 = [1 / 2.0, 1 / 3.5, 1 / 4.0]
+    b365 = [value / sum(b365) for value in b365]
+    pinnacle = [1 / 2.2, 1 / 3.2, 1 / 3.6]
+    pinnacle = [value / sum(pinnacle) for value in pinnacle]
+    expected_before = [
+        (b365[index] + pinnacle[index]) / 2
+        for index in range(3)
+    ]
+    assert list(before.market.values()) == pytest.approx(expected_before)
+    assert list(after.market.values()) == pytest.approx(b365)
