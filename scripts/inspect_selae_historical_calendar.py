@@ -12,9 +12,9 @@ from typing import Any
 
 import requests
 import xlrd
-from xlrd import xldate
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
+from xlrd import xldate
 
 SOURCE_URL = (
     "https://www.loteriasyapuestas.es/f/loterias/documentos/"
