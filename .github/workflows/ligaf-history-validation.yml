@@ -23,13 +23,16 @@ permissions:
   contents: read
 
 concurrency:
-  group: ligaf-history-validation-${{ github.ref_name }}
+  group: ligaf-history-validation-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
 jobs:
   import-and-validate:
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    env:
+      MAX_CURRENT_MATCHDAY: ${{ inputs.max_current_matchday || 10 }}
+      REFRESH_HISTORY: ${{ inputs.refresh || false }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -40,9 +43,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .cache/ligaf
-          key: ligaf-history-${{ runner.os }}-${{ github.ref_name }}-${{ github.run_id }}
+          key: ligaf-history-${{ runner.os }}-${{ github.head_ref || github.ref_name }}-${{ github.run_id }}
           restore-keys: |
-            ligaf-history-${{ runner.os }}-${{ github.ref_name }}-
+            ligaf-history-${{ runner.os }}-${{ github.head_ref || github.ref_name }}-
             ligaf-history-${{ runner.os }}-
       - name: Import and validate official Liga F history
         shell: bash
@@ -50,11 +53,11 @@ jobs:
           args=(
             --seasons 2023 2024 2025 2026 2027
             --current-season 2027
-            --max-current-matchday "${{ inputs.max_current_matchday || 10 }}"
+            --max-current-matchday "$MAX_CURRENT_MATCHDAY"
             --cache-ttl-hours 168
             --request-delay 0.35
           )
-          if [[ "${{ inputs.refresh || false }}" == "true" ]]; then
+          if [[ "$REFRESH_HISTORY" == "true" ]]; then
             args+=(--refresh)
           fi
           python scripts/import_ligaf_history.py "${args[@]}"
@@ -62,6 +65,7 @@ jobs:
         run: |
           python - <<'PY'
           import json
+          import os
           from pathlib import Path
 
           profile = json.loads(
@@ -71,15 +75,29 @@ jobs:
               raise SystemExit("Liga F history integrity did not pass")
           if profile.get("training_eligibility", {}).get("eligible") is not False:
               raise SystemExit("Liga F history must remain excluded from training")
+
           for year in ("2023", "2024", "2025", "2026"):
               season = profile["season_profiles"][year]
               if season["scheduled_fixtures"] != 240 or season["played_fixtures"] != 240:
                   raise SystemExit(f"Completed season {year} is not a validated 240-match season")
+              if season["team_count_in_played_fixtures"] != 16:
+                  raise SystemExit(f"Completed season {year} does not contain 16 teams")
               if season["postponed_fixtures"] or season["suspended_fixtures"] or season["in_progress_fixtures"]:
                   raise SystemExit(f"Completed season {year} contains non-final fixtures")
+
+          expected_current_matchday = int(os.environ["MAX_CURRENT_MATCHDAY"])
           current = profile["season_profiles"]["2027"]
-          if current["scheduled_fixtures"] != int("${{ inputs.max_current_matchday }}") * 8:
+          expected_current_fixtures = expected_current_matchday * 8
+          if (
+              current["requested_matchdays"] != expected_current_matchday
+              or current["scheduled_fixtures"] != expected_current_fixtures
+              or current["rounds_with_expected_fixture_count"] != expected_current_matchday
+              or current["missing_or_incomplete_rounds"]
+          ):
               raise SystemExit("Current-season round coverage does not match the requested range")
+          if profile["unique_match_ids"] != profile["total_scheduled_fixtures"]:
+              raise SystemExit("Liga F history contains duplicate or missing match IDs")
+
           print(json.dumps(profile, indent=2, ensure_ascii=False))
           PY
       - name: Upload Liga F history and provenance profile
@@ -90,6 +108,5 @@ jobs:
           path: |
             data/ligaf_history.jsonl
             data/ligaf_history.profile.json
-            .cache/ligaf/
           if-no-files-found: warn
           retention-days: 30
