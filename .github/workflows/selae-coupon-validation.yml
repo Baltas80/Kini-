@@ -29,7 +29,7 @@ jobs:
         run: python -m pip install -e ".[dev]"
       - name: Run deterministic parser and integrity tests
         run: pytest -q tests/test_import_selae_results.py
-      - name: Probe official SELAE delivery endpoints from the runner network
+      - name: Probe official and independent historical sources from the runner network
         run: |
           python - <<'PY'
           import requests
@@ -47,6 +47,9 @@ jobs:
               base + "/es/la-quiniela/escrutinios/la-quiniela-premios-y-ganadores-del-08-de-noviembre-de-2026.formatoRSS",
               base + "/es/la-quiniela/resultados",
               base + "/f/loterias/documentos/Quiniela/Notas%20de%20prensa/NOTA_DE_PRENSA_LA_QUINIELA_08_11_26.pdf",
+              "https://www.historicoquiniela.com/historico/2026-2027/20",
+              "https://www.historicoquiniela.com/robots.txt",
+              "https://www.historicoquiniela.com/aviso-legal",
           ]
           for url in urls:
               try:
