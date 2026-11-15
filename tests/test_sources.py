@@ -166,16 +166,16 @@ def test_details_returns_provider_records_without_changing_the_schema():
 
 
 @pytest.mark.parametrize(
-    "payload",
+    ("payload", "error"),
     [
-        {"metadata": {}},
-        {"detallePartidos": {"idPartido": 123}},
-        {"detallePartidos": [None]},
+        ({"metadata": {}}, ValueError),
+        ({"detallePartidos": {"idPartido": 123}}, TypeError),
+        ({"detallePartidos": [None]}, TypeError),
     ],
 )
-def test_details_rejects_unknown_or_malformed_provider_schema(payload):
+def test_details_rejects_unknown_or_malformed_provider_schema(payload, error):
     source = KinielaGPTSource()
     source.session = FakeDetailsSession(payload)
 
-    with pytest.raises(ValueError, match="KinielaGPT"):
+    with pytest.raises(error, match="KinielaGPT"):
         source.details(12, 2026)

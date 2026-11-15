@@ -221,7 +221,7 @@ class KinielaGPTSource:
         captured_at = datetime.now(UTC).isoformat()
         payload = response.json()
         if not isinstance(payload, dict):
-            raise ValueError("KinielaGPT details response must be a JSON object")
+            raise TypeError("KinielaGPT details response must be a JSON object")
         return payload, captured_at
 
     def details(self, jornada: int, temporada: int) -> list[dict[str, Any]]:
@@ -231,9 +231,9 @@ class KinielaGPTSource:
             raise ValueError("KinielaGPT details response is missing 'detallePartidos'")
         records = payload["detallePartidos"]
         if not isinstance(records, list):
-            raise ValueError("KinielaGPT 'detallePartidos' must be a JSON array")
+            raise TypeError("KinielaGPT 'detallePartidos' must be a JSON array")
         if any(not isinstance(record, dict) for record in records):
-            raise ValueError("KinielaGPT detail records must be JSON objects")
+            raise TypeError("KinielaGPT detail records must be JSON objects")
         return records
 
 

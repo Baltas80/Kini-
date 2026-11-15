@@ -25,6 +25,11 @@ _KEY_HINTS = (
     "visitante",
     "equipo",
     "num",
+    "dia",
+    "orden",
+    "jornada",
+    "temporada",
+    "caducidad",
 )
 _TIME_HINTS = ("fecha", "date", "hora", "time", "inicio", "kickoff")
 _MAX_CANDIDATES = 80
@@ -32,7 +37,7 @@ _MAX_CANDIDATES = 80
 
 def _timezone_aware_iso(value: str) -> bool:
     try:
-        parsed = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(value.strip())
     except ValueError:
         return False
     return parsed.tzinfo is not None and parsed.utcoffset() is not None
@@ -116,6 +121,7 @@ def summarize_payload(payload: Any) -> dict[str, Any]:
     return {
         "payload_type": "object",
         "root_keys": sorted(str(key) for key in payload)[:80],
+        "root_candidate_fields": _candidate_fields(payload),
         "details_key_present": "detallePartidos" in payload,
         "details_value_type": (
             type(raw_records).__name__ if "detallePartidos" in payload else None
@@ -163,7 +169,7 @@ def main() -> int:
     try:
         report = collect_live_diagnostic()
         exit_code = 0 if report["status"] == "ok" else 2
-    except Exception as exc:  # diagnostic must preserve failure evidence
+    except Exception as exc:  # noqa: BLE001 - preserve failure evidence in this diagnostic
         report = {
             "diagnostic": "kinielagpt_detalle_partido_schema",
             "requested_at": datetime.now(UTC).isoformat(),

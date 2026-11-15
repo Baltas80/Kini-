@@ -1128,3 +1128,16 @@ A read-only GitHub Actions diagnostic has been added. It fetches the current jor
 - Live workflow result and artifact: pending this commit's PR-triggered execution.
 
 Production LAE eligibility remains fail-closed. A timezone-aware kickoff is not inferred from a local date/time string; a field must be tied to the same provider match ID before it can be passed into `Match`.
+
+
+### First live details-schema observation — run 43745525438
+
+The read-only diagnostic [run 43745525438](https://github.com/Baltas80/Kini-/actions/runs/43745525438) succeeded for current jornada 22, temporada 2027. Artifact [kinielagpt-details-diagnostic, ID 14174630685](https://github.com/Baltas80/Kini-/actions/runs/43745525438/artifacts/14174630685), 1,839 bytes, SHA-256 `c849d144df20e93cf22149c4ec668bf1ca843ede65bf2e17fb5c8a191e037d37`.
+
+- The provider returned a JSON object with 15 `detallePartidos` records.
+- Root fields include `jornada`, `temporada`, `caducidad`, `juego`, `clasificaciones`, `detallePartidos` and `detallePlenoQuince`.
+- Each inspected detail record exposes `idEquipoLocal`, `idEquipoVisitante`, team names, `dia`, `hora`, `orden` and `idCompeticion`.
+- No `idPartido` or timezone-aware kickoff field appeared in the sampled detail records. The observed `hora` value is a local clock string (for example `20:45`), not an offset-aware timestamp.
+- The first five records include international team fixtures; their team provider IDs are available, but the separate percentage XML uses a match number and display names. A join must be explicitly verified rather than assuming that `orden` and XML `num` are interchangeable.
+
+This is sufficient to keep the LAE gate disabled: the response does not currently prove an exact, timezone-aware kickoff. The diagnostic has been extended to expose the actual `dia`, `orden`, jornada/season and cache-expiry samples so the date semantics and any safe match-number crosswalk can be checked. No timezone will be inferred from the Spanish-language site or from the local clock string.
