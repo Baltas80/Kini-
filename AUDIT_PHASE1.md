@@ -480,7 +480,7 @@ A separate feature branch, `feat/selae-official-coupon-ingestion`, has been crea
 
 The schema intentionally leaves `draw_id`, `kickoff_date` and `kickoff_time` unresolved. The date on the escrutinio page is the draw date, not proof of each fixture's kickoff date. Results/signs are target labels and must not become pre-match features. Prize winners and unit prizes do not reconstruct expected payout.
 
-The first deterministic parser run exposed over-escaped regular expressions (4 failures). They were corrected in commit `b09dc3f1024cafebff4552e8914cf62ff6e546cb`; the deterministic suite passed in [CI run 43680988493](https://github.com/Baltas80/Kini-/actions/runs/43680988493). The suite has since been extended with offline-file import, non-numeric Pleno markers, idempotent merging and corrupt-JSONL rejection. The final CI for those additions is [run 43681160432](https://github.com/Baltas80/Kini-/actions/runs/43681160432) and must be checked before the dependent PR is considered validated.
+The first deterministic parser run exposed over-escaped regular expressions (4 failures). They were corrected in commit `b09dc3f1024cafebff4552e8914cf62ff6e546cb`. The final suite now passes **73 tests with four dependency warnings** in [CI run 43681510193](https://github.com/Baltas80/Kini-/actions/runs/43681510193); Ruff reports **all checks passed** in [SELAE workflow 43681510200](https://github.com/Baltas80/Kini-/actions/runs/43681510200). The latter workflow also attempted the live import, received HTTP 403, skipped source acceptance and emitted an explicit warning. Its green workflow conclusion does not mean the source was validated.
 
 ### SELAE source access and importer state
 
