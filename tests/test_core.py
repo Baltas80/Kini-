@@ -263,9 +263,9 @@ def test_lae_mode_and_ensemble_accept_timezone_verified_pre_match_input():
     "detail",
     [
         {},
-        verified_lae_detail(captured_at="2025-04-01T09:00:00"),
-        verified_lae_detail(captured_at="2025-04-01T21:00:00+02:00"),
-        verified_lae_detail(captured_at="2025-04-01T20:00:00+02:00"),
+        verified_lae_detail(lae_captured_at="2025-04-01T09:00:00"),
+        verified_lae_detail(lae_captured_at="2025-04-01T21:00:00+02:00"),
+        verified_lae_detail(lae_captured_at="2025-04-01T20:00:00+02:00"),
         verified_lae_detail(kickoff_evidence_checked_at_utc=None),
         verified_lae_detail(
             kickoff_evidence_checked_at_utc="2025-03-31T06:00:00+00:00"
