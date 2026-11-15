@@ -680,6 +680,31 @@ The validated Liga F profile is being extended to expose the exact observed team
 
 Regression tests in `dac9edee68edfda3f88af807fd05eb81bdac6c4d` assert 16 team profiles and 30/15/15 appearance counts for a complete season, and explicitly keep `Málaga` distinct from `Malaga`. The regenerated live import [43713031093](https://github.com/Baltas80/Kini-/actions/runs/43713031093) passed; its artifact profile reports 16 exact team labels in each of the five season ranges. The current-season inventory is `Athletic Club`, `Atlético de Madrid`, `Costa Adeje Tenerife`, `Deportivo Abanca`, `Deportivo Alavés`, `FC Badalona Women`, `FC Barcelona`, `Granada CF`, `Logroño United`, `Madrid CFF`, `RCD Espanyol`, `Real Madrid CF`, `Real Sociedad`, `SD Eibar`, `Sevilla FC`, and `VCF Femenino`. Consecutive-season set differences are recorded as entrants/exits only; they are not treated as proof of club renaming or continuity.
 
-The current-season identity registry was expanded to 16 official Liga F labels in commit `431a12df8a38d86a8f372eeeeb7f870a7808a4ff`; six retain the verified SELAE aliases. `data/ligaf_team_profile_crosswalk.json` (commit `201bbfcbee843fa294d15dbed70cf35cf476a676`) records 16 official team profile IDs/URLs and one official match-detail evidence URL per team. Tests in `5fb7ad5b425b7c27c9f90086a0ba94b6b3f8c059` validate exact registry resolution, unique provider IDs and official source URLs. CI found one formatting-only failure in the long assertion; it was corrected in `8217f8166c02aa310e0758f611078db66f4fcc88`. The latest CI and historical-data workflow runs are pending; do not mark this registry/crosswalk change validated until the current-head CI passes.
+The current-season identity registry was expanded to 16 official Liga F labels in commit `431a12df8a38d86a8f372eeeeb7f870a7808a4ff`; six retain the verified SELAE aliases. `data/ligaf_team_profile_crosswalk.json` (commit `201bbfcbee843fa294d15dbed70cf35cf476a676`) records 16 official team profile IDs/URLs and one official match-detail evidence URL per team. Tests in `5fb7ad5b425b7c27c9f90086a0ba94b6b3f8c059` validate exact registry resolution, unique provider IDs and official source URLs. CI found one formatting-only failure in the long assertion; it was corrected in `8217f8166c02aa310e0758f611078db66f4fcc88`. Historical-data validation [43713637624](https://github.com/Baltas80/Kini-/actions/runs/43713637624) passed after the crosswalk was added. The final current-head CI is pending in [43713722801](https://github.com/Baltas80/Kini-/actions/runs/43713722801); do not mark the code/tests validated until it passes.
 
 **Training boundary unchanged:** this history is a validated evidence dataset candidate, not an approved model dataset. Team identity history and pre-kickoff feature availability still require separate validation. No Liga F rows are connected to Football-Data, Dixon–Coles, ML, ensemble or forecast inputs.
+
+
+## Walk-forward reproducibility rerun — 2026-11-15
+
+GitHub Actions [run 43713524597](https://github.com/Baltas80/Kini-/actions/runs/43713524597) completed successfully on commit `201bbfcbee843fa294d15dbed70cf35cf476a676`. It ran the full historical comparison after a metadata-only Liga F profile-crosswalk addition; no predictive model code changed. The run still provides a useful fresh regression baseline:
+
+- Initial training sample: 300.
+- Test predictions: 5,011 per each of Dixon–Coles, ML and all three ensemble candidates; zero prediction errors.
+- Test period: 2020-12-11 through 2026-11-09.
+- Common model/market sample: 4,424; 587 fixtures excluded by the schedule screen because the Football-Data kickoff-time timezone/capture instant is unknown.
+
+| Candidate | Accuracy | Brier | Log Loss | N on common sample |
+|---|---:|---:|---:|---:|
+| Dixon–Coles | 0.4806 | 0.61636 | 1.02750 | 4,424 |
+| ML | 0.4383 | 0.64694 | 1.07330 | 4,424 |
+| Market pre-closing | **0.5072** | **0.59750** | **0.99944** | 4,424 |
+| Market-assisted ensemble | 0.4815 | 0.61347 | 1.02293 | 4,424 |
+| Fixed DC/ML | 0.4758 | 0.61599 | 1.02675 | 4,424 |
+| Adaptive DC/ML | 0.4758 | 0.61618 | 1.02703 | 4,424 |
+
+The market remains better on all three reported metrics on the identical 4,424-match sample. The 5,011 all-model forecast count is not the comparison sample: the 587 temporally ambiguous market fixtures are retained for model-only evaluation but excluded from model/market comparison. The benchmark remains a schedule-screened **pre-closing** reference, not timestamp-proven executable closing odds.
+
+Prequential calibration completed on 4,480 post-warm-up forecasts per model with same-calendar-day outcomes excluded. It improved raw Brier/Log Loss for Dixon–Coles (0.61510/1.02527 to 0.61439/1.02395) and ML (0.63969/1.06178 to 0.63341/1.05148), but slightly worsened the market-assisted ensemble (0.61250/1.02118 to 0.61264/1.02132). The calibrated ensemble still trails the market on the common benchmark; no model/calibrator is promoted on this evidence.
+
+Artifact: [historical-backtest, run 43713524597](https://github.com/Baltas80/Kini-/actions/runs/43713524597), ZIP SHA-256 `247ace2a9c5d5984ff418ae0f15dd79596fbc11809390ff7d9fe0e4cfc6a83b4`. The run was triggered unnecessarily by the new Liga F profile-crosswalk JSON matching a broad `data/**` workflow filter. The backtest and historical-data workflows now explicitly exclude `data/ligaf_team_profile_crosswalk.json` in both relevant event filters, preventing future full football backtests/data rebuilds for this metadata-only file.
