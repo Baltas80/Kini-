@@ -30,10 +30,18 @@ class KinielaGPTSource:
 
     def __init__(self, timeout: int = 15) -> None:
         self.session = requests.Session()
-        retry = Retry(total=3, backoff_factor=0.6, status_forcelist=(429, 500, 502, 503, 504), allowed_methods=("GET",))
+        retry = Retry(
+            total=3,
+            backoff_factor=0.6,
+            status_forcelist=(429, 500, 502, 503, 504),
+            allowed_methods=("GET",),
+        )
         self.session.mount("https://", HTTPAdapter(max_retries=retry))
         self.timeout = timeout
-        self.headers = {"User-Agent": "Kini/0.2 (+https://github.com/Baltas80/Kini-)", "Accept-Language": "es-ES,es;q=0.9"}
+        self.headers = {
+            "User-Agent": "Kini/0.2 (+https://github.com/Baltas80/Kini-)",
+            "Accept-Language": "es-ES,es;q=0.9",
+        }
 
     def _xml_snapshot(self, url: str) -> tuple[dict[str, Any], str]:
         """Fetch XML and timestamp when its complete response became available locally."""
@@ -52,7 +60,9 @@ class KinielaGPTSource:
         """Extract one normalized probability vector per match ID from a source response."""
         root = payload.get("quinielista", {})
         percentages = root.get("porcentajes", {}) if isinstance(root, dict) else {}
-        raw_matches = percentages.get("partido", []) if isinstance(percentages, dict) else []
+        raw_matches = (
+            percentages.get("partido", []) if isinstance(percentages, dict) else []
+        )
         if isinstance(raw_matches, dict):
             records = [raw_matches]
         elif isinstance(raw_matches, list):
@@ -130,7 +140,10 @@ class KinielaGPTSource:
         data = self._xml(self.BASE)["quinielista"]["porcentajes"]
         jornada = int(data["jornada"])
         temporada = int(data["temporada"])
-        matches = [{"id": int(p["num"]), "home": p["local"], "away": p["visitante"]} for p in data["partido"]]
+        matches = [
+            {"id": int(p["num"]), "home": p["local"], "away": p["visitante"]}
+            for p in data["partido"]
+        ]
         return jornada, temporada, matches
 
     def probabilities(self, jornada: int, temporada: int) -> list[dict[str, Any]]:
@@ -140,8 +153,12 @@ class KinielaGPTSource:
         client obtained a response, not when the provider originally published or
         last refreshed its contents.
         """
-        lae_payload, lae_captured_at = self._xml_snapshot(self.LAE.format(jornada, temporada))
-        quinielista_payload, quinielista_captured_at = self._xml_snapshot(self.QUINI.format(jornada, temporada))
+        lae_payload, lae_captured_at = self._xml_snapshot(
+            self.LAE.format(jornada, temporada)
+        )
+        quinielista_payload, quinielista_captured_at = self._xml_snapshot(
+            self.QUINI.format(jornada, temporada)
+        )
         lae_rows = self._probability_map(lae_payload)
         quinielista_rows = self._probability_map(quinielista_payload)
 
@@ -150,8 +167,12 @@ class KinielaGPTSource:
             lae_row = lae_rows.get(match_id)
             quinielista_row = quinielista_rows.get(match_id)
             lae_probabilities = lae_row["probabilities"] if lae_row else None
-            quinielista_probabilities = quinielista_row["probabilities"] if quinielista_row else None
-            combined = self._combined_probabilities(lae_probabilities, quinielista_probabilities)
+            quinielista_probabilities = (
+                quinielista_row["probabilities"] if quinielista_row else None
+            )
+            combined = self._combined_probabilities(
+                lae_probabilities, quinielista_probabilities
+            )
             preferred = lae_row or quinielista_row or {}
 
             out.append(
@@ -164,18 +185,28 @@ class KinielaGPTSource:
                     "lae_source": self.LAE_SOURCE if lae_row else None,
                     "lae_captured_at": lae_captured_at if lae_row else None,
                     "quinielista": quinielista_probabilities,
-                    "quinielista_source": self.QUINIELISTA_SOURCE if quinielista_row else None,
-                    "quinielista_captured_at": quinielista_captured_at if quinielista_row else None,
+                    "quinielista_source": self.QUINIELISTA_SOURCE
+                    if quinielista_row
+                    else None,
+                    "quinielista_captured_at": quinielista_captured_at
+                    if quinielista_row
+                    else None,
                     "probability_method": "equal_weight_mean_of_available_source_vectors",
                 }
             )
         return out
 
     def details(self, jornada: int, temporada: int) -> list[dict[str, Any]]:
-        self.session.get(self.HOME, headers=self.headers, timeout=self.timeout).raise_for_status()
+        self.session.get(
+            self.HOME, headers=self.headers, timeout=self.timeout
+        ).raise_for_status()
         response = self.session.get(
             self.DETAILS,
-            params={"jornada": jornada, "temporada": temporada, "uts": int(time.time() * 1000)},
+            params={
+                "jornada": jornada,
+                "temporada": temporada,
+                "uts": int(time.time() * 1000),
+            },
             headers=self.headers,
             timeout=self.timeout,
         )
@@ -197,7 +228,12 @@ class SelaeSource:
     def fixture(self, date_yyyymmdd: str) -> dict[str, Any] | None:
         response = self.session.get(
             self.SEARCH,
-            params={"game_id": "LAQU", "celebrados": "false", "fechaInicioInclusiva": date_yyyymmdd, "num_results": 1},
+            params={
+                "game_id": "LAQU",
+                "celebrados": "false",
+                "fechaInicioInclusiva": date_yyyymmdd,
+                "num_results": 1,
+            },
             headers=self.headers,
             timeout=self.timeout,
         )
@@ -206,12 +242,19 @@ class SelaeSource:
         if not data:
             return None
         draw = data[0] if isinstance(data, list) else data
-        raw = draw.get("partidos") or draw.get("jornada_partidos") or draw.get("combinacion") or []
+        raw = (
+            draw.get("partidos")
+            or draw.get("jornada_partidos")
+            or draw.get("combinacion")
+            or []
+        )
         parts = [
             {
                 "numero": i,
                 "local": (match.get("equipoLocal") or match.get("local") or "").strip(),
-                "visitante": (match.get("equipoVisitante") or match.get("visitante") or "").strip(),
+                "visitante": (
+                    match.get("equipoVisitante") or match.get("visitante") or ""
+                ).strip(),
                 "pleno15": i == 15,
             }
             for i, match in enumerate(raw, 1)
