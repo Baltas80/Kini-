@@ -238,6 +238,7 @@ def _download_calendar(
 
     return payload, response_metadata
 
+
 def inspect_workbook(
     payload: bytes,
     output_dir: Path,
