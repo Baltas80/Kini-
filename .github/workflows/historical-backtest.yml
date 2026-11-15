@@ -150,9 +150,29 @@ jobs:
               raise SystemExit("Market calibration comparison is missing or invalid")
 
           common = calibration.get("common_market_sample", {})
+          common_sample_sizes = {}
           for name in required:
-              if int(common.get(name, {}).get("n", 0)) <= 0:
-                  raise SystemExit(f"{name} has no calibrated common-market sample")
+              sample = common.get(name, {})
+              sample_n = int(sample.get("n", 0))
+              component_sizes = {
+                  "raw_model": int(sample.get("raw_model", {}).get("n", 0)),
+                  "calibrated_model": int(sample.get("calibrated_model", {}).get("n", 0)),
+                  "raw_market": int(sample.get("raw_market", {}).get("n", 0)),
+                  "calibrated_market": int(sample.get("calibrated_market", {}).get("n", 0)),
+              }
+              if sample_n <= 0 or any(count != sample_n for count in component_sizes.values()):
+                  raise SystemExit(
+                      f"{name} has inconsistent calibrated common-market samples: "
+                      f"sample={sample_n}, components={component_sizes}"
+                  )
+              common_sample_sizes[name] = sample_n
+
+          expected_common_n = market_n
+          if any(count != expected_common_n for count in common_sample_sizes.values()):
+              raise SystemExit(
+                  "Model/market calibrated comparisons do not share the exact fixture sample: "
+                  f"market={expected_common_n}, models={common_sample_sizes}"
+              )
 
           print(
               "PREQUENTIAL_CALIBRATION_OK: calibrated and raw forecasts "
