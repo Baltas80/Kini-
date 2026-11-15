@@ -12,6 +12,7 @@ on:
   workflow_dispatch:
 
 permissions:
+  actions: read
   contents: read
 
 concurrency:
@@ -28,26 +29,62 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 2
-      - name: Check whether the latest commit changed diagnostic inputs
+      - name: Check changes since the last successful live inspection
         id: filter
         shell: bash
         env:
+          GH_TOKEN: ${{ github.token }}
           PR_ACTION: ${{ github.event.action || '' }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha || '' }}
+          PR_BRANCH: ${{ github.head_ref || '' }}
         run: |
           if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" || "$PR_ACTION" == "opened" || "$PR_ACTION" == "reopened" ]]; then
             echo "inspect=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          if ! git rev-parse HEAD^ >/dev/null 2>&1; then
-            echo "inspect=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          changed_files="$(git diff --name-only HEAD^ HEAD)"
-          if grep -Eq '^(kini_engine/sources.py|scripts/diagnose_kinielagpt_details.py|tests/test_sources.py|tests/test_kinielagpt_details_diagnostic.py|[.]github/workflows/kinielagpt-live-details-diagnostic[.]yml)$' <<<"$changed_files"; then
-            echo "inspect=true" >> "$GITHUB_OUTPUT"
+
+          # Compare with the latest completed run whose inspect job actually
+          # succeeded. A cancelled run or a successful run with inspect skipped
+          # must not hide an unvalidated source/script change.
+          last_success=""
+          runs_json="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/kinielagpt-live-details-diagnostic.yml/runs?branch=$PR_BRANCH&event=pull_request&status=completed&per_page=100" 2>/dev/null || printf '{"workflow_runs":[]}')"
+          while read -r run_id head_sha; do
+            [[ -n "$run_id" && -n "$head_sha" ]] || continue
+            jobs_json="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/jobs?per_page=100" 2>/dev/null || printf '{"jobs":[]}')"
+            if jq -e '[.jobs[]? | select(.name == "inspect" and .conclusion == "success")] | length > 0' <<<"$jobs_json" >/dev/null; then
+              last_success="$head_sha"
+              break
+            fi
+          done < <(
+            jq -r '.workflow_runs[]? | select(.conclusion == "success") | [.id, .head_sha] | @tsv' <<<"$runs_json"
+          )
+
+          if [[ -n "$last_success" ]] && git fetch --no-tags --depth=1 origin "$last_success"; then
+            if git merge-base --is-ancestor "$last_success" HEAD; then
+              changed_files="$(git diff --name-only "$last_success" HEAD)"
+            else
+              git fetch --no-tags --depth=1 origin "$PR_BASE_SHA"
+              changed_files="$(git diff --name-only "$PR_BASE_SHA" HEAD)"
+            fi
           else
-            echo "inspect=false" >> "$GITHUB_OUTPUT"
+            git fetch --no-tags --depth=1 origin "$PR_BASE_SHA"
+            changed_files="$(git diff --name-only "$PR_BASE_SHA" HEAD)"
           fi
+
+          inspect=false
+          while IFS= read -r path; do
+            case "$path" in
+              kini_engine/sources.py|scripts/diagnose_kinielagpt_details.py|tests/test_sources.py|tests/test_kinielagpt_details_diagnostic.py|.github/workflows/kinielagpt-live-details-diagnostic.yml)
+                inspect=true
+                ;;
+            esac
+          done <<<"$changed_files"
+
+          echo "Files since last successful live inspection:"
+          printf '%s\n' "$changed_files"
+          echo "Last successful live inspection head: ${last_success:-none}"
+          echo "inspect=$inspect" >> "$GITHUB_OUTPUT"
+          echo "Live inspection required: $inspect"
 
   inspect:
     needs: changes
@@ -63,9 +100,9 @@ jobs:
           python-version: "3.12"
       - name: Install adapter dependencies
         run: python -m pip install -e .
-      - name: Inspect current jornada details (read-only GET)
+      - name: Inspect current jornada details and fixture crosswalk (read-only GET)
         run: python scripts/diagnose_kinielagpt_details.py --output kinielagpt-details-diagnostic.json
-      - name: Upload bounded schema evidence
+      - name: Upload bounded schema and crosswalk evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
