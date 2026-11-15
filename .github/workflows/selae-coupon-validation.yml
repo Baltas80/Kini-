@@ -30,10 +30,7 @@ jobs:
       - name: Run deterministic parser and integrity tests
         run: pytest -q tests/test_import_selae_results.py
       - name: Lint importer and regression tests
-        run: |
-          ruff check --fix scripts/import_selae_results.py tests/test_import_selae_results.py || true
-          git diff -- scripts/import_selae_results.py tests/test_import_selae_results.py
-          ruff check scripts/import_selae_results.py tests/test_import_selae_results.py
+        run: ruff check scripts/import_selae_results.py tests/test_import_selae_results.py
       - name: Attempt live import from the official SELAE page
         id: fetch_selae
         continue-on-error: true
