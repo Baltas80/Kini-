@@ -47,13 +47,19 @@ jobs:
           fetch-depth: 2
       - id: filter
         shell: bash
+        env:
+          PR_ACTION: ${{ github.event.action || '' }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha || '' }}
         run: |
           if [[ "$GITHUB_EVENT_NAME" != "pull_request" ]]; then
             echo "run_backtest=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
-          if git rev-parse HEAD^ >/dev/null 2>&1; then
+          if [[ "$PR_ACTION" == "opened" || "$PR_ACTION" == "reopened" ]]; then
+            git fetch --no-tags --depth=1 origin "$PR_BASE_SHA"
+            changed_files="$(git diff --name-only "$PR_BASE_SHA" HEAD)"
+          elif git rev-parse HEAD^ >/dev/null 2>&1; then
             changed_files="$(git diff --name-only HEAD^ HEAD)"
           else
             changed_files="$(git diff-tree --no-commit-id --name-only -r HEAD)"
