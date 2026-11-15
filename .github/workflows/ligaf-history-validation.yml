@@ -1,11 +1,12 @@
 name: ligaf-history-validation
 
 on:
-  pull_request:
+  push:
+    branches:
+      - "feat/selae-fixture-reconciliation"
     paths:
       - "kini_engine/ligaf_history.py"
       - "scripts/import_ligaf_history.py"
-      - "tests/test_ligaf_history.py"
       - ".github/workflows/ligaf-history-validation.yml"
   workflow_dispatch:
     inputs:
