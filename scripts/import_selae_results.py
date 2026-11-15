@@ -26,9 +26,9 @@ MONTHS = (
 DEFAULT_CACHE_DIR = Path(".cache/selae-quiniela")
 DEFAULT_OUTPUT = Path("data/selae_quiniela_draws.jsonl")
 CACHE_TTL_HOURS = 24.0
-TEAM_CATEGORY_RE = re.compile(r"^(.*?)\\s+\\(([MF])\\)$", re.IGNORECASE)
-SCORE_RE = re.compile(r"^(\\d+)\\s*[-–]\\s*(\\d+)$")
-PLENO_SCORE_RE = re.compile(r"^(M|\\d+)\\s*[-–]\\s*(M|\\d+)$", re.IGNORECASE)
+TEAM_CATEGORY_RE = re.compile(r"^(.*?)\s+\(([MF])\)$", re.IGNORECASE)
+SCORE_RE = re.compile(r"^(\d+)\s*[-–]\s*(\d+)$")
+PLENO_SCORE_RE = re.compile(r"^(M|\d+)\s*[-–]\s*(M|\d+)$", re.IGNORECASE)
 log = logging.getLogger("kini.selae")
 
 
@@ -101,7 +101,7 @@ def make_draw_url(draw_date: date) -> str:
 
 
 def _clean(value: str) -> str:
-    return " ".join(value.replace("\\xa0", " ").split()).strip()
+    return " ".join(value.replace("\xa0", " ").split()).strip()
 
 
 def _is_position_block(items: list[str], start: int) -> bool:
@@ -209,7 +209,7 @@ def _parse_integer(value: str) -> int | None:
 def _parse_eur_cents(value: str) -> int | None:
     cleaned = _clean(value).replace("€", "").replace("EUR", "").replace(" ", "")
     cleaned = cleaned.replace(".", "").replace(",", ".")
-    match = re.search(r"\\d+(?:\\.\\d{1,2})?", cleaned)
+    match = re.search(r"\d+(?:\.\d{1,2})?", cleaned)
     if not match:
         return None
     try:
