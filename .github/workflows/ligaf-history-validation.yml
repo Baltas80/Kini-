@@ -6,6 +6,9 @@ on:
       - "feat/selae-fixture-reconciliation"
     paths:
       - "kini_engine/ligaf_history.py"
+      - "kini_engine/ligaf_team_profiles.py"
+      - "scripts/build_ligaf_team_profiles.py"
+      - "tests/test_ligaf_team_profiles.py"
       - ".github/workflows/ligaf-history-validation.yml"
   workflow_dispatch:
     inputs:
@@ -62,6 +65,12 @@ jobs:
             args+=(--refresh)
           fi
           python scripts/import_ligaf_history.py "${args[@]}"
+      - name: Build season-scoped historical team-profile evidence
+        run: >-
+          python scripts/build_ligaf_team_profiles.py
+          --seasons 2023 2024 2025 2026
+          --cache-ttl-hours 168
+          --request-delay 0.35
       - name: Assert historical coverage and training exclusion
         run: |
           python - <<'PY'
@@ -99,9 +108,22 @@ jobs:
           if profile["unique_match_ids"] != profile["total_scheduled_fixtures"]:
               raise SystemExit("Liga F history contains duplicate or missing match IDs")
 
+          historical_profiles = json.loads(
+              Path("data/ligaf_historical_team_profiles.json").read_text(encoding="utf-8")
+          )
+          if historical_profiles.get("training_eligibility", {}).get("eligible") is not False:
+              raise SystemExit("Historical profile evidence must remain excluded from training")
+          for year in ("2023", "2024", "2025", "2026"):
+              season = historical_profiles["seasons"][year]
+              if season["team_count"] != 16 or season["unique_profile_ids"] != 16:
+                  raise SystemExit(f"Historical profile coverage failed for {year}")
+              if len(season["entries"]) != 16 or not season["all_profile_pages_verified"]:
+                  raise SystemExit(f"Historical profile pages are incomplete for {year}")
+
           print(json.dumps(profile, indent=2, ensure_ascii=False))
+          print(json.dumps(historical_profiles["cross_season_provider_id_observations"], indent=2, ensure_ascii=False))
           PY
-      - name: Upload Liga F history and provenance profile
+      - name: Upload Liga F history and provenance profiles
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -109,5 +131,6 @@ jobs:
           path: |
             data/ligaf_history.jsonl
             data/ligaf_history.profile.json
+            data/ligaf_historical_team_profiles.json
           if-no-files-found: warn
           retention-days: 30

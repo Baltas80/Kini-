@@ -12,3 +12,4 @@ data/historical_spain.csv
 .cache/ligaf/
 data/ligaf_history.jsonl
 data/ligaf_history.profile.json
+data/ligaf_historical_team_profiles.json
