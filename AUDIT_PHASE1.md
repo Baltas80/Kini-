@@ -367,3 +367,14 @@ The current optimizer maximizes product coverage of selected 1/X/2 marginal mass
 ### P6 optimizer input-contract hardening — 2026-11-15
 
 A final review found that `TicketOptimizer.optimize` used `prediction.get(sign, 0.0)`. This silently accepted an incomplete probability mapping when the remaining two values happened to sum to one, effectively treating an omitted outcome as a proven zero-probability event. The optimizer now rejects any match missing one of the required `1`, `X`, or `2` keys before validating numeric values. A regression test removes the `2` key while leaving the other two probabilities summing to one and verifies that the input is rejected. This is an input-integrity correction only; it does not change the optimization objective or claim correlation-aware coverage. The DP still maximizes independent-match full-ticket coverage under a maximum column budget.
+
+## Latest optimizer hardening validation — 2026-11-15
+
+- Code: `c6d42a004a3f7657e416dc443fb17228f81b11d6` rejects incomplete 1/X/2 mappings instead of silently substituting zero for a missing sign.
+- Regression test: `877867655899439e7a296a94633e6b477d944740` removes one sign while the remaining two sum to one and verifies that the optimizer raises `ValueError`.
+- Branch head including the code, test and audit updates: `dcca16a7df7c91718ae6811133ff9613be66286e`.
+- CI on the updated branch: **55 passed, 4 third-party deprecation warnings** — [run 43671694073](https://github.com/Baltas80/Kini-/actions/runs/43671694073).
+- Historical data validation: **5,311 fixtures, `integrity_passed=true`** — [run 43671694061](https://github.com/Baltas80/Kini-/actions/runs/43671694061).
+- The full strict-market walk-forward benchmark remains the accepted result from [run 43666544162](https://github.com/Baltas80/Kini-/actions/runs/43666544162). The optimizer input-contract change does not alter model fitting, forecasts, market inputs or ticket coverage calculations.
+
+The optimizer still reports coverage only under its explicit independent-match approximation. Correlation-aware coverage and expected payout remain unvalidated until historical official coupon composition, outcome/pool data and applicable system rules are available.
