@@ -768,3 +768,34 @@ The historical provider-profile extraction is implemented and live-validated. Th
 A separate exact-label comparison between the 2025/26 historical profile evidence and the current 2026/27 profile crosswalk found 14 shared team labels and 14 identical provider profile IDs, with zero ID mismatches. Relative to 2025/26, the current season contains Deportivo Alavés and VCF Femenino where Alhama CF ElPozo and Levante UD were present previously. The Alavés provider ID is independently observed in 2022/23; the VCF Femenino ID is observed in 2022/23–2024/25. These are season-membership differences, not evidence of a new club identity or an alias; no canonical identity is inferred.
 
 The first lint/format attempts exposed import-order, set-comprehension and formatting issues, followed by an incomplete unit-test fixture for the stronger evidence contract. These were corrected in commits `dc189590199bd911850c0e5b18e46d3231452511` and `5d575ded59ca15aeb214224ecd523e4d8a314ad5`. Final PR CI [run 43716295453](https://github.com/Baltas80/Kini-/actions/runs/43716295453) passed on head `5d575ded59ca15aeb214224ecd523e4d8a314ad5`: Ruff checks passed, five files were already formatted, 132 tests passed, and four upstream NumPy/penaltyblog deprecation warnings remained. The latest live source/profile validation is run 43716218767 above; the subsequent 5d575 test-only commit did not alter the importer or profile collector.
+
+## Point-in-time audit of ML features — 2026-11-15
+
+### Implemented feature contract
+
+A code review of `FeatureModel._features` found that the original 15-column matrix included three standings-position fields read from arbitrary `Match.detail` values. The Football-Data loader did not populate those fields, so they were constant zero in the validated historical benchmark. Other callers could nevertheless inject standings without any publication-time provenance. The fields have therefore been removed rather than treated as valid pre-match inputs.
+
+The model now uses exactly 12 numeric features:
+
+1. Home-team points per match, goals for per match and goals against per match over its last eight completed matches.
+2. Away-team equivalents over its last eight completed matches.
+3. Home-team points/goals for/goals against over its last eight completed home fixtures.
+4. Away-team points/goals for/goals against over its last eight completed away fixtures.
+
+The feature builder now independently filters history to completed matches whose source calendar date is strictly earlier than the forecast fixture, then sorts those observations chronologically before taking the last eight. This protects both training-row construction and inference from accidentally supplied same-day or future matches; it no longer relies solely on the caller to pass a clean history list. Unverified standings and other arbitrary detail fields are not read.
+
+Implementation commit: [`401de5d`](https://github.com/Baltas80/Kini-/commit/401de5d8b6a49cf6a5906326c8b4f576fc80b852). Regression commit: [`506deec`](https://github.com/Baltas80/Kini-/commit/506deec73cf5d8f2622451d3c3f2c48d8943dcfe).
+
+### Regression coverage
+
+- The fake-estimator tests now assert the 12-feature training and 12-feature inference matrix shapes.
+- A new test supplies same-day and future results with extreme scores, plus unverified standings positions, and asserts that the resulting feature vector is identical to the clean prior-history vector.
+- The existing training-row test continues to assert that same-calendar-day outcomes are excluded.
+
+CI and the full historical walk-forward benchmark are triggered by the model/test changes. Do not reuse the earlier 15-feature ML metrics as validation of this revised feature contract; publish updated metrics only after the new workflow completes.
+
+### Remaining temporal limitations
+
+This is a defensive code-level feature audit, not proof of every upstream observation's publication timestamp. Football-Data provides match dates and results but not a per-result publication timestamp. The strict prior-calendar-day rule excludes same-day results, but the benchmark still assumes a completed prior-date result was available before the next calendar date. This assumption should remain explicit.
+
+The historical benchmark's `KiniEngine(enable_ml=True)` path does not enable `context_adjust`; no H2H adjustment is applied in that benchmark. Football-Data rows loaded by `dataio.py` do not carry LAE probabilities, so LAE is absent from this historical comparison. The market component remains gated by the schedule-compatibility screen, not an exact odds-capture timestamp. These external-source limitations remain open and must not be represented as fully point-in-time verified.
