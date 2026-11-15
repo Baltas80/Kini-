@@ -826,3 +826,10 @@ Corrections:
 Implementation: [`9abee23`](https://github.com/Baltas80/Kini-/commit/9abee231ad87c86bb646a51ae0ebfb1e3721f45a). Tests: [`10d1fe5`](https://github.com/Baltas80/Kini-/commit/10d1fe5ecaa85c6f8a9d24503f882f3c54a5b5a5).
 
 The failed expanded-lint run was [43717966679](https://github.com/Baltas80/Kini-/actions/runs/43717966679). The corrected code and tests trigger a fresh CI run and another full historical benchmark because `core.py` changed. Validation remains pending until those runs finish.
+
+
+## Historical backtest pull-request validation — 2026-11-15
+
+The historical benchmark workflow was previously push/schedule/manual only. Its push-triggered result is not exposed by the connector's PR-only workflow lookup, which prevented reliable inspection of the exact benchmark generated for a PR head. Commit [08a24ae](https://github.com/Baltas80/Kini-/commit/08a24ae0c80b5cd6184b63df7e29027ae30b9894) adds a `pull_request` trigger with the same model/data path filters and evidence-only exclusions as the push trigger. The existing branch concurrency key keeps push/PR duplicates from running simultaneously.
+
+This makes the required non-empty forecast, zero-error, strict market-sample and prequential-calibration acceptance steps observable against the proposed PR head. The new PR-triggered run is pending; do not claim updated benchmark metrics until it completes and its artifact is inspected.
