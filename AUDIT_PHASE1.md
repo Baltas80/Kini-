@@ -564,7 +564,7 @@ Both have been corrected. The workflow now watches the manifest and supports man
 
 ### Validation on latest head
 
-- Head commit: 46ccff9e64560dba8b5e3f8e1fd8659cc336e2fc.
+- Validated implementation commit: 46ccff9e64560dba8b5e3f8e1fd8659cc336e2fc (the subsequent 974ecc353b38c7e0cfa49bcfcc843ff90fea2a21 commit changes documentation only).
 - SELAE source-validation: [run 43693816806](https://github.com/Baltas80/Kini-/actions/runs/43693816806) — **23 parser/integrity tests passed; Ruff all checks passed**. The live fetch still receives HTTP 403 from the GitHub-hosted runner; the workflow records a warning and correctly does not claim live-source acceptance or upload a validated source artifact.
 - Full repository CI: [run 43693820720](https://github.com/Baltas80/Kini-/actions/runs/43693820720) — **81 passed, 4 third-party warnings**.
 - Historical-data validation: [run 43693820723](https://github.com/Baltas80/Kini-/actions/runs/43693820723) — **5,311 complete fixtures, zero duplicates, zero conflicting duplicates, integrity_passed=true**.
