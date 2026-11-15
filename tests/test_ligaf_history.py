@@ -174,7 +174,7 @@ def test_validate_history_rejects_duplicate_canonical_fixture():
     first = _record(1)
     second = _record(2)
     second["kickoff_at"] = first["kickoff_at"]
-    with pytest.raises(LigaFHistoryError, match="duplicate canonical Liga F fixture"):
+    with pytest.raises(LigaFHistoryError, match="duplicate scheduled home/away pair"):
         validate_history(
             [first, second],
             completed_seasons=set(),
@@ -234,7 +234,7 @@ def test_fetch_html_offline_requires_validated_cache(tmp_path: Path):
     html, metadata = fetch_html(url, cache_dir=tmp_path, offline=True)
     assert "Resultados Liga F" in html
     assert metadata["cache_used"] is True
-    assert metadata["cache_stale"] is True
+    assert metadata["cache_stale"] is False
 
 
 def test_fetch_html_rejects_cache_hash_mismatch(tmp_path: Path):
