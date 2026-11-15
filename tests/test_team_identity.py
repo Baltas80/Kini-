@@ -57,6 +57,16 @@ def test_default_registry_rejects_wrong_competition_or_season():
     ) is None
 
 
+def test_resolve_rejects_blank_optional_scope_values():
+    registry = TeamIdentityRegistry.from_path(REGISTRY_PATH)
+
+    with pytest.raises(ValueError, match="competition_id must be a non-empty string"):
+        registry.resolve("Real Madrid", source="football-data", competition_id=" ")
+
+    with pytest.raises(ValueError, match="season must be a non-empty string"):
+        registry.resolve("Real Madrid", source="football-data", season=" ")
+
+
 def test_aliases_are_provider_scoped_and_never_fuzzy():
     registry = TeamIdentityRegistry.from_path(REGISTRY_PATH)
 
