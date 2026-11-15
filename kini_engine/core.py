@@ -431,7 +431,31 @@ def _recent_form(history: list[Match], team: str) -> float:
 
 
 class TicketOptimizer:
-    """Exact column-budget optimizer under an independent-match approximation."""
+    """SELAE direct-multiple optimizer under an independent-match approximation.
+
+    Only double/triple counts authorized by the direct-method table are
+    considered. Coverage is the probability that every match outcome belongs
+    to its selected sign set; it is not expected payout or profitability.
+    """
+
+    MAX_AUTHORIZED_COLUMNS = 31_104
+    MAX_TRIPLES_BY_DOUBLES = {
+        0: 9,
+        1: 8,
+        2: 8,
+        3: 7,
+        4: 6,
+        5: 6,
+        6: 5,
+        7: 5,
+        8: 4,
+        9: 3,
+        10: 3,
+        11: 2,
+        12: 1,
+        13: 1,
+        14: 0,
+    }
 
     def __init__(
         self,
@@ -447,18 +471,19 @@ class TicketOptimizer:
         if (
             isinstance(minimum_columns, bool)
             or not isinstance(minimum_columns, int)
-            or minimum_columns < 1
+            or minimum_columns < 2
         ):
-            raise ValueError("minimum_columns must be a positive integer")
+            raise ValueError("minimum_columns must be an integer of at least 2")
+        if minimum_columns > self.MAX_AUTHORIZED_COLUMNS:
+            raise ValueError("minimum_columns exceeds the authorized direct-system maximum")
         self.price_per_column_eur = price
         self.minimum_columns = minimum_columns
 
     def optimize(self, predictions: list[dict[str, float]], budget: int = 8) -> dict[str, Any]:
-        """Maximize full-ticket coverage, not expected prize or expected profit.
+        """Maximize full-ticket coverage within SELAE's direct-system table.
 
-        Budget is the maximum number of 14-match columns. The default
-        0.75 EUR price and two-column minimum follow the SELAE 2024 annual
-        report; both are configurable for later rule or price changes.
+        Budget is the maximum number of 14-match columns. The current engine
+        selects exactly one Pleno al 15 category pair, so its multiplier is 1.
         """
         if len(predictions) != 14:
             raise ValueError("standard ticket optimisation needs exactly 14 matches")
@@ -467,6 +492,10 @@ class TicketOptimizer:
         if budget < self.minimum_columns:
             raise ValueError(
                 f"budget must be at least {self.minimum_columns} columns"
+            )
+        if budget > self.MAX_AUTHORIZED_COLUMNS:
+            raise ValueError(
+                f"budget must not exceed {self.MAX_AUTHORIZED_COLUMNS} authorized direct columns"
             )
 
         normalized: list[dict[str, float]] = []
@@ -503,48 +532,57 @@ class TicketOptimizer:
                 )
             normalized.append({sign: values[sign] / total for sign in SIGNS})
 
-        # Each match contributes one, two or three selected signs. The number
-        # of resulting columns is their product. Maximizing the log of the
-        # product of selected marginal masses gives an exact DP under the
-        # independence approximation.
-        dp: dict[int, tuple[float, list[tuple[str, ...]]]] = {1: (0.0, [])}
+        # State is (number of doubles, number of triples). The SELAE direct
+        # table constrains the authorized triple count for each double count.
+        # For a fixed state, the best sign subset at each match is its top-k.
+        dp: dict[tuple[int, int], tuple[float, list[tuple[str, ...]]]] = {
+            (0, 0): (0.0, [])
+        }
 
         for probabilities in normalized:
-            nxt: dict[int, tuple[float, list[tuple[str, ...]]]] = {}
+            nxt: dict[tuple[int, int], tuple[float, list[tuple[str, ...]]]] = {}
             ordered = sorted(
                 SIGNS,
                 key=lambda sign: probabilities[sign],
                 reverse=True,
             )
 
-            for used, (log_mass, picks) in dp.items():
+            for (double_count, triple_count), (log_mass, picks) in dp.items():
                 for count in (1, 2, 3):
-                    new_used = used * count
+                    new_doubles = double_count + int(count == 2)
+                    new_triples = triple_count + int(count == 3)
+                    if new_triples > self.MAX_TRIPLES_BY_DOUBLES[new_doubles]:
+                        continue
+
+                    new_used = (2 ** new_doubles) * (3 ** new_triples)
                     if new_used > budget:
                         continue
+
                     signs = tuple(ordered[:count])
                     mass = sum(probabilities[sign] for sign in signs)
                     candidate = log_mass + float(np.log(max(mass, 1e-15)))
-                    previous = nxt.get(new_used)
+                    state = (new_doubles, new_triples)
+                    previous = nxt.get(state)
                     if previous is None or candidate > previous[0]:
-                        nxt[new_used] = (candidate, picks + [signs])
+                        nxt[state] = (candidate, picks + [signs])
 
             dp = nxt
 
         eligible = {
-            used: value
-            for used, value in dp.items()
-            if used >= self.minimum_columns
+            state: value
+            for state, value in dp.items()
+            if (2 ** state[0]) * (3 ** state[1]) >= self.minimum_columns
         }
         if not eligible:
             raise ValueError(
                 f"budget {budget} cannot satisfy the {self.minimum_columns}-column minimum"
             )
 
-        used, (log_mass, picks) = max(
+        (double_count, triple_count), (log_mass, picks) = max(
             eligible.items(),
             key=lambda item: item[1][0],
         )
+        used = (2 ** double_count) * (3 ** triple_count)
         columns = [
             [picks[j][mask[j]] for j in range(14)]
             for mask in np.ndindex(tuple(len(x) for x in picks))
@@ -557,11 +595,16 @@ class TicketOptimizer:
             "budget_unit": "columns",
             "columns": columns,
             "column_count": len(columns),
+            "double_count": double_count,
+            "triple_count": triple_count,
             "shape": tuple(len(x) for x in picks),
             "joint_coverage": float(np.exp(log_mass)),
             "coverage_assumption": "independent_matches",
+            "system_method": "multiple_direct",
+            "maximum_authorized_columns": self.MAX_AUTHORIZED_COLUMNS,
             "minimum_columns": self.minimum_columns,
             "price_per_column_eur": self.price_per_column_eur,
+            "pleno15_multiplier": 1,
             "cost_eur": round(len(columns) * self.price_per_column_eur, 2),
         }
 
