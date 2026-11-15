@@ -305,6 +305,38 @@ def extract_match_links(html: str, *, page_url: str) -> list[dict[str, str]]:
     return [{"match_id": key, "match_url": value} for key, value in found.items()]
 
 
+def extract_round_dates(html: str, *, season_end_year: int) -> set[date]:
+    """Read explicit calendar dates shown in the official round archive."""
+    document = _parse_document(html)
+    season_start = date(season_end_year - 1, 7, 1)
+    season_end = date(season_end_year, 6, 30)
+    dates: set[date] = set()
+    pattern = re.compile(
+        r"\b(?P<day>\d{1,2})\s+(?P<month>[A-Za-zÁÉÍÓÚÜáéíóúü]{3})\s+"
+        r"(?P<year>20\d{2})\b",
+        flags=re.IGNORECASE,
+    )
+    for match in pattern.finditer(document.text):
+        month = MONTHS.get(match.group("month").upper())
+        if month is None:
+            continue
+        try:
+            value = date(
+                int(match.group("year")),
+                month,
+                int(match.group("day")),
+            )
+        except ValueError:
+            continue
+        if season_start <= value <= season_end:
+            dates.add(value)
+    if not dates:
+        raise LigaFHistoryError(
+            f"official round page has no explicit dates for season {season_end_year}"
+        )
+    return dates
+
+
 def _parse_match_title(title: str) -> tuple[str, str]:
     """Extract teams without trusting the site's title year for historical seasons."""
     cleaned = re.sub(r"\s+", " ", title).strip()
@@ -373,6 +405,7 @@ def parse_match_detail(
     round_url: str,
     match_source_metadata: dict[str, Any],
     round_source_metadata: dict[str, Any],
+    allowed_round_dates: set[date] | None = None,
 ) -> dict[str, Any]:
     """Parse one official match page; unknown statuses and malformed scores fail closed."""
     _official_url(match_url, "match_url")
@@ -396,6 +429,15 @@ def parse_match_detail(
             raise LigaFHistoryError(
                 f"match {match_id} belongs to jornada {matchday}, "
                 f"but was linked from jornada {expected_matchday}"
+            )
+        if (
+            kickoff is not None
+            and allowed_round_dates is not None
+            and kickoff.date() not in allowed_round_dates
+        ):
+            raise LigaFHistoryError(
+                f"match {match_id} kickoff date {kickoff.date()} is absent "
+                "from the official round archive dates"
             )
 
     leading_text = document.text[:2500].casefold()
@@ -746,6 +788,10 @@ def import_ligaf_history(
                 request_delay=request_delay,
             )
             links = extract_match_links(round_html, page_url=round_url)
+            round_dates = extract_round_dates(
+                round_html,
+                season_end_year=season_end_year,
+            )
             if len(links) != expected_fixtures_per_round:
                 raise LigaFHistoryError(
                     f"season {season_end_year} matchday {matchday} exposes "
@@ -769,6 +815,7 @@ def import_ligaf_history(
                     round_url=round_url,
                     match_source_metadata=match_meta,
                     round_source_metadata=round_meta,
+                    allowed_round_dates=round_dates,
                 )
                 row["match_source_cache_stale"] = bool(match_meta.get("cache_stale"))
                 row["round_source_cache_stale"] = bool(round_meta.get("cache_stale"))
