@@ -147,6 +147,84 @@ def summarize_payload(payload: Any) -> dict[str, Any]:
     }
 
 
+
+def summarize_probability_payload(payload: Any) -> dict[str, Any]:
+    """Expose bounded LAE XML probability-field evidence without storing raw XML."""
+    if not isinstance(payload, Mapping):
+        return {
+            "payload_type": type(payload).__name__,
+            "root_keys": [],
+            "percentage_keys": [],
+            "record_count": 0,
+            "record_fields": [],
+            "probability_field_samples": {},
+            "parsed_match_count": 0,
+            "valid_probability_vector_count": 0,
+            "invalid_probability_match_ids": [],
+        }
+
+    root = payload.get("quinielista")
+    percentages = root.get("porcentajes") if isinstance(root, Mapping) else None
+    raw_records = (
+        percentages.get("partido") if isinstance(percentages, Mapping) else None
+    )
+    if isinstance(raw_records, Mapping):
+        records = [raw_records]
+    elif isinstance(raw_records, list):
+        records = [record for record in raw_records if isinstance(record, Mapping)]
+    else:
+        records = []
+
+    field_names = sorted(
+        {str(key) for record in records[:10] for key in record}
+    )
+    probability_fields = [
+        key
+        for key in field_names
+        if any(
+            token in key.casefold()
+            for token in ("porc", "prob", "pronost", "sign", "1x2")
+        )
+        or key.casefold() in {"1", "x", "2"}
+    ]
+    field_samples = {
+        key: [_safe_sample(record.get(key)) for record in records[:3] if key in record]
+        for key in probability_fields[:30]
+    }
+
+    parsed = KinielaGPTSource._probability_map(dict(payload))
+    valid_ids = [
+        match_id
+        for match_id, row in parsed.items()
+        if isinstance(row.get("probabilities"), Mapping)
+    ]
+    invalid_ids = [
+        match_id
+        for match_id, row in parsed.items()
+        if row.get("probabilities") is None
+    ]
+
+    return {
+        "payload_type": "object",
+        "root_keys": sorted(str(key) for key in payload)[:40],
+        "percentage_keys": (
+            sorted(str(key) for key in percentages)[:40]
+            if isinstance(percentages, Mapping)
+            else []
+        ),
+        "record_count": len(records),
+        "record_fields": field_names[:80],
+        "probability_field_samples": field_samples,
+        "expected_parser_fields_present": {
+            field: field in field_names
+            for field in ("num", "local", "visitante", "porc_1", "porc_X", "porc_2")
+        },
+        "parsed_match_count": len(parsed),
+        "valid_probability_vector_count": len(valid_ids),
+        "invalid_probability_match_ids": invalid_ids[:30],
+    }
+
+
 def _normalize_team_name(value: Any) -> str | None:
     """Normalize case, accents and punctuation without applying team aliases."""
     if not isinstance(value, str):
@@ -423,6 +501,13 @@ def collect_live_diagnostic() -> dict[str, Any]:
     report["schema"] = summarize_payload(payload)
     details = payload.get("detallePartidos")
     report["fixture_crosswalk"] = reconcile_fixture_order(details, percentage_matches)
+    lae_payload, lae_schema_received_at = source._xml_snapshot(
+        source.LAE.format(jornada, temporada)
+    )
+    report["lae_probability_schema"] = {
+        "schema_probe_received_at": lae_schema_received_at,
+        **summarize_probability_payload(lae_payload),
+    }
     probability_rows = source.probabilities(jornada, temporada)
     report["kickoff_attachment"] = summarize_kickoff_attachment(
         probability_rows, source.LAE_SOURCE

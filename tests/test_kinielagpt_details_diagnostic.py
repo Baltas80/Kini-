@@ -1,6 +1,7 @@
 from scripts.diagnose_kinielagpt_details import (
     reconcile_fixture_order,
     summarize_kickoff_attachment,
+    summarize_probability_payload,
     summarize_payload,
 )
 
@@ -167,3 +168,68 @@ def test_kickoff_attachment_summary_requires_verified_identity_and_temporal_orde
         fixture["temporally_eligible_lae"] is False
         for fixture in summary["fixtures"][1:]
     )
+
+
+
+def test_probability_payload_summary_reports_expected_fields_and_valid_vectors():
+    payload = {
+        "quinielista": {
+            "porcentajes": {
+                "partido": [
+                    {
+                        "num": "1",
+                        "local": "Local FC",
+                        "visitante": "Visitante FC",
+                        "porc_1": "52.5",
+                        "porc_X": "26.0",
+                        "porc_2": "21.5",
+                    }
+                ]
+            }
+        }
+    }
+
+    summary = summarize_probability_payload(payload)
+
+    assert summary["record_count"] == 1
+    assert summary["expected_parser_fields_present"] == {
+        "num": True,
+        "local": True,
+        "visitante": True,
+        "porc_1": True,
+        "porc_X": True,
+        "porc_2": True,
+    }
+    assert summary["parsed_match_count"] == 1
+    assert summary["valid_probability_vector_count"] == 1
+    assert summary["probability_field_samples"] == {
+        "porc_1": ["52.5"],
+        "porc_2": ["21.5"],
+        "porc_X": ["26.0"],
+    }
+
+
+def test_probability_payload_summary_exposes_parser_schema_mismatch():
+    payload = {
+        "quinielista": {
+            "porcentajes": {
+                "partido": [
+                    {
+                        "num": "1",
+                        "local": "Local FC",
+                        "visitante": "Visitante FC",
+                        "porcentaje_1": "52.5",
+                        "porcentaje_x": "26.0",
+                        "porcentaje_2": "21.5",
+                    }
+                ]
+            }
+        }
+    }
+
+    summary = summarize_probability_payload(payload)
+
+    assert summary["expected_parser_fields_present"]["porc_1"] is False
+    assert summary["parsed_match_count"] == 1
+    assert summary["valid_probability_vector_count"] == 0
+    assert summary["probability_field_samples"]["porcentaje_1"] == ["52.5"]
