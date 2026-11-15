@@ -463,7 +463,7 @@ The public `KiniEngine.quiniela` result now includes `estimated_full_coupon_cove
 - Regression test: [`83bc72f`](https://github.com/Baltas80/Kini-/commit/83bc72f6b3488bc558dc09d88c091b5026f0c8e9).
 - Documentation/source audit: [`0703b3c`](https://github.com/Baltas80/Kini-/commit/0703b3c7e4ea25ad26cedd4eae4ea2a702c63b47).
 - CI on the updated branch head: **58 passed, 4 third-party warnings** ([run 43675732172](https://github.com/Baltas80/Kini-/actions/runs/43675732172)).
-- Historical-data validation triggered on the same head is still running ([run 43675732192](https://github.com/Baltas80/Kini-/actions/runs/43675732192)); no new integrity result is claimed yet.
+- Historical-data validation on the same head passed: **5,311 completed fixtures, zero duplicates, `integrity_passed=true`** ([run 43675732192](https://github.com/Baltas80/Kini-/actions/runs/43675732192)).
 - The accepted predictive benchmark remains [run 43666544162](https://github.com/Baltas80/Kini-/actions/runs/43666544162). This change only adds a clearly labelled derived coverage field; it does not change model probabilities, the 14-match DP objective or benchmark forecasts.
 
 PR #5 remains open and is still the prerequisite for integrating PR #6. PR #6 remains draft. No PR has been merged and `master` remains untouched.
