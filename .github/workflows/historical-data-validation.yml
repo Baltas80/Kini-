@@ -5,6 +5,9 @@ on:
     paths:
       - "scripts/build_history.py"
       - "kini_engine/dataio.py"
+      - "kini_engine/team_identity.py"
+      - "kini_engine/data/**"
+      - "scripts/validate_team_identity_registry.py"
       - "data/**"
       - "pyproject.toml"
       - "requirements*.txt"
@@ -42,6 +45,9 @@ jobs:
             football-data-${{ runner.os }}-
       - name: Build historical data and profile
         run: python scripts/build_history.py
+      - name: Validate canonical team identities
+        run: |
+          python -m scripts.validate_team_identity_registry --csv data/historical_spain.csv --output data/team_identity_validation.json
       - name: Validate generated dataset and profile
         run: |
           python - <<'PY'
@@ -99,5 +105,6 @@ jobs:
           path: |
             data/historical_spain.csv
             data/historical_spain.profile.json
+            data/team_identity_validation.json
           if-no-files-found: warn
           retention-days: 30
