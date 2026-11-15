@@ -1,5 +1,6 @@
 from scripts.diagnose_kinielagpt_details import (
     reconcile_fixture_order,
+    summarize_kickoff_attachment,
     summarize_payload,
 )
 
@@ -123,3 +124,47 @@ def test_fixture_crosswalk_exposes_timezone_aware_kickoff_candidates_without_inf
     assert report["mapping"][0]["provider_day_label"] == "MAR"
     assert report["mapping"][0]["provider_clock_time"] == "20:45"
     assert report["mapping"][0]["timezone_aware_candidate_fields"] == ["fechaHora"]
+
+
+
+def test_kickoff_attachment_summary_requires_verified_identity_and_temporal_order():
+    valid = {
+        "id": 1,
+        "fixture_identity_status": "verified",
+        "kickoff_at": "2026-11-17T20:45:00+01:00",
+        "kickoff_evidence_checked_at_utc": "2026-11-15T19:00:00+00:00",
+        "lae_captured_at": "2026-11-15T19:30:00+00:00",
+        "lae_source": "official-lae",
+        "lae": {"1": 0.5, "X": 0.25, "2": 0.25},
+    }
+    identity_mismatch = {
+        **valid,
+        "id": 2,
+        "fixture_identity_status": "source_name_mismatch",
+    }
+    evidence_after_capture = {
+        **valid,
+        "id": 3,
+        "kickoff_evidence_checked_at_utc": "2026-11-15T19:40:00+00:00",
+    }
+    invalid_vector = {
+        **valid,
+        "id": 4,
+        "lae": {"1": 1.2, "X": 0.0, "2": 0.0},
+    }
+
+    summary = summarize_kickoff_attachment(
+        [valid, identity_mismatch, evidence_after_capture, invalid_vector],
+        "official-lae",
+    )
+
+    assert summary["rows_count"] == 4
+    assert summary["kickoff_mapped_count"] == 4
+    assert summary["lae_source_rows_count"] == 4
+    assert summary["valid_lae_vector_count"] == 3
+    assert summary["temporally_eligible_lae_count"] == 1
+    assert summary["fixtures"][0]["temporally_eligible_lae"] is True
+    assert all(
+        fixture["temporally_eligible_lae"] is False
+        for fixture in summary["fixtures"][1:]
+    )
