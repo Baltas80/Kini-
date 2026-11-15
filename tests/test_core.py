@@ -300,6 +300,14 @@ def test_feature_model_uses_latest_feature_history_without_refitting(monkeypatch
     assert FakeXGBClassifier.inference_first_feature == len(feature_history)
 
 
+def test_optimizer_rejects_missing_sign_probability():
+    predictions = [{"1": 0.5, "X": 0.3, "2": 0.2} for _ in range(14)]
+    del predictions[6]["2"]
+
+    with pytest.raises(ValueError, match="missing probability for sign"):
+        TicketOptimizer().optimize(predictions, budget=8)
+
+
 def test_optimizer_rejects_invalid_probability_distributions():
     import pytest
 
