@@ -183,9 +183,14 @@ def _read_cache(html_path: Path, metadata_path: Path) -> tuple[str, dict[str, An
     try:
         html_bytes = html_path.read_bytes()
         metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+        if not isinstance(metadata, dict):
+            raise LigaFHistoryError(f"invalid cache metadata: {metadata_path}")
         if hashlib.sha256(html_bytes).hexdigest() != metadata.get("content_sha256"):
             raise LigaFHistoryError(f"cache hash mismatch: {html_path}")
-        return html_bytes.decode("utf-8"), metadata
+        encoding = metadata.get("encoding", "utf-8")
+        if not isinstance(encoding, str) or not encoding:
+            raise LigaFHistoryError(f"invalid cache encoding: {metadata_path}")
+        return html_bytes.decode(encoding, errors="strict"), metadata
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise LigaFHistoryError(f"cannot read cached source {html_path}: {exc}") from exc
 
@@ -247,6 +252,7 @@ def fetch_html(
             "retrieved_at_utc": retrieved_at,
             "content_sha256": hashlib.sha256(html_bytes).hexdigest(),
             "http_status": int(response.status_code),
+            "encoding": encoding,
             "cache_used": False,
             "cache_stale": False,
         }
@@ -483,6 +489,7 @@ def validate_history(
 
     seen_ids: set[str] = set()
     seen_fixtures: set[tuple[str, str, str, str]] = set()
+    seen_scheduled_pairs: set[tuple[str, str, str]] = set()
     grouped: dict[int, list[dict[str, Any]]] = defaultdict(list)
     stale_sources: set[str] = set()
 
@@ -523,8 +530,24 @@ def validate_history(
         if _normalized_name(home) == _normalized_name(away):
             raise LigaFHistoryError(f"{location} has identical home and away teams")
 
-        _official_url(row.get("match_url", ""), f"{location}.match_url")
-        _official_url(row.get("round_url", ""), f"{location}.round_url")
+        match_url = _official_url(row.get("match_url", ""), f"{location}.match_url")
+        match_path = MATCH_PATH.fullmatch(urlparse(match_url).path)
+        if match_path is None or match_path.group(1) != match_id:
+            raise LigaFHistoryError(f"{location}.match_url does not identify match_id")
+        round_url = _official_url(row.get("round_url", ""), f"{location}.round_url")
+        expected_round_path = (
+            f"/resultados/primera_division_femenina/{matchday}/{season_end_year}"
+        )
+        if urlparse(round_url).path.rstrip("/") != expected_round_path:
+            raise LigaFHistoryError(f"{location}.round_url does not match season/matchday")
+        scheduled_pair = (
+            expected_season,
+            _normalized_name(home),
+            _normalized_name(away),
+        )
+        if scheduled_pair in seen_scheduled_pairs:
+            raise LigaFHistoryError(f"duplicate scheduled home/away pair: {scheduled_pair}")
+        seen_scheduled_pairs.add(scheduled_pair)
         for field in (
             "match_source_sha256",
             "round_source_sha256",
@@ -544,6 +567,10 @@ def validate_history(
                 raise LigaFHistoryError(f"{location}.kickoff_at is invalid") from exc
             if kickoff.tzinfo is None or kickoff.utcoffset() is None:
                 raise LigaFHistoryError(f"{location}.kickoff_at must include timezone")
+            season_start = date(season_end_year - 1, 7, 1)
+            season_end = date(season_end_year, 6, 30)
+            if not season_start <= kickoff.date() <= season_end:
+                raise LigaFHistoryError(f"{location}.kickoff_at falls outside its season")
             goals = (row.get("home_goals"), row.get("away_goals"))
             if any(isinstance(goal, bool) or not isinstance(goal, int) or goal < 0 for goal in goals):
                 raise LigaFHistoryError(f"{location} has invalid full-time goals")
@@ -603,6 +630,15 @@ def validate_history(
         team_home = Counter(row["home_team_name"] for row in played)
         team_away = Counter(row["away_team_name"] for row in played)
         appearances = team_home + team_away
+        scheduled_teams = {
+            _normalized_name(team)
+            for row in rows
+            for team in (row["home_team_name"], row["away_team_name"])
+        }
+        if len(scheduled_teams) != 16:
+            raise LigaFHistoryError(
+                f"season {season_end_year} does not contain the expected 16 scheduled teams"
+            )
         if season_end_year in completed_seasons:
             if postponed or suspended or in_progress:
                 raise LigaFHistoryError(
