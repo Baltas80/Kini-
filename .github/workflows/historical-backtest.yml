@@ -2,9 +2,22 @@ name: historical-backtest
 
 on:
   push:
+    # The full walk-forward run is expensive. Documentation-only and workflow-only
+    # commits are covered by CI; run this benchmark when its inputs or code change.
+    paths:
+      - "kini_engine/**"
+      - "scripts/build_history.py"
+      - "scripts/diagnose_ml.py"
+      - "data/**"
+      - "pyproject.toml"
+      - "requirements*.txt"
   workflow_dispatch:
   schedule:
     - cron: "17 4 * * 1"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
 
 jobs:
   backtest:
@@ -14,12 +27,160 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: python -m pip install -e ".[all]"
+      - run: python -m pip install -e ".[ml]"
       - run: python scripts/build_history.py
+      - name: Diagnose first ML forecast
+        run: python scripts/diagnose_ml.py data/historical_spain.csv --min-train 300
       - name: Run historical comparison
         run: |
-          python -m kini_engine.cli compare data/historical_spain.csv --min-train 300 --refit-every 1000 > backtest-results.json
+          python -m kini_engine.cli compare data/historical_spain.csv --min-train 300 --refit-every 30 > backtest-results.json
           cat backtest-results.json
+      - name: Enforce non-empty model backtests
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          result = json.loads(Path("backtest-results.json").read_text())
+          required = ("dc", "ml", "ensemble", "ensemble_dc_ml", "ensemble_dc_ml_adaptive")
+          total = int(result.get("n_total", 0))
+          if total <= 0:
+              raise SystemExit("Backtest has no test fixtures")
+          errors_by_model = result.get("prediction_errors", {})
+          for name in required:
+              n = int(result.get(name, {}).get("n", 0))
+              errors = errors_by_model.get(name, {})
+              error_count = int(errors.get("count", 0))
+              if n != total or error_count != 0:
+                  raise SystemExit(
+                      f"{name} produced {n}/{total} predictions with "
+                      f"{error_count} prediction errors; first_error={errors.get('first_error')}"
+                  )
+          print(f"BACKTEST_ACCEPTANCE_OK: {total} fixtures for {', '.join(required)}")
+          PY
+
+      - name: Enforce schedule-screened market sample acceptance
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          result = json.loads(Path("backtest-results.json").read_text())
+          audit = result.get("market_temporal_audit", {})
+          market = result.get("market", {})
+          unfiltered = result.get("market_unfiltered_snapshot", {})
+          n_with_odds = int(audit.get("n_with_odds", 0))
+          n_eligible = int(audit.get("n_schedule_eligible", 0))
+          n_excluded = int(audit.get("n_excluded", -1))
+          status_counts = {
+              str(status): int(count)
+              for status, count in audit.get("status_counts", {}).items()
+          }
+
+          if n_with_odds <= 0 or n_eligible <= 0:
+              raise SystemExit("Strict schedule-screened market sample is empty")
+          if int(unfiltered.get("n", 0)) != n_with_odds:
+              raise SystemExit("Unfiltered market count disagrees with temporal audit")
+          if int(market.get("n", 0)) != n_eligible:
+              raise SystemExit("Strict market metrics disagree with eligible count")
+          if n_excluded != n_with_odds - n_eligible:
+              raise SystemExit("Excluded market count is inconsistent")
+          if sum(status_counts.values()) != n_with_odds:
+              raise SystemExit("Market temporal status counts do not cover all odds rows")
+          excluded_by_status = sum(
+              count for status, count in status_counts.items()
+              if status != "schedule_compatible"
+          )
+          if excluded_by_status != n_excluded:
+              raise SystemExit("Excluded count disagrees with market temporal statuses")
+
+          required = ("dc", "ml", "ensemble", "ensemble_dc_ml", "ensemble_dc_ml_adaptive")
+          common = result.get("common_sample", {})
+          for name in required:
+              sample = common.get(name, {})
+              model_n = int(sample.get("model", {}).get("n", 0))
+              market_n = int(sample.get("market", {}).get("n", 0))
+              if model_n != n_eligible or market_n != n_eligible:
+                  raise SystemExit(
+                      f"{name} is not compared on the exact strict market sample: "
+                      f"model={model_n}, market={market_n}, expected={n_eligible}"
+                  )
+
+          print(
+              "MARKET_TEMPORAL_ACCEPTANCE_OK: "
+              f"{n_eligible}/{n_with_odds} schedule-screened odds; "
+              "all model/market comparisons use identical fixtures"
+          )
+          PY
+
+      - name: Enforce prequential calibration acceptance
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          result = json.loads(Path("backtest-results.json").read_text())
+          calibration = result.get("prequential_calibration", {})
+          if calibration.get("same_calendar_day_outcomes_excluded") is not True:
+              raise SystemExit("Calibration is not marked as date-isolated")
+
+          models = calibration.get("models", {})
+          required = ("dc", "ml", "ensemble", "ensemble_dc_ml", "ensemble_dc_ml_adaptive")
+          for name in required:
+              summary = models.get(name, {})
+              n = int(summary.get("n", 0))
+              raw_n = int(summary.get("raw_on_same_sample", {}).get("n", 0))
+              calibrated_n = int(summary.get("calibrated", {}).get("n", 0))
+              last_fit = summary.get("last_fit", {})
+              if n <= 0 or raw_n != n or calibrated_n != n:
+                  raise SystemExit(
+                      f"{name} has invalid calibrated comparison sample: "
+                      f"n={n}, raw={raw_n}, calibrated={calibrated_n}"
+                  )
+              if not last_fit.get("fitted") or int(last_fit.get("n_train", 0)) < 500:
+                  raise SystemExit(f"{name} has no valid prior-OOF calibrator fit")
+
+          market = calibration.get("market", {})
+          market_n = int(market.get("n", 0))
+          if (
+              market_n <= 0
+              or int(market.get("raw_on_same_sample", {}).get("n", 0)) != market_n
+              or int(market.get("calibrated", {}).get("n", 0)) != market_n
+              or not market.get("last_fit", {}).get("fitted")
+          ):
+              raise SystemExit("Market calibration comparison is missing or invalid")
+
+          common = calibration.get("common_market_sample", {})
+          common_sample_sizes = {}
+          for name in required:
+              sample = common.get(name, {})
+              sample_n = int(sample.get("n", 0))
+              component_sizes = {
+                  "raw_model": int(sample.get("raw_model", {}).get("n", 0)),
+                  "calibrated_model": int(sample.get("calibrated_model", {}).get("n", 0)),
+                  "raw_market": int(sample.get("raw_market", {}).get("n", 0)),
+                  "calibrated_market": int(sample.get("calibrated_market", {}).get("n", 0)),
+              }
+              if sample_n <= 0 or any(count != sample_n for count in component_sizes.values()):
+                  raise SystemExit(
+                      f"{name} has inconsistent calibrated common-market samples: "
+                      f"sample={sample_n}, components={component_sizes}"
+                  )
+              common_sample_sizes[name] = sample_n
+
+          expected_common_n = market_n
+          if any(count != expected_common_n for count in common_sample_sizes.values()):
+              raise SystemExit(
+                  "Model/market calibrated comparisons do not share the exact fixture sample: "
+                  f"market={expected_common_n}, models={common_sample_sizes}"
+              )
+
+          print(
+              "PREQUENTIAL_CALIBRATION_OK: calibrated and raw forecasts "
+              "share the same post-warm-up samples"
+          )
+          PY
+
       - name: Upload backtest results
         uses: actions/upload-artifact@v4
         with:
