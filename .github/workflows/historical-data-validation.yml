@@ -23,6 +23,8 @@ on:
       - "scripts/validate_team_identity_registry.py"
       - "data/**"
       - "!data/selae_fixture_crosswalk.json"
+      - "!data/ligaf_fixture_evidence.json"
+      - "!kini_engine/data/ligaf_team_identity_registry.json"
       - "pyproject.toml"
       - "requirements*.txt"
   workflow_dispatch:
