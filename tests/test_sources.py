@@ -286,7 +286,9 @@ def test_probabilities_do_not_use_schedule_evidence_checked_after_lae_capture(
     _freeze_source_clock(monkeypatch, fixed)
     path = tmp_path / "kinielagpt_fixture_kickoffs.json"
     path.write_text(
-        json.dumps(_kickoff_crosswalk_payload(schedule_checked_at="2026-11-15T19:30:00Z")),
+        json.dumps(
+            _kickoff_crosswalk_payload(schedule_checked_at="2026-11-15T19:30:00Z")
+        ),
         encoding="utf-8",
     )
     monkeypatch.setattr(KinielaGPTSource, "KICKOFF_CROSSWALK_PATH", path)
