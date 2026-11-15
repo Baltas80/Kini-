@@ -374,29 +374,26 @@ def fetch_draw(
     url = make_draw_url(draw_date)
     cache_path = Path(cache_dir) / f"{draw_date.isoformat()}.html"
     metadata_path = cache_path.with_suffix(".meta.json")
-    cached_html: str | None = None
     cached_draw: dict[str, object] | None = None
-    cached_retrieved_at: str | None = None
 
     if cache_path.is_file():
         try:
             cached_bytes = cache_path.read_bytes()
-            cached_html = cached_bytes.decode("utf-8", errors="replace")
             metadata = json.loads(metadata_path.read_text(encoding="utf-8")) if metadata_path.is_file() else {}
-            cached_retrieved_at = metadata.get("source_retrieved_at_utc")
+            encoding = str(metadata.get("encoding") or "utf-8")
+            cached_html = cached_bytes.decode(encoding, errors="replace")
             cached_draw = parse_selae_draw(
                 cached_html,
                 draw_date,
                 source_url=url,
-                source_retrieved_at_utc=cached_retrieved_at,
+                source_retrieved_at_utc=metadata.get("source_retrieved_at_utc"),
                 raw_content=cached_bytes,
             )
             age_hours = max(0.0, time.time() - cache_path.stat().st_mtime) / 3600
             if not refresh and age_hours <= cache_ttl_hours:
                 return cached_draw
-        except (OSError, ValueError, json.JSONDecodeError) as exc:
+        except (OSError, ValueError, json.JSONDecodeError, LookupError) as exc:
             log.warning("Caché SELAE inválida %s: %s", cache_path, exc)
-            cached_html = None
             cached_draw = None
 
     client = session or make_session()
@@ -415,17 +412,44 @@ def fetch_draw(
             raw_content=raw_content,
         )
         _atomic_write(cache_path, raw_content)
+        metadata = {
+            "source_url": url,
+            "source_retrieved_at_utc": fetched_at,
+            "raw_sha256": parsed["raw_sha256"],
+            "encoding": encoding,
+        }
         _atomic_write(
             metadata_path,
-            (json.dumps({"source_url": url, "source_retrieved_at_utc": fetched_at, "raw_sha256": parsed["raw_sha256"]}, ensure_ascii=False) + "\n").encode("utf-8"),
+            (json.dumps(metadata, ensure_ascii=False) + "\n").encode("utf-8"),
         )
         return parsed
-    except (requests.RequestException, ValueError, UnicodeError) as exc:
+    except (requests.RequestException, ValueError, UnicodeError, LookupError) as exc:
         if cached_draw is not None:
             log.warning("SELAE no disponible; se conserva caché validada (%s): %s", url, exc)
             return cached_draw
         raise RuntimeError(f"No se pudo obtener un escrutinio SELAE válido para {draw_date}: {exc}") from exc
 
+
+def load_local_draw(draw_date: date, html_dir: str | Path) -> dict[str, object]:
+    """Parse a page saved locally from the official SELAE site (useful when a runner is geo-blocked)."""
+    html_path = Path(html_dir) / f"{draw_date.isoformat()}.html"
+    if not html_path.is_file():
+        raise FileNotFoundError(f"No existe el HTML local esperado: {html_path}")
+    raw_content = html_path.read_bytes()
+    metadata_path = html_path.with_suffix(".meta.json")
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8")) if metadata_path.is_file() else {}
+    encoding = str(metadata.get("encoding") or "utf-8-sig")
+    html = raw_content.decode(encoding, errors="replace")
+    retrieved_at = metadata.get("source_retrieved_at_utc")
+    if not retrieved_at:
+        retrieved_at = datetime.fromtimestamp(html_path.stat().st_mtime, timezone.utc).isoformat()
+    return parse_selae_draw(
+        html,
+        draw_date,
+        source_url=str(metadata.get("source_url") or make_draw_url(draw_date)),
+        source_retrieved_at_utc=str(retrieved_at),
+        raw_content=raw_content,
+    )
 
 def parse_iso_date(value: str) -> date:
     try:
@@ -449,29 +473,84 @@ def load_dates(values: Iterable[str], date_file: str | Path | None = None) -> li
     return sorted(parsed)
 
 
-def write_draws(draws: list[dict[str, object]], output: str | Path) -> None:
+def write_draws(
+    draws: list[dict[str, object]],
+    output: str | Path,
+    *,
+    replace_existing: bool = False,
+) -> None:
     if not draws:
         raise ValueError("No se puede escribir un histórico de sorteos vacío")
-    dates = [str(draw["draw_date"]) for draw in draws]
-    if len(dates) != len(set(dates)):
-        raise ValueError("Hay fechas de sorteo duplicadas")
-    lines = [json.dumps(draw, ensure_ascii=False, sort_keys=True) for draw in sorted(draws, key=lambda item: str(item["draw_date"]))]
+    incoming_dates = [str(draw["draw_date"]) for draw in draws]
+    if len(incoming_dates) != len(set(incoming_dates)):
+        raise ValueError("La importación contiene fechas de sorteo duplicadas")
+
     target = Path(output)
+    merged: dict[str, dict[str, object]] = {}
+    if target.is_file():
+        for line_number, line in enumerate(target.read_text(encoding="utf-8").splitlines(), start=1):
+            if not line.strip():
+                continue
+            try:
+                existing = json.loads(line)
+            except json.JSONDecodeError as exc:
+                raise ValueError(f"JSONL existente corrupto en línea {line_number}: {exc}") from exc
+            if not isinstance(existing, dict) or not existing.get("draw_date"):
+                raise ValueError(f"Registro JSONL inválido en línea {line_number}")
+            draw_date = str(existing["draw_date"])
+            if draw_date in merged:
+                raise ValueError(f"El histórico existente contiene la fecha duplicada {draw_date}")
+            merged[draw_date] = existing
+
+    unchanged_count = 0
+    replaced_count = 0
+    for draw in draws:
+        draw_date = str(draw["draw_date"])
+        existing = merged.get(draw_date)
+        if existing is not None:
+            if existing.get("raw_sha256") == draw.get("raw_sha256"):
+                unchanged_count += 1
+                continue
+            if not replace_existing:
+                raise ValueError(
+                    f"El sorteo {draw_date} ya existe con otro SHA-256; "
+                    "use --replace-existing solo tras revisar la corrección de origen"
+                )
+            replaced_count += 1
+        merged[draw_date] = draw
+
+    ordered_draws = [merged[key] for key in sorted(merged)]
+    if not ordered_draws:
+        raise ValueError("El histórico final quedaría vacío")
+
+    integrity_passed = all(
+        int(draw.get("fixture_count", 0)) == 14
+        and len(draw.get("fixtures", [])) == 14
+        and all(fixture.get("sign") in {"1", "X", "2"} for fixture in draw.get("fixtures", []))
+        and len(str(draw.get("raw_sha256", ""))) == 64
+        for draw in ordered_draws
+    )
+    if not integrity_passed:
+        raise ValueError("El perfil de integridad del histórico SELAE no ha superado las comprobaciones")
+
+    lines = [
+        json.dumps(draw, ensure_ascii=False, sort_keys=True)
+        for draw in ordered_draws
+    ]
     _atomic_write(target, ("\n".join(lines) + "\n").encode("utf-8"))
     profile = {
         "profile_generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "provider": "SELAE",
-        "source_urls": sorted({str(draw["source_url"]) for draw in draws}),
-        "draw_count": len(draws),
-        "fixture_count": sum(int(draw["fixture_count"]) for draw in draws),
-        "draw_dates": sorted(dates),
-        "raw_sha256_by_draw_date": {str(draw["draw_date"]): draw["raw_sha256"] for draw in draws},
-        "integrity_passed": all(
-            int(draw["fixture_count"]) == 14
-            and len(draw["fixtures"]) == 14
-            and all(fixture["sign"] in {"1", "X", "2"} for fixture in draw["fixtures"])
-            for draw in draws
-        ),
+        "source_urls": sorted({str(draw["source_url"]) for draw in ordered_draws}),
+        "draw_count": len(ordered_draws),
+        "fixture_count": sum(int(draw["fixture_count"]) for draw in ordered_draws),
+        "draw_dates": [str(draw["draw_date"]) for draw in ordered_draws],
+        "raw_sha256_by_draw_date": {
+            str(draw["draw_date"]): draw["raw_sha256"] for draw in ordered_draws
+        },
+        "integrity_passed": integrity_passed,
+        "unchanged_draws_in_this_import": unchanged_count,
+        "replaced_draws_in_this_import": replaced_count,
         "match_kickoff_dates_available": False,
         "expected_payout_validated": False,
     }
@@ -479,20 +558,19 @@ def write_draws(draws: list[dict[str, object]], output: str | Path) -> None:
         target.with_name(f"{target.stem}.profile.json"),
         (json.dumps(profile, indent=2, ensure_ascii=False) + "\n").encode("utf-8"),
     )
-    if not profile["integrity_passed"]:
-        raise ValueError("El perfil de integridad del histórico SELAE no ha superado las comprobaciones")
-
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Importa escrutinios oficiales de La Quiniela desde fechas explícitas; no explora días a ciegas."
+        description="Importa escrutinios de La Quiniela desde fechas explícitas; no explora días a ciegas."
     )
     parser.add_argument("--dates", nargs="*", default=[], help="Fechas de sorteo ISO (YYYY-MM-DD).")
     parser.add_argument("--date-file", type=Path, help="Archivo UTF-8 con una fecha ISO por línea.")
+    parser.add_argument("--html-dir", type=Path, help="Usa HTML oficial guardado localmente como YYYY-MM-DD.html; no realiza peticiones.")
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--cache-dir", type=Path, default=DEFAULT_CACHE_DIR)
     parser.add_argument("--cache-ttl-hours", type=float, default=CACHE_TTL_HOURS)
     parser.add_argument("--refresh", action="store_true", help="Renovar incluso una caché válida.")
+    parser.add_argument("--replace-existing", action="store_true", help="Reemplazar un sorteo existente solo si su SHA-256 de origen ha cambiado.")
     return parser.parse_args()
 
 
@@ -500,18 +578,21 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     args = _parse_args()
     dates = load_dates(args.dates, args.date_file)
-    draws = [
-        fetch_draw(
-            draw_date,
-            cache_dir=args.cache_dir,
-            cache_ttl_hours=args.cache_ttl_hours,
-            refresh=args.refresh,
-        )
-        for draw_date in dates
-    ]
-    write_draws(draws, args.output)
+    if args.html_dir is not None:
+        draws = [load_local_draw(draw_date, args.html_dir) for draw_date in dates]
+    else:
+        draws = [
+            fetch_draw(
+                draw_date,
+                cache_dir=args.cache_dir,
+                cache_ttl_hours=args.cache_ttl_hours,
+                refresh=args.refresh,
+            )
+            for draw_date in dates
+        ]
+    write_draws(draws, args.output, replace_existing=args.replace_existing)
     profile_path = args.output.with_name(f"{args.output.stem}.profile.json")
-    print(f"SELAE_IMPORT_OK: {sum(int(draw['fixture_count']) for draw in draws)} fixtures in {len(draws)} draws")
+    print(f"SELAE_IMPORT_OK: {sum(int(draw['fixture_count']) for draw in draws)} imported fixtures")
     print(f"Dataset: {args.output}")
     print(f"Profile: {profile_path}")
 
