@@ -60,6 +60,17 @@ jobs:
               raise SystemExit("Official coupon does not contain exactly 14 fixtures")
           if any(item["sign"] not in {"1", "X", "2"} for item in draw["fixtures"]):
               raise SystemExit("Invalid 1/X/2 sign in official coupon")
+          postponed = draw["fixtures"][13]
+          if postponed.get("score_status") != "not_played":
+              raise SystemExit("Fixture 14 must be marked as not played under the official override")
+          if postponed.get("sign_determination") != "public_draw" or postponed.get("sign") != "1":
+              raise SystemExit("Fixture 14 public-draw coupon sign is missing or inconsistent")
+          if postponed.get("score_raw") is not None or postponed.get("home_goals") is not None or postponed.get("away_goals") is not None:
+              raise SystemExit("A public-draw fixture must not be represented as a football score")
+          if postponed.get("reported_score_raw") != "1-0":
+              raise SystemExit("Unexpected SELAE displayed score for the overridden fixture")
+          if audit.get("not_played_fixture_count") != 1 or audit.get("football_result_usable_fixture_count") != 13:
+              raise SystemExit("SELAE profile did not separate played and non-played fixtures")
           if urlparse(draw["source_url"]).hostname != "www.loteriasyapuestas.es":
               raise SystemExit("Source URL is not the official SELAE host")
           if len(draw["raw_sha256"]) != 64:
