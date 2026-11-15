@@ -409,3 +409,19 @@ Reproduction input: artifact `kini-historical-data` from run 43671694061 (5,311 
 
 - CI [run 43671814302](https://github.com/Baltas80/Kini-/actions/runs/43671814302): **55 passed**, four warnings (third-party NumPy/penaltyblog deprecation warnings).
 - Historical data validation [run 43671814249](https://github.com/Baltas80/Kini-/actions/runs/43671814249): **5,311 fixtures**, `integrity_passed=true`, validation marker `DATA_VALIDATION_OK`.
+
+## P6 direct-system constraints — 2026-11-15
+
+A review of SELAE's official multiple-direct table found that the optimizer previously constrained only the product of selected signs to the caller's budget. It did not enforce the table's authorized maximum number of triples for each number of doubles, nor the 31,104-column maximum (7 doubles + 5 triples). This could allow a caller-supplied high budget to generate a combination not authorized by the direct-method table.
+
+Implemented on the audit branch:
+- Reworked the exact DP state to track `(double_count, triple_count)`.
+- Enforced the Anexo I maximum triples-by-doubles table and 31,104 maximum.
+- Enforced the official two-column minimum even if a caller attempts to configure a lower minimum.
+- Exposed explicit double/triple counts, system method and maximum authorized columns in the result.
+- Retained the independent-match coverage objective; no correlation or prize-pool assumptions were added.
+- The current `KiniEngine.quiniela` chooses one Pleno al 15 category pair, so its multiplier remains 1. Multiple Pleno al 15 categories are not supported.
+
+Regression tests cover the maximum authorized 7-double/5-triple combination, rejection above the direct-system maximum, rejection of a one-column minimum, and the existing exhaustive small-budget comparison.
+
+Official source: SELAE, *Normas de la Quiniela y Elige 8* (October 2019), Anexo I, pp. 40–42, and final clause stating validity for subsequent seasons until replaced: https://www.selae.es/f/loterias/documentos/normativa/Normativa%20de%20los%20juegos/Normas_de_la_Quiniela_y_Elige8_Octubre_2019.pdf. Current SELAE normative-games index: https://www.selae.es/es/web-corporativa/normativa/normativa-de-los-juegos/normativa-de-los-juegos-web-corporativa.
