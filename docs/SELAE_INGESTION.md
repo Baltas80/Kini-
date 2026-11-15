@@ -65,7 +65,7 @@ En consecuencia, este importador crea una fuente canónica de composición y res
 
 Pruebas deterministas: `pytest -q tests/test_import_selae_results.py`.
 
-Prueba de fuente real: el workflow `selae-coupon-source-validation` intenta importar el sorteo 2026-11-08, pero la infraestructura de GitHub Actions recibe HTTP 403 del dominio SELAE en la página de escrutinio, el HTML estático de resultados, el RSS, el índice de resultados y el PDF oficial de prensa. Ese paso es no bloqueante para que una restricción geográfica externa no oculte fallos del parser; **un 403 no equivale a validación de la fuente**. La descarga debe ejecutarse desde un entorno en España con acceso legítimo al sitio o se deben guardar las páginas HTML oficiales y procesarlas con `--html-dir`.
+Prueba de fuente real: el workflow `selae-coupon-source-validation` intenta importar el sorteo 2026-11-08, pero la infraestructura de GitHub Actions recibe HTTP 403 del dominio SELAE en la página de escrutinio, el HTML estático de resultados, el RSS, el índice de resultados y el PDF oficial de prensa. Ese paso es no bloqueante para que una restricción geográfica externa no oculte fallos del parser; **un 403 no equivale a validación de la fuente**. La descarga debe ejecutarse desde un entorno con acceso permitido al sitio (por ejemplo, la máquina local en España) o se deben guardar las páginas HTML oficiales y procesarlas con `--html-dir`.
 
 La integración en el flujo de modelos queda pendiente de una fase separada de identidad de equipos/competiciones y fechas de inicio.
 
