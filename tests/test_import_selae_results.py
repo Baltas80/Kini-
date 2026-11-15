@@ -6,7 +6,6 @@ from datetime import date
 from pathlib import Path
 
 import pytest
-import requests
 
 from scripts.import_selae_results import (
     fetch_draw,
