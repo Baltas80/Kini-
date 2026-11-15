@@ -1197,4 +1197,4 @@ Validation on `0bf4f7a7c17b5f78550cc3be1564f7fa498081f9`:
 
 The current endpoint still returns `dia=MAR` and `hora=20:45`, with no calendar date or timezone. LAE remains fail-closed. The last full historical model comparison remains run 43740951689 as documented above.
 
-Next verification: make a documentation-only audit commit and confirm that the new filter runs the `changes` job but skips `inspect`. This validates that routine documentation updates no longer trigger a redundant live fetch.
+This verification was completed on documentation-only commit `6041fd8`: live workflow run [43746425602](https://github.com/Baltas80/Kini-/actions/runs/43746425602) passed `changes` and skipped `inspect`; historical run [43746425599](https://github.com/Baltas80/Kini-/actions/runs/43746425599) skipped the backtest. The latest-commit filter therefore avoids a redundant provider GET on audit-only updates.
