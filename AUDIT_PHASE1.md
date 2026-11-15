@@ -105,7 +105,7 @@ These diagnostics consume only walk-forward out-of-sample predictions. All fixtu
 
 El calibrador aplica:
 
-\`softmax(scale * log(p) + class_bias)\`
+`softmax(scale * log(p) + class_bias)`
 
 Utiliza una escala positiva compartida y tres sesgos por clase cuya suma es cero (dos parámetros libres). Se ajusta mediante máxima verosimilitud regularizada con SciPy L-BFGS-B y contracción hacia la transformación identidad.
 
@@ -570,16 +570,16 @@ A critical historical metadata defect was identified: a match page for Real Soci
 
 ### Implementation
 
-- Added \`kini_engine/ligaf_history.py\` and \`scripts/import_ligaf_history.py\`.
-- Added deterministic parser, cache, source-integrity, postponed-match, date cross-check, duplicate and season-structure tests in \`tests/test_ligaf_history.py\`.
+- Added `kini_engine/ligaf_history.py` and `scripts/import_ligaf_history.py`.
+- Added deterministic parser, cache, source-integrity, postponed-match, date cross-check, duplicate and season-structure tests in `tests/test_ligaf_history.py`.
 - Added a content-addressed HTML cache with SHA-256 metadata, bounded HTTP retries, stale-cache fallback, atomic writes and offline mode.
 - Added strict eight-fixture-per-round checks, unique match IDs, exact official source URLs and result/score consistency.
 - Completed seasons must contain 240 played fixtures, 16 teams, 30 appearances per team and 15 home/15 away fixtures per team.
 - Current-season data is capped at matchday 10 by default; the limit is configurable.
-- All records remain \`training_label_eligible=false\`; no model, Football-Data CSV, forecast or backtest input is changed.
-- Added a manual \`ligaf-history-validation\` GitHub Actions workflow and expanded CI lint/test coverage.
+- All records remain `training_label_eligible=false`; no model, Football-Data CSV, forecast or backtest input is changed.
+- Added a manual `ligaf-history-validation` GitHub Actions workflow and expanded CI lint/test coverage.
 - Added generated-data/cache exclusions so Liga F evidence does not trigger the men's Football-Data rebuild.
 
 ### State
 
-Implementation: **committed to \`feat/selae-fixture-reconciliation\`**. Deterministic CI is pending for the current branch head. Live bulk ingestion is not yet validated. The next action is to inspect CI results, fix any parser/test regressions, then run the manual workflow from a supported GitHub Actions environment. If the official host blocks GitHub runners, retain the fail-closed result and use the same CLI with official HTML captured from an accessible Spain-based environment; do not fabricate or relax source checks.
+Implementation: **committed to `feat/selae-fixture-reconciliation`**. Deterministic CI is pending for the current branch head. Live bulk ingestion is not yet validated. The next action is to inspect CI results, fix any parser/test regressions, then run the manual workflow from a supported GitHub Actions environment. If the official host blocks GitHub runners, retain the fail-closed result and use the same CLI with official HTML captured from an accessible Spain-based environment; do not fabricate or relax source checks.
