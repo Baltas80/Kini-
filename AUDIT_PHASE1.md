@@ -1159,3 +1159,15 @@ Observed field semantics:
 The evidence rules out deriving kickoff from `dia` + `hora` or treating `caducidad` as match time. LAE therefore remains ineligible for live surprise detection. The diagnostic now explicitly flags `dia` as a date/time candidate and verifies that weekday-only and local-clock strings are not timezone-aware ISO timestamps.
 
 The next safe investigation is a strict crosswalk check between `orden` and the percentage XML's `num`, using exact normalized home/away names as an independent guard. Even a successful crosswalk will not solve the missing calendar date/timezone; a separate source with a documented, timezone-aware kickoff is still required.
+
+
+### Final validation for the live details diagnostic — 2026-11-15
+
+Validated on commit `afde6775d3cc1243da6016e2797b4216d84df331`:
+
+- CI [run 43745904226](https://github.com/Baltas80/Kini-/actions/runs/43745904226) completed successfully: Ruff passed, formatting passed, **156 tests passed**, four upstream deprecation warnings.
+- Live schema diagnostic [run 43745904213](https://github.com/Baltas80/Kini-/actions/runs/43745904213) completed successfully. Artifact [ID 14174441120](https://github.com/Baltas80/Kini-/actions/runs/43745904213/artifacts/14174441120), 2,569 bytes; SHA-256 `c77d022e2f465f80b30c6523fd838615ef344f2d610cb9810532dc1323dfbee1`.
+- The repeated live response again returned 15 detail records for jornada 22 / temporada 2027. The first five sampled records consistently reported `dia=MAR`, `hora=20:45`, and `orden=1..5`; both `dia` and `hora` are explicitly classified as not timezone-aware ISO values.
+- The historical workflow [run 43745904189](https://github.com/Baltas80/Kini-/actions/runs/43745904189) completed successfully with the expensive backtest job skipped by its change-scope gate. No model or historical data code changed in this diagnostic unit.
+
+The live LAE source is therefore not eligible for pre-kickoff surprise detection using this endpoint alone. The implementation is fail-closed; the absence of a calendar date and timezone is a provider-data limitation, not a parsing failure.
