@@ -467,3 +467,21 @@ The public `KiniEngine.quiniela` result now includes `estimated_full_coupon_cove
 - The accepted predictive benchmark remains [run 43666544162](https://github.com/Baltas80/Kini-/actions/runs/43666544162). This change only adds a clearly labelled derived coverage field; it does not change model probabilities, the 14-match DP objective or benchmark forecasts.
 
 PR #5 remains open and is still the prerequisite for integrating PR #6. PR #6 remains draft. No PR has been merged and `master` remains untouched.
+
+
+## SELAE official coupon ingestion foundation — 2026-11-15
+
+A separate feature branch, `feat/selae-official-coupon-ingestion`, has been created from the current audit branch head. It adds a strict importer for date-specific SELAE escrutinio pages:
+
+- `scripts/import_selae_results.py`: explicit-date CLI, bounded HTTP retries, validated cache, atomic JSONL/profile output, source URL, retrieval timestamp and SHA-256 provenance.
+- `tests/test_import_selae_results.py`: deterministic parser, sign/score consistency, incomplete-draw rejection, cache and output-profile tests.
+- `docs/SELAE_INGESTION.md`: source contract and limitations.
+- `.github/workflows/selae-coupon-validation.yml`: integration smoke test against the known completed draw of 2026-11-08.
+
+The schema intentionally leaves `draw_id`, `kickoff_date` and `kickoff_time` unresolved. The date on the escrutinio page is the draw date, not proof of each fixture's kickoff date. Results/signs are target labels and must not become pre-match features. Prize winners and unit prizes do not reconstruct expected payout.
+
+The first deterministic test run exposed over-escaped regular expressions in the new parser (4 failures). This was corrected in commit `b09dc3f1024cafebff4552e8914cf62ff6e546cb`. The corrected live-source validation is running as [workflow 43680658551](https://github.com/Baltas80/Kini-/actions/runs/43680658551); CI is queued as [run 43680658598](https://github.com/Baltas80/Kini-/actions/runs/43680658598). No live-source acceptance is claimed until those runs complete.
+
+A path-filter correction in `.github/workflows/historical-backtest.yml` now limits expensive full model backtests to engine/data changes and the history/model diagnostic scripts, rather than every script under `scripts/`. The earlier run [43680544471](https://github.com/Baltas80/Kini-/actions/runs/43680544471) was already started before this correction; the importer itself does not change model code or the Football-Data dataset.
+
+The feature is not yet integrated into model training. A later identity-resolution phase must join SELAE coupon fixtures to independently sourced match dates, competition identifiers and canonical team IDs, and must reject ambiguous matches. The branch is intended to become a separate dependent PR against `audit/phase-1-temporal-validation`; neither `master` nor existing PRs are modified or merged.
