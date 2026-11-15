@@ -799,3 +799,12 @@ CI and the full historical walk-forward benchmark are triggered by the model/tes
 This is a defensive code-level feature audit, not proof of every upstream observation's publication timestamp. Football-Data provides match dates and results but not a per-result publication timestamp. The strict prior-calendar-day rule excludes same-day results, but the benchmark still assumes a completed prior-date result was available before the next calendar date. This assumption should remain explicit.
 
 The historical benchmark's `KiniEngine(enable_ml=True)` path does not enable `context_adjust`; no H2H adjustment is applied in that benchmark. Football-Data rows loaded by `dataio.py` do not carry LAE probabilities, so LAE is absent from this historical comparison. The market component remains gated by the schedule-compatibility screen, not an exact odds-capture timestamp. These external-source limitations remain open and must not be represented as fully point-in-time verified.
+
+
+## ML feature hardening — first CI result and lint coverage — 2026-11-15
+
+The first CI run after the 12-feature change completed successfully: [run 43717813345](https://github.com/Baltas80/Kini-/actions/runs/43717813345), Ruff's existing scoped checks passed and pytest reported **133 passed, 4 upstream NumPy/penaltyblog deprecation warnings**. This includes the new same-day/future-history regression test.
+
+The workflow previously linted fixture-reconciliation and Liga F files but did not run Ruff against the predictive core. Commit [fc9bf71](https://github.com/Baltas80/Kini-/commit/fc9bf714538352108c79d4150cf99110770a8816) expands the lint step to include `kini_engine/core.py` and `tests/test_core.py`. Its CI run is pending; any Ruff findings must be corrected before treating the code-quality check as complete.
+
+The model-code push matches the `historical-backtest` path filter. The PR-scoped workflow lookup does not expose the push-triggered backtest run, so no new ML metrics are claimed yet. The last accepted 15-feature metrics remain historical only; the 12-feature revision still requires a fresh full walk-forward result with non-empty model samples and zero prediction errors.
