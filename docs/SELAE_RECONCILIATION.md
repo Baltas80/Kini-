@@ -165,7 +165,7 @@ python scripts/import_ligaf_history.py --offline
 python scripts/import_ligaf_history.py --max-current-matchday 11
 ```
 
-The manual GitHub Actions workflow `ligaf-history-validation` runs the same import and uploads the JSONL plus integrity profile. It accepts a current-season matchday limit and a cache-refresh switch.
+The GitHub Actions workflow `ligaf-history-validation` runs on importer changes pushed to the reconciliation branch and can also be started manually. It uploads the JSONL plus integrity profile, accepts a current-season matchday limit and a cache-refresh switch, and cancels overlapping downloads.
 
 ### Integrity contract
 
