@@ -8,8 +8,10 @@ from pathlib import Path
 import pytest
 
 from scripts.import_selae_results import (
+    apply_fixture_overrides,
     fetch_draw,
     load_dates,
+    load_fixture_overrides,
     load_local_draw,
     make_draw_url,
     parse_selae_draw,
@@ -98,6 +100,9 @@ def test_parse_selae_draw_extracts_14_fixtures_pleno_and_prizes() -> None:
     assert draw["fixtures"][0]["home"]["category_marker"] == "M"
     assert draw["fixtures"][10]["home"]["category_marker"] == "F"
     assert draw["fixtures"][0]["sign"] == "2"
+    assert draw["fixtures"][0]["score_status"] == "played"
+    assert draw["fixtures"][0]["sign_determination"] == "score"
+    assert draw["fixtures"][0]["reported_score_raw"] == "1-2"
     assert draw["fixtures"][5]["sign"] == "X"
     assert draw["fixtures"][0]["kickoff_date"] is None
     assert draw["pleno_al_15"]["home"]["name"] == "At. Madrid"
@@ -239,6 +244,95 @@ def test_load_local_draw_rejects_non_official_source_url(tmp_path: Path) -> None
     )
     with pytest.raises(ValueError, match="procedencia SELAE"):
         load_local_draw(DRAW_DATE, tmp_path)
+
+
+
+def test_official_override_separates_public_draw_sign_from_football_score(tmp_path: Path) -> None:
+    draw = parse_selae_draw(make_html(), DRAW_DATE)
+    overrides = load_fixture_overrides()
+    assert len(overrides) == 1
+
+    applied = apply_fixture_overrides([draw], overrides)
+
+    fixture = draw["fixtures"][13]
+    assert applied == 1
+    assert fixture["sign"] == "1"
+    assert fixture["reported_score_raw"] == "1-0"
+    assert fixture["score_raw"] is None
+    assert fixture["home_goals"] is None
+    assert fixture["away_goals"] is None
+    assert fixture["score_status"] == "not_played"
+    assert fixture["sign_determination"] == "public_draw"
+    assert fixture["sign_evidence_url"].startswith("https://www.loteriasyapuestas.es/")
+    assert fixture["status_reason"]
+
+
+def test_official_override_fails_closed_if_page_score_changes() -> None:
+    draw = parse_selae_draw(make_html(), DRAW_DATE)
+    overrides = load_fixture_overrides()
+    overrides[0]["reported_score_raw"] = "0-0"
+
+    with pytest.raises(ValueError, match="marcador mostrado"):
+        apply_fixture_overrides([draw], overrides)
+
+
+def test_official_override_fails_closed_if_coupon_sign_changes() -> None:
+    draw = parse_selae_draw(make_html(), DRAW_DATE)
+    overrides = load_fixture_overrides()
+    overrides[0]["sign"] = "X"
+
+    with pytest.raises(ValueError, match="signo publicado"):
+        apply_fixture_overrides([draw], overrides)
+
+
+def test_override_manifest_rejects_non_official_evidence_url(tmp_path: Path) -> None:
+    manifest = {
+        "schema_version": 1,
+        "provider": "SELAE",
+        "overrides": [{
+            "draw_date": "2026-11-08",
+            "position": 14,
+            "status": "not_played",
+            "determination": "public_draw",
+            "sign": "1",
+            "reported_score_raw": "1-0",
+            "evidence_url": "https://example.com/notice.pdf",
+            "evidence_checked_at_utc": "2026-11-15T07:14:47Z",
+            "reason": "test",
+        }],
+    }
+    path = tmp_path / "overrides.json"
+    path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="dominio oficial SELAE"):
+        load_fixture_overrides(path)
+
+
+def test_write_draws_profile_excludes_public_draw_from_football_results(tmp_path: Path) -> None:
+    draw = parse_selae_draw(make_html(), DRAW_DATE)
+    apply_fixture_overrides([draw], load_fixture_overrides())
+    output = tmp_path / "selae.jsonl"
+
+    write_draws([draw], output)
+
+    profile = json.loads((tmp_path / "selae.profile.json").read_text(encoding="utf-8"))
+    assert profile["fixture_count"] == 14
+    assert profile["played_fixture_count"] == 13
+    assert profile["not_played_fixture_count"] == 1
+    assert profile["public_draw_fixture_count"] == 1
+    assert profile["football_result_usable_fixture_count"] == 13
+
+
+def test_write_draws_rejects_fake_football_score_for_public_draw(tmp_path: Path) -> None:
+    draw = parse_selae_draw(make_html(), DRAW_DATE)
+    apply_fixture_overrides([draw], load_fixture_overrides())
+    corrupted = dict(draw)
+    corrupted["fixtures"] = [dict(fixture) for fixture in draw["fixtures"]]
+    corrupted["fixtures"][13]["home_goals"] = 1
+    output = tmp_path / "selae.jsonl"
+
+    with pytest.raises(ValueError, match="integridad"):
+        write_draws([corrupted], output)
 
 
 def test_write_draws_rejects_existing_record_with_score_sign_conflict(tmp_path: Path) -> None:
