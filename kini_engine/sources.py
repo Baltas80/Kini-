@@ -15,7 +15,7 @@ import xmltodict
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-from .core import SIGNS
+from .core import LAE_KICKOFF_EVIDENCE_MAX_AGE, LAE_SOURCE_ID, SIGNS
 
 log = logging.getLogger(__name__)
 
@@ -55,7 +55,7 @@ class KinielaGPTSource:
     QUINI = "https://www.quinielista.es/xml2/porcentajes.asp?jornada={}&temporada={}"
     DETAILS = "https://api.eduardolosilla.es/detallePartido"
     HOME = "https://www.eduardolosilla.es/"
-    LAE_SOURCE = "quinielista.es:porcentajes_lae.asp"
+    LAE_SOURCE = LAE_SOURCE_ID
     QUINIELISTA_SOURCE = "quinielista.es:porcentajes.asp"
     KICKOFF_CROSSWALK_PATH = (
         Path(__file__).resolve().parent.parent
@@ -384,10 +384,14 @@ class KinielaGPTSource:
                     else None
                 )
                 lae_received_at = _parse_aware_timestamp(lae_captured_at)
+                evidence_age = (
+                    lae_received_at - evidence_checked_at
+                    if evidence_checked_at is not None and lae_received_at is not None
+                    else None
+                )
                 evidence_precedes_capture = lae_row is None or (
-                    evidence_checked_at is not None
-                    and lae_received_at is not None
-                    and evidence_checked_at <= lae_received_at
+                    evidence_age is not None
+                    and timedelta(0) <= evidence_age <= LAE_KICKOFF_EVIDENCE_MAX_AGE
                 )
                 if names_match and evidence_precedes_capture:
                     result_row.update(candidate)
@@ -395,6 +399,8 @@ class KinielaGPTSource:
                 elif candidate is not None and names_match:
                     result_row["fixture_identity_status"] = (
                         "schedule_evidence_after_lae_capture"
+                        if evidence_age is not None and evidence_age < timedelta(0)
+                        else "schedule_evidence_stale"
                     )
                 elif candidate is not None:
                     result_row["fixture_identity_status"] = "source_name_mismatch"

@@ -147,23 +147,36 @@ def test_kickoff_attachment_summary_requires_verified_identity_and_temporal_orde
         "id": 3,
         "kickoff_evidence_checked_at_utc": "2026-11-15T19:40:00+00:00",
     }
-    invalid_vector = {
+    stale_evidence = {
         **valid,
         "id": 4,
+        "kickoff_evidence_checked_at_utc": "2026-11-14T18:00:00+00:00",
+    }
+    invalid_vector = {
+        **valid,
+        "id": 5,
         "lae": {"1": 1.2, "X": 0.0, "2": 0.0},
     }
 
     summary = summarize_kickoff_attachment(
-        [valid, identity_mismatch, evidence_after_capture, invalid_vector],
+        [
+            valid,
+            identity_mismatch,
+            evidence_after_capture,
+            stale_evidence,
+            invalid_vector,
+        ],
         "official-lae",
     )
 
-    assert summary["rows_count"] == 4
-    assert summary["kickoff_mapped_count"] == 4
-    assert summary["lae_source_rows_count"] == 4
-    assert summary["valid_lae_vector_count"] == 3
+    assert summary["rows_count"] == 5
+    assert summary["kickoff_mapped_count"] == 5
+    assert summary["lae_source_rows_count"] == 5
+    assert summary["valid_lae_vector_count"] == 4
     assert summary["temporally_eligible_lae_count"] == 1
     assert summary["fixtures"][0]["temporally_eligible_lae"] is True
+    assert summary["fixtures"][0]["evidence_fresh_at_capture"] is True
+    assert summary["fixtures"][3]["evidence_fresh_at_capture"] is False
     assert all(
         fixture["temporally_eligible_lae"] is False
         for fixture in summary["fixtures"][1:]

@@ -10,6 +10,7 @@ from kini_engine.core import (
     DixonColes,
     FeatureModel,
     KiniEngine,
+    LAE_SOURCE_ID,
     Match,
     TicketOptimizer,
     _date_num,
@@ -29,6 +30,20 @@ def sample():
         ag = (i + 1) % 3
         out.append(Match(base + timedelta(days=i), h, a, hg, ag, "1" if hg > ag else ("2" if ag > hg else "X")))
     return out
+
+
+def verified_lae_detail(**overrides):
+    detail = {
+        "lae_source": LAE_SOURCE_ID,
+        "fixture_identity_status": "verified",
+        "lae_captured_at": "2025-04-01T09:00:00+02:00",
+        "kickoff_evidence_checked_at_utc": "2025-04-01T06:30:00+00:00",
+        "kickoff_evidence_url": "https://www.uefa.com/test-schedule/",
+        "kickoff_source": "UEFA test schedule",
+        "kickoff_at": "2025-04-01T20:00:00+02:00",
+    }
+    detail.update(overrides)
+    return detail
 
 
 def test_fit_predict():
@@ -124,11 +139,7 @@ def test_surprise_signal_uses_verified_match_lae_not_external_override():
         "A",
         "B",
         lae=verified_lae,
-        detail={
-            "lae_source": "SELAE",
-            "lae_captured_at": "2025-04-01T09:00:00+02:00",
-            "kickoff_at": "2025-04-01T20:00:00+02:00",
-        },
+        detail=verified_lae_detail(),
     )
 
     signal = surprise_signal(model, model, None, fixture, [])
@@ -233,11 +244,7 @@ def test_lae_mode_and_ensemble_accept_timezone_verified_pre_match_input():
         "A",
         "B",
         lae=lae,
-        detail={
-            "lae_source": "SELAE",
-            "lae_captured_at": "2025-04-01T09:00:00+02:00",
-            "kickoff_at": "2025-04-01T09:00:00+01:00",
-        },
+        detail=verified_lae_detail(kickoff_at="2025-04-01T09:00:00+01:00"),
     )
 
     assert fixture.has_temporally_eligible_lae is True
@@ -255,28 +262,20 @@ def test_lae_mode_and_ensemble_accept_timezone_verified_pre_match_input():
 @pytest.mark.parametrize(
     "detail",
     [
-        {
-            "lae_captured_at": "2025-04-01T09:00:00+02:00",
-            "kickoff_at": "2025-04-01T20:00:00+02:00",
-        },
-        {
-            "lae_source": "SELAE",
-            "lae_captured_at": "2025-04-01T09:00:00",
-            "kickoff_at": "2025-04-01T20:00:00+02:00",
-        },
-        {
-            "lae_source": "SELAE",
-            "lae_captured_at": "2025-04-01T21:00:00+02:00",
-            "kickoff_at": "2025-04-01T20:00:00+02:00",
-        },
-        {
-            "lae_source": "SELAE",
-            "lae_captured_at": "2025-04-01T20:00:00+02:00",
-            "kickoff_at": "2025-04-01T20:00:00+02:00",
-        },
+        {},
+        verified_lae_detail(captured_at="2025-04-01T09:00:00"),
+        verified_lae_detail(captured_at="2025-04-01T21:00:00+02:00"),
+        verified_lae_detail(captured_at="2025-04-01T20:00:00+02:00"),
+        verified_lae_detail(kickoff_evidence_checked_at_utc=None),
+        verified_lae_detail(
+            kickoff_evidence_checked_at_utc="2025-03-31T06:00:00+00:00"
+        ),
+        verified_lae_detail(fixture_identity_status="unverified"),
+        verified_lae_detail(lae_source="untrusted-source"),
+        verified_lae_detail(kickoff_evidence_url="http://www.uefa.com/test-schedule/"),
     ],
 )
-def test_lae_requires_source_and_timezone_aware_capture_before_kickoff(detail):
+def test_lae_requires_fresh_verified_schedule_evidence_and_timezone_aware_capture_before_kickoff(detail):
     fixture = Match(
         datetime(2025, 4, 1),
         "A",
@@ -293,11 +292,7 @@ def test_lae_rejects_invalid_probability_contract():
         "A",
         "B",
         lae={"1": 0.4, "X": 0.3, "2": 0.2},
-        detail={
-            "lae_source": "SELAE",
-            "lae_captured_at": "2025-04-01T09:00:00+02:00",
-            "kickoff_at": "2025-04-01T20:00:00+02:00",
-        },
+        detail=verified_lae_detail(),
     )
     assert fixture.has_temporally_eligible_lae is False
 

@@ -308,6 +308,30 @@ def test_probabilities_do_not_use_schedule_evidence_checked_after_lae_capture(
     assert row["kickoff_at"] is None
 
 
+def test_probabilities_do_not_attach_kickoff_when_schedule_evidence_is_stale(
+    monkeypatch, tmp_path
+):
+    fixed = datetime(2026, 11, 16, 20, 1, tzinfo=UTC)
+    _freeze_source_clock(monkeypatch, fixed)
+    path = tmp_path / "kinielagpt_fixture_kickoffs.json"
+    path.write_text(json.dumps(_kickoff_crosswalk_payload()), encoding="utf-8")
+    monkeypatch.setattr(KinielaGPTSource, "KICKOFF_CROSSWALK_PATH", path)
+
+    source = KinielaGPTSource()
+    source.session = FakeSession(
+        {
+            "porcentajes_lae.asp": xml_fixture("Local", "Visitante", (60, 20, 20)),
+            "porcentajes.asp?": xml_fixture("Local", "Visitante", (20, 30, 50)),
+        }
+    )
+
+    row = source.probabilities(12, 2026)[0]
+
+    assert row["fixture_identity_status"] == "schedule_evidence_stale"
+    assert row["kickoff_at"] is None
+    assert row["lae"] == pytest.approx({"1": 0.6, "X": 0.2, "2": 0.2})
+
+
 def test_curated_jornada_22_kickoff_crosswalk_loads_all_fifteen_verified_fixtures():
     mapping = KinielaGPTSource._load_kickoff_crosswalk(22, 2027)
 

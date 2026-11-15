@@ -10,6 +10,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from kini_engine.core import LAE_KICKOFF_EVIDENCE_MAX_AGE
+
 from kini_engine.sources import KinielaGPTSource
 
 _KEY_HINTS = (
@@ -432,6 +434,16 @@ def summarize_kickoff_attachment(rows: Any, lae_source: str) -> dict[str, Any]:
             and captured_at is not None
             and evidence_checked_at <= captured_at
         )
+        evidence_age = (
+            captured_at - evidence_checked_at
+            if evidence_checked_at is not None and captured_at is not None
+            else None
+        )
+        evidence_fresh_at_capture = (
+            evidence_age is not None
+            and 0 <= evidence_age.total_seconds()
+            <= LAE_KICKOFF_EVIDENCE_MAX_AGE.total_seconds()
+        )
         capture_before_kickoff = (
             captured_at is not None
             and kickoff_at is not None
@@ -442,6 +454,7 @@ def summarize_kickoff_attachment(rows: Any, lae_source: str) -> dict[str, Any]:
             and row.get("lae_source") == lae_source
             and vector_valid
             and evidence_before_capture
+            and evidence_fresh_at_capture
             and capture_before_kickoff
         )
         fixtures.append(
@@ -451,6 +464,7 @@ def summarize_kickoff_attachment(rows: Any, lae_source: str) -> dict[str, Any]:
                 "kickoff_at": row.get("kickoff_at"),
                 "lae_vector_valid": vector_valid,
                 "evidence_before_capture": evidence_before_capture,
+                "evidence_fresh_at_capture": evidence_fresh_at_capture,
                 "capture_before_kickoff": capture_before_kickoff,
                 "temporally_eligible_lae": eligible,
             }

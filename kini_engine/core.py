@@ -2,13 +2,15 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any, ClassVar
 
 import numpy as np
 from scipy.stats import poisson
 
 SIGNS = ("1", "X", "2")
+LAE_SOURCE_ID = "quinielista.es:porcentajes_lae.asp"
+LAE_KICKOFF_EVIDENCE_MAX_AGE = timedelta(hours=24)
 
 
 def _validated_probability_vector(probabilities: Any) -> np.ndarray | None:
@@ -64,17 +66,30 @@ class Match:
 
     @property
     def has_temporally_eligible_lae(self) -> bool:
-        """Require valid probabilities and timestamped source evidence before kickoff."""
+        """Require a verified fixture, fresh schedule evidence and a pre-kickoff capture."""
         if not self.lae:
             return False
+        if self.detail.get("lae_source") != LAE_SOURCE_ID:
+            return False
+        if self.detail.get("fixture_identity_status") != "verified":
+            return False
 
-        source = self.detail.get("lae_source")
-        if not isinstance(source, str) or not source.strip():
+        evidence_url = self.detail.get("kickoff_evidence_url")
+        if not isinstance(evidence_url, str) or not evidence_url.startswith("https://"):
             return False
 
         captured_at = _parse_aware_datetime(self.detail.get("lae_captured_at"))
+        evidence_checked_at = _parse_aware_datetime(
+            self.detail.get("kickoff_evidence_checked_at_utc")
+        )
         kickoff_at = _parse_aware_datetime(self.detail.get("kickoff_at"))
-        if captured_at is None or kickoff_at is None or captured_at >= kickoff_at:
+        if captured_at is None or evidence_checked_at is None or kickoff_at is None:
+            return False
+
+        evidence_age = captured_at - evidence_checked_at
+        if not timedelta(0) <= evidence_age <= LAE_KICKOFF_EVIDENCE_MAX_AGE:
+            return False
+        if captured_at >= kickoff_at:
             return False
 
         return _validated_probability_vector(self.lae) is not None
