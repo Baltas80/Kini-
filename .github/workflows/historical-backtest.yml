@@ -50,7 +50,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
-          fetch-depth: 2
+          fetch-depth: 0
       - id: filter
         shell: bash
         env:
@@ -83,7 +83,7 @@ jobs:
             jq -r '.workflow_runs[]? | select(.conclusion == "success") | [.id, .head_sha] | @tsv' <<<"$runs_json"
           )
           echo "Last successful backtest head: ${last_success:-none}"
-          if [[ -n "$last_success" ]] && git fetch --no-tags --depth=1 origin "$last_success"; then
+          if [[ -n "$last_success" ]] && git fetch --no-tags origin "$last_success"; then
             if git merge-base --is-ancestor "$last_success" HEAD; then
               changed_files="$(git diff --name-only "$last_success" HEAD)"
             else
