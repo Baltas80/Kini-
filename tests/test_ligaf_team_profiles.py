@@ -180,7 +180,9 @@ def test_cross_season_display_name_audit_flags_multiple_provider_ids():
                 {
                     "team_name_in_match": "Team A",
                     "provider_team_profile_id": "123",
-                    "team_profile_url": "https://ligaf.es/equipo/team-a/123/plantilla/2023",
+                    "team_profile_url": (
+                        "https://ligaf.es/equipo/team-a/123/plantilla/2023"
+                    ),
                 }
             ]
         },
@@ -189,7 +191,9 @@ def test_cross_season_display_name_audit_flags_multiple_provider_ids():
                 {
                     "team_name_in_match": "Team A",
                     "provider_team_profile_id": "124",
-                    "team_profile_url": "https://ligaf.es/equipo/team-a/124/plantilla/2024",
+                    "team_profile_url": (
+                        "https://ligaf.es/equipo/team-a/124/plantilla/2024"
+                    ),
                 }
             ]
         },

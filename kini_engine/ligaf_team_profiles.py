@@ -11,8 +11,8 @@ from urllib.parse import urljoin, urlparse
 from kini_engine.ligaf_history import (
     ARCHIVE_URL,
     DEFAULT_CACHE_DIR,
-    LigaFHistoryError,
     MATCH_PATH,
+    LigaFHistoryError,
     _atomic_write,
     _official_url,
     _parse_document,
@@ -245,7 +245,9 @@ def validate_historical_team_profiles(document: dict[str, Any]) -> None:
 
     for season_end_year, season in seasons.items():
         if not season_end_year.isdigit():
-            raise LigaFHistoryError("historical team-profile season key must be numeric")
+            raise LigaFHistoryError(
+                "historical team-profile season key must be numeric"
+            )
         expected_year = int(season_end_year)
         if season.get("season_end_year") != expected_year:
             raise LigaFHistoryError("season_end_year does not match its season key")
@@ -273,7 +275,9 @@ def validate_historical_team_profiles(document: dict[str, Any]) -> None:
             if not isinstance(name, str) or not name.strip():
                 raise LigaFHistoryError(f"{location} has no source team name")
             if not isinstance(profile_id, str) or not profile_id.isdigit():
-                raise LigaFHistoryError(f"{location} has an invalid provider profile ID")
+                raise LigaFHistoryError(
+                    f"{location} has an invalid provider profile ID"
+                )
             normalized = _normalized_name(name)
             if normalized in names:
                 raise LigaFHistoryError(
@@ -312,7 +316,8 @@ def validate_historical_team_profiles(document: dict[str, Any]) -> None:
                 or profile_link_path.group("slug") != profile_path.group("slug")
             ):
                 raise LigaFHistoryError(
-                    f"{location}.match_detail_profile_link_url conflicts with its profile"
+                    f"{location}.match_detail_profile_link_url conflicts "
+                    "with its profile"
                 )
             match_evidence_url = _official_url(
                 entry.get("match_evidence_url", ""),
@@ -388,9 +393,13 @@ def validate_historical_team_profiles(document: dict[str, Any]) -> None:
         "canonical_identity_assignments": 0,
     }
     if document.get("cross_season_provider_id_observations") != provider_observations:
-        raise LigaFHistoryError("cross-season provider-ID observations are inconsistent")
+        raise LigaFHistoryError(
+            "cross-season provider-ID observations are inconsistent"
+        )
     if document.get("cross_season_display_name_observations") != name_observations:
-        raise LigaFHistoryError("cross-season display-name observations are inconsistent")
+        raise LigaFHistoryError(
+            "cross-season display-name observations are inconsistent"
+        )
     if document.get("identity_audit_summary") != expected_identity_summary:
         raise LigaFHistoryError("cross-season identity audit summary is inconsistent")
 
@@ -407,7 +416,7 @@ def build_historical_team_profiles(
     session: Any | None = None,
 ) -> dict[str, Any]:
     """Build season-scoped provider-ID evidence from official match/profile pages."""
-    selected = tuple(sorted(set(int(year) for year in seasons)))
+    selected = tuple(sorted({int(year) for year in seasons}))
     if not selected:
         raise ValueError("at least one completed season must be selected")
     if any(year < 2023 or year > 2100 for year in selected):
@@ -433,7 +442,8 @@ def build_historical_team_profiles(
         links = extract_match_links(round_html, page_url=round_url)
         if len(links) != 8:
             raise LigaFHistoryError(
-                f"season {season_end_year} final round has {len(links)} matches; expected 8"
+                f"season {season_end_year} final round has {len(links)} "
+                "matches; expected 8"
             )
         round_dates = extract_round_dates(
             round_html,

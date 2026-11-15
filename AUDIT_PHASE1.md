@@ -710,3 +710,55 @@ The market remains better on all three reported metrics on the identical 4,424-m
 Prequential calibration completed on 4,480 post-warm-up forecasts per model with same-calendar-day outcomes excluded. It improved raw Brier/Log Loss for Dixon–Coles (0.61510/1.02527 to 0.61439/1.02395) and ML (0.63969/1.06178 to 0.63341/1.05148), but slightly worsened the market-assisted ensemble (0.61250/1.02118 to 0.61264/1.02132). The calibrated ensemble still trails the market on the common benchmark; no model/calibrator is promoted on this evidence.
 
 Artifact: [historical-backtest, run 43713524597](https://github.com/Baltas80/Kini-/actions/runs/43713524597), ZIP SHA-256 `247ace2a9c5d5984ff418ae0f15dd79596fbc11809390ff7d9fe0e4cfc6a83b4`. The run was triggered unnecessarily by the new Liga F profile-crosswalk JSON matching a broad `data/**` workflow filter. The backtest and historical-data workflows now explicitly exclude `data/ligaf_team_profile_crosswalk.json` in both relevant event filters, preventing future full football backtests/data rebuilds for this metadata-only file.
+
+## Historical Liga F team-profile identity evidence — 2026-11-15
+
+### Season-scoped profile extraction
+
+Commit `cc40622f5ab1f1dcaeeb498084f719308c729908` adds a separate evidence collector:
+- `kini_engine/ligaf_team_profiles.py`
+- `scripts/build_ligaf_team_profiles.py`
+- `tests/test_ligaf_team_profiles.py`
+
+For each completed season 2022/23–2025/26, the collector reads the eight official match-detail links from matchday 30, extracts each team's provider profile ID from the exact home/away team-name anchor, then requests the season-specific profile route using that ID and slug. A profile page is accepted only if its heading and season standings are present. No fuzzy matching or canonical team ID is assigned.
+
+The live validation [run 43715821261](https://github.com/Baltas80/Kini-/actions/runs/43715821261) passed on 2026-11-15. Artifact `ligaf-history` (ID `14161874316`, 102,265 bytes) has ZIP SHA-256 `5706a7794252b57ead68fb7584504a18b73c780afef44df47d3107b9f232416a`.
+
+| Season | Teams | Unique provider IDs | Profile pages verified | Exact display-name matches | Manual review |
+|---|---:|---:|---:|---:|---:|
+| 2022/23 | 16 | 16 | 16 | 16 | 0 |
+| 2023/24 | 16 | 16 | 16 | 16 | 0 |
+| 2024/25 | 16 | 16 | 16 | 16 | 0 |
+| 2025/26 | 16 | 16 | 16 | 16 | 0 |
+| **Total team-season observations** | **64** | **64** | **64** | **64** | **0** |
+
+Across the four seasons, the audit found 21 distinct observed display names and 21 distinct provider profile IDs:
+- No display name was assigned multiple provider IDs across the observed seasons.
+- No provider profile ID was associated with multiple display names.
+- Repeated provider IDs retained the same observed display name.
+- `canonical_identity_assignments=0`; repeated source IDs remain evidence only and are not promoted to internal canonical identities.
+
+The artifact also contains the Liga F fixture history: 1,040 scheduled fixtures, 1,039 played, one postponed, 1,040 unique match IDs, `integrity_passed=true`, no stale-cache sources and `training_eligibility.eligible=false`. The postponed Costa Adeje Tenerife–Deportivo Alavés fixture remains without goals or a result.
+
+### Backtest regression triggered by the broad engine path
+
+The profile collector initially matched the broad `kini_engine/**` path filter in `historical-backtest`. The resulting full walk-forward run [43715470120](https://github.com/Baltas80/Kini-/actions/runs/43715470120) completed successfully:
+- 5,011 predictions for each of Dixon–Coles, ML and all three ensemble candidates.
+- Zero recorded prediction errors for every model.
+- Initial training sample 300; test period 2020-12-11 to 2026-11-09.
+- Common schedule-screened market sample: 4,424 fixtures; 587 odds rows excluded as temporally ambiguous.
+
+| Candidate | Accuracy | Brier | Log Loss |
+|---|---:|---:|---:|
+| Dixon–Coles | 0.4806 | 0.616357 | 1.027499 |
+| ML | 0.4383 | 0.646939 | 1.073301 |
+| Baseline ensemble | 0.4815 | 0.613467 | 1.022929 |
+| Market | **0.5072** | **0.597504** | **0.999444** |
+
+The market remains better on the identical 4,424-match sample. The ensemble's small improvement over Dixon–Coles does not close the gap; ML remains experimental. Prequential calibration used 3,847 common market fixtures with same-calendar-day outcomes excluded and did not change the ranking. Exact per-fixture odds capture timestamps remain unavailable, so this is not proof of executable closing odds or profitability.
+
+Commit `02b761fc80c81591cfe1cea7381ee5476bda8f90` excludes `kini_engine/ligaf_team_profiles.py` from the expensive model-backtest trigger. Future changes to this metadata/evidence collector will run CI and Liga F validation without automatically rerunning the men's model benchmark.
+
+### Next priority
+
+The historical provider-profile extraction is implemented and live-validated. The next unresolved acceptance item is a point-in-time audit of every candidate Liga F feature: source publication time, observation time, transformation window, and whether the value existed before the fixture's kickoff. Historical team labels and results remain excluded from model training until that audit and the separate canonical identity review are complete.
