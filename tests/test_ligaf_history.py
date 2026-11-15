@@ -274,21 +274,27 @@ def test_validate_history_rejects_duplicate_scheduled_home_away_pair():
         )
 
 
-def test_validate_history_accepts_scheduled_fixture_without_result():
-    row = _record(1)
-    row["match_status"] = "scheduled"
-    row["home_goals"] = None
-    row["away_goals"] = None
-    row["result_1x2"] = None
+def test_validate_history_accepts_scheduled_fixtures_without_results():
+    rows = []
+    for index in range(8):
+        row = _record(
+            index + 1,
+            home=f"Home {index}",
+            away=f"Away {index}",
+        )
+        row["match_status"] = "scheduled"
+        row["home_goals"] = None
+        row["away_goals"] = None
+        row["result_1x2"] = None
+        rows.append(row)
     profile = validate_history(
-        [row],
+        rows,
         completed_seasons=set(),
         requested_rounds={2023: 1},
-        expected_fixtures_per_round=1,
     )
     assert profile["total_played_fixtures"] == 0
-    assert profile["total_non_final_fixtures"] == 1
-    assert profile["season_profiles"]["2023"]["scheduled_not_started_fixtures"] == 1
+    assert profile["total_non_final_fixtures"] == 8
+    assert profile["season_profiles"]["2023"]["scheduled_not_started_fixtures"] == 8
 
 
 def test_validate_history_rejects_non_final_fixture_with_goals():
