@@ -19,7 +19,7 @@ Latest validated code/test head: `491b40aa6a399f7535284c1562d8784606035b6d` (47 
 - **Calibration diagnostics:** one-vs-rest reliability, prevalence, mean predicted probability, binary Brier/Log Loss and ECE by 1/X/2 class and football season are implemented on out-of-sample forecasts.
 - **Pinnacle data quality:** PSH/PSD/PSA are excluded from market inputs for match dates on/after 2025-07-23, following the provider's stale-feed warning; the full backtest passed with unchanged market coverage.
 - **Prequential calibration experiment:** a regularized multinomial vector-bias/shared-scale calibrator is implemented for every model and the market. It is fitted only on prior OOF forecasts, with a 500-row warm-up, 1,500-row rolling window, minimum 20 observations per class and refits every 30 forecast dates. Same-day outcomes are appended only after the entire date has been forecast. Its updated full walk-forward evaluation completed in run [43657960317](https://github.com/Baltas80/Kini-/actions/runs/43657960317): 4,480 post-warm-up forecasts per model and 33 successful refits after the Pinnacle data-quality correction. It remains experimental because results vary by model and season; it is not selected as a production default.
-- **Not complete:** timestamped odds provenance, canonical team identity, correlation-aware ticket coverage and expected-payout modelling.
+- **Not complete:** exact per-fixture odds-capture timestamps/timezone provenance, canonical team identity, correlation-aware ticket coverage and expected-payout modelling.
 
 ## P0/P2 — walk-forward and ML integrity
 
@@ -290,3 +290,17 @@ Impact against the immediately preceding backtest with Pinnacle included:
 - No material predictive improvement is claimed. The exclusion is justified by provider-quality evidence; its measured score impact is negligible.
 
 The market benchmark remains a multi-book average of per-book no-vig probabilities, not Football-Data's AvgH/AvgD/AvgA consensus columns. Comparing that provider consensus separately is still open research.
+
+
+## Market timestamp conservatism — implementation in progress (2026-11-15)
+
+The loader now preserves Football-Data's raw `Time` value as `Match.detail.kickoff_time` and records its timezone as `unspecified`; it does not silently interpret the field as UTC or BST. It classifies a market row as:
+
+- `ambiguous` when a Friday kickoff is at or before 17:00, or a Tuesday kickoff is at or before 13:00, matching the provider's published snapshot cutoffs.
+- `schedule_compatible` when a valid kickoff time is later than the relevant published cutoff (or falls on another weekday).
+- `unknown` when kickoff time/date cannot be parsed.
+- `unavailable` when no valid pre-closing market probabilities exist.
+
+Only rows carrying both `market_pre_match_eligible=true` and `market_temporal_status=schedule_compatible` enter the strict market benchmark, market calibrator, and model-versus-market common sample. All odds-bearing rows remain available in the explicitly labelled `market_unfiltered_snapshot` diagnostic. The backtest reports counts and examples for excluded rows.
+
+This is a conservative schedule-based screen, **not proof of the exact capture time**: Football-Data does not provide per-fixture capture timestamps, and the timezone of its CSV `Time` field is unspecified. The full historical workflow must confirm the expected seven ambiguous Friday fixtures and report the resulting strict common-sample size before the change is considered validated. Until then, the existing 5,011-row model metrics remain the last fully validated model baseline; no new market metrics are claimed.

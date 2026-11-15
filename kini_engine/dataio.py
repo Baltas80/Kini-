@@ -30,6 +30,53 @@ def _team_key(value: str) -> str:
     return " ".join(unicodedata.normalize("NFKC", value).split()).casefold()
 
 
+def _parse_kickoff_minutes(value: object) -> int | None:
+    """Parse Football-Data's local kickoff time without inventing a timezone."""
+    if value is None or pd.isna(value):
+        return None
+    raw = str(value).strip()
+    if not raw:
+        return None
+    for fmt in ("%H:%M", "%H:%M:%S"):
+        try:
+            parsed = datetime.strptime(raw, fmt)
+            return parsed.hour * 60 + parsed.minute
+        except ValueError:
+            continue
+    return None
+
+
+def _market_temporal_status(
+    match_date: datetime | str,
+    kickoff_time: object,
+    market_available: bool,
+) -> str:
+    """Classify odds against Football-Data's published snapshot schedule.
+
+    This is schedule compatibility, not proof of the exact odds-capture time:
+    the CSV does not provide a per-fixture capture timestamp or a timezone for
+    its kickoff-time field.
+    """
+    if not market_available:
+        return "unavailable"
+    kickoff_minutes = _parse_kickoff_minutes(kickoff_time)
+    if kickoff_minutes is None:
+        return "unknown"
+    try:
+        weekday = _parse_match_date(match_date).weekday()
+    except (TypeError, ValueError):
+        return "unknown"
+
+    # Football-Data describes weekend snapshots by Friday 17:00 BST and
+    # midweek snapshots by Tuesday 13:00 BST. Earlier/equal kickoffs are
+    # ambiguous because the snapshot may have been collected after kickoff.
+    if weekday == 4 and kickoff_minutes <= 17 * 60:
+        return "ambiguous"
+    if weekday == 1 and kickoff_minutes <= 13 * 60:
+        return "ambiguous"
+    return "schedule_compatible"
+
+
 def _optional_goal(value: object, row_number: int, column: str) -> int | None:
     if pd.isna(value):
         return None
@@ -118,7 +165,21 @@ def load_matches_csv(path: str | Path) -> list[Match]:
             for k in ("League", "Season", "Div")
             if k in row.index and pd.notna(row[k])
         }
+        raw_kickoff_time = row.get("Time")
+        kickoff_time = (
+            str(raw_kickoff_time).strip()
+            if raw_kickoff_time is not None and pd.notna(raw_kickoff_time)
+            else None
+        )
+        detail["kickoff_time"] = kickoff_time
+        detail["kickoff_time_timezone"] = "unspecified" if kickoff_time else None
+
         market = _market_from_row(row, row["Date"])
+        temporal_status = _market_temporal_status(
+            row["Date"], kickoff_time, market_available=market is not None
+        )
+        detail["market_temporal_status"] = temporal_status
+        detail["market_pre_match_eligible"] = temporal_status == "schedule_compatible"
 
         out.append(
             Match(

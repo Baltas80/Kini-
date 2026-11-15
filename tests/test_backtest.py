@@ -116,7 +116,14 @@ def test_compare_reports_market_metrics_on_same_fixture_sample(monkeypatch):
         Match(day1, f"H{i}", f"A{i}", 1, 0, "1")
         for i in range(12)
     ] + [
-        Match(day2, "H12", "A12", 1, 0, "1", market={"1": 0.4, "X": 0.3, "2": 0.3}),
+        Match(
+            day2, "H12", "A12", 1, 0, "1",
+            market={"1": 0.4, "X": 0.3, "2": 0.3},
+            detail={
+                "market_temporal_status": "schedule_compatible",
+                "market_pre_match_eligible": True,
+            },
+        ),
         Match(day2, "H13", "A13", 0, 0, "X"),
     ]
 
@@ -259,10 +266,18 @@ def test_compare_reports_out_of_sample_classwise_calibration_by_season(monkeypat
         Match(
             datetime(2024, 7, 1), "H12", "A12", 1, 0, "1",
             market={"1": 0.5, "X": 0.3, "2": 0.2},
+            detail={
+                "market_temporal_status": "schedule_compatible",
+                "market_pre_match_eligible": True,
+            },
         ),
         Match(
             datetime(2025, 7, 1), "H13", "A13", 0, 0, "X",
             market={"1": 0.4, "X": 0.35, "2": 0.25},
+            detail={
+                "market_temporal_status": "schedule_compatible",
+                "market_pre_match_eligible": True,
+            },
         ),
     ])
 
@@ -406,3 +421,66 @@ def test_compare_fits_calibrator_only_from_completed_prior_dates(monkeypatch):
     assert summary["last_fit"]["n_train"] == 5
     assert summary["n"] == 3
     assert result["prequential_calibration"]["same_calendar_day_outcomes_excluded"] is True
+
+
+
+def test_compare_excludes_ambiguous_and_unknown_market_rows_from_strict_sample(monkeypatch):
+    class FakeEngine:
+        def __init__(self, enable_ml=False):
+            self.dc = type("DC", (), {"decay": 0.995})()
+
+        def fit(self, history):
+            return self
+
+        def predict(self, match, mode="ensemble", history=None):
+            return type("Prediction", (), {
+                "probabilities": {"1": 0.5, "X": 0.3, "2": 0.2}
+            })()
+
+    monkeypatch.setattr(backtest, "KiniEngine", FakeEngine)
+    training_day = datetime(2025, 1, 1)
+    forecast_day = datetime(2025, 1, 2)
+    training = [
+        Match(training_day, f"H{i}", f"A{i}", 1, 0, "1")
+        for i in range(12)
+    ]
+    market = {"1": 0.4, "X": 0.3, "2": 0.3}
+    fixtures = [
+        Match(
+            forecast_day, "Eligible", "A", 1, 0, "1", market=market,
+            detail={
+                "market_temporal_status": "schedule_compatible",
+                "market_pre_match_eligible": True,
+                "kickoff_time": "20:00",
+            },
+        ),
+        Match(
+            forecast_day, "Ambiguous", "B", 0, 0, "X", market=market,
+            detail={
+                "market_temporal_status": "ambiguous",
+                "market_pre_match_eligible": False,
+                "kickoff_time": "16:30",
+            },
+        ),
+        Match(
+            forecast_day, "Unknown", "C", 0, 1, "2", market=market,
+            detail={
+                "market_temporal_status": "unknown",
+                "market_pre_match_eligible": False,
+            },
+        ),
+    ]
+
+    result = backtest.compare_walk_forward(training + fixtures, min_train=12)
+
+    assert result["market"]["n"] == 1
+    assert result["market_unfiltered_snapshot"]["n"] == 3
+    assert result["market_temporal_audit"]["n_with_odds"] == 3
+    assert result["market_temporal_audit"]["n_schedule_eligible"] == 1
+    assert result["market_temporal_audit"]["n_excluded"] == 2
+    assert result["market_temporal_audit"]["status_counts"] == {
+        "ambiguous": 1,
+        "schedule_compatible": 1,
+        "unknown": 1,
+    }
+    assert result["common_sample"]["dc"]["market"]["n"] == 1

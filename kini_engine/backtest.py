@@ -555,6 +555,9 @@ def compare_walk_forward(
     dated_common_rows = {mode: [] for mode in all_modes}
     dated_common_market_rows = {mode: [] for mode in all_modes}
     market_rows: list[tuple[dict[str, float], str]] = []
+    market_unfiltered_rows: list[tuple[dict[str, float], str]] = []
+    market_status_counts: dict[str, int] = {}
+    market_excluded_examples: list[dict[str, str | None]] = []
     dated_market_rows: list[tuple[str, dict[str, float], str]] = []
     prediction_errors = {mode: {"count": 0, "first_error": None} for mode in all_modes}
     adaptive_history: list[tuple[dict[str, float], dict[str, float], str]] = []
@@ -680,59 +683,84 @@ def compare_walk_forward(
                     )
 
             if match.market:
-                market_rows.append((match.market, actual))
-                dated_market_rows.append(
-                    (forecast_date, match.market, actual)
+                market_unfiltered_rows.append((match.market, actual))
+                temporal_status = str(
+                    match.detail.get("market_temporal_status", "unclassified")
                 )
-                pending_calibration_history["market"].append(
-                    (match.market, actual)
+                market_status_counts[temporal_status] = (
+                    market_status_counts.get(temporal_status, 0) + 1
                 )
-                if calibrators["market"]["fitted"]:
-                    calibrated_market = apply_multiclass_calibrator(
-                        match.market, calibrators["market"]
+                market_is_eligible = (
+                    temporal_status == "schedule_compatible"
+                    and match.detail.get("market_pre_match_eligible") is True
+                )
+                if not market_is_eligible and len(market_excluded_examples) < 20:
+                    market_excluded_examples.append({
+                        "date": forecast_date,
+                        "home": match.home,
+                        "away": match.away,
+                        "kickoff_time": (
+                            str(match.detail.get("kickoff_time"))
+                            if match.detail.get("kickoff_time") is not None
+                            else None
+                        ),
+                        "status": temporal_status,
+                    })
+
+                if market_is_eligible:
+                    market_rows.append((match.market, actual))
+                    dated_market_rows.append(
+                        (forecast_date, match.market, actual)
                     )
-                    calibration_raw_rows["market"].append(
+                    pending_calibration_history["market"].append(
                         (match.market, actual)
                     )
-                    calibration_rows["market"].append(
-                        (calibrated_market, actual)
-                    )
-                    calibration_raw_dated_rows["market"].append(
-                        (forecast_date, match.market, actual)
-                    )
-                    calibration_dated_rows["market"].append(
-                        (forecast_date, calibrated_market, actual)
-                    )
-
-                for mode, probabilities in predictions.items():
-                    common_rows[mode].append((probabilities, actual))
-                    common_market_rows[mode].append((match.market, actual))
-                    dated_common_rows[mode].append(
-                        (forecast_date, probabilities, actual)
-                    )
-                    dated_common_market_rows[mode].append(
-                        (forecast_date, match.market, actual)
-                    )
-
-                    if calibrators[mode]["fitted"] and calibrators["market"]["fitted"]:
-                        calibration_common_raw_model[mode].append(
-                            (probabilities, actual)
+                    if calibrators["market"]["fitted"]:
+                        calibrated_market = apply_multiclass_calibrator(
+                            match.market, calibrators["market"]
                         )
-                        calibration_common_model[mode].append((
-                            apply_multiclass_calibrator(
-                                probabilities, calibrators[mode]
-                            ),
-                            actual,
-                        ))
-                        calibration_common_raw_market[mode].append(
+                        calibration_raw_rows["market"].append(
                             (match.market, actual)
                         )
-                        calibration_common_market[mode].append((
-                            apply_multiclass_calibrator(
-                                match.market, calibrators["market"]
-                            ),
-                            actual,
-                        ))
+                        calibration_rows["market"].append(
+                            (calibrated_market, actual)
+                        )
+                        calibration_raw_dated_rows["market"].append(
+                            (forecast_date, match.market, actual)
+                        )
+                        calibration_dated_rows["market"].append(
+                            (forecast_date, calibrated_market, actual)
+                        )
+
+                    for mode, probabilities in predictions.items():
+                        common_rows[mode].append((probabilities, actual))
+                        common_market_rows[mode].append((match.market, actual))
+                        dated_common_rows[mode].append(
+                            (forecast_date, probabilities, actual)
+                        )
+                        dated_common_market_rows[mode].append(
+                            (forecast_date, match.market, actual)
+                        )
+
+                        if calibrators[mode]["fitted"] and calibrators["market"]["fitted"]:
+                            calibration_common_raw_model[mode].append(
+                                (probabilities, actual)
+                            )
+                            calibration_common_model[mode].append((
+                                apply_multiclass_calibrator(
+                                    probabilities, calibrators[mode]
+                                ),
+                                actual,
+                            ))
+                            calibration_common_raw_market[mode].append(
+                                (match.market, actual)
+                            )
+                            calibration_common_market[mode].append((
+                                apply_multiclass_calibrator(
+                                    match.market, calibrators["market"]
+                                ),
+                                actual,
+                            ))
             n_total += 1
             test_dates.append(forecast_date)
 
@@ -761,6 +789,25 @@ def compare_walk_forward(
         mode: multiclass_metrics(values) for mode, values in rows.items()
     }
     result["market"] = multiclass_metrics(market_rows) if market_rows else empty
+    result["market_unfiltered_snapshot"] = (
+        multiclass_metrics(market_unfiltered_rows)
+        if market_unfiltered_rows else empty
+    )
+    result["market_temporal_audit"] = {
+        "n_with_odds": len(market_unfiltered_rows),
+        "n_schedule_eligible": len(market_rows),
+        "n_excluded": len(market_unfiltered_rows) - len(market_rows),
+        "status_counts": dict(sorted(market_status_counts.items())),
+        "eligibility_rule": (
+            "market_pre_match_eligible=true and "
+            "market_temporal_status=schedule_compatible"
+        ),
+        "limitation": (
+            "schedule compatibility only; Football-Data does not provide "
+            "per-fixture odds-capture timestamps or the kickoff-time timezone"
+        ),
+        "excluded_examples": market_excluded_examples,
+    }
     result["common_sample"] = {
         mode: {
             "model": multiclass_metrics(common_rows[mode]),
