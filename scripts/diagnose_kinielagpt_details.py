@@ -155,10 +155,7 @@ def _normalize_team_name(value: Any) -> str | None:
         character for character in decomposed if not unicodedata.combining(character)
     )
     normalized = " ".join(
-        "".join(
-            character if character.isalnum() else " "
-            for character in without_marks
-        ).split()
+        "".join(character if character.isalnum() else " " for character in without_marks).split()
     )
     return normalized or None
 
@@ -177,9 +174,7 @@ def _positive_integer(value: Any) -> int | None:
     return number if number > 0 else None
 
 
-def reconcile_fixture_order(
-    details: Any, percentage_matches: Any
-) -> dict[str, Any]:
+def reconcile_fixture_order(details: Any, percentage_matches: Any) -> dict[str, Any]:
     """Verify detail.orden -> percentage.num using an exact normalized team pair.
 
     Accent/case/punctuation normalization is allowed, but no aliases, fuzzy
@@ -322,9 +317,7 @@ def collect_live_diagnostic() -> dict[str, Any]:
     report["details_response_received_at"] = captured_at
     report["schema"] = summarize_payload(payload)
     details = payload.get("detallePartidos")
-    report["fixture_crosswalk"] = reconcile_fixture_order(
-        details, percentage_matches
-    )
+    report["fixture_crosswalk"] = reconcile_fixture_order(details, percentage_matches)
     report["status"] = (
         "ok"
         if report["schema"]["details_key_present"]
