@@ -722,7 +722,7 @@ Commit `cc40622f5ab1f1dcaeeb498084f719308c729908` adds a separate evidence colle
 
 For each completed season 2022/23–2025/26, the collector reads the eight official match-detail links from matchday 30, extracts each team's provider profile ID from the exact home/away team-name anchor, then requests the season-specific profile route using that ID and slug. A profile page is accepted only if its heading and season standings are present. No fuzzy matching or canonical team ID is assigned.
 
-The live validation [run 43715821261](https://github.com/Baltas80/Kini-/actions/runs/43715821261) passed on 2026-11-15. Artifact `ligaf-history` (ID `14161874316`, 102,265 bytes) has ZIP SHA-256 `5706a7794252b57ead68fb7584504a18b73c780afef44df47d3107b9f232416a`.
+The latest live validation [run 43716218767](https://github.com/Baltas80/Kini-/actions/runs/43716218767) passed on 2026-11-15. Artifact `ligaf-history` (ID `14161934608`, 102,264 bytes) has ZIP SHA-256 `4275010c8f448f917e4ba7c8a3dc9cafdcbadcb88b9208c159cea788b49bb2ab`.
 
 | Season | Teams | Unique provider IDs | Profile pages verified | Exact display-name matches | Manual review |
 |---|---:|---:|---:|---:|---:|
@@ -767,4 +767,4 @@ The historical provider-profile extraction is implemented and live-validated. Th
 
 A separate exact-label comparison between the 2025/26 historical profile evidence and the current 2026/27 profile crosswalk found 14 shared team labels and 14 identical provider profile IDs, with zero ID mismatches. Relative to 2025/26, the current season contains Deportivo Alavés and VCF Femenino where Alhama CF ElPozo and Levante UD were present previously. The Alavés provider ID is independently observed in 2022/23; the VCF Femenino ID is observed in 2022/23–2024/25. These are season-membership differences, not evidence of a new club identity or an alias; no canonical identity is inferred.
 
-CI follow-up: the first lint/format run exposed only Ruff import-order, set-comprehension and formatting issues in the new evidence collector/tests. Those are being corrected before the final CI acceptance; the live source/profile validation itself passed in run 43716043929.
+The first lint/format attempts exposed import-order, set-comprehension and formatting issues, followed by an incomplete unit-test fixture for the stronger evidence contract. These were corrected in commits `dc189590199bd911850c0e5b18e46d3231452511` and `5d575ded59ca15aeb214224ecd523e4d8a314ad5`. Final PR CI [run 43716295453](https://github.com/Baltas80/Kini-/actions/runs/43716295453) passed on head `5d575ded59ca15aeb214224ecd523e4d8a314ad5`: Ruff checks passed, five files were already formatted, 132 tests passed, and four upstream NumPy/penaltyblog deprecation warnings remained. The latest live source/profile validation is run 43716218767 above; the subsequent 5d575 test-only commit did not alter the importer or profile collector.

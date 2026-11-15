@@ -9,6 +9,7 @@ on:
       - "data/**"
       - "pyproject.toml"
       - "requirements*.txt"
+      - "AUDIT_PHASE1.md"
       - ".github/workflows/**"
   pull_request:
     paths:
