@@ -6,7 +6,7 @@ Working branch: `audit/phase-1-temporal-validation`
 Base branch: `master`  
 Backtest code commit evaluated: `fbffca8b1600346ca728e19f010ab3f61f35f198`  
 Latest fully validated baseline: `2963e7dcbc3f0aca6680011e9c347367c79af44e`  
-Latest code HEAD: `3fff53c52d4b60efe851eba18d9bd4e85a463f88` (44 tests and historical-data validation passed; calibrated historical backtest pending)
+Latest model-code HEAD: `3fff53c52d4b60efe851eba18d9bd4e85a463f88` (44 tests, historical-data validation and prequential calibration backtest passed)
 
 ## Executive status
 
@@ -17,7 +17,7 @@ Latest code HEAD: `3fff53c52d4b60efe851eba18d9bd4e85a463f88` (44 tests and histo
 - **Predictive performance:** the market remains materially better than every model configuration on accuracy, Brier and Log Loss.
 - **Ensemble weighting:** fixed and rolling prequential DC/ML-only comparisons are now evaluated. The adaptive variant did not improve Brier or Log Loss over the fixed DC/ML blend and is not selected as the default.
 - **Calibration diagnostics:** one-vs-rest reliability, prevalence, mean predicted probability, binary Brier/Log Loss and ECE by 1/X/2 class and football season are implemented on out-of-sample forecasts.
-- **Prequential calibration experiment:** a regularized multinomial vector-bias/shared-scale calibrator is implemented for every model and the market. It is fitted only on prior OOF forecasts, with a 500-row warm-up, 1,500-row rolling window, minimum 20 observations per class and refits every 30 forecast dates. Same-day outcomes are appended only after the entire date has been forecast. Its full backtest evaluation is pending; it is not selected as a production default.
+- **Prequential calibration experiment:** a regularized multinomial vector-bias/shared-scale calibrator is implemented for every model and the market. It is fitted only on prior OOF forecasts, with a 500-row warm-up, 1,500-row rolling window, minimum 20 observations per class and refits every 30 forecast dates. Same-day outcomes are appended only after the entire date has been forecast. Its full walk-forward evaluation completed in run [43652723196](https://github.com/Baltas80/Kini-/actions/runs/43652723196): 4,480 post-warm-up forecasts per model and 33 successful refits. It remains experimental because results vary by model and season; it is not selected as a production default.
 - **Not complete:** timestamped odds provenance, canonical team identity, correlation-aware ticket coverage and expected-payout modelling.
 
 ## P0/P2 — walk-forward and ML integrity
@@ -120,7 +120,7 @@ Configuración predeterminada del walk-forward:
 
 Las pruebas incluyen un conjunto sintético con sesgo conocido y un bloque de test independiente, además de una prueba de regresión que demuestra que los resultados de la fecha actual no entran en el ajuste de esa misma fecha.
 
-El workflow histórico rechaza muestras calibradas vacías, tamaños distintos entre muestras originales y calibradas, calibradores sin ajuste válido o comparaciones comunes con el mercado inexistentes. La aceptación comprueba que el experimento se ejecutó; no exige que mejore las métricas. Solo se promoverá si reduce Brier y Log Loss fuera de muestra sobre la misma muestra temporal. El resultado del backtest completo sigue pendiente.
+El workflow histórico rechaza muestras calibradas vacías, tamaños distintos entre muestras originales y calibradas, calibradores sin ajuste válido o comparaciones comunes con el mercado inexistentes. La aceptación comprueba que el experimento se ejecutó; no exige que mejore las métricas. Solo se promoverá si reduce Brier y Log Loss fuera de muestra sobre la misma muestra temporal. El backtest completo terminó correctamente en el run [43652723196](https://github.com/Baltas80/Kini-/actions/runs/43652723196); sus métricas y la decisión de no promover el calibrador se documentan más abajo.
 
 ### Adaptive DC/ML weighting
 
@@ -178,7 +178,7 @@ Baseline validado: `2963e7dcbc3f0aca6680011e9c347367c79af44e`. Último HEAD: `3f
 
 - [CI del último HEAD — 44 tests superados](https://github.com/Baltas80/Kini-/actions/runs/43652728930). Permanecen cuatro advertencias deprecatorias de `penaltyblog` 1.13.1 al asignar la forma de un array bajo NumPy 2.5.
 - [Validación histórica del último HEAD](https://github.com/Baltas80/Kini-/actions/runs/43652728953): 5.311 partidos, `integrity_passed: true`, cero duplicados; LaLiga 2026/27: 119 partidos y Segunda 2026/27: 140.
-- [Backtest histórico anterior](https://github.com/Baltas80/Kini-/actions/runs/43642060879): 5.011 predicciones para cada una de las cinco configuraciones, cero errores y `BACKTEST_ACCEPTANCE_OK`. El backtest del nuevo calibrador está pendiente de confirmación.
+- [Backtest histórico con calibración prequential](https://github.com/Baltas80/Kini-/actions/runs/43652723196): 5.011 predicciones para cada una de las cinco configuraciones, cero errores, 4.480 comparaciones calibradas/raw por configuración, 33 ajustes por calibrador y `PREQUENTIAL_CALIBRATION_OK`.
 
 El constructor de la ingesta consolida el DataFrame normalizado antes de añadir `_ParsedDate` y concatena `League`, `Season` y `SourceURL` como un único bloque de metadatos. CI detectó que el primer intento había comentado accidentalmente la asignación de la fecha parseada; el commit `2963e7d` la restauró. La implementación corregida conserva las 5.311 filas y elimina los avisos de fragmentación de pandas.
 
@@ -200,7 +200,7 @@ El constructor de la ingesta consolida el DataFrame normalizado antes de añadir
 5. Source/cache provenance and current-season coverage — **validated on 5,311 fixtures**.
 6. Non-empty Dixon-Coles, ML and ensemble backtests — **validated, 5,011 predictions each**.
 7. Optimizer probability validation and small-budget DP exactness — **implemented and CI-tested**.
-8. Fixed and adaptive independent model-only ensembles — **implemented and validated on 5,011 walk-forward fixtures**; adaptive weighting did not improve Brier or Log Loss over the fixed blend. Class-wise and seasonal one-vs-rest diagnostics — **implemented and validated on 5,011 OOF fixtures**. Prequential calibrator — **implemented with same-day isolation and acceptance checks; full backtest result pending**. Timestamped odds and expected-payout model — **pending**.
+8. Fixed and adaptive independent model-only ensembles — **implemented and validated on 5,011 walk-forward fixtures**; adaptive weighting did not improve Brier or Log Loss over the fixed blend. Class-wise and seasonal one-vs-rest diagnostics — **implemented and validated on 5,011 OOF fixtures**. Prequential calibrator — **implemented, same-day isolation and full backtest validated; not promoted because the main ensemble does not improve and seasonal effects are mixed**. Timestamped odds and expected-payout model — **pending**.
 
 ## Integration status
 
@@ -215,5 +215,38 @@ El constructor de la ingesta consolida el DataFrame normalizado antes de añadir
 - Branch HEAD before this checkpoint: `d3d9e46f35e790c8b2b61b36f02007e9116b66be`; this checkpoint is documentation-only and does not change model code.
 - Latest PR validation on that tree: CI run [43652911556](https://github.com/Baltas80/Kini-/actions/runs/43652911556) passed **44 tests**. Four warnings remain in the third-party `penaltyblog` Dixon-Coles implementation under NumPy 2.5.
 - Historical-data validation run [43652911550](https://github.com/Baltas80/Kini-/actions/runs/43652911550) completed successfully.
-- The calibrated historical backtest has still not been evidenced. The earlier 5,011-fixture comparison evaluates the pre-calibrator code and must not be presented as validation of the calibration experiment.
-- Next acceptance gate: execute `.github/workflows/historical-backtest.yml` against the current PR branch. It must produce non-empty predictions for all five model configurations, a non-empty calibrated/raw comparison on identical post-warm-up fixtures, successful prior-OOF fits, and a non-empty common-market sample. Calibration is not promoted unless both Brier and Log Loss improve on the same chronological sample.
+- The calibrated historical backtest is now evidenced by run [43652723196](https://github.com/Baltas80/Kini-/actions/runs/43652723196), on code HEAD `3fff53c`. It evaluated the calibrator on the same post-warm-up fixtures as raw forecasts.
+- Acceptance passed: all five model configurations produced 5,011/5,011 predictions; each calibration comparison used 4,480 identical raw/calibrated fixtures; all calibrators had 33 valid fits and a 1,500-row final training window. The next priority is independent temporal stability/uncertainty analysis and the unresolved timestamped-odds provenance. No global calibrator promotion is justified.
+
+## Prequential calibration results — run 43652723196
+
+The full workflow completed successfully on 2026-11-14/15 for model-code HEAD `3fff53c52d4b60efe851eba18d9bd4e85a463f88`. The subsequent branch commits were documentation-only. The run rebuilt the historical source, passed the first-ML diagnostic, produced all five model forecasts and passed both backtest acceptance gates.
+
+- Source history: 5,311 completed matches.
+- Initial training: 300 matches.
+- Walk-forward test: 5,011 matches, 2020-12-11 to 2026-11-09.
+- Prediction errors: zero for Dixon-Coles, ML, market-assisted ensemble, fixed DC/ML blend and adaptive DC/ML blend.
+- Calibration: 4,480 post-warm-up forecasts per model and for the market; raw and calibrated scores use identical fixtures.
+- Calibration refits: 33 per model/market; final fit used 1,500 prior OOF rows and was dated 2026-10-26.
+- Same-calendar-day outcome exclusion: true. Workflow markers: `BACKTEST_ACCEPTANCE_OK` and `PREQUENTIAL_CALIBRATION_OK`.
+
+| Model | n | Raw Brier | Calibrated Brier | Δ Brier | Raw Log Loss | Calibrated Log Loss | Δ Log Loss |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Dixon-Coles | 4,480 | 0.615105 | 0.614391 | -0.000714 | 1.025271 | 1.023953 | -0.001317 |
+| ML | 4,480 | 0.639687 | 0.633407 | -0.006279 | 1.061780 | 1.051484 | -0.010296 |
+| Ensemble DC/ML/LAE/market | 4,480 | 0.612291 | 0.612432 | +0.000141 | 1.020870 | 1.021008 | +0.000138 |
+| Fixed DC/ML-only | 4,480 | 0.614517 | 0.614567 | +0.000050 | 1.024162 | 1.024174 | +0.000012 |
+| Adaptive DC/ML-only | 4,480 | 0.614591 | 0.614550 | -0.000041 | 1.024310 | 1.024157 | -0.000153 |
+| Market | 4,480 | 0.598952 | 0.598058 | -0.000894 | 1.001505 | 1.000017 | -0.001488 |
+
+Negative deltas indicate improvement. The market remains materially better than every calibrated model on both proper scoring rules. On the same 4,480 common fixtures, the calibrated market scores 0.598058 Brier / 1.000017 Log Loss; the best calibrated model configuration is the raw market-assisted ensemble at 0.612432 / 1.021008.
+
+### Promotion decision
+
+**Do not promote the calibrator as the default prediction layer.** The primary market-assisted ensemble becomes slightly worse on both Brier and Log Loss after calibration. The fixed model-only blend also becomes marginally worse. Standalone Dixon-Coles and ML improve overall, but the improvement is not seasonally stable: in 2026/27 (259 forecasts), the classwise-summed multiclass Brier changes from 0.596009 to 0.598636 for DC, from 0.592878 to 0.594151 for the main ensemble, and from 0.595670 to 0.597484 for the fixed DC/ML blend. The market improves from 0.574361 to 0.572488 in that season. The adaptive blend's overall gain is negligible and its 2026/27 Brier also worsens (0.596068 to 0.598392).
+
+The result validates the prequential implementation and the experiment, not a universal calibration benefit. Keep raw probabilities as the production default; retain the calibrator behind the experiment/backtest path until an independent later holdout or nested temporal selection demonstrates a stable gain for a specific model.
+
+## CI efficiency
+
+The historical-backtest workflow now runs on pushes that change `kini_engine/**`, `scripts/**`, `data/**`, `pyproject.toml` or `requirements*.txt`. Documentation-only and workflow-only commits no longer trigger the expensive full walk-forward benchmark. Manual dispatch and the weekly schedule remain available.
