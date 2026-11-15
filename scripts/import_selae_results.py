@@ -8,11 +8,11 @@ import os
 import re
 import tempfile
 import time
-from datetime import date, datetime, timezone
+from collections.abc import Iterable
+from datetime import UTC, date, datetime
 from decimal import Decimal, InvalidOperation
 from html.parser import HTMLParser
 from pathlib import Path
-from typing import Iterable
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -291,7 +291,7 @@ def parse_selae_draw(
     if len(prize_tiers) < 5:
         raise ValueError(f"Desglose de premios incompleto: se esperaban al menos 5 categorías, hay {len(prize_tiers)}")
 
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     raw_bytes = raw_content if raw_content is not None else html.encode("utf-8")
     return {
         "schema_version": 1,
@@ -403,7 +403,7 @@ def fetch_draw(
         encoding = getattr(response, "encoding", None) or "utf-8"
         raw_content = response.content
         html = raw_content.decode(encoding, errors="replace")
-        fetched_at = datetime.now(timezone.utc).isoformat()
+        fetched_at = datetime.now(UTC).isoformat()
         parsed = parse_selae_draw(
             html,
             draw_date,
@@ -442,7 +442,7 @@ def load_local_draw(draw_date: date, html_dir: str | Path) -> dict[str, object]:
     html = raw_content.decode(encoding, errors="replace")
     retrieved_at = metadata.get("source_retrieved_at_utc")
     if not retrieved_at:
-        retrieved_at = datetime.fromtimestamp(html_path.stat().st_mtime, timezone.utc).isoformat()
+        retrieved_at = datetime.fromtimestamp(html_path.stat().st_mtime, UTC).isoformat()
     return parse_selae_draw(
         html,
         draw_date,
@@ -539,7 +539,7 @@ def write_draws(
     ]
     _atomic_write(target, ("\n".join(lines) + "\n").encode("utf-8"))
     profile = {
-        "profile_generated_at_utc": datetime.now(timezone.utc).isoformat(),
+        "profile_generated_at_utc": datetime.now(UTC).isoformat(),
         "provider": "SELAE",
         "source_urls": sorted({str(draw["source_url"]) for draw in ordered_draws}),
         "draw_count": len(ordered_draws),
