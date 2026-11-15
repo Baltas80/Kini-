@@ -890,3 +890,81 @@ This avoids the previous failure mode where a documentation commit cancelled a l
 - No new predictive metrics are claimed. The 12-feature ML candidate and the context hardening remain pending full validation.
 
 Next action: complete CI and the active walk-forward run, verify that all five model candidates produce non-empty predictions with zero errors, inspect the uploaded JSON artifact, and confirm the workflow-only pending run skips the expensive job.
+
+## Latest 12-feature walk-forward validation — 2026-11-15
+
+This section supersedes the earlier pending-validation notes above. The exact PR head `af65a05d088ed9d3dfd3ae9c742ccd9fae2897ef` completed both CI and the full historical benchmark.
+
+### CI
+
+- [PR CI run 43724099444](https://github.com/Baltas80/Kini-/actions/runs/43724099444): Ruff lint passed, formatting check passed, **135 tests passed**.
+- Four upstream NumPy 2.5 / penaltyblog deprecation warnings remain; they are not test failures.
+- The PR-triggered workflow change detector and full benchmark [run 43724099417](https://github.com/Baltas80/Kini-/actions/runs/43724099417) both completed successfully.
+
+### ML first-forecast diagnostic
+
+- Source history: 5,311 matches.
+- Initial training rows: 300.
+- Feature matrix: **300 × 12**, all finite.
+- First forecast: Valladolid–Osasuna, 2020-12-11.
+- First-forecast probabilities: `[0.4246723417, 0.3873721121, 0.1879555462]`; sum = 1.0, all finite and non-negative.
+- `ML_DIAGNOSTIC_OK`.
+
+### Full walk-forward result
+
+- Run: [43724099417](https://github.com/Baltas80/Kini-/actions/runs/43724099417).
+- Evaluated PR head: `af65a05d088ed9d3dfd3ae9c742ccd9fae2897ef`.
+- Source dataset: 5,311 completed fixtures.
+- Initial train: 300; test: 5,011 fixtures.
+- Test period: 2020-12-11 through 2026-11-09.
+- All five configurations generated **5,011/5,011 forecasts**, with zero recorded prediction errors.
+- Artifact: `historical-backtest`, ID `14165829900`, 169,354 bytes; GitHub artifact digest `sha256:6971b7a5e9e650e125a5e8d5bb457f0347c382b9198cf20675906dad665f300e`.
+
+| Candidate | Accuracy | Multiclass Brier | Log Loss | RPS | ECE |
+|---|---:|---:|---:|---:|---:|
+| Dixon–Coles | 0.4817 | 0.616668 | 1.027806 | 0.208245 | 0.011423 |
+| ML (12 features) | 0.4414 | 0.645534 | 1.071417 | 0.219951 | 0.044087 |
+| Market-assisted ensemble | 0.4793 | 0.613630 | 1.023028 | 0.207026 | 0.012840 |
+| Fixed DC/ML-only | 0.4758 | 0.615866 | 1.026405 | 0.208008 | 0.009508 |
+| Adaptive DC/ML-only | 0.4772 | 0.616077 | 1.026712 | 0.208079 | 0.008118 |
+| Schedule-screened market | **0.5072** | **0.597504** | **0.999444** | **0.199876** | 0.024213 |
+
+The raw full-sample model metrics above use 5,011 forecasts; the market uses its 4,424 eligible observations and must not be compared to those full-sample model metrics as if they were paired. The exact common-sample comparison below is the fair model-versus-market comparison.
+
+### Identical market sample
+
+The temporal audit found 5,011 rows with odds, 4,424 schedule-compatible rows and 587 ambiguous rows excluded. All five models and the market were scored on the exact same 4,424 fixtures:
+
+| Candidate | Accuracy | Multiclass Brier | Log Loss |
+|---|---:|---:|---:|
+| Dixon–Coles | 0.4806 | 0.616357 | 1.027499 |
+| ML (12 features) | 0.4378 | 0.647471 | 1.074246 |
+| Market-assisted ensemble | 0.4781 | 0.613563 | 1.023018 |
+| Fixed DC/ML-only | 0.4740 | 0.616095 | 1.026842 |
+| Adaptive DC/ML-only | 0.4749 | 0.616305 | 1.027133 |
+| Market | **0.5072** | **0.597504** | **0.999444** |
+
+The market is better on all three reported metrics. The market-assisted ensemble improves slightly over Dixon–Coles on Brier and Log Loss, but remains materially behind the market. ML remains weaker and is not promoted. No ensemble is selected as a market-beating default.
+
+### Prequential calibration
+
+The calibration workflow passed with same-calendar-day outcomes excluded. The regularized multinomial vector-bias/shared-scale calibrator was fitted only on prior walk-forward OOF forecasts, with a 500-row warm-up, 1,500-row rolling window, minimum 20 observations per class and refits every 30 forecast dates.
+
+- Raw/calibrated post-warm-up sample: 4,480 forecasts per model.
+- Common model/market calibrated sample: 3,847 fixtures.
+- Last calibrator fit: 2026-10-26, using 1,500 prior forecasts.
+- On the 3,847 common fixtures, calibrated market: accuracy 0.5082, Brier 0.596714, Log Loss 0.998094.
+- Best calibrated model by Brier/Log Loss on that same sample was the market-assisted ensemble: Brier 0.611522, Log Loss 1.019966; it still underperformed the calibrated market. Calibration did not reverse model selection.
+
+The calibration experiment is validated as an evaluation pipeline, not as evidence that calibration makes the model competitive with the market. It remains an experiment.
+
+### Updated acceptance state
+
+- **P0 backtest non-empty predictions:** validated on this PR head; all five configurations returned 5,011 forecasts and zero prediction errors.
+- **12-feature ML inference and probability contract:** validated by first-forecast diagnostic and full walk-forward.
+- **CI:** validated on this PR head, 135 tests passing.
+- **P2 leakage controls:** code-level protections for prior-date results, context/H2H and ML feature history are implemented and tested. Exact publication timestamps for historical results remain unavailable, so this is not a complete source-level point-in-time proof.
+- **Market timing:** still schedule-screened, not exact per-fixture capture-time verified; 587 ambiguous rows are excluded.
+- **P6 optimizer:** existing basic budget/probability/Pleno tests remain in place; correlation-aware ticket coverage, current SELAE rule verification and defensible expected-payout modelling remain open.
+
+Next priority: audit every external forecast input for an explicit availability timestamp/eligibility contract (especially LAE), then finish canonical team identity and correlation-aware ticket optimization. Do not promote ML or an ensemble based on this benchmark.
