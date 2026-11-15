@@ -107,6 +107,32 @@ def test_parse_match_detail_handles_postponed_without_fabricating_score():
     assert row["result_1x2"] is None
 
 
+def test_parse_match_detail_uses_archive_season_not_static_title_year():
+    html = """
+    <html><head>
+    <title>Real Sociedad Vs Real Madrid CF - Liga F 2027 | LIGAF</title>
+    </head><body>
+    <h2>Liga F Moeve | JOR. 30 | Vie 19 MAY 19:00</h2>
+    <p>Finalizado</p>
+    <div>Real Sociedad</div><div>1 - 1</div><div>Real Madrid CF</div>
+    </body></html>
+    """
+    url = "https://ligaf.es/partido/real-sociedad/real-madrid/2023310144/detalle"
+    row = parse_match_detail(
+        html,
+        match_url=url,
+        season_end_year=2023,
+        expected_matchday=30,
+        round_url="https://ligaf.es/resultados/primera_division_femenina/30/2023",
+        match_source_metadata=source_metadata(html, url),
+        round_source_metadata=source_metadata(ROUND_HTML, ROUND_URL),
+    )
+    assert row["season"] == "2022-23"
+    assert row["kickoff_at"] == "2023-05-19T19:00:00+02:00"
+    assert row["home_team_name"] == "Real Sociedad"
+    assert row["away_team_name"] == "Real Madrid CF"
+
+
 def test_validate_history_rejects_result_score_mismatch():
     row = _record(1)
     row["result_1x2"] = "2"
@@ -170,7 +196,7 @@ def test_validate_history_rejects_duplicate_match_ids():
         )
 
 
-def test_validate_history_rejects_duplicate_canonical_fixture():
+def test_validate_history_rejects_duplicate_scheduled_home_away_pair():
     first = _record(1)
     second = _record(2)
     second["kickoff_at"] = first["kickoff_at"]
