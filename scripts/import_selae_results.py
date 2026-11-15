@@ -13,6 +13,7 @@ from datetime import UTC, date, datetime
 from decimal import Decimal, InvalidOperation
 from html.parser import HTMLParser
 from pathlib import Path
+from urllib.parse import urlparse
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -228,15 +229,23 @@ def _parse_prize_tiers(rows: list[list[str]]) -> list[dict[str, object]]:
         if "acierto" not in category.casefold() and "pleno al 15" not in category.casefold():
             continue
         winners = _parse_integer(row[1])
-        prize_cents = _parse_eur_cents(row[2])
-        if winners is None or prize_cents is None:
+        prize_raw = _clean(row[2])
+        prize_status = (
+            "bote"
+            if "bote" in prize_raw.casefold() or "acumulado" in prize_raw.casefold()
+            else "published_unit_amount"
+        )
+        prize_cents = _parse_eur_cents(prize_raw)
+        if prize_status != "bote" and (winners is None or prize_cents is None):
             continue
         tiers.append(
             {
                 "category": category,
                 "winners": winners,
                 "unit_prize_cents": prize_cents,
-                "unit_prize_currency": "EUR",
+                "unit_prize_currency": "EUR" if prize_cents is not None else None,
+                "prize_status": prize_status,
+                "unit_prize_raw": prize_raw,
             }
         )
     return tiers
@@ -404,10 +413,13 @@ def fetch_draw(
         raw_content = response.content
         html = raw_content.decode(encoding, errors="replace")
         fetched_at = datetime.now(UTC).isoformat()
+        response_url = getattr(response, "url", None) or url
+        if urlparse(response_url).hostname != "www.loteriasyapuestas.es":
+            raise ValueError(f"Redirección a un dominio no oficial: {response_url}")
         parsed = parse_selae_draw(
             html,
             draw_date,
-            source_url=getattr(response, "url", None) or url,
+            source_url=response_url,
             source_retrieved_at_utc=fetched_at,
             raw_content=raw_content,
         )
@@ -443,10 +455,13 @@ def load_local_draw(draw_date: date, html_dir: str | Path) -> dict[str, object]:
     retrieved_at = metadata.get("source_retrieved_at_utc")
     if not retrieved_at:
         retrieved_at = datetime.fromtimestamp(html_path.stat().st_mtime, UTC).isoformat()
+    source_url = str(metadata.get("source_url") or make_draw_url(draw_date))
+    if urlparse(source_url).hostname != "www.loteriasyapuestas.es":
+        raise ValueError(f"El HTML local no tiene procedencia SELAE válida: {source_url}")
     return parse_selae_draw(
         html,
         draw_date,
-        source_url=str(metadata.get("source_url") or make_draw_url(draw_date)),
+        source_url=source_url,
         source_retrieved_at_utc=str(retrieved_at),
         raw_content=raw_content,
     )
@@ -471,6 +486,39 @@ def load_dates(values: Iterable[str], date_file: str | Path | None = None) -> li
     if len(parsed) != len(set(parsed)):
         raise ValueError("La lista contiene fechas de sorteo duplicadas")
     return sorted(parsed)
+
+
+def _validate_draw_record(draw: dict[str, object]) -> bool:
+    if draw.get("provider") != "SELAE" or draw.get("record_type") != "completed_quiniela_draw":
+        return False
+    try:
+        date.fromisoformat(str(draw["draw_date"]))
+    except (KeyError, ValueError):
+        return False
+    if urlparse(str(draw.get("source_url", ""))).hostname != "www.loteriasyapuestas.es":
+        return False
+    if re.fullmatch(r"[0-9a-f]{64}", str(draw.get("raw_sha256", "")).lower()) is None:
+        return False
+    fixtures = draw.get("fixtures")
+    if not isinstance(fixtures, list) or len(fixtures) != 14 or draw.get("fixture_count") != 14:
+        return False
+    for expected_position, fixture in enumerate(fixtures, start=1):
+        if not isinstance(fixture, dict) or fixture.get("position") != expected_position:
+            return False
+        home = fixture.get("home")
+        away = fixture.get("away")
+        if not isinstance(home, dict) or not home.get("name"):
+            return False
+        if not isinstance(away, dict) or not away.get("name"):
+            return False
+        home_goals = fixture.get("home_goals")
+        away_goals = fixture.get("away_goals")
+        if not isinstance(home_goals, int) or not isinstance(away_goals, int):
+            return False
+        expected_sign = "1" if home_goals > away_goals else "2" if home_goals < away_goals else "X"
+        if fixture.get("sign") != expected_sign:
+            return False
+    return True
 
 
 def write_draws(
@@ -523,13 +571,7 @@ def write_draws(
     if not ordered_draws:
         raise ValueError("El histórico final quedaría vacío")
 
-    integrity_passed = all(
-        int(draw.get("fixture_count", 0)) == 14
-        and len(draw.get("fixtures", [])) == 14
-        and all(fixture.get("sign") in {"1", "X", "2"} for fixture in draw.get("fixtures", []))
-        and len(str(draw.get("raw_sha256", ""))) == 64
-        for draw in ordered_draws
-    )
+    integrity_passed = all(_validate_draw_record(draw) for draw in ordered_draws)
     if not integrity_passed:
         raise ValueError("El perfil de integridad del histórico SELAE no ha superado las comprobaciones")
 
