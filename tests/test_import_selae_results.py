@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from datetime import date
 from pathlib import Path
@@ -10,6 +11,7 @@ import requests
 from scripts.import_selae_results import (
     fetch_draw,
     load_dates,
+    load_local_draw,
     make_draw_url,
     parse_selae_draw,
     write_draws,
@@ -33,11 +35,11 @@ SCORES = ["1-2", "1-1", "0-3", "0-2", "1-0", "0-0", "2-0", "1-2", "0-1", "1-2", 
 SIGNS = ["2", "X", "2", "2", "1", "X", "1", "2", "2", "2", "X", "X", "2", "1"]
 
 
-def make_html(*, signs: list[str] | None = None, scores: list[str] | None = None) -> str:
+def make_html(*, signs: list[str] | None = None, scores: list[str] | None = None, pleno_score: str = "1-2") -> str:
     signs = signs or SIGNS
     scores = scores or SCORES
     items = [str(i) for i in range(1, 15)] + HOMES + AWAYS + scores + signs
-    items += ["15", "At. Madrid (M)", "Barcelona (M)", "1-2", "1 - 2"]
+    items += ["15", "At. Madrid (M)", "Barcelona (M)", pleno_score, pleno_score]
     list_html = "".join(f"<li><span>{item}</span></li>" for item in items)
     prizes = [
         ("Pleno al 15", "1", "1.647.986,55 €"),
@@ -161,3 +163,61 @@ def test_write_draws_creates_jsonl_and_integrity_profile(tmp_path: Path) -> None
     assert profile["fixture_count"] == 14
     assert profile["integrity_passed"] is True
     assert profile["match_kickoff_dates_available"] is False
+
+
+def test_parse_selae_draw_accepts_non_numeric_pleno_marker() -> None:
+    draw = parse_selae_draw(make_html(pleno_score="M - M"), DRAW_DATE)
+    assert draw["pleno_al_15"]["score_raw"] == "M - M"
+    assert draw["pleno_al_15"]["home_goals"] is None
+    assert draw["pleno_al_15"]["away_goals"] is None
+    assert draw["pleno_al_15"]["score_complete"] is False
+
+
+def test_load_local_draw_uses_original_bytes_and_metadata(tmp_path: Path) -> None:
+    raw = make_html().encode("utf-8")
+    html_path = tmp_path / "2026-11-08.html"
+    html_path.write_bytes(raw)
+    html_path.with_suffix(".meta.json").write_text(
+        json.dumps({
+            "source_url": make_draw_url(DRAW_DATE),
+            "source_retrieved_at_utc": "2026-11-09T00:00:00+00:00",
+            "encoding": "utf-8",
+        }),
+        encoding="utf-8",
+    )
+
+    draw = load_local_draw(DRAW_DATE, tmp_path)
+    assert draw["raw_sha256"] == hashlib.sha256(raw).hexdigest()
+    assert draw["source_retrieved_at_utc"] == "2026-11-09T00:00:00+00:00"
+
+
+def test_write_draws_is_idempotent_and_requires_explicit_replacement(tmp_path: Path) -> None:
+    draw = parse_selae_draw(make_html(), DRAW_DATE)
+    output = tmp_path / "selae.jsonl"
+    write_draws([draw], output)
+    write_draws([draw], output)
+
+    lines = output.read_text(encoding="utf-8").splitlines()
+    profile = json.loads((tmp_path / "selae.profile.json").read_text(encoding="utf-8"))
+    assert len(lines) == 1
+    assert profile["draw_count"] == 1
+    assert profile["unchanged_draws_in_this_import"] == 1
+
+    corrected = dict(draw)
+    corrected["raw_sha256"] = "a" * 64
+    with pytest.raises(ValueError, match="otro SHA-256"):
+        write_draws([corrected], output)
+
+    write_draws([corrected], output, replace_existing=True)
+    final_record = json.loads(output.read_text(encoding="utf-8").splitlines()[0])
+    final_profile = json.loads((tmp_path / "selae.profile.json").read_text(encoding="utf-8"))
+    assert final_record["raw_sha256"] == "a" * 64
+    assert final_profile["replaced_draws_in_this_import"] == 1
+
+
+def test_write_draws_rejects_corrupt_existing_jsonl(tmp_path: Path) -> None:
+    output = tmp_path / "selae.jsonl"
+    output.write_text("{not-json}\\n", encoding="utf-8")
+    draw = parse_selae_draw(make_html(), DRAW_DATE)
+    with pytest.raises(ValueError, match="corrupto"):
+        write_draws([draw], output)
