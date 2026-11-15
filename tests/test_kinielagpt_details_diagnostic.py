@@ -126,7 +126,6 @@ def test_fixture_crosswalk_exposes_timezone_aware_kickoff_candidates_without_inf
     assert report["mapping"][0]["timezone_aware_candidate_fields"] == ["fechaHora"]
 
 
-
 def test_kickoff_attachment_summary_requires_verified_identity_and_temporal_order():
     valid = {
         "id": 1,
