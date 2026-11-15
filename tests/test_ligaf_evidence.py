@@ -12,7 +12,6 @@ from kini_engine.ligaf_evidence import (
 
 ROOT = Path(__file__).resolve().parents[1]
 EVIDENCE_PATH = ROOT / "data" / "ligaf_fixture_evidence.json"
-REGISTRY_PATH = ROOT / "kini_engine" / "data" / "ligaf_team_identity_registry.json"
 
 
 def _document() -> dict[str, object]:
