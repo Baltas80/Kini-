@@ -1,6 +1,6 @@
 # Ingesta de escrutinios oficiales de La Quiniela (SELAE)
 
-**Estado:** implementada en rama de trabajo; validación contra la página real de SELAE pendiente de completar.
+**Estado:** parser e importador implementados; pruebas deterministas en CI. La descarga directa desde GitHub-hosted runners está bloqueada por HTTP 403 y no se considera validada en ese entorno.
 
 ## Fuente y alcance
 
@@ -65,10 +65,31 @@ En consecuencia, este importador crea una fuente canónica de composición y res
 
 Pruebas deterministas: `pytest -q tests/test_import_selae_results.py`.
 
-Prueba de integración: workflow `selae-coupon-source-validation`, que consulta el sorteo 2026-11-08 y exige 14 partidos, signos válidos, procedencia del dominio oficial, SHA-256 y perfil de integridad correcto.
+Prueba de fuente real: el workflow `selae-coupon-source-validation` intenta importar el sorteo 2026-11-08, pero la infraestructura de GitHub Actions recibe HTTP 403 del dominio SELAE en la página de escrutinio, el HTML estático de resultados, el RSS, el índice de resultados y el PDF oficial de prensa. Ese paso es no bloqueante para que una restricción geográfica externa no oculte fallos del parser; **un 403 no equivale a validación de la fuente**. La descarga debe ejecutarse desde un entorno en España con acceso legítimo al sitio o se deben guardar las páginas HTML oficiales y procesarlas con `--html-dir`.
 
 La integración en el flujo de modelos queda pendiente de una fase separada de identidad de equipos/competiciones y fechas de inicio.
 
 ## Uso de marca y datos
 
 El proyecto conserva enlaces de procedencia y no incorpora logotipos ni elementos gráficos de SELAE. El uso de marcas, distintivos o materiales protegidos debe respetar el aviso legal y las condiciones de SELAE; la existencia de una página pública no equivale a una licencia general de reutilización.
+
+
+## Ejecución desde España o importación offline
+
+Si el acceso HTTP desde la máquina de trabajo está permitido, se puede ejecutar directamente:
+
+```powershell
+python scripts/import_selae_results.py --dates 2026-11-08 --refresh
+```
+
+Si el HTML se ha guardado manualmente desde la página oficial, nombrar los archivos por fecha ISO (`2026-11-08.html`) y ejecutar:
+
+```powershell
+python scripts/import_selae_results.py --dates 2026-11-08 --html-dir .\\data\\selae-html
+```
+
+El importador combina las nuevas fechas con el JSONL existente. Repetir la misma importación (mismo SHA-256) es idempotente. Si SELAE corrige una página ya importada y cambia su SHA-256, el proceso se detiene; solo se sustituye el registro después de revisar el cambio y pasar `--replace-existing`.
+
+## Fuentes secundarias evaluadas
+
+Se ha revisado una web independiente que publica fechas de partido, resultados y premios, y se han contrastado manualmente tres jornadas recientes con páginas/PDF oficiales de SELAE. No se incorpora como proveedor automatizado: su aviso legal declara que no es fuente oficial, no se ha identificado una licencia explícita de reutilización y su `robots.txt` excluye expresamente los agentes de IA. No se automatiza su extracción ni se usa para alimentar el modelo. La procedencia primaria del dataset de cupones seguirá siendo SELAE.
