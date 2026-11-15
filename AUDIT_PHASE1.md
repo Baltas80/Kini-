@@ -1466,7 +1466,7 @@ Prequential calibration used only prior out-of-sample forecasts and excluded sam
 
 ### Current validation and continuity
 
-- Historical-data validation [43763639957](https://github.com/Baltas80/Kini-/actions/runs/43763639957) passed on the current branch lineage.
+- Historical-data validation [43763639957](https://github.com/Baltas80/Kini-/actions/runs/43763639957) passed, and the latest validation on documentation head `db10e32` [43764336134](https://github.com/Baltas80/Kini-/actions/runs/43764336134) also passed dataset construction, canonical team identity checks, and generated-profile validation.
 - The CI run for the current head is still in progress; earlier attempts exposed only Ruff formatting issues in the new inspector, which have been corrected in commit e3b1a50. Do not mark CI green until the current run completes.
 - A separate full walk-forward [43763046836](https://github.com/Baltas80/Kini-/actions/runs/43763046836), triggered by the development-only xlrd dependency change, is still in the historical-comparison step. It is not a new result until its model acceptance steps pass.
 - PR #9 remains open as a draft against feat/canonical-team-identity-registry. No PR was merged and master was not modified.
