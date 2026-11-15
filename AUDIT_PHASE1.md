@@ -508,3 +508,26 @@ The first CI attempts exposed test-fixture construction mistakes and Ruff import
 The incidental model backtest triggered before the workflow path exclusions were committed completed successfully in [run 43698454758](https://github.com/Baltas80/Kini-/actions/runs/43698454758). It used no changed model code or model inputs; it does not constitute a new model-performance result.
 
 PR #9 is a draft targeting PR #8's identity branch. PR #7's SELAE importer remains a separate draft dependency and is not copied into this branch. The next data task is to source and validate Liga F historical identities and results for the three remaining women's fixtures, without borrowing men's identities or fabricating competition mappings. No full-coupon training-label export or model training join has been enabled; no PR has been merged and `master` remains untouched.
+
+
+## Liga F official fixture evidence — 2026-11-15
+
+A source-specific evidence layer has been added for the three played women's fixtures in the 8 November 2026 Quiniela coupon. This does **not** extend the Football-Data training dataset or alter forecasts.
+
+- Separate registry: `kini_engine/data/ligaf_team_identity_registry.json`; six internal IDs, with exact provider-scoped aliases for Liga F and SELAE and gender fixed to `women`, competition `LIGA_F`, season `2026-27`.
+- Evidence manifest: `data/ligaf_fixture_evidence.json`.
+- Validator: `kini_engine/ligaf_evidence.py`.
+- Regression suite: `tests/test_ligaf_evidence.py`.
+- Position 11: Athletic Club–Real Madrid CF, 2026-11-07 16:00 +01:00, 1-1, Liga F match ID `202723868`.
+- Position 12: Logroño United–Sevilla FC, 2026-11-08 12:00 +01:00, 2-2, match ID `202723864`.
+- Position 13: SD Eibar–Real Sociedad, 2026-11-07 17:00 +01:00, 1-2, match ID `202723866`.
+- All three match pages and all six team profile URLs are on the official `ligaf.es` domain. The validator checks source host, unique match IDs, unique coupon positions, timezone-aware kickoffs, UTC evidence timestamps, score/sign consistency, and both Liga F and SELAE aliases against the separate registry.
+- The loader hard-codes the safe downstream contract: every returned record has `training_label_eligible=false` until a validated multi-season Liga F historical dataset and temporal training boundary exist.
+- The Football-Data crosswalk remains ten men's fixtures. No Liga F record is silently inserted into `historical_spain.csv`; the public-draw Tenerife–Alavés fixture remains excluded.
+
+Official match pages:
+- https://ligaf.es/partido/athletic-club-femenino/real-madrid-cf-femenino/202723868/detalle
+- https://ligaf.es/partido/logrono/sevilla-fc-femenino/202723864/detalle
+- https://ligaf.es/partido/eibar-femenino/real-sociedad-futbol-femenino/202723866/detalle
+
+Validation status at this log update: GitHub Actions is expected to run because the new code, data and tests are included in the CI path filters. Do not treat the evidence layer as validated until the corresponding run passes. No model code, training data or forecast probabilities are changed.
