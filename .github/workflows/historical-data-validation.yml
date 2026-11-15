@@ -9,6 +9,7 @@ on:
       - "kini_engine/data/**"
       - "scripts/validate_team_identity_registry.py"
       - "data/**"
+      - "!data/selae_fixture_crosswalk.json"
       - "pyproject.toml"
       - "requirements*.txt"
   pull_request:
@@ -19,6 +20,7 @@ on:
       - "kini_engine/data/**"
       - "scripts/validate_team_identity_registry.py"
       - "data/**"
+      - "!data/selae_fixture_crosswalk.json"
       - "pyproject.toml"
       - "requirements*.txt"
   workflow_dispatch:

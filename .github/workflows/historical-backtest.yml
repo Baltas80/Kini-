@@ -7,10 +7,12 @@ on:
     paths:
       - "kini_engine/**"
       - "!kini_engine/team_identity.py"
+      - "!kini_engine/fixture_reconciliation.py"
       - "!kini_engine/data/**"
       - "scripts/build_history.py"
       - "scripts/diagnose_ml.py"
       - "data/**"
+      - "!data/selae_fixture_crosswalk.json"
       - "pyproject.toml"
       - "requirements*.txt"
   workflow_dispatch:

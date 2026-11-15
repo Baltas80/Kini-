@@ -33,4 +33,10 @@ jobs:
         with:
           python-version: "3.12"
       - run: python -m pip install -e ".[dev]"
+      - name: Lint SELAE reconciliation changes
+        run: >-
+          ruff check
+          kini_engine/fixture_reconciliation.py
+          scripts/reconcile_selae_fixtures.py
+          tests/test_fixture_reconciliation.py
       - run: pytest -q

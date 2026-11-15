@@ -45,3 +45,12 @@ Tests:
 ## Integration boundary
 
 This registry is an identity layer only. It is not yet wired into model fitting or historical training features. The next data-integration step is to establish independently verified source aliases, kickoff dates, competition IDs and season context for each SELAE fixture. Only resolved fixtures may be joined to training data; unresolved records must remain visible and excluded from model fitting.
+
+
+## SELAE cross-provider reconciliation
+
+The canonical registry deliberately contains no inferred SELAE aliases. A separate fixture-level crosswalk is required because an escrutinio draw date is not a kickoff date, and coupon display labels/category markers do not establish competition or team identity.
+
+The reconciliation contract and CLI are documented in [SELAE_RECONCILIATION.md](SELAE_RECONCILIATION.md). Every played coupon fixture must match an exact SELAE display-name pair and resolve both Football-Data labels under an explicit competition, season and gender. The crosswalk must also contain a timezone-aware kickoff timestamp and independent HTTPS schedule evidence. Unknown, ambiguous, out-of-scope or mismatched records are excluded and reported; no fuzzy matching is used.
+
+The current crosswalk contains ten independently verified mappings from the 8 November 2026 coupon (positions 1–10), each supported by an official club schedule page and an exact SP1/2627 or SP2/2627 Football-Data row. Only the three women's fixtures remain unresolved; the postponed public-draw fixture is excluded. No full-coupon training-label export is permitted while any played fixture remains unresolved. Even after reconciliation, goals and 1/X/2 are target labels only, and downstream features must be computed strictly before kickoff.

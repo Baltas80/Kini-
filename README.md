@@ -40,7 +40,17 @@ El registro de identidades por proveedor está en `kini_engine/data/team_identit
 
     python -m scripts.validate_team_identity_registry --csv data/historical_spain.csv
 
-Los alias SELAE y las competiciones ajenas a SP1/SP2 siguen pendientes de verificación independiente. Véase `docs/TEAM_IDENTITY.md`.
+Los alias SELAE y las competiciones ajenas a SP1/SP2 siguen pendientes de verificación independiente. La reconciliación de cupones exige un crosswalk por partido con nombres exactos, competición, temporada, kickoff con zona horaria y evidencia independiente:
+
+```bash
+python -m scripts.reconcile_selae_fixtures \
+  --draws data/selae_quiniela_draws.jsonl \
+  --crosswalk data/selae_fixture_crosswalk.json \
+  --historical data/historical_spain.csv \
+  --output data/selae_fixture_reconciliation.json
+```
+
+El manifiesto `data/selae_fixture_crosswalk.json` contiene diez asociaciones verificadas con horarios oficiales y coincidencia exacta en Football-Data. En el cupón del 8 de noviembre quedan pendientes los tres partidos femeninos de Liga F. Para ejecutar la reconciliación, primero genera `data/historical_spain.csv` con `python scripts/build_history.py` y pasa `--historical data/historical_spain.csv`. Los partidos no disputados con signo por sorteo público se excluyen de las etiquetas futbolísticas; los encuentros aún no reconciliados bloquean la exportación de etiquetas. Véanse `docs/TEAM_IDENTITY.md` y `docs/SELAE_RECONCILIATION.md`.
 
 ## Licencia y procedencia
 
