@@ -181,7 +181,6 @@ def test_details_rejects_unknown_or_malformed_provider_schema(payload, error):
         source.details(12, 2026)
 
 
-
 def _kickoff_crosswalk_payload(*, checked_at: str = "2026-11-15T19:00:00Z") -> dict:
     return {
         "schema_version": 1,
