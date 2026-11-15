@@ -104,7 +104,6 @@ def test_fixture_order_crosswalk_rejects_ambiguous_duplicate_name_pairs():
     assert "home_away_name_pair_not_unique_or_unmatched" in report["reasons"]
 
 
-
 def test_fixture_crosswalk_exposes_timezone_aware_kickoff_candidates_without_inference():
     details = [
         {
