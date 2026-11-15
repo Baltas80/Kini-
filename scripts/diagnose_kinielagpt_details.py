@@ -341,9 +341,7 @@ def _valid_three_way_vector(value: Any) -> bool:
     return math.isclose(sum(probabilities), 1.0, rel_tol=0.0, abs_tol=1e-6)
 
 
-def summarize_kickoff_attachment(
-    rows: Any, lae_source: str
-) -> dict[str, Any]:
+def summarize_kickoff_attachment(rows: Any, lae_source: str) -> dict[str, Any]:
     """Summarize only fixture identity, timestamp ordering and LAE vector validity."""
     records = rows if isinstance(rows, list) else []
     fixtures = []
