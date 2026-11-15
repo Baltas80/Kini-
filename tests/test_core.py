@@ -407,6 +407,14 @@ def test_quiniela_returns_16_pleno15_categories():
     assert len(result["pleno_al_15"]) == 16
     assert sum(row["probability"] for row in result["pleno_al_15"]) == pytest.approx(1.0)
     assert result["pleno_al_15_best"] == result["pleno_al_15"][0]
+    assert result["full_coupon_coverage_assumption"] == (
+        "independent_all_14_matches_and_pleno15"
+    )
+    assert result["estimated_full_coupon_coverage_independent"] == pytest.approx(
+        result["ticket"]["joint_coverage"]
+        * result["pleno_al_15_best"]["probability"]
+    )
+    assert 0.0 <= result["estimated_full_coupon_coverage_independent"] <= 1.0
 
 
 def test_optimizer_matches_exhaustive_search_for_small_budget():
