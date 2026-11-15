@@ -308,3 +308,58 @@ A single `Match.has_temporally_eligible_market` predicate now gates market use i
 Validation on commit `de49624a97567237ba789a3d39dc2f2eab543aca`: CI **54 passed, 4 dependency deprecation warnings** ([run 43666547677](https://github.com/Baltas80/Kini-/actions/runs/43666547677)); historical data validation **5,311 completed fixtures, integrity_passed=true, zero duplicates** ([run 43666547684](https://github.com/Baltas80/Kini-/actions/runs/43666547684)). The full walk-forward backtest is still running ([run 43666544162](https://github.com/Baltas80/Kini-/actions/runs/43666544162)); its strict market sample and new metrics are intentionally not reported until the workflow completes.
 
 This conservative rule removes the prior assumption that a kickoff time without timezone can be compared directly with the provider's BST cutoff. Exact per-fixture odds-capture timestamps are still unavailable, so the market benchmark remains schedule-screened rather than timestamp-verified.
+
+## Latest strict-market backtest — run 43666544162 (2026-11-15)
+
+The full workflow completed successfully on commit `de49624a97567237ba789a3d39dc2f2eab543aca`. The job log contains all three acceptance markers: `BACKTEST_ACCEPTANCE_OK`, `MARKET_TEMPORAL_ACCEPTANCE_OK` and `PREQUENTIAL_CALIBRATION_OK`. The downloadable artifact is `historical-backtest/backtest-results.json` (SHA-256 `7d0fe5d9baa63d07a4201e87c9fa35c369d58aff57b55d2b4a7eac42c03722ed`).
+
+- Historical dataset: 5,311 completed fixtures; initial training: 300.
+- Walk-forward test: 5,011 fixtures, 2020-12-11 through 2026-11-09; refit every 30 forecast dates.
+- Dixon-Coles, ML, main ensemble, fixed DC/ML-only blend and adaptive DC/ML-only blend: **5,011/5,011 predictions each; zero prediction errors**.
+- Market odds present: 5,011; schedule-eligible: **4,424**; ambiguous/excluded: **587** (all Friday/Tuesday fixtures with odds, because kickoff timezone/capture timestamp is not documented).
+- Strict market acceptance: all five model configurations and the market are compared on exactly the same 4,424 fixtures. This is a schedule-screened benchmark, not timestamp-verified or an executable-price benchmark.
+
+### Common 4,424-fixture comparison
+
+| Model | Accuracy | Multiclass Brier | Log Loss | RPS | ECE |
+|---|---:|---:|---:|---:|---:|
+| Dixon-Coles | 0.4806 | 0.6164 | 1.0275 | 0.2080 | 0.0163 |
+| ML | 0.4383 | 0.6469 | 1.0733 | 0.2204 | 0.0487 |
+| Ensemble DC/ML/LAE/eligible market | 0.4815 | 0.6135 | 1.0229 | 0.2068 | 0.0148 |
+| Fixed DC/ML-only | 0.4758 | 0.6160 | 1.0267 | 0.2079 | 0.0127 |
+| Adaptive DC/ML-only | 0.4758 | 0.6162 | 1.0270 | 0.2080 | 0.0128 |
+| Multi-book pre-closing market | **0.5072** | **0.5975** | **0.9994** | **0.1999** | 0.0242 |
+
+The market wins on accuracy, multiclass Brier, Log Loss and RPS on the identical 4,424-fixture sample. The main ensemble is the best model-only-or-assisted configuration by Brier/Log Loss, but remains materially behind the market. The model-only blends do not improve on Dixon-Coles in this strict sample. Lower ECE for a model is not enough to outweigh worse proper scoring rules.
+
+### Prequential calibration — exact 3,847-fixture model/market intersection
+
+The post-warm-up model/market comparison contains 3,847 identical fixtures. Raw and calibrated forecasts are compared on those same fixtures:
+
+| Configuration | Raw Brier | Calibrated Brier | Raw Log Loss | Calibrated Log Loss |
+|---|---:|---:|---:|---:|
+| Dixon-Coles | 0.613791 | 0.613232 | 1.023639 | 1.022458 |
+| ML | 0.638003 | 0.632559 | 1.059609 | 1.050517 |
+| Main ensemble | 0.611197 | 0.611412 | 1.019558 | 1.019795 |
+| Fixed DC/ML-only | 0.613386 | 0.613535 | 1.022816 | 1.022945 |
+| Adaptive DC/ML-only | 0.613531 | 0.613585 | 1.023040 | 1.022991 |
+| Market | 0.597564 | 0.596714 | 0.999533 | 0.998094 |
+
+There are 33 model-calibrator refits (4,480 post-warm-up forecasts per model); the market has 32 refits and its exact common intersection is 3,847 fixtures. Calibration improves standalone DC and ML aggregate scores on this intersection, but worsens the main ensemble and fixed blend. It is therefore **not promoted** as the production default. The market remains better than every model configuration on both proper scoring rules.
+
+### Validation status and decision
+
+- CI: **54 tests passed**, four third-party deprecation warnings — [run 43666547677](https://github.com/Baltas80/Kini-/actions/runs/43666547677).
+- Historical data: **5,311 fixtures**, zero duplicates/incomplete scores and `integrity_passed=true` — [run 43666547684](https://github.com/Baltas80/Kini-/actions/runs/43666547684).
+- Full walk-forward: [run 43666544162](https://github.com/Baltas80/Kini-/actions/runs/43666544162), all acceptance markers passed.
+- Artifact: [historical-backtest](https://github.com/Baltas80/Kini-/actions/runs/43666544162).
+
+**Decision:** keep raw main-ensemble probabilities as the default; do not promote calibration, adaptive DC/ML weighting or a claim of market outperformance. Keep the market benchmark labelled schedule-screened pre-closing. No profitability claim is supported.
+
+### P0/P5 status after run 43666544162
+
+P0 is validated for non-empty, correctly keyed walk-forward forecasts across all five configurations, with zero prediction errors and reproducible machine-readable output. P5 is validated as a fair same-fixture comparison under the conservative schedule screen; it establishes that the current model configurations do not beat the available market benchmark. Exact bookmaker capture timestamps remain unavailable.
+
+### Next priority — P6 ticket validation
+
+The current optimizer maximizes product coverage of selected 1/X/2 marginal masses subject to a maximum column budget, using an exact dynamic programme under an explicit independent-match approximation. Existing tests compare the DP with exhaustive search for a small budget and validate the 14-match/Pleno al 15 split. Remaining work is not to imply correlation-aware or economic optimization without data: obtain historical official Quiniela coupon composition and prize/pool data, then test cross-match dependence and full SELAE system/reduced-bet constraints. Until those inputs exist, the optimizer must remain labelled as independent-match coverage only, not expected payout or profitability.
