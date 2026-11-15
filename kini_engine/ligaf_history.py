@@ -310,7 +310,7 @@ def _parse_match_title(title: str) -> tuple[str, str]:
     cleaned = re.sub(r"\s+", " ", title).strip()
     match = re.search(
         r"^(?P<home>.+?)\s+vs\.?\s+(?P<away>.+?)\s+-\s+"
-        r"(?:Liga F|Primera Iberdrola|Primera División Femenina)"
+        r"(?:Liga F(?:\s+Moeve)?|Primera Iberdrola|Primera División Femenina)"
         r"(?:\s+20\d{2})?(?:\s*\||$)",
         cleaned,
         flags=re.IGNORECASE,
