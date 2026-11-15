@@ -523,3 +523,17 @@ The market eligibility audit classified 4,424/5,011 matches as schedule-compatib
 - Feature branch: `feat/selae-official-coupon-ingestion`, based on `audit/phase-1-temporal-validation`.
 - `master` is untouched. No PR has been merged.
 - Next: verify the final deterministic CI; then prepare a dependent draft PR against the audit branch. After the importer is run from Spain, reconcile coupon fixtures with canonical team IDs, competitions and actual kickoff dates. Until that join is complete, the coupon data must not enter model training or full-coupon backtests.
+
+
+## SELAE: exclusión de marcadores asignados por sorteo público — 2026-11-15
+
+La revisión de la jornada 2026-11-08 detectó un riesgo de integridad en el importador: el escrutinio muestra `Tenerife (F) – Alavés (F)` en la posición 14 con una representación `1-0`, pero el aviso oficial de SELAE indica que el encuentro fue aplazado y que, si no se disputaba dentro de las 24 horas siguientes, el signo se determinaría mediante sorteo público a las 22:00 del 8 de noviembre bajo las normas 38.ª y 39.ª. La nota de prensa oficial confirma que el signo obtenido fue `1`. Ese `1-0` no debe convertirse en goles reales ni utilizarse como etiqueta futbolística.
+
+Se ha añadido `data/selae_fixture_overrides.json` y el importador aplica sus excepciones solo si coinciden la fecha del sorteo, posición, signo y marcador mostrado. El fixture conserva `reported_score_raw=1-0`, pero `score_raw`, `home_goals` y `away_goals` quedan en `null`; `score_status=not_played` y `sign_determination=public_draw`. El signo `1` se mantiene exclusivamente para evaluar el cupón. La validación del JSONL rechaza un partido no disputado que vuelva a incluir goles numéricos.
+
+Fuentes oficiales:
+- Aviso de aplazamiento: https://www.loteriasyapuestas.es/f/loterias/web_corporativa/Comunicacion/Avisos_de_interes/APLAZAMIENTO%20JORNADA%2020%20DE%20LA%20QUINIELA%207_8%20NOVIEMBRE%202026%20%28002%29.pdf
+- Resultado del 08-11-2026: https://www.loteriasyapuestas.es/es/la-quiniela/resultados/la-quiniela-resultados-del-08-de-noviembre-de-2026
+- Nota de prensa: https://www.loteriasyapuestas.es/f/loterias/documentos/Quiniela/Notas%20de%20prensa/NOTA_DE_PRENSA_LA_QUINIELA_08_11_26.pdf
+
+La suite de regresión incorpora comprobaciones de coincidencia exacta de la excepción, dominio oficial, conservación del signo de cupón, goles nulos y recuentos separados de partidos aptos para resultados futbolísticos. La ingesta de escrutinios sigue sin proporcionar fechas reales de inicio ni competición por sí sola; esta corrección no habilita aún el entrenamiento con el histórico SELAE.
