@@ -256,3 +256,20 @@ The result validates the prequential implementation and the experiment, not a un
 ## CI efficiency
 
 The historical-backtest workflow now runs on pushes that change `kini_engine/**`, `scripts/**`, `data/**`, `pyproject.toml` or `requirements*.txt`. Documentation-only and workflow-only commits no longer trigger the expensive full walk-forward benchmark. Manual dispatch and the weekly schedule remain available.
+
+## Reproducibility and team-label audit — 2026-11-15
+
+### Exact backtest reproducibility
+
+A second full execution, [run 43657293261](https://github.com/Baltas80/Kini-/actions/runs/43657293261), completed successfully on a documentation-only commit with the same model code and source data. It reproduced **exactly** every aggregate metric for Dixon-Coles, ML, all three ensembles and the B365 pre-closing benchmark, as well as every prequential-calibration summary (4,480-row samples, 33 fits, 1,500-row final fit, 2026-10-26 fit date). All numerical deltas between the two artifacts were zero. This demonstrates deterministic reproducibility for the pinned code/data run; it is not an independent holdout.
+
+### Football-Data team labels
+
+A direct audit of the 5,311-row artifact found:
+- 7 LaLiga seasons with exactly 20 distinct team labels each.
+- 7 Segunda seasons with exactly 22 distinct team labels each.
+- 31 distinct LaLiga labels and 44 distinct Segunda labels across the full period.
+- No collisions under the same NFKC + whitespace normalization + case-folding used by `_team_key`.
+- No obvious alias variants within this Football-Data sample. Reserve teams such as `Sociedad B`, `Celta B` and `Villarreal B` remain distinct labels.
+
+This closes the immediate alias-variant check for the current source sample, but not canonical identity management across external providers or future renamed clubs. A persistent team-ID registry remains pending before adding other data sources.
