@@ -1,5 +1,9 @@
 name: historical-backtest
 
+permissions:
+  actions: read
+  contents: read
+
 on:
   # Run after a model/data change is pushed to master. Feature branches are
   # validated by the PR event below, avoiding duplicate push + PR backtests.
@@ -48,21 +52,30 @@ jobs:
       - id: filter
         shell: bash
         env:
-          PR_ACTION: ${{ github.event.action || '' }}
+          GH_TOKEN: ${{ github.token }}
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha || '' }}
+          PR_BRANCH: ${{ github.head_ref || '' }}
         run: |
           if [[ "$GITHUB_EVENT_NAME" != "pull_request" ]]; then
             echo "run_backtest=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
-          if [[ "$PR_ACTION" == "opened" || "$PR_ACTION" == "reopened" ]]; then
+          # Compare with the latest successful backtest for this PR branch,
+          # not merely the latest commit. Documentation-only commits arriving
+          # while a run is queued therefore cannot hide an unvalidated code change.
+          last_success="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/historical-backtest.yml/runs?branch=$PR_BRANCH&event=pull_request&status=success&per_page=100" --jq '.workflow_runs[0].head_sha // empty' 2>/dev/null || true)"
+
+          if [[ -n "$last_success" ]] && git fetch --no-tags --depth=1 origin "$last_success"; then
+            if git merge-base --is-ancestor "$last_success" HEAD; then
+              changed_files="$(git diff --name-only "$last_success" HEAD)"
+            else
+              git fetch --no-tags --depth=1 origin "$PR_BASE_SHA"
+              changed_files="$(git diff --name-only "$PR_BASE_SHA" HEAD)"
+            fi
+          else
             git fetch --no-tags --depth=1 origin "$PR_BASE_SHA"
             changed_files="$(git diff --name-only "$PR_BASE_SHA" HEAD)"
-          elif git rev-parse HEAD^ >/dev/null 2>&1; then
-            changed_files="$(git diff --name-only HEAD^ HEAD)"
-          else
-            changed_files="$(git diff-tree --no-commit-id --name-only -r HEAD)"
           fi
 
           run_backtest=false
