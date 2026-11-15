@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "provider": "SELAE",
+  "overrides": [
+    {
+      "draw_date": "2026-11-08",
+      "position": 14,
+      "status": "not_played",
+      "determination": "public_draw",
+      "sign": "1",
+      "reported_score_raw": "1-0",
+      "evidence_url": "https://www.loteriasyapuestas.es/f/loterias/web_corporativa/Comunicacion/Avisos_de_interes/APLAZAMIENTO%20JORNADA%2020%20DE%20LA%20QUINIELA%207_8%20NOVIEMBRE%202026%20%28002%29.pdf",
+      "evidence_checked_at_utc": "2026-11-15T07:14:47Z",
+      "reason": "SELAE states that fixture 14 was postponed; if it could not be played within 24 hours, its coupon sign would be determined by public draw at 22:00 on 2026-11-08 under rules 38 and 39."
+    }
+  ]
+}
