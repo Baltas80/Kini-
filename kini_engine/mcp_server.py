@@ -89,6 +89,13 @@ def create_server(engine: KiniEngine | None = None):
                 "lae_source": row.get("lae_source"),
                 "lae_captured_at": row.get("lae_captured_at"),
                 "kickoff_at": row.get("kickoff_at"),
+                "kickoff_source": row.get("kickoff_source"),
+                "kickoff_evidence_url": row.get("kickoff_evidence_url"),
+                "kickoff_evidence_checked_at_utc": row.get(
+                    "kickoff_evidence_checked_at_utc"
+                ),
+                "kickoff_timezone": row.get("kickoff_timezone"),
+                "fixture_identity_status": row.get("fixture_identity_status"),
             }
             current = Match(
                 row.get("kickoff_at") or "",
