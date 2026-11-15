@@ -140,12 +140,12 @@ def _team_fields(value: str) -> dict[str, str | None]:
     return {"name": display_name, "category_marker": None, "display_name": display_name}
 
 
-def _find_fixture_groups(items: list[str]) -> tuple[list[str], list[str], list[str], list[str]]:
+def _find_fixture_groups(items: list[str]) -> tuple[list[str], list[str], list[str], list[str], int]:
     positions = [i for i in range(max(0, len(items) - 13)) if _is_position_block(items, i)]
     if len(positions) != 1:
         raise ValueError(f"Se esperaba un único bloque de posiciones 1..14; encontrados {len(positions)}")
     tail_start = positions[0] + 14
-    candidates: list[tuple[list[str], list[str], list[str], list[str]]] = []
+    candidates: list[tuple[list[str], list[str], list[str], list[str], int]] = []
     for start in range(tail_start, max(tail_start, len(items) - 55)):
         block = items[start : start + 56]
         if len(block) != 56:
@@ -156,7 +156,7 @@ def _find_fixture_groups(items: list[str]) -> tuple[list[str], list[str], list[s
             and all(_is_score(value) for value in scores)
             and all(_is_sign(value) for value in signs)
         ):
-            candidates.append((home, away, scores, [value.upper() for value in signs]))
+            candidates.append((home, away, scores, [value.upper() for value in signs], start + 56))
     if len(candidates) != 1:
         raise ValueError(f"No se pudo aislar un único bloque completo de 14 partidos; candidatos={len(candidates)}")
     return candidates[0]
@@ -248,6 +248,7 @@ def parse_selae_draw(
     *,
     source_url: str | None = None,
     source_retrieved_at_utc: str | None = None,
+    raw_content: bytes | None = None,
 ) -> dict[str, object]:
     """Parse one completed SELAE escrutinio page and fail closed on structural drift."""
     parser = CouponPageParser()
@@ -258,7 +259,7 @@ def parse_selae_draw(
     if "la quiniela" not in text.casefold() or date_phrase.casefold() not in text.casefold():
         raise ValueError(f"La página no confirma La Quiniela y la fecha esperada {date_phrase!r}")
 
-    home, away, scores, signs = _find_fixture_groups(parser.list_items)
+    home, away, scores, signs, sign_end_index = _find_fixture_groups(parser.list_items)
     fixtures: list[dict[str, object]] = []
     for position, (home_raw, away_raw, score_raw, sign) in enumerate(
         zip(home, away, scores, signs, strict=True), start=1
@@ -285,13 +286,13 @@ def parse_selae_draw(
             }
         )
 
-    pleno = _parse_pleno(parser.list_items, parser.list_items.index(signs[-1]) + 1 if signs[-1] in parser.list_items else 0)
+    pleno = _parse_pleno(parser.list_items, sign_end_index)
     prize_tiers = _parse_prize_tiers(parser.table_rows)
     if len(prize_tiers) < 5:
         raise ValueError(f"Desglose de premios incompleto: se esperaban al menos 5 categorías, hay {len(prize_tiers)}")
 
     now = datetime.now(timezone.utc).isoformat()
-    raw_bytes = html.encode("utf-8")
+    raw_bytes = raw_content if raw_content is not None else html.encode("utf-8")
     return {
         "schema_version": 1,
         "provider": "SELAE",
@@ -377,7 +378,8 @@ def fetch_draw(
 
     if cache_path.is_file():
         try:
-            cached_html = cache_path.read_text(encoding="utf-8")
+            cached_bytes = cache_path.read_bytes()
+            cached_html = cached_bytes.decode("utf-8", errors="replace")
             metadata = json.loads(metadata_path.read_text(encoding="utf-8")) if metadata_path.is_file() else {}
             cached_retrieved_at = metadata.get("source_retrieved_at_utc")
             cached_draw = parse_selae_draw(
@@ -385,6 +387,7 @@ def fetch_draw(
                 draw_date,
                 source_url=url,
                 source_retrieved_at_utc=cached_retrieved_at,
+                raw_content=cached_bytes,
             )
             age_hours = max(0.0, time.time() - cache_path.stat().st_mtime) / 3600
             if not refresh and age_hours <= cache_ttl_hours:
@@ -399,18 +402,20 @@ def fetch_draw(
         response = client.get(url, timeout=(5, 30))
         response.raise_for_status()
         encoding = getattr(response, "encoding", None) or "utf-8"
-        html = response.content.decode(encoding, errors="replace")
+        raw_content = response.content
+        html = raw_content.decode(encoding, errors="replace")
         fetched_at = datetime.now(timezone.utc).isoformat()
         parsed = parse_selae_draw(
             html,
             draw_date,
             source_url=getattr(response, "url", None) or url,
             source_retrieved_at_utc=fetched_at,
+            raw_content=raw_content,
         )
-        _atomic_write(cache_path, html.encode("utf-8"))
+        _atomic_write(cache_path, raw_content)
         _atomic_write(
             metadata_path,
-            (json.dumps({"source_url": url, "source_retrieved_at_utc": fetched_at, "raw_sha256": parsed["raw_sha256"]}, ensure_ascii=False) + "\\n").encode("utf-8"),
+            (json.dumps({"source_url": url, "source_retrieved_at_utc": fetched_at, "raw_sha256": parsed["raw_sha256"]}, ensure_ascii=False) + "\n").encode("utf-8"),
         )
         return parsed
     except (requests.RequestException, ValueError, UnicodeError) as exc:
@@ -450,7 +455,7 @@ def write_draws(draws: list[dict[str, object]], output: str | Path) -> None:
         raise ValueError("Hay fechas de sorteo duplicadas")
     lines = [json.dumps(draw, ensure_ascii=False, sort_keys=True) for draw in sorted(draws, key=lambda item: str(item["draw_date"]))]
     target = Path(output)
-    _atomic_write(target, ("\\n".join(lines) + "\\n").encode("utf-8"))
+    _atomic_write(target, ("\n".join(lines) + "\n").encode("utf-8"))
     profile = {
         "profile_generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "provider": "SELAE",
@@ -470,7 +475,7 @@ def write_draws(draws: list[dict[str, object]], output: str | Path) -> None:
     }
     _atomic_write(
         target.with_name(f"{target.stem}.profile.json"),
-        (json.dumps(profile, indent=2, ensure_ascii=False) + "\\n").encode("utf-8"),
+        (json.dumps(profile, indent=2, ensure_ascii=False) + "\n").encode("utf-8"),
     )
     if not profile["integrity_passed"]:
         raise ValueError("El perfil de integridad del histórico SELAE no ha superado las comprobaciones")
