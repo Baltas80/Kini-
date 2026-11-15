@@ -122,6 +122,121 @@ def test_dc_forecast_does_not_train_optional_ml_model():
 
 
 
+def test_ensemble_ignores_lae_without_capture_provenance():
+    engine = KiniEngine()
+    engine.dc.predict = lambda home, away: (
+        {"1": 0.80, "X": 0.10, "2": 0.10},
+        [],
+    )
+    unverified = Match(
+        datetime(2025, 4, 1),
+        "A",
+        "B",
+        lae={"1": 0.05, "X": 0.05, "2": 0.90},
+    )
+    without_lae = Match(datetime(2025, 4, 1), "A", "B")
+
+    prediction = engine.predict(unverified, mode="ensemble")
+    baseline = engine.predict(without_lae, mode="ensemble")
+
+    assert prediction.probabilities == pytest.approx(baseline.probabilities)
+    assert prediction.surprise is None
+    assert unverified.has_temporally_eligible_lae is False
+
+
+def test_lae_mode_and_ensemble_accept_timezone_verified_pre_match_input():
+    engine = KiniEngine()
+    engine.dc.predict = lambda home, away: (
+        {"1": 0.80, "X": 0.10, "2": 0.10},
+        [],
+    )
+    lae = {"1": 0.05, "X": 0.05, "2": 0.90}
+    fixture = Match(
+        datetime(2025, 4, 1),
+        "A",
+        "B",
+        lae=lae,
+        detail={
+            "lae_source": "SELAE",
+            "lae_captured_at": "2025-04-01T09:00:00+02:00",
+            "kickoff_at": "2025-04-01T09:00:00+01:00",
+        },
+    )
+
+    assert fixture.has_temporally_eligible_lae is True
+    direct = engine.predict(fixture, mode="lae")
+    ensemble = engine.predict(fixture, mode="ensemble")
+
+    assert direct.probabilities == pytest.approx(lae)
+    assert ensemble.probabilities != pytest.approx(
+        engine.predict(Match(datetime(2025, 4, 1), "A", "B")).probabilities
+    )
+    assert ensemble.surprise is not None
+    assert ensemble.surprise["reference"] == "LAE"
+
+
+@pytest.mark.parametrize(
+    "detail",
+    [
+        {
+            "lae_captured_at": "2025-04-01T09:00:00+02:00",
+            "kickoff_at": "2025-04-01T20:00:00+02:00",
+        },
+        {
+            "lae_source": "SELAE",
+            "lae_captured_at": "2025-04-01T09:00:00",
+            "kickoff_at": "2025-04-01T20:00:00+02:00",
+        },
+        {
+            "lae_source": "SELAE",
+            "lae_captured_at": "2025-04-01T21:00:00+02:00",
+            "kickoff_at": "2025-04-01T20:00:00+02:00",
+        },
+        {
+            "lae_source": "SELAE",
+            "lae_captured_at": "2025-04-01T20:00:00+02:00",
+            "kickoff_at": "2025-04-01T20:00:00+02:00",
+        },
+    ],
+)
+def test_lae_requires_source_and_timezone_aware_capture_before_kickoff(detail):
+    fixture = Match(
+        datetime(2025, 4, 1),
+        "A",
+        "B",
+        lae={"1": 0.4, "X": 0.3, "2": 0.3},
+        detail=detail,
+    )
+    assert fixture.has_temporally_eligible_lae is False
+
+
+def test_lae_rejects_invalid_probability_contract():
+    fixture = Match(
+        datetime(2025, 4, 1),
+        "A",
+        "B",
+        lae={"1": 0.4, "X": 0.3, "2": 0.2},
+        detail={
+            "lae_source": "SELAE",
+            "lae_captured_at": "2025-04-01T09:00:00+02:00",
+            "kickoff_at": "2025-04-01T20:00:00+02:00",
+        },
+    )
+    assert fixture.has_temporally_eligible_lae is False
+
+
+def test_lae_mode_rejects_unverified_input():
+    engine = KiniEngine()
+    fixture = Match(
+        datetime(2025, 4, 1),
+        "A",
+        "B",
+        lae={"1": 0.4, "X": 0.3, "2": 0.3},
+    )
+    with pytest.raises(ValueError, match="not temporally verified"):
+        engine.predict(fixture, mode="lae")
+
+
 def test_model_only_ensemble_excludes_market_and_lae():
     class FakeML:
         def fit_predict_proba(self, training_history, current, feature_history=None):

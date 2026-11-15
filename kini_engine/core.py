@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, ClassVar
 
 import numpy as np
@@ -39,6 +39,36 @@ class Match:
             and self.detail.get("market_pre_match_eligible") is True
         )
 
+    @property
+    def has_temporally_eligible_lae(self) -> bool:
+        """Require valid probabilities and timestamped source evidence before kickoff."""
+        if not self.lae:
+            return False
+
+        source = self.detail.get("lae_source")
+        if not isinstance(source, str) or not source.strip():
+            return False
+
+        captured_at = _parse_aware_datetime(self.detail.get("lae_captured_at"))
+        kickoff_at = _parse_aware_datetime(self.detail.get("kickoff_at"))
+        if captured_at is None or kickoff_at is None or captured_at >= kickoff_at:
+            return False
+
+        values = []
+        for sign in SIGNS:
+            raw = self.lae.get(sign)
+            if isinstance(raw, (bool, np.bool_)):
+                return False
+            try:
+                value = float(raw)
+            except (TypeError, ValueError):
+                return False
+            if not np.isfinite(value) or not 0.0 <= value <= 1.0:
+                return False
+            values.append(value)
+
+        return bool(np.isclose(sum(values), 1.0, rtol=0.0, atol=1e-6))
+
 
 @dataclass(frozen=True)
 class Prediction:
@@ -70,6 +100,26 @@ def _date_num(value: datetime | str) -> float:
             continue
 
     raise ValueError(f"Unsupported date format: {raw!r}")
+
+
+def _parse_aware_datetime(value: Any) -> datetime | None:
+    """Parse an ISO timestamp only when its timezone is explicit."""
+    if isinstance(value, datetime):
+        parsed = value
+    elif isinstance(value, str):
+        raw = value.strip()
+        if not raw:
+            return None
+        try:
+            parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+    else:
+        return None
+
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        return None
+    return parsed.astimezone(timezone.utc)
 
 
 def _calendar_date_key(value: datetime | str) -> str:
@@ -765,6 +815,7 @@ class KiniEngine:
         # Raw odds remain on Match for audit diagnostics, but only explicitly
         # schedule-screened odds may influence a forecast.
         market_probs = m.market if m.has_temporally_eligible_market else None
+        lae_probs = m.lae if m.has_temporally_eligible_lae else None
         if mode not in {"ensemble", "ensemble_dc_ml", "dc", "ml", "lae", "market"}:
             raise ValueError("mode must be one of: ensemble, ensemble_dc_ml, dc, ml, lae, market")
 
@@ -775,9 +826,11 @@ class KiniEngine:
                 raise ValueError("ML mode requires enable_ml=True and sufficient history")
             base = ml_probs
         elif mode == "lae":
-            if not m.lae:
-                raise ValueError("LAE probabilities are unavailable")
-            base = _blend((m.lae, 1.0))
+            if not lae_probs:
+                raise ValueError(
+                    "LAE probabilities are unavailable or not temporally verified"
+                )
+            base = _blend((lae_probs, 1.0))
         elif mode == "market":
             if not market_probs:
                 raise ValueError("market probabilities are unavailable or not temporally eligible")
@@ -792,8 +845,8 @@ class KiniEngine:
             blend_items = [(dc_probs, 0.58)]
             if ml_probs:
                 blend_items.append((ml_probs, 0.17))
-            if m.lae:
-                blend_items.append((m.lae, 0.18))
+            if lae_probs:
+                blend_items.append((lae_probs, 0.18))
             if market_probs:
                 blend_items.append((market_probs, 0.07))
             base = _blend(*blend_items)
@@ -802,7 +855,7 @@ class KiniEngine:
             adjusted, reasons = context_adjust(base, m, history)
         else:
             adjusted, reasons = base, []
-        surprise = surprise_signal(adjusted, m.lae, market_probs, m, history)
+        surprise = surprise_signal(adjusted, lae_probs, market_probs, m, history)
         sign = max(SIGNS, key=lambda s: adjusted[s])
         return Prediction(m.home, m.away, adjusted, sign, scores, surprise, reasons)
 

@@ -968,3 +968,21 @@ The calibration experiment is validated as an evaluation pipeline, not as eviden
 - **P6 optimizer:** existing basic budget/probability/Pleno tests remain in place; correlation-aware ticket coverage, current SELAE rule verification and defensible expected-payout modelling remain open.
 
 Next priority: audit every external forecast input for an explicit availability timestamp/eligibility contract (especially LAE), then finish canonical team identity and correlation-aware ticket optimization. Do not promote ML or an ensemble based on this benchmark.
+
+## LAE point-in-time eligibility gate — 2026-11-15
+
+A code review found that the live prediction path accepted any non-empty `Match.lae` mapping in the default ensemble, the explicit `lae` mode and the surprise-reference diagnostic. Unlike the market path, LAE had no temporal eligibility contract; a stale or post-kickoff value could therefore influence a forecast.
+
+The prediction core now fails closed. LAE can influence the ensemble, direct LAE mode or surprise diagnostic only when all of the following are present and valid:
+
+- A non-empty `lae_source` identifying the provider/feed.
+- `lae_captured_at` as an ISO-8601 timestamp with an explicit UTC offset.
+- `kickoff_at` as an ISO-8601 timestamp with an explicit UTC offset.
+- The capture instant is strictly earlier than the kickoff instant after UTC normalization.
+- All three 1/X/2 values exist, are finite, lie in [0, 1], and sum to one within 1e-6.
+
+Date-only values, naive timestamps, missing provenance, equal/post-kickoff captures and malformed probability vectors are ineligible. Unverified LAE values remain on the Match object for diagnostics but do not affect predictions. The direct `lae` mode raises a clear error instead of silently accepting an unverified input.
+
+Regression tests cover the fail-closed default, a valid cross-offset timestamp, missing source, naive timestamps, equal/late capture, invalid probability sums and rejection by direct LAE mode.
+
+Implementation is intentionally an input contract, not a new historical LAE data claim. The Football-Data historical loader currently supplies no LAE observations, so the 2020–2026 walk-forward benchmark is unchanged by this gate. No LAE feed is considered eligible until its caller supplies the required source and capture/kickoff timestamps.
