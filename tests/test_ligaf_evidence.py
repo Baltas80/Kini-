@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from urllib.parse import urlparse
 
 import pytest
 
@@ -85,6 +86,59 @@ def test_ligaf_registry_covers_all_sixteen_current_season_teams():
     assert len(identities) == 16
     assert all(identity is not None for identity in identities)
     assert registry.team_count == 16
+
+
+def test_ligaf_profile_crosswalk_covers_all_sixteen_current_season_teams():
+    crosswalk = json.loads(
+        (ROOT / "data" / "ligaf_team_profile_crosswalk.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    registry = TeamIdentityRegistry.from_path(
+        ROOT / "kini_engine" / "data" / "ligaf_team_identity_registry.json"
+    )
+
+    assert crosswalk["provider"] == "LIGA_F"
+    assert crosswalk["competition_id"] == "LIGA_F"
+    assert crosswalk["gender"] == "women"
+    assert crosswalk["season"] == "2026-27"
+    assert urlparse(crosswalk["source_archive_url"]).hostname == "ligaf.es"
+    assert len(crosswalk["entries"]) == 16
+
+    team_ids = set()
+    provider_ids = set()
+    for entry in crosswalk["entries"]:
+        assert set(entry) == {
+            "team_id",
+            "canonical_name",
+            "provider_team_profile_id",
+            "team_profile_url",
+            "match_evidence_url",
+        }
+        assert entry["team_id"] not in team_ids
+        assert entry["provider_team_profile_id"] not in provider_ids
+        team_ids.add(entry["team_id"])
+        provider_ids.add(entry["provider_team_profile_id"])
+
+        identity = registry.resolve(
+            entry["canonical_name"],
+            source="ligaf",
+            competition_id="LIGA_F",
+            season="2026-27",
+            gender="women",
+        )
+        assert identity is not None
+        assert identity.team_id == entry["team_id"]
+
+        profile_url = urlparse(entry["team_profile_url"])
+        assert profile_url.scheme == "https"
+        assert profile_url.hostname == "ligaf.es"
+        assert f"/{entry['provider_team_profile_id']}/plantilla/2027" in profile_url.path
+
+        match_url = urlparse(entry["match_evidence_url"])
+        assert match_url.scheme == "https"
+        assert match_url.hostname == "ligaf.es"
+        assert match_url.path.endswith("/detalle")
 
 
 def test_ligaf_registry_resolves_both_provider_aliases_for_all_six_teams():
