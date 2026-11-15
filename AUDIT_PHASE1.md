@@ -548,3 +548,29 @@ La suite de regresión incorpora comprobaciones de coincidencia exacta de la exc
 - The new code/docs are committed on feat/selae-official-coupon-ingestion, latest commit 52a25278fa83e326ac78a6a3bf2297745c3c0694; PR #7 remains a draft against audit/phase-1-temporal-validation.
 - Validation status: no new Actions run ID or commit status was exposed for this head in this execution. The previous 73-test run predates this change and is not evidence for the new code. Do not mark the new correction as CI-validated until the updated tests and workflow have actually run.
 - Preliminary artifact inspection of the 5,311-row Football-Data dataset found exact pair/date/score matches for the ten men's 1/X/2 coupon fixtures and the Pleno al 15 match from 2026-11-08. Three women's fixtures remain outside SP1/SP2, and the postponed women's fixture is not a played match. This was an exploratory cross-check only; no cross-provider aliases or automated fixture joins have yet been committed.
+
+
+## SELAE override parsing and CI correction — 2026-11-15
+
+A follow-up review of the public-draw override found that the parser checked the displayed score against the coupon sign before applying the official exception. That ordering would reject a legitimate public-draw sign if it differed from the displayed score. The parser now receives the validated override manifest in online, cache and offline modes. A score/sign mismatch is tolerated only for the exact draw date, fixture position, displayed score and coupon sign recorded in the official manifest; all other mismatches still fail closed. The override is then applied and the football goals are nulled before JSONL integrity validation.
+
+Regression coverage now includes both an official public-draw sign that differs from the displayed score and rejection when the manifest does not match the source score.
+
+The first source-validation attempt after the outcome-semantics change exposed two separate CI defects:
+- Ruff reported five lint violations in the importer (exception type, redundant UTC replacement and nested conditional).
+- The source-validation workflow did not watch the SELAE override manifest, so the first test run occurred before that required manifest was present on the branch.
+
+Both have been corrected. The workflow now watches the manifest and supports manual dispatch.
+
+### Validation on latest head
+
+- Head commit: 46ccff9e64560dba8b5e3f8e1fd8659cc336e2fc.
+- SELAE source-validation: [run 43693816806](https://github.com/Baltas80/Kini-/actions/runs/43693816806) — **23 parser/integrity tests passed; Ruff all checks passed**. The live fetch still receives HTTP 403 from the GitHub-hosted runner; the workflow records a warning and correctly does not claim live-source acceptance or upload a validated source artifact.
+- Full repository CI: [run 43693820720](https://github.com/Baltas80/Kini-/actions/runs/43693820720) — **81 passed, 4 third-party warnings**.
+- Historical-data validation: [run 43693820723](https://github.com/Baltas80/Kini-/actions/runs/43693820723) — **5,311 complete fixtures, zero duplicates, zero conflicting duplicates, integrity_passed=true**.
+
+No model code, model probabilities, training data, backtest metrics or optimizer objective were changed. SELAE coupon records still lack independently verified kickoff timestamps and competition IDs; they remain ineligible for model training. PR #7 remains a draft against audit/phase-1-temporal-validation; no PR has been merged and master remains untouched.
+
+### Next action
+
+Continue the source reconciliation only with independently evidenced aliases, competition IDs and actual fixture kickoff dates. Do not infer identities from gender markers, name similarity, draw date or coupon position. If the official source does not expose the required metadata, preserve the fixture as unresolved and excluded from training.
