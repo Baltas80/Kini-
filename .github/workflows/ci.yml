@@ -51,6 +51,9 @@ jobs:
           tests/test_ligaf_team_profiles.py
           kini_engine/core.py
           tests/test_core.py
+          kini_engine/sources.py
+          kini_engine/mcp_server.py
+          tests/test_sources.py
       - name: Verify formatting for Liga F evidence code
         run: >-
           ruff format --check
@@ -59,4 +62,7 @@ jobs:
           kini_engine/ligaf_team_profiles.py
           scripts/build_ligaf_team_profiles.py
           tests/test_ligaf_team_profiles.py
+          kini_engine/sources.py
+          kini_engine/mcp_server.py
+          tests/test_sources.py
       - run: pytest -q
