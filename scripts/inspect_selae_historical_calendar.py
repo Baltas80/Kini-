@@ -12,6 +12,7 @@ from typing import Any
 
 import requests
 import xlrd
+from xlrd import xldate
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
@@ -63,7 +64,7 @@ def _cell_to_json(cell: Any, datemode: int) -> dict[str, Any]:
     if cell_type == xlrd.XL_CELL_NUMBER:
         return {"type": "number", "value": _finite_number(value)}
     if cell_type == xlrd.XL_CELL_DATE:
-        parsed = xlrd.xldate_as_datetime(value, datemode)
+        parsed = xldate.xldate_as_datetime(value, datemode)
         return {
             "type": "date",
             "value": parsed.isoformat(),
