@@ -1066,3 +1066,25 @@ Calibration improves the market's Brier/Log Loss slightly on this sample and red
 - **P6:** optimizer still needs correlation-aware coverage validation, complete rule/price refresh for actual submission, and defensible expected-payout modelling.
 
 Next priority: repair the live LAE adapter contract by preserving a provider capture timestamp and obtaining an exact timezone-aware kickoff from the fixture source; then continue canonical team identity and correlation-aware ticket-optimization acceptance. Do not promote ML or an ensemble on these results. No merge or changes to `master`.
+
+## Live LAE adapter provenance — 2026-11-15
+
+The live KinielaGPT adapter was hardened in commits [b61d147](https://github.com/Baltas80/Kini-/commit/b61d14795ac32f075cffde976b20ac544ef5d13f) and [1c7e8b8](https://github.com/Baltas80/Kini-/commit/1c7e8b84ba250bb1efd47c6d09eabc56d66fe422), with formatting and optional-dependency cleanup in subsequent commits through `60bf55b`.
+
+- Each XML endpoint is fetched independently through a response-snapshot helper. The adapter records a timezone-aware UTC timestamp immediately after the complete HTTP response has been received.
+- The LAE endpoint (`porcentajes_lae.asp`) and public Quinielista percentages endpoint (`porcentajes.asp`) are now retained as separate normalized 1/X/2 vectors, with separate source identifiers and client-receipt timestamps.
+- The legacy top-level 1/X/2 output remains available as an equal-weight mean of the valid, individually normalized source vectors, preserving the existing consumer contract while making its composition explicit.
+- Invalid or empty source vectors are not repaired into apparently valid probabilities and are excluded from the blend.
+- MCP `detect_surprises()` now passes the actual LAE vector and its provenance metadata to `Match`; it no longer labels the legacy blended vector as LAE.
+
+**Timestamp limitation:** these timestamps prove when this client received the response, not when the provider first published or last refreshed the underlying percentages. The adapter still does not provide a verified, timezone-aware per-match kickoff timestamp. Consequently the core's LAE gate remains fail-closed and the MCP surprise tool does not yet use LAE to alter predictions. No timestamp or kickoff has been inferred or fabricated. Re-enabling the feature requires an exact kickoff value from the fixture/details source and an explicit mapping to the same match ID.
+
+### Validation and workflow scope
+
+- CI [run 43740812199](https://github.com/Baltas80/Kini-/actions/runs/43740812199) passed on the current adapter head: Ruff passed, formatting passed, **149 tests passed**, with four upstream NumPy 2.5 / penaltyblog deprecation warnings.
+- Two source-adapter regression tests cover separate feed vectors, the equal-weight compatibility blend, UTC response-receipt timestamps and exclusion of an invalid all-zero source vector.
+- Ruff and formatting coverage now includes `kini_engine/sources.py`, `kini_engine/mcp_server.py` and `tests/test_sources.py`.
+- The historical backtest workflow now excludes source/MCP adapter-only changes from the expensive model benchmark. The walk-forward CLI imports `backtest` and `dataio`, not these live adapters; CI still validates the adapters. No model or historical feature code changed in this unit, so the previously completed 5,011-forecast benchmark remains the applicable model result. The current PR-triggered scope-check run is [43740812220](https://github.com/Baltas80/Kini-/actions/runs/43740812220); its final skip/success state is to be recorded once the job is created.
+- The current production limitation remains: LAE-based surprise detection is not active until a verified kickoff timestamp is available. The fail-closed behavior is intentional.
+
+Next priority: inspect the live `detallePartido` response schema through a controlled, non-mutating source diagnostic; map its exact match identifier and timezone-aware kickoff field only if the provider supplies them. If it supplies only local date/time without timezone semantics, keep LAE ineligible until that contract is verified.
