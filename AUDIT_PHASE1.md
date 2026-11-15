@@ -582,7 +582,7 @@ A critical historical metadata defect was identified: a match page for Real Soci
 
 ### State
 
-Implementation: **committed to `feat/selae-fixture-reconciliation`**. Deterministic CI is pending for the current branch head. Live bulk ingestion is not yet validated. The next action is to inspect CI results, fix any parser/test regressions, then run the manual workflow from a supported GitHub Actions environment. If the official host blocks GitHub runners, retain the fail-closed result and use the same CLI with official HTML captured from an accessible Spain-based environment; do not fabricate or relax source checks.
+Implementation: **committed to `feat/selae-fixture-reconciliation`**. CI run 43704125275 passed: Ruff lint and 118 tests. Live bulk ingestion is still running and is not yet validated. The next action is to inspect CI results, fix any parser/test regressions, then run the manual workflow from a supported GitHub Actions environment. If the official host blocks GitHub runners, retain the fail-closed result and use the same CLI with official HTML captured from an accessible Spain-based environment; do not fabricate or relax source checks.
 
 
 ## Full historical model benchmark — 2026-11-15
