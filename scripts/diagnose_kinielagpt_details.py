@@ -155,7 +155,9 @@ def _normalize_team_name(value: Any) -> str | None:
         character for character in decomposed if not unicodedata.combining(character)
     )
     normalized = " ".join(
-        "".join(character if character.isalnum() else " " for character in without_marks).split()
+        "".join(
+            character if character.isalnum() else " " for character in without_marks
+        ).split()
     )
     return normalized or None
 
