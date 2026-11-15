@@ -246,8 +246,43 @@ def test_validate_history_accepts_complete_16_team_double_round_robin():
     )
     assert profile["total_scheduled_fixtures"] == 240
     assert profile["total_played_fixtures"] == 240
-    assert profile["season_profiles"]["2023"]["team_count_in_played_fixtures"] == 16
+    season_profile = profile["season_profiles"]["2023"]
+    assert season_profile["team_count_in_played_fixtures"] == 16
+    assert len(season_profile["teams"]) == 16
+    assert all(team["scheduled_appearances"] == 30 for team in season_profile["teams"])
+    assert all(team["played_appearances"] == 30 for team in season_profile["teams"])
+    assert all(team["home_played"] == 15 for team in season_profile["teams"])
+    assert all(team["away_played"] == 15 for team in season_profile["teams"])
     assert profile["training_eligibility"]["eligible"] is False
+
+
+def test_validate_history_team_inventory_keeps_accents_distinct():
+    names = ["Málaga", "Malaga", *[f"Team {index:02d}" for index in range(2, 16)]]
+    records = [
+        _record(
+            index + 1,
+            matchday=1,
+            home=names[index * 2],
+            away=names[index * 2 + 1],
+        )
+        for index in range(8)
+    ]
+
+    profile = validate_history(
+        records,
+        completed_seasons=set(),
+        requested_rounds={2023: 1},
+    )
+    teams = {
+        team["normalized_name"]: team
+        for team in profile["season_profiles"]["2023"]["teams"]
+    }
+
+    assert len(teams) == 16
+    assert teams["málaga"]["observed_names"] == ["Málaga"]
+    assert teams["malaga"]["observed_names"] == ["Malaga"]
+    assert teams["málaga"]["played_appearances"] == 1
+    assert teams["malaga"]["played_appearances"] == 1
 
 
 def test_validate_history_rejects_duplicate_match_ids():
