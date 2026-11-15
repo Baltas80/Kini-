@@ -93,3 +93,18 @@ El importador combina las nuevas fechas con el JSONL existente. Repetir la misma
 ## Fuentes secundarias evaluadas
 
 Se ha revisado una web independiente que publica fechas de partido, resultados y premios, y se han contrastado manualmente tres jornadas recientes con páginas/PDF oficiales de SELAE. No se incorpora como proveedor automatizado: su aviso legal declara que no es fuente oficial, no se ha identificado una licencia explícita de reutilización y su `robots.txt` excluye expresamente los agentes de IA. No se automatiza su extracción ni se usa para alimentar el modelo. La procedencia primaria del dataset de cupones seguirá siendo SELAE.
+
+
+## Partidos aplazados y signos determinados por sorteo público
+
+El marcador numérico que aparece en una página de escrutinio no demuestra por sí solo que el encuentro se haya disputado. SELAE puede asignar el signo mediante sorteo público cuando un partido se aplaza y no se juega dentro del plazo normativo. Por eso el importador aplica el manifiesto versionado `data/selae_fixture_overrides.json` después de comprobar que la fecha, posición, signo y marcador mostrado coinciden exactamente con la página importada.
+
+Para la jornada del **8 de noviembre de 2026**, el aviso oficial de SELAE identifica el partido 14, **Tenerife (F) – Alavés (F)**, como aplazado; indica que, si no se disputaba dentro de las 24 horas siguientes, el signo se determinaría mediante sorteo público a las 22:00 del 8 de noviembre, conforme a las normas 38.ª y 39.ª. El resultado oficial confirma que el signo obtenido fue `1`. Fuentes primarias:
+
+- Aviso de aplazamiento: https://www.loteriasyapuestas.es/f/loterias/web_corporativa/Comunicacion/Avisos_de_interes/APLAZAMIENTO%20JORNADA%2020%20DE%20LA%20QUINIELA%207_8%20NOVIEMBRE%202026%20%28002%29.pdf
+- Resultado oficial de la jornada: https://www.loteriasyapuestas.es/es/la-quiniela/resultados/la-quiniela-resultados-del-08-de-noviembre-de-2026
+- Nota de prensa oficial: https://www.loteriasyapuestas.es/f/loterias/documentos/Quiniela/Notas%20de%20prensa/NOTA_DE_PRENSA_LA_QUINIELA_08_11_26.pdf
+
+El registro conserva el valor mostrado por SELAE en `reported_score_raw`, pero pone `score_raw`, `home_goals` y `away_goals` a `null`; marca `score_status=not_played` y `sign_determination=public_draw`. El campo `sign` conserva el signo válido para puntuar el cupón. Ese signo **no es un resultado futbolístico** y debe excluirse del entrenamiento y de la evaluación de predicciones de partidos reales. El perfil del histórico informa por separado partidos disputados y partidos cuyo signo fue determinado por sorteo.
+
+El manifiesto exige URL HTTPS del dominio oficial SELAE, fecha de verificación con zona horaria, posición, signo y marcador mostrado exactos. Si cambia la página o el signo, la importación falla y exige revisar la evidencia; no se aplica una corrección aproximada.
