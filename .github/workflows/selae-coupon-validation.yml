@@ -29,6 +29,40 @@ jobs:
         run: python -m pip install -e ".[dev]"
       - name: Run deterministic parser and integrity tests
         run: pytest -q tests/test_import_selae_results.py
+      - name: Probe official SELAE delivery endpoints from the runner network
+        run: |
+          python - <<'PY'
+          import requests
+
+          base = "https://www.loteriasyapuestas.es"
+          headers = {
+              "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
+              "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+              "Accept-Language": "es-ES,es;q=0.9,en;q=0.7",
+              "Referer": base + "/es/la-quiniela/resultados",
+          }
+          urls = [
+              base + "/es/la-quiniela/escrutinios/la-quiniela-premios-y-ganadores-del-08-de-noviembre-de-2026",
+              base + "/f/loterias/resultados/quiniela.html?game_id=LAQU&fecha_sorteo=20261108",
+              base + "/es/la-quiniela/escrutinios/la-quiniela-premios-y-ganadores-del-08-de-noviembre-de-2026.formatoRSS",
+              base + "/es/la-quiniela/resultados",
+              base + "/f/loterias/documentos/Quiniela/Notas%20de%20prensa/NOTA_DE_PRENSA_LA_QUINIELA_08_11_26.pdf",
+          ]
+          for url in urls:
+              try:
+                  response = requests.get(url, headers=headers, timeout=(5, 20), allow_redirects=True)
+                  sample = response.content[:100].decode(response.encoding or "utf-8", errors="replace").replace("\\n", " ")
+                  print({
+                      "requested": url,
+                      "status": response.status_code,
+                      "content_type": response.headers.get("Content-Type"),
+                      "bytes": len(response.content),
+                      "final_url": response.url,
+                      "sample": sample,
+                  })
+              except requests.RequestException as exc:
+                  print({"requested": url, "error": str(exc)})
+          PY
       - name: Fetch one known completed draw from the official source
         run: |
           python scripts/import_selae_results.py \
