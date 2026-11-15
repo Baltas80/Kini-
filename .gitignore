@@ -9,3 +9,6 @@ dist/
 build/
 *.egg-info/
 data/historical_spain.csv
+.cache/ligaf/
+data/ligaf_history.jsonl
+data/ligaf_history.profile.json
