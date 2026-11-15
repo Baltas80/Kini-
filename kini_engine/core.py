@@ -1,12 +1,11 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import datetime
-from math import exp
-from typing import Any, Iterable
+from typing import Any, ClassVar
 
 import numpy as np
-from scipy.optimize import minimize
 from scipy.stats import poisson
 
 
@@ -138,7 +137,7 @@ class DixonColes:
         self.fitted = False
         self.model: Any = None
 
-    def fit(self, matches: list[Match]) -> "DixonColes":
+    def fit(self, matches: list[Match]) -> DixonColes:
         usable = [
             m for m in matches
             if m.home_goals is not None and m.away_goals is not None
@@ -368,7 +367,7 @@ class FeatureModel:
                     subsample=0.85, colsample_bytree=0.85, objective="multi:softprob",
                     num_class=3, eval_metric="mlogloss", random_state=42, n_jobs=1
                 )
-            except Exception:
+            except (ImportError, OSError):
                 from sklearn.ensemble import HistGradientBoostingClassifier
                 self.model = HistGradientBoostingClassifier(
                     max_iter=180, learning_rate=0.05, max_leaf_nodes=15, random_state=42
@@ -493,7 +492,7 @@ class TicketOptimizer:
     """
 
     MAX_AUTHORIZED_COLUMNS = 31_104
-    MAX_TRIPLES_BY_DOUBLES = {
+    MAX_TRIPLES_BY_DOUBLES: ClassVar[dict[int, int]] = {
         0: 9,
         1: 8,
         2: 8,
@@ -542,7 +541,7 @@ class TicketOptimizer:
         if len(predictions) != 14:
             raise ValueError("standard ticket optimisation needs exactly 14 matches")
         if isinstance(budget, bool) or not isinstance(budget, int):
-            raise ValueError("budget must be a positive integer number of columns")
+            raise TypeError("budget must be a positive integer number of columns")
         if budget < self.minimum_columns:
             raise ValueError(
                 f"budget must be at least {self.minimum_columns} columns"
@@ -555,7 +554,7 @@ class TicketOptimizer:
         normalized: list[dict[str, float]] = []
         for index, prediction in enumerate(predictions, start=1):
             if not isinstance(prediction, dict):
-                raise ValueError(f"match {index}: probabilities must be a mapping")
+                raise TypeError(f"match {index}: probabilities must be a mapping")
             missing_signs = [sign for sign in SIGNS if sign not in prediction]
             if missing_signs:
                 raise ValueError(
@@ -566,7 +565,7 @@ class TicketOptimizer:
             for sign in SIGNS:
                 raw = prediction[sign]
                 if isinstance(raw, (bool, np.bool_)):
-                    raise ValueError(f"match {index}: invalid probability for sign {sign}")
+                    raise TypeError(f"match {index}: invalid probability for sign {sign}")
                 try:
                     value = float(raw)
                 except (TypeError, ValueError) as exc:
@@ -677,8 +676,8 @@ class KiniEngine:
         self.fitted = False
         self.temperature = 1.0
 
-    def fit(self, history: list[Match]) -> "KiniEngine":
-        self.history = sorted(list(history), key=lambda m: _date_num(m.date))
+    def fit(self, history: list[Match]) -> KiniEngine:
+        self.history = sorted(history, key=lambda m: _date_num(m.date))
         self.dc.fit(self.history)
         if self.ml is not None and hasattr(self.ml, "invalidate"):
             self.ml.invalidate()
