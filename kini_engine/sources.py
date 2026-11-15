@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import logging
+import math
 import time
+from datetime import UTC, datetime
 from typing import Any
 
 import pandas as pd
@@ -23,6 +25,8 @@ class KinielaGPTSource:
     QUINI = "https://www.quinielista.es/xml2/porcentajes.asp?jornada={}&temporada={}"
     DETAILS = "https://api.eduardolosilla.es/detallePartido"
     HOME = "https://www.eduardolosilla.es/"
+    LAE_SOURCE = "quinielista.es:porcentajes_lae.asp"
+    QUINIELISTA_SOURCE = "quinielista.es:porcentajes.asp"
 
     def __init__(self, timeout: int = 15) -> None:
         self.session = requests.Session()
@@ -31,10 +35,96 @@ class KinielaGPTSource:
         self.timeout = timeout
         self.headers = {"User-Agent": "Kini/0.2 (+https://github.com/Baltas80/Kini-)", "Accept-Language": "es-ES,es;q=0.9"}
 
+    def _xml_snapshot(self, url: str) -> tuple[dict[str, Any], str]:
+        """Fetch XML and timestamp when its complete response became available locally."""
+        response = self.session.get(url, headers=self.headers, timeout=self.timeout)
+        response.raise_for_status()
+        captured_at = datetime.now(UTC).isoformat()
+        return xmltodict.parse(response.content, attr_prefix=""), captured_at
+
     def _xml(self, url: str) -> dict[str, Any]:
-        r = self.session.get(url, headers=self.headers, timeout=self.timeout)
-        r.raise_for_status()
-        return xmltodict.parse(r.content, attr_prefix="")
+        """Compatibility wrapper for callers that do not need response provenance."""
+        payload, _ = self._xml_snapshot(url)
+        return payload
+
+    @staticmethod
+    def _probability_map(payload: dict[str, Any]) -> dict[int, dict[str, Any]]:
+        """Extract one normalized probability vector per match ID from a source response."""
+        root = payload.get("quinielista", {})
+        percentages = root.get("porcentajes", {}) if isinstance(root, dict) else {}
+        raw_matches = percentages.get("partido", []) if isinstance(percentages, dict) else []
+        if isinstance(raw_matches, dict):
+            records = [raw_matches]
+        elif isinstance(raw_matches, list):
+            records = raw_matches
+        else:
+            records = []
+
+        frame = pd.DataFrame(records)
+        if frame.empty or "num" not in frame:
+            return {}
+
+        for column in ("local", "visitante"):
+            if column not in frame:
+                frame[column] = ""
+
+        frame["num"] = pd.to_numeric(frame["num"], errors="coerce")
+        frame = frame.dropna(subset=["num"]).copy()
+        if frame.empty:
+            return {}
+        frame["num"] = frame["num"].astype(int)
+
+        probability_columns = {"1": "porc_1", "X": "porc_X", "2": "porc_2"}
+        for column in probability_columns.values():
+            if column not in frame:
+                frame[column] = 0.0
+            frame[column] = pd.to_numeric(frame[column], errors="coerce")
+
+        aggregations = {"local": "first", "visitante": "first"} | {
+            column: "mean" for column in probability_columns.values()
+        }
+        grouped = frame.groupby("num", sort=True).agg(aggregations)
+        result: dict[int, dict[str, Any]] = {}
+
+        for match_id, row in grouped.iterrows():
+            values: list[float] = []
+            valid = True
+            for column in probability_columns.values():
+                value = row[column]
+                if pd.isna(value):
+                    valid = False
+                    break
+                numeric = float(value)
+                if not math.isfinite(numeric) or numeric < 0:
+                    valid = False
+                    break
+                values.append(numeric)
+
+            total = sum(values)
+            probabilities = (
+                dict(zip(SIGNS, (value / total for value in values)))
+                if valid and math.isfinite(total) and total > 0
+                else None
+            )
+            local = row["local"]
+            away = row["visitante"]
+            result[int(match_id)] = {
+                "local": str(local) if pd.notna(local) else "",
+                "visitante": str(away) if pd.notna(away) else "",
+                "probabilities": probabilities,
+            }
+        return result
+
+    @staticmethod
+    def _combined_probabilities(*vectors: dict[str, float] | None) -> dict[str, float]:
+        """Return an equal-weight mean of available, individually normalized sources."""
+        available = [vector for vector in vectors if vector is not None]
+        if not available:
+            return {sign: 0.0 for sign in SIGNS}
+        return {
+            sign: sum(vector[sign] for vector in available) / len(available)
+            for sign in SIGNS
+        }
 
     def last(self) -> tuple[int, int, list[dict[str, Any]]]:
         data = self._xml(self.BASE)["quinielista"]["porcentajes"]
@@ -44,34 +134,53 @@ class KinielaGPTSource:
         return jornada, temporada, matches
 
     def probabilities(self, jornada: int, temporada: int) -> list[dict[str, Any]]:
-        a = self._xml(self.LAE.format(jornada, temporada))
-        b = self._xml(self.QUINI.format(jornada, temporada))
-        pa = pd.DataFrame(a["quinielista"]["porcentajes"]["partido"]).fillna(0)
-        pb = pd.DataFrame(b["quinielista"]["porcentajes"]["partido"]).fillna(0)
-        both = pd.concat([pa, pb], ignore_index=True)
-        both["num"] = pd.to_numeric(both["num"], errors="coerce").fillna(0).astype(int)
-        cols = [c for c in both.columns if c.startswith("porc_")]
-        both[cols] = both[cols].apply(pd.to_numeric, errors="coerce").fillna(0.0)
-        agg = {"local": "first", "visitante": "first"} | {c: "mean" for c in cols}
-        out = both.groupby("num").agg(agg).reset_index()
-        out = out.rename(columns={"num": "id", "porc_1": "1", "porc_X": "X", "porc_2": "2"})
-        for c in SIGNS:
-            if c not in out:
-                out[c] = 0.0
-        s = out[list(SIGNS)].sum(axis=1).replace(0, 1)
-        out[list(SIGNS)] = out[list(SIGNS)].div(s, axis=0)
-        return out.to_dict("records")
+        """Return the legacy blend plus separate, timestamped source vectors.
+
+        Capture timestamps are local response-receipt times. They prove when this
+        client obtained a response, not when the provider originally published or
+        last refreshed its contents.
+        """
+        lae_payload, lae_captured_at = self._xml_snapshot(self.LAE.format(jornada, temporada))
+        quinielista_payload, quinielista_captured_at = self._xml_snapshot(self.QUINI.format(jornada, temporada))
+        lae_rows = self._probability_map(lae_payload)
+        quinielista_rows = self._probability_map(quinielista_payload)
+
+        out = []
+        for match_id in sorted(set(lae_rows) | set(quinielista_rows)):
+            lae_row = lae_rows.get(match_id)
+            quinielista_row = quinielista_rows.get(match_id)
+            lae_probabilities = lae_row["probabilities"] if lae_row else None
+            quinielista_probabilities = quinielista_row["probabilities"] if quinielista_row else None
+            combined = self._combined_probabilities(lae_probabilities, quinielista_probabilities)
+            preferred = lae_row or quinielista_row or {}
+
+            out.append(
+                {
+                    "id": match_id,
+                    "local": preferred.get("local", ""),
+                    "visitante": preferred.get("visitante", ""),
+                    **combined,
+                    "lae": lae_probabilities,
+                    "lae_source": self.LAE_SOURCE if lae_row else None,
+                    "lae_captured_at": lae_captured_at if lae_row else None,
+                    "quinielista": quinielista_probabilities,
+                    "quinielista_source": self.QUINIELISTA_SOURCE if quinielista_row else None,
+                    "quinielista_captured_at": quinielista_captured_at if quinielista_row else None,
+                    "probability_method": "equal_weight_mean_of_available_source_vectors",
+                }
+            )
+        return out
 
     def details(self, jornada: int, temporada: int) -> list[dict[str, Any]]:
         self.session.get(self.HOME, headers=self.headers, timeout=self.timeout).raise_for_status()
-        r = self.session.get(
+        response = self.session.get(
             self.DETAILS,
             params={"jornada": jornada, "temporada": temporada, "uts": int(time.time() * 1000)},
             headers=self.headers,
             timeout=self.timeout,
         )
-        r.raise_for_status()
-        return r.json().get("detallePartidos", [])
+        response.raise_for_status()
+        return response.json().get("detallePartidos", [])
 
 
 class SelaeSource:
@@ -86,30 +195,30 @@ class SelaeSource:
         self.headers = {"User-Agent": "Kini/0.2", "Accept-Language": "es-ES,es;q=0.9"}
 
     def fixture(self, date_yyyymmdd: str) -> dict[str, Any] | None:
-        r = self.session.get(
+        response = self.session.get(
             self.SEARCH,
             params={"game_id": "LAQU", "celebrados": "false", "fechaInicioInclusiva": date_yyyymmdd, "num_results": 1},
             headers=self.headers,
             timeout=self.timeout,
         )
-        r.raise_for_status()
-        data = r.json()
+        response.raise_for_status()
+        data = response.json()
         if not data:
             return None
-        s = data[0] if isinstance(data, list) else data
-        raw = s.get("partidos") or s.get("jornada_partidos") or s.get("combinacion") or []
+        draw = data[0] if isinstance(data, list) else data
+        raw = draw.get("partidos") or draw.get("jornada_partidos") or draw.get("combinacion") or []
         parts = [
             {
                 "numero": i,
-                "local": (p.get("equipoLocal") or p.get("local") or "").strip(),
-                "visitante": (p.get("equipoVisitante") or p.get("visitante") or "").strip(),
+                "local": (match.get("equipoLocal") or match.get("local") or "").strip(),
+                "visitante": (match.get("equipoVisitante") or match.get("visitante") or "").strip(),
                 "pleno15": i == 15,
             }
-            for i, p in enumerate(raw, 1)
+            for i, match in enumerate(raw, 1)
         ]
         return {
-            "numero_jornada": s.get("num_sorteo") or s.get("jornada"),
-            "fecha_cierre": s.get("fecha_sorteo"),
+            "numero_jornada": draw.get("num_sorteo") or draw.get("jornada"),
+            "fecha_cierre": draw.get("fecha_sorteo"),
             "partidos": parts,
             "fuente": "selae_json",
         }
