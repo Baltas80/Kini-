@@ -124,3 +124,64 @@ Official match evidence:
 - Ruff format: both new Liga F Python files already formatted.
 - Pytest: 101 passed, 4 upstream NumPy/penaltyblog deprecation warnings.
 - No historical dataset rebuild or model backtest was run; the evidence-only paths are explicitly excluded from those expensive workflows.
+
+
+## Liga F multi-season archive importer — 2026-11-15
+
+A provenance-preserving importer has been added in \`kini_engine/ligaf_history.py\`, with the CLI \`scripts/import_ligaf_history.py\` and deterministic tests in \`tests/test_ligaf_history.py\`.
+
+### Official source route and observed structure
+
+The official archive uses:
+
+\`\`\`
+https://ligaf.es/resultados/primera_division_femenina/{matchday}/{season_end_year}
+\`\`\`
+
+The archive pages expose eight match-detail links per round. Each match page exposes the official match ID in its URL, the team names in its title, a round/date/time header, the match status and the full-time score.
+
+Round-30 archive pages were inspected for season-end years 2023, 2024, 2025 and 2026. Round 10 of season-end year 2027 was also inspected. The current-season round contains eight scheduled fixtures, including a postponed match; postponed fixtures must remain scoreless until an official final result exists.
+
+A material source quirk was discovered: an official detail page for a match played on 19 May 2023 has a page title ending in “Liga F 2027”, while its match header correctly states \`JOR. 30 | Vie 19 MAY 19:00\`. The importer therefore **does not trust the year in the page title**. It derives the season from the archive route, parses the matchday date/time from the detail header, and cross-checks that date against the explicit dates in the requested round-results section.
+
+### Run
+
+\`\`\`bash
+python scripts/import_ligaf_history.py
+\`\`\`
+
+Defaults:
+- Completed seasons: 2022/23, 2023/24, 2024/25 and 2025/26.
+- Current season: 2026/27, matchdays 1–10 (the last fully inspected range at implementation time).
+- Eight scheduled fixtures per matchday.
+- Source cache: \`.cache/ligaf\`, with raw HTML and SHA-256 metadata.
+- Output: \`data/ligaf_history.jsonl\` and \`data/ligaf_history.profile.json\`.
+
+Useful options:
+
+\`\`\`bash
+python scripts/import_ligaf_history.py --refresh
+python scripts/import_ligaf_history.py --offline
+python scripts/import_ligaf_history.py --max-current-matchday 11
+\`\`\`
+
+The manual GitHub Actions workflow \`ligaf-history-validation\` runs the same import and uploads the JSONL plus integrity profile. It accepts a current-season matchday limit and a cache-refresh switch.
+
+### Integrity contract
+
+The importer fails closed on:
+- Non-official or non-HTTPS source URLs.
+- Missing/duplicate match IDs or duplicate scheduled home/away pairs.
+- Missing round pages or a round with other than eight match links.
+- A matchday mismatch between the detail page and archive route.
+- A kickoff date not listed in the official round-results section.
+- An unknown match status or a completed match without a parseable score.
+- Invalid score/result combinations or non-final fixtures carrying football goals.
+- Completed seasons without 240 final matches, 16 teams, 30 appearances per team and 15 home/15 away matches per team.
+- A current season without the expected number of scheduled fixtures or 16 scheduled teams.
+
+All imported records are explicitly \`training_label_eligible=false\`. The data is evidence-only and is not merged into Football-Data, not used by Dixon-Coles/ML/ensemble, and not used to create forecasts. Historical source aliases, season-scoped team identities, complete multi-season data validation and pre-kickoff feature availability must be reviewed before any training promotion.
+
+### Validation status
+
+The parser, cache, score checks, date cross-checks, completed-season structure and training-exclusion contract have deterministic tests. The live bulk import has **not** yet been executed from a GitHub runner; HTTP access, page markup stability and all 240-match season totals remain to be confirmed by the manual workflow. A passing unit-test suite is not evidence that the live import succeeded.
