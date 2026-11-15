@@ -15,6 +15,7 @@ from kini_engine.core import (
     _date_num,
     context_adjust,
     score_grid,
+    surprise_signal,
 )
 
 
@@ -81,6 +82,30 @@ def test_h2h_counts_current_home_team_wins_regardless_of_historical_venue():
     assert adjusted["1"] > adjusted["2"]
     assert "histórico H2H incorporado con peso limitado" in reasons
 
+
+
+def test_context_and_surprise_signals_ignore_same_day_and_future_results():
+    current = Match(datetime(2025, 4, 1), "A", "B")
+    prior = [
+        Match(datetime(2025, 3, 1) + timedelta(days=index), "A", "B", 2, 0, "1")
+        for index in range(5)
+    ]
+    contaminated = prior + [
+        Match(datetime(2025, 4, 1), "A", "B", 0, 8, "2"),
+        Match(datetime(2025, 4, 2), "B", "A", 8, 0, "1"),
+        Match(datetime(2025, 4, 3), "C", "A", 8, 0, "1"),
+    ]
+    base = {"1": 1 / 3, "X": 1 / 3, "2": 1 / 3}
+    model = {"1": 0.90, "X": 0.05, "2": 0.05}
+    lae = {"1": 0.05, "X": 0.05, "2": 0.90}
+
+    baseline_adjusted = context_adjust(base, current, prior)
+    contaminated_adjusted = context_adjust(base, current, contaminated)
+    assert contaminated_adjusted == baseline_adjusted
+
+    baseline_signal = surprise_signal(model, lae, None, current, prior)
+    contaminated_signal = surprise_signal(model, lae, None, current, contaminated)
+    assert contaminated_signal == baseline_signal
 
 
 def test_dc_forecast_does_not_train_optional_ml_model():
@@ -221,6 +246,31 @@ def test_feature_model_ignores_same_day_future_and_unverified_standings():
     assert np.array_equal(observed, baseline)
 
 
+def test_feature_model_incremental_training_rows_match_reference_builder():
+    history = sample()
+    history[1] = Match(
+        history[0].date,
+        history[1].home,
+        history[1].away,
+        history[1].home_goals,
+        history[1].away_goals,
+        history[1].result,
+    )
+    shuffled = history[::2] + history[1::2]
+    model = FeatureModel()
+
+    rows, outcomes = model._training_rows(shuffled)
+    ordered = sorted(
+        shuffled,
+        key=lambda match: (match.date.date().isoformat(), _date_num(match.date)),
+    )
+    expected_rows = [model._features(shuffled, match) for match in ordered]
+    expected_outcomes = [match.outcome() for match in ordered]
+
+    assert np.vstack(rows) == pytest.approx(np.vstack(expected_rows))
+    assert outcomes == expected_outcomes
+
+
 def test_feature_model_uses_2d_inference_and_caches_fit_per_history(monkeypatch):
     class FakeXGBClassifier:
         fit_calls = 0
@@ -276,19 +326,19 @@ def test_feature_model_training_rows_exclude_same_calendar_day_results(monkeypat
     first = history[0]
     second = history[1]
     history[1] = Match(first.date, second.home, second.away, second.home_goals, second.away_goals, second.result)
-    captured = {}
     model = FeatureModel()
+    rows, outcomes = model._training_rows(history)
+    expected = model._features(history, history[1])
 
-    def capture_features(past, current):
-        if current is history[1]:
-            captured["past"] = list(past)
-        return np.zeros(12, dtype=float)
-
-    monkeypatch.setattr(model, "_features", capture_features)
-    probabilities = model.fit_predict_proba(history, Match(datetime(2025, 4, 1), "A", "D"))
-
-    assert probabilities is not None
-    assert first not in captured["past"]
+    assert len(rows) == len(outcomes) == 80
+    assert np.array_equal(rows[1], expected)
+    assert first not in [
+        match
+        for match in history
+        if match.home_goals is not None
+        and match.away_goals is not None
+        and _date_num(match.date) < _date_num(history[1].date)
+    ]
 
 
 def test_feature_model_uses_latest_feature_history_without_refitting(monkeypatch):
