@@ -986,3 +986,7 @@ Date-only values, naive timestamps, missing provenance, equal/post-kickoff captu
 Regression tests cover the fail-closed default, a valid cross-offset timestamp, missing source, naive timestamps, equal/late capture, invalid probability sums and rejection by direct LAE mode.
 
 Implementation is intentionally an input contract, not a new historical LAE data claim. The Football-Data historical loader currently supplies no LAE observations, so the 2020–2026 walk-forward benchmark is unchanged by this gate. No LAE feed is considered eligible until its caller supplies the required source and capture/kickoff timestamps.
+
+### LAE gate lint correction — 2026-11-15
+
+The first CI attempt on the new LAE gate stopped at Ruff before pytest. It identified two Python 3.11+ modernization rules: `datetime.fromisoformat` already accepts the UTC `Z` suffix, and the timezone constant should use `datetime.UTC`. Both were corrected without changing the eligibility contract. The initial lint failure is [run 43728615705](https://github.com/Baltas80/Kini-/actions/runs/43728615705); the corrected head is queued for fresh CI and walk-forward validation.

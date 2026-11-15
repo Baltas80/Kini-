@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any, ClassVar
 
 import numpy as np
@@ -111,7 +111,7 @@ def _parse_aware_datetime(value: Any) -> datetime | None:
         if not raw:
             return None
         try:
-            parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+            parsed = datetime.fromisoformat(raw)
         except ValueError:
             return None
     else:
@@ -119,7 +119,7 @@ def _parse_aware_datetime(value: Any) -> datetime | None:
 
     if parsed.tzinfo is None or parsed.utcoffset() is None:
         return None
-    return parsed.astimezone(timezone.utc)
+    return parsed.astimezone(UTC)
 
 
 def _calendar_date_key(value: datetime | str) -> str:
