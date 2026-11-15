@@ -480,8 +480,46 @@ A separate feature branch, `feat/selae-official-coupon-ingestion`, has been crea
 
 The schema intentionally leaves `draw_id`, `kickoff_date` and `kickoff_time` unresolved. The date on the escrutinio page is the draw date, not proof of each fixture's kickoff date. Results/signs are target labels and must not become pre-match features. Prize winners and unit prizes do not reconstruct expected payout.
 
-The first deterministic test run exposed over-escaped regular expressions in the new parser (4 failures). This was corrected in commit `b09dc3f1024cafebff4552e8914cf62ff6e546cb`. The corrected live-source validation is running as [workflow 43680658551](https://github.com/Baltas80/Kini-/actions/runs/43680658551); CI is queued as [run 43680658598](https://github.com/Baltas80/Kini-/actions/runs/43680658598). No live-source acceptance is claimed until those runs complete.
+The first deterministic parser run exposed over-escaped regular expressions (4 failures). They were corrected in commit `b09dc3f1024cafebff4552e8914cf62ff6e546cb`; the deterministic suite passed in [CI run 43680988493](https://github.com/Baltas80/Kini-/actions/runs/43680988493). The suite has since been extended with offline-file import, non-numeric Pleno markers, idempotent merging and corrupt-JSONL rejection. The final CI for those additions is [run 43681160432](https://github.com/Baltas80/Kini-/actions/runs/43681160432) and must be checked before the dependent PR is considered validated.
 
-A path-filter correction in `.github/workflows/historical-backtest.yml` now limits expensive full model backtests to engine/data changes and the history/model diagnostic scripts, rather than every script under `scripts/`. The earlier run [43680544471](https://github.com/Baltas80/Kini-/actions/runs/43680544471) was already started before this correction; the importer itself does not change model code or the Football-Data dataset.
+### SELAE source access and importer state
 
-The feature is not yet integrated into model training. A later identity-resolution phase must join SELAE coupon fixtures to independently sourced match dates, competition identifiers and canonical team IDs, and must reject ambiguous matches. The branch is intended to become a separate dependent PR against `audit/phase-1-temporal-validation`; neither `master` nor existing PRs are modified or merged.
+The importer now has these safeguards:
+
+- Explicit draw dates only; it does not probe every calendar day.
+- Strict 14-match validation, score/sign consistency, Pleno parsing and prize-tier validation.
+- Raw-response SHA-256, source URL and retrieval timestamp.
+- Bounded retries, validated cache and atomic writes.
+- Idempotent incremental JSONL merge. A changed source hash for an existing draw stops by default; `--replace-existing` is required to replace it.
+- Offline mode via `--html-dir`, using files named `YYYY-MM-DD.html`, for environments that can access SELAE but where the automated runner cannot.
+
+GitHub-hosted runners received HTTP 403 from all five tested official SELAE routes: the date-specific escrutinio page, static HTML result, RSS variant, results listing and official press-release PDF. The evidence is in [source-probe workflow 43680763521](https://github.com/Baltas80/Kini-/actions/runs/43680763521). Browser-like headers and the official-site referer did not change the result. The live-source step is therefore non-blocking in CI, but its failure is not treated as successful data validation. The importer must be run from a Spain-based environment with legitimate access, or with locally saved official HTML. No proxy/geoblock circumvention is introduced.
+
+An independent historical site was evaluated only as a diagnostic reference. It states that it is not official; its robots policy explicitly disallows GPTBot and other AI crawlers, and no explicit data-reuse licence was identified. It is **not** adopted as an automated provider and no crawler is being built for it.
+
+### Latest model benchmark
+
+[Historical backtest workflow 43680544471](https://github.com/Baltas80/Kini-/actions/runs/43680544471) completed successfully. It used the Football-Data history with 300 initial training matches and produced 5,011 out-of-sample predictions from 2020-12-11 through 2026-11-09. This confirms that the prior empty-prediction condition did not recur in that run; it does not establish that every future dataset/configuration is safe.
+
+On the same 4,424-match market-eligible sample:
+
+| Model | Accuracy | Brier (lower is better) | Log Loss (lower is better) |
+|---|---:|---:|---:|
+| Dixon-Coles | 48.06% | 0.616357 | 1.027499 |
+| ML | 43.83% | 0.646939 | 1.073301 |
+| Ensemble | 48.15% | 0.613467 | 1.022929 |
+| Market | 50.72% | 0.597504 | 0.999444 |
+
+The ensemble improves modestly over Dixon-Coles on this sample, but the market remains better than every model. ML is materially worse. Do not promote ML or the ensemble over the market on these results.
+
+Prequential calibration used 3,847 common observations. Brier/Log Loss were: Dixon-Coles 0.613232/1.022458; ML 0.632559/1.050517; ensemble 0.611412/1.019795; market 0.596714/0.998094. Calibration improves Dixon-Coles and ML slightly, worsens the ensemble slightly, and the market remains best.
+
+The market eligibility audit classified 4,424/5,011 matches as schedule-compatible and excluded 587 as ambiguous. It is only a schedule screen: exact per-fixture odds capture timestamps are unavailable, and Friday/Tuesday fixtures are excluded because kickoff timezone is unspecified. Treat the market comparison as a strong benchmark, not as proof of perfectly timestamped historical odds.
+
+### Continuity and next action
+
+- The earlier 5,311-record integrity audit remains: 0 duplicates and 0 duplicate conflicts.
+- `.github/workflows/historical-backtest.yml` now triggers expensive backtests only for engine/data and history/model-diagnostic changes, not every script under `scripts/`.
+- Feature branch: `feat/selae-official-coupon-ingestion`, based on `audit/phase-1-temporal-validation`.
+- `master` is untouched. No PR has been merged.
+- Next: verify the final deterministic CI; then prepare a dependent draft PR against the audit branch. After the importer is run from Spain, reconcile coupon fixtures with canonical team IDs, competitions and actual kickoff dates. Until that join is complete, the coupon data must not enter model training or full-coupon backtests.
