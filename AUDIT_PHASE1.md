@@ -1171,3 +1171,15 @@ Validated on commit `afde6775d3cc1243da6016e2797b4216d84df331`:
 - The historical workflow [run 43745904189](https://github.com/Baltas80/Kini-/actions/runs/43745904189) completed successfully with the expensive backtest job skipped by its change-scope gate. No model or historical data code changed in this diagnostic unit.
 
 The live LAE source is therefore not eligible for pre-kickoff surprise detection using this endpoint alone. The implementation is fail-closed; the absence of a calendar date and timezone is a provider-data limitation, not a parsing failure.
+
+
+### Diagnostic workflow efficiency and final CI — 2026-11-15
+
+The live details workflow now checks the files changed in the latest PR commit before making external GET requests. PR open/reopen events and commits that change the adapter, diagnostic script, related tests or workflow run the diagnostic; documentation-only follow-up commits skip it. This avoids re-fetching the provider schema merely because the audit log was updated.
+
+- Code validation on `afde677`: [CI run 43745904226](https://github.com/Baltas80/Kini-/actions/runs/43745904226) passed Ruff, formatting and 156 tests.
+- Documentation-head validation on `848e78f`: [CI run 43746039985](https://github.com/Baltas80/Kini-/actions/runs/43746039985) also passed Ruff, formatting and 156 tests.
+- The repeated live schema check [run 43746039912](https://github.com/Baltas80/Kini-/actions/runs/43746039912) succeeded and produced the same 15-record, weekday-plus-local-time schema. Its artifact is retained for seven days.
+- The expensive historical backtest [run 43746039920](https://github.com/Baltas80/Kini-/actions/runs/43746039920) was skipped by the scope gate because the commit only changed documentation.
+
+No changes were made to model code or historical features in this unit. The last full walk-forward metrics remain those recorded above. The PR remains open as a draft and `master` is unchanged.

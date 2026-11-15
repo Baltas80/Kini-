@@ -19,7 +19,39 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      inspect: ${{ steps.filter.outputs.inspect }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 2
+      - name: Check whether the latest commit changed diagnostic inputs
+        id: filter
+        shell: bash
+        env:
+          PR_ACTION: ${{ github.event.action || '' }}
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" || "$PR_ACTION" == "opened" || "$PR_ACTION" == "reopened" ]]; then
+            echo "inspect=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if ! git rev-parse HEAD^ >/dev/null 2>&1; then
+            echo "inspect=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          changed_files="$(git diff --name-only HEAD^ HEAD)"
+          if grep -Eq '^(kini_engine/sources.py|scripts/diagnose_kinielagpt_details.py|tests/test_sources.py|tests/test_kinielagpt_details_diagnostic.py|\\.github/workflows/kinielagpt-live-details-diagnostic\\.yml) <<<"$changed_files"; then
+            echo "inspect=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "inspect=false" >> "$GITHUB_OUTPUT"
+          fi
+
   inspect:
+    needs: changes
+    if: needs.changes.outputs.inspect == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
