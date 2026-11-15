@@ -255,29 +255,83 @@ class FeatureModel:
         self._history_ref = None
 
     def _features(self, history: list[Match], m: Match) -> np.ndarray:
+        """Build 12 rolling form features from completed matches on prior dates.
+
+        The source has no reliable publication timestamp for standings or
+        arbitrary context fields. Those fields are deliberately excluded.
+        Date-only inputs use a strict calendar-day cutoff: same-day results
+        cannot become features for another fixture on that date.
+        """
+        target_day = _calendar_date_key(m.date)
+        prior_history = [
+            match
+            for match in history
+            if _calendar_date_key(match.date) < target_day
+            and match.home_goals is not None
+            and match.away_goals is not None
+        ]
+        prior_history.sort(
+            key=lambda match: (_calendar_date_key(match.date), _date_num(match.date))
+        )
+
         def stats(team: str, venue: str | None = None) -> tuple[float, float, float]:
-            xs = [x for x in history if (x.home == team or x.away == team) and x.home_goals is not None and x.away_goals is not None]
+            xs = [
+                match
+                for match in prior_history
+                if match.home == team or match.away == team
+            ]
             if venue == "home":
-                xs = [x for x in xs if x.home == team]
+                xs = [match for match in xs if match.home == team]
             elif venue == "away":
-                xs = [x for x in xs if x.away == team]
+                xs = [match for match in xs if match.away == team]
             xs = xs[-8:]
             if not xs:
                 return 0.0, 1.35, 1.05
-            pts = gf = ga = 0.0
-            for x in xs:
-                gf += x.home_goals if x.home == team else x.away_goals
-                ga += x.away_goals if x.home == team else x.home_goals
-                pts += 3 if ((x.home == team and x.home_goals > x.away_goals) or (x.away == team and x.away_goals > x.home_goals)) else (1 if x.home_goals == x.away_goals else 0)
-            return pts / len(xs), gf / len(xs), ga / len(xs)
 
-        hp, hgf, hga = stats(m.home)
-        ap, agf, aga = stats(m.away)
-        hhp, hhgf, hhga = stats(m.home, "home")
-        aap, aagf, aaga = stats(m.away, "away")
-        pos_h = float(m.detail.get("clasificacion_local_pos", 0) or 0)
-        pos_a = float(m.detail.get("clasificacion_visitante_pos", 0) or 0)
-        return np.array([hp, hgf, hga, ap, agf, aga, hhp, hhgf, hhga, aap, aagf, aaga, pos_h, pos_a, pos_h - pos_a], dtype=float)
+            points = goals_for = goals_against = 0.0
+            for match in xs:
+                if match.home == team:
+                    goals_for += match.home_goals
+                    goals_against += match.away_goals
+                    won = match.home_goals > match.away_goals
+                else:
+                    goals_for += match.away_goals
+                    goals_against += match.home_goals
+                    won = match.away_goals > match.home_goals
+                points += (
+                    3
+                    if won
+                    else 1
+                    if match.home_goals == match.away_goals
+                    else 0
+                )
+            return (
+                points / len(xs),
+                goals_for / len(xs),
+                goals_against / len(xs),
+            )
+
+        home_points, home_gf, home_ga = stats(m.home)
+        away_points, away_gf, away_ga = stats(m.away)
+        home_home_points, home_home_gf, home_home_ga = stats(m.home, "home")
+        away_away_points, away_away_gf, away_away_ga = stats(m.away, "away")
+        return np.asarray(
+            [
+                home_points,
+                home_gf,
+                home_ga,
+                away_points,
+                away_gf,
+                away_ga,
+                home_home_points,
+                home_home_gf,
+                home_home_ga,
+                away_away_points,
+                away_away_gf,
+                away_away_ga,
+            ],
+            dtype=float,
+        )
 
     def fit_predict_proba(
         self,
