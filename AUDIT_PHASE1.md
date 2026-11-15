@@ -1477,3 +1477,13 @@ Prequential calibration used only prior out-of-sample forecasts and excluded sam
 2. Capture and validate the result of the in-progress walk-forward only if it completes; do not launch another full run while it remains active.
 3. Continue the point-in-time audit. In particular, review all public baseline helpers for the same strict source-eligibility gates already used by the live prediction path.
 4. Resume joint-scenario dataset construction only after official SELAE calendar/results bytes are available. Until then, the optimizer must continue to label its current product-of-marginals estimate as an independence approximation.
+## SELAE inspector validation correction — 2026-11-15
+
+The first CI run that reached the new date-cell test exposed an API namespace mistake: xlrd's date conversion functions are provided by the xlrd.xldate module, not as top-level xlrd attributes. The parser and test now import that module explicitly in commit f171b54. This was a test/API integration failure, not a failure of the historical workbook parser against source data; the official workbook remains inaccessible from the hosted runner as documented above.
+
+- Previous CI [43763909260](https://github.com/Baltas80/Kini-/actions/runs/43763909260): Ruff and formatting passed; 185 tests passed and one date-serialization test failed on the incorrect xlrd attribute.
+- Current CI [43764064931](https://github.com/Baltas80/Kini-/actions/runs/43764064931): running against the corrected code at f171b54; do not report it green until its pytest step completes.
+- Historical-data validation [43764064913](https://github.com/Baltas80/Kini-/actions/runs/43764064913): pending.
+- The older full walk-forward [43763046836](https://github.com/Baltas80/Kini-/actions/runs/43763046836) remains in its historical-comparison step. No new model metrics are claimed from it.
+
+The current branch head is f171b54; PR #9 remains open as a draft. No merge or master change.
