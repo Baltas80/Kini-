@@ -80,7 +80,7 @@ Code commit evaluated: `fbffca8b1600346ca728e19f010ab3f61f35f198`
 | Ensemble (DC/ML/LAE/market) | 0.4825 | 0.6134 | 1.0226 | 0.2069 | 0.0117 |
 | Fixed DC/ML-only | 0.4772 | 0.6158 | 1.0264 | 0.2080 | 0.0108 |
 | Adaptive DC/ML-only | 0.4777 | 0.6160 | 1.0267 | 0.2080 | 0.0100 |
-| B365 pre-closing | **0.5085** | **0.5980** | **1.0002** | **0.2002** | 0.0261 |
+| multi-book pre-closing | **0.5085** | **0.5980** | **1.0002** | **0.2002** | 0.0261 |
 
 * RPS is secondary because 1/X/2 are nominal outcomes rather than a naturally ordinal scale.  
 ** ECE is maximum-confidence expected calibration error with 10 equal-width bins; it is not a complete class-wise calibration assessment.
@@ -137,7 +137,7 @@ The evaluator selects one weight before each calendar date and appends that date
 
 ### Interpretation
 
-- The B365 pre-closing benchmark outperforms every model configuration on accuracy, Brier and Log Loss.
+- The multi-book pre-closing benchmark outperforms every model configuration on accuracy, Brier and Log Loss.
 - The market-assisted ensemble is marginally better than Dixon-Coles on Brier and Log Loss, but not accuracy; this does not establish a meaningful predictive advantage.
 - ML remains materially weaker than Dixon-Coles and market.
 - The fixed model-only DC/ML blend slightly improves Brier and Log Loss relative to Dixon-Coles but has lower accuracy.
@@ -146,9 +146,9 @@ The evaluator selects one weight before each calendar date and appends that date
 
 ### Odds provenance clarification — 2026-11-15
 
-The official Football-Data notes define `B365H/D/A` as **pre-closing** Bet365 odds; the closing equivalents are `B365CH/CD/CA` (the additional `C` marks closing). The current parser in `kini_engine/dataio.py::_market_from_row` selects `B365H/D/A`, not the closing columns. Therefore every result labelled “market” in the current backtests is a **Bet365 pre-closing snapshot benchmark**, not a closing-odds benchmark.
+The official Football-Data notes define `B365H/D/A` as **pre-closing** Bet365 odds; the closing equivalents are `B365CH/CD/CA` (the additional `C` marks closing). The current parser in `kini_engine/dataio.py::_market_from_row` averages normalized implied probabilities from the pre-closing triples `B365H/D/A`, `WHH/WHD/WHA`, `VCH/VCD/VCA` and `PSH/PSD/PSA` when available. It does not use the corresponding closing columns (`B365CH/CD/CA`, `WHCH/WHCD/WHCA`, `VCCH/VCCD/VCCA`, `PSCH/PSCD/PSCA`). Therefore every result labelled “market” in the current backtests is a **multi-book pre-closing snapshot benchmark**, not a closing-odds benchmark.
 
-Football-Data states that since 2019/20 it publishes two sets: an initial set collected after market opening at scheduled times, and a separate closing set. Its fixtures page specifies that weekend odds are collected on Fridays generally no later than 17:00 British Standard Time, and midweek odds on Tuesdays no later than 13:00 British Standard Time. The historical match CSV does not store a per-fixture capture timestamp. The scheduled policy supports treating `B365H/D/A` as a pre-match snapshot reference, but does not prove the exact capture time for every fixture, reschedule or operational cutoff, nor guarantee an executable price.
+Football-Data states that since 2019/20 it publishes two sets: an initial set collected after market opening at scheduled times, and a separate closing set. Its fixtures page specifies that weekend odds are collected on Fridays generally no later than 17:00 British Standard Time, and midweek odds on Tuesdays no later than 13:00 British Standard Time. The historical match CSV does not store a per-fixture capture timestamp. The scheduled policy supports treating these pre-closing bookmaker triples as a pre-match snapshot reference, but does not prove the exact capture time for every fixture, reschedule or operational cutoff, nor guarantee an executable price.
 
 Sources: [Football-Data odds/data notes](https://football-data.co.uk/data), [column glossary](https://football-data.co.uk/notes.txt), [fixture collection schedule](https://football-data.co.uk/matches.php).
 
@@ -191,7 +191,7 @@ El constructor de la ingesta consolida el DataFrame normalizado antes de añadir
 ## Remaining work — priority order
 
 1. **Calibration correction:** evaluate the new prequential vector-bias/shared-scale calibrator against raw forecasts on its identical post-warm-up sample. Promote it only if Brier and Log Loss improve on the same chronological evaluation; otherwise retain raw probabilities and document the result.
-2. **Odds provenance:** the current benchmark is B365 pre-closing, not closing. Add separate pre-closing and closing benchmark fields and verify match-level timing/reschedule handling before making a strict operational-cutoff claim.
+2. **Odds provenance:** the current benchmark is multi-book pre-closing, not closing. Add separate pre-closing and closing benchmark fields and verify match-level timing/reschedule handling before making a strict operational-cutoff claim.
 3. **Data identity:** audit aliases, renamed clubs and cross-season continuity; profile checks currently normalize text but do not maintain a canonical team-identity registry.
 4. **Ticket economics:** test cross-match dependence and realistic system/reduced-bet constraints. Do not claim expected payout or profitability without a defensible payout model and prize-pool data.
 5. **Model research:** retain the adaptive DC/ML weighting as an experiment; do not promote it unless a prequential or nested temporal evaluation demonstrates improvement in proper scoring rules.
@@ -243,9 +243,9 @@ The full workflow completed successfully on 2026-11-14/15 for model-code HEAD `3
 | Ensemble DC/ML/LAE/market | 4,480 | 0.612291 | 0.612432 | +0.000141 | 1.020870 | 1.021008 | +0.000138 |
 | Fixed DC/ML-only | 4,480 | 0.614517 | 0.614567 | +0.000050 | 1.024162 | 1.024174 | +0.000012 |
 | Adaptive DC/ML-only | 4,480 | 0.614591 | 0.614550 | -0.000041 | 1.024310 | 1.024157 | -0.000153 |
-| B365 pre-closing | 4,480 | 0.598952 | 0.598058 | -0.000894 | 1.001505 | 1.000017 | -0.001488 |
+| multi-book pre-closing | 4,480 | 0.598952 | 0.598058 | -0.000894 | 1.001505 | 1.000017 | -0.001488 |
 
-Negative deltas indicate improvement. The B365 pre-closing benchmark remains materially better than every calibrated model on both proper scoring rules. On the same 4,480 common fixtures, the calibrated market scores 0.598058 Brier / 1.000017 Log Loss; the best calibrated model configuration is the raw market-assisted ensemble at 0.612432 / 1.021008.
+Negative deltas indicate improvement. The multi-book pre-closing benchmark remains materially better than every calibrated model on both proper scoring rules. On the same 4,480 common fixtures, the calibrated market scores 0.598058 Brier / 1.000017 Log Loss; the best calibrated model configuration is the raw market-assisted ensemble at 0.612432 / 1.021008.
 
 ### Promotion decision
 
@@ -261,7 +261,7 @@ The historical-backtest workflow now runs on pushes that change `kini_engine/**`
 
 ### Exact backtest reproducibility
 
-A second full execution, [run 43657293261](https://github.com/Baltas80/Kini-/actions/runs/43657293261), completed successfully on a documentation-only commit with the same model code and source data. It reproduced **exactly** every aggregate metric for Dixon-Coles, ML, all three ensembles and the B365 pre-closing benchmark, as well as every prequential-calibration summary (4,480-row samples, 33 fits, 1,500-row final fit, 2026-10-26 fit date). All numerical deltas between the two artifacts were zero. This demonstrates deterministic reproducibility for the pinned code/data run; it is not an independent holdout.
+A second full execution, [run 43657293261](https://github.com/Baltas80/Kini-/actions/runs/43657293261), completed successfully on a documentation-only commit with the same model code and source data. It reproduced **exactly** every aggregate metric for Dixon-Coles, ML, all three ensembles and the multi-book pre-closing benchmark, as well as every prequential-calibration summary (4,480-row samples, 33 fits, 1,500-row final fit, 2026-10-26 fit date). All numerical deltas between the two artifacts were zero. This demonstrates deterministic reproducibility for the pinned code/data run; it is not an independent holdout.
 
 ### Football-Data team labels
 
