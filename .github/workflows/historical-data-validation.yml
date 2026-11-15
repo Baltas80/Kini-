@@ -29,6 +29,7 @@ on:
       - "!data/ligaf_fixture_evidence.json"
       - "!data/ligaf_history.jsonl"
       - "!data/ligaf_history.profile.json"
+      - "!data/ligaf_team_profile_crosswalk.json"
       - "!kini_engine/data/ligaf_team_identity_registry.json"
       - "pyproject.toml"
       - "requirements*.txt"
