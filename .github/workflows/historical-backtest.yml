@@ -102,7 +102,7 @@ jobs:
                 ;;
               kini_engine/team_identity.py|kini_engine/fixture_reconciliation.py|kini_engine/ligaf_evidence.py|kini_engine/ligaf_history.py|kini_engine/ligaf_team_profiles.py|kini_engine/sources.py|kini_engine/mcp_server.py|kini_engine/data/*)
                 ;;
-              data/selae_fixture_crosswalk.json|data/ligaf_fixture_evidence.json|data/ligaf_history.jsonl|data/ligaf_history.profile.json|data/ligaf_team_profile_crosswalk.json)
+              data/selae_fixture_crosswalk.json|data/kinielagpt_fixture_kickoffs.json|data/ligaf_fixture_evidence.json|data/ligaf_history.jsonl|data/ligaf_history.profile.json|data/ligaf_team_profile_crosswalk.json)
                 ;;
               kini_engine/*|scripts/build_history.py|scripts/diagnose_ml.py|data/*|pyproject.toml|requirements*.txt)
                 run_backtest=true
