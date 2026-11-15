@@ -230,5 +230,7 @@
       "gender": "men",
       "time_basis": "official_default_time"
     }
-  ]
+  ],
+  "schedule_evidence_checked_at_utc": "2026-11-15T19:36:39.115Z",
+  "schedule_evidence_check_method": "official UEFA schedule pages reopened and checked; all listed kickoff times use CET"
 }
