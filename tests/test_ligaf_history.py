@@ -107,22 +107,15 @@ def test_parse_match_detail_handles_postponed_without_fabricating_score():
     assert row["result_1x2"] is None
 
 
-def test_parse_match_detail_rejects_score_mismatch_between_title_and_status():
-    html = MATCH_HTML.replace("Finalizado", "Aplazado")
-    with pytest.raises(LigaFHistoryError, match="non-final|unknown"):
-        row = parse_match_detail(
-            html,
-            match_url=MATCH_URL,
-            season_end_year=2027,
-            expected_matchday=10,
-            round_url=ROUND_URL,
-            match_source_metadata=source_metadata(html, MATCH_URL),
-            round_source_metadata=source_metadata(ROUND_HTML, ROUND_URL),
-        )
+def test_validate_history_rejects_result_score_mismatch():
+    row = _record(1)
+    row["result_1x2"] = "2"
+    with pytest.raises(LigaFHistoryError, match="result conflicts with the full-time score"):
         validate_history(
             [row],
             completed_seasons=set(),
-            requested_rounds={2027: 10},
+            requested_rounds={2023: 1},
+            expected_fixtures_per_round=1,
         )
 
 
