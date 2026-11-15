@@ -124,6 +124,38 @@ def test_parse_selae_draw_rejects_sign_score_mismatch() -> None:
         parse_selae_draw(make_html(signs=wrong_signs), DRAW_DATE)
 
 
+def test_parse_selae_draw_allows_mismatch_only_for_exact_official_override() -> None:
+    wrong_signs = SIGNS.copy()
+    wrong_signs[13] = "X"
+    overrides = load_fixture_overrides()
+    overrides[0] = {**overrides[0], "sign": "X"}
+
+    draw = parse_selae_draw(
+        make_html(signs=wrong_signs),
+        DRAW_DATE,
+        fixture_overrides=overrides,
+    )
+    assert apply_fixture_overrides([draw], overrides) == 1
+    fixture = draw["fixtures"][13]
+    assert fixture["score_status"] == "not_played"
+    assert fixture["sign_determination"] == "public_draw"
+    assert fixture["sign"] == "X"
+
+
+def test_parse_selae_draw_rejects_override_that_does_not_match_source_score() -> None:
+    wrong_signs = SIGNS.copy()
+    wrong_signs[13] = "X"
+    overrides = load_fixture_overrides()
+    overrides[0] = {**overrides[0], "sign": "X", "reported_score_raw": "0-0"}
+
+    with pytest.raises(ValueError, match="no coincide con el manifiesto oficial"):
+        parse_selae_draw(
+            make_html(signs=wrong_signs),
+            DRAW_DATE,
+            fixture_overrides=overrides,
+        )
+
+
 def test_parse_selae_draw_rejects_incomplete_coupon() -> None:
     incomplete = make_html().replace("<li><span>Tenerife (F)</span></li>", "")
     with pytest.raises(ValueError, match="bloque completo"):
