@@ -65,7 +65,7 @@ El resultado se escribe en `data/ligaf_history.jsonl` y su perfil de integridad 
 
 El importador exige ocho encuentros por jornada, identificadores oficiales únicos, fechas del partido coincidentes con la sección de resultados de la jornada, marcador y signo coherentes y, para temporadas completas, 240 partidos, 16 equipos y 15 encuentros como local y visitante por equipo. Los títulos de algunas fichas históricas muestran un año estático incorrecto; por eso el año de temporada se toma de la ruta oficial del archivo y la fecha del encabezado de la ficha se contrasta con las fechas de la jornada.
 
-**Límite de entrenamiento:** todos los registros llevan `training_label_eligible=false`. Todavía faltan el registro de identidades históricas por temporada, la auditoría completa de cambios de nombre/ascensos/descensos y una validación temporal de las variables prepartido. Este importador no modifica `historical_spain.csv`, los modelos ni las predicciones. Véase `docs/SELAE_RECONCILIATION.md`.
+**Validación de ingesta:** el importador completó una ejecución real de GitHub Actions el 15-11-2026 ([run 43707943077](https://github.com/Baltas80/Kini-/actions/runs/43707943077)): 1.040 encuentros, 1.039 disputados, uno aplazado, 1.040 IDs únicos e integridad aprobada. El artefacto `ligaf-history` se publicó correctamente. **Límite de entrenamiento:** todos los registros llevan `training_label_eligible=false`. Todavía faltan el registro de identidades históricas por temporada, la auditoría completa de cambios de nombre/ascensos/descensos y una validación temporal de las variables prepartido. Este importador no modifica `historical_spain.csv`, los modelos ni las predicciones. Véase `docs/SELAE_RECONCILIATION.md`.
 
 ## Licencia y procedencia
 
