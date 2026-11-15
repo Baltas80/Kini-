@@ -26,6 +26,8 @@ on:
       - "data/**"
       - "!data/selae_fixture_crosswalk.json"
       - "!data/ligaf_fixture_evidence.json"
+      - "!data/ligaf_history.jsonl"
+      - "!data/ligaf_history.profile.json"
       - "!kini_engine/data/ligaf_team_identity_registry.json"
       - "pyproject.toml"
       - "requirements*.txt"
