@@ -6,7 +6,6 @@ on:
       - "feat/selae-fixture-reconciliation"
     paths:
       - "kini_engine/ligaf_history.py"
-      - "scripts/import_ligaf_history.py"
   workflow_dispatch:
     inputs:
       max_current_matchday:
