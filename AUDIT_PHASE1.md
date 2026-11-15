@@ -999,3 +999,70 @@ The first CI attempt on the new LAE gate stopped at Ruff before pytest. It ident
 - The full walk-forward on the LAE-gate implementation commit `313496c` is still running as [43728615644](https://github.com/Baltas80/Kini-/actions/runs/43728615644). The corrected parser commit changes only equivalent ISO-8601 UTC parsing syntax; historical Football-Data rows contain no LAE inputs, so this gate does not alter the historical benchmark path. A final current-head backtest is queued as [43728777983](https://github.com/Baltas80/Kini-/actions/runs/43728777983).
 
 No LAE provider is currently marked eligible by the historical loader. Live callers must supply the source identifier and timezone-aware capture/kickoff timestamps required by the new contract.
+
+## Source-eligibility hardening and final walk-forward — 2026-11-15
+
+Implementation commit [606ba1e4d86db8838e1297a805b269f95c5a1353](https://github.com/Baltas80/Kini-/commit/606ba1e4d86db8838e1297a805b269f95c5a1353) closes a second point-in-time bypass in the public `surprise_signal()` diagnostic. The engine's normal forecast path already screened source values, but direct callers could previously pass arbitrary LAE/market dictionaries without tying them to the current fixture's provenance. The helper now treats legacy LAE/market arguments only as source-selection flags and reads the authoritative vectors from the current `Match` after its eligibility checks.
+
+- Added a shared strict 1/X/2 validator: all three keys required, finite values in [0, 1], booleans rejected, and sum within 1e-6 of one. Invalid inputs are rejected rather than silently normalized.
+- Market eligibility now requires both the explicit schedule-compatibility flags and a valid probability vector.
+- LAE eligibility reuses the same probability validator after source, timezone-aware capture/kickoff and strict pre-kickoff checks.
+- Surprise diagnostics no longer trust caller-supplied external vectors as data; verified Match-attached values are authoritative.
+- Four regression tests cover unverified external vectors, verified Match data overriding external values, invalid market vectors and market provenance requirements.
+
+### Validation on commit 606ba1e
+
+- PR CI [run 43734040241](https://github.com/Baltas80/Kini-/actions/runs/43734040241) completed successfully: Ruff **All checks passed**, formatting passed, **147 tests passed**, with four upstream NumPy 2.5 / penaltyblog deprecation warnings.
+- Historical walk-forward [run 43734040294](https://github.com/Baltas80/Kini-/actions/runs/43734040294) completed successfully. History construction, first-ML forecast diagnostic, historical comparison, non-empty prediction acceptance, market-sample acceptance, prequential-calibration acceptance and artifact upload all passed.
+- Test period: 2020-12-11 through 2026-11-09; initial training sample: 300; generated history: 5,311 completed fixtures; five model configurations each produced **5,011/5,011 forecasts** with **zero prediction errors**.
+- Artifact: [historical-backtest, ID 14169644093](https://github.com/Baltas80/Kini-/actions/runs/43734040294/artifacts/14169644093), 169,317 bytes; ZIP SHA-256 `9dfb3c07e6b42e205c0422dfecff10c79ab6801c48cba1a5828b3f415a29689f`.
+
+### Current-head metrics
+
+Full model samples contain 5,011 forecasts each. The schedule-screened market sample contains 4,424 fixtures; the 587 ambiguous rows are excluded. Full-sample model metrics are descriptive only and must not be compared to the smaller market sample as if paired.
+
+| Candidate | n | Accuracy | Multiclass Brier | Log Loss | RPS | ECE |
+|---|---:|---:|---:|---:|---:|---:|
+| Dixon–Coles | 5,011 | 0.4817 | 0.616668 | 1.027806 | 0.208245 | 0.011423 |
+| ML (12 features) | 5,011 | 0.4414 | 0.645534 | 1.071417 | 0.219951 | 0.044087 |
+| Market-assisted ensemble | 5,011 | 0.4793 | 0.613630 | 1.023028 | 0.207026 | 0.012840 |
+| Fixed DC/ML-only | 5,011 | 0.4758 | 0.615866 | 1.026405 | 0.208008 | 0.009508 |
+| Adaptive DC/ML-only | 5,011 | 0.4772 | 0.616077 | 1.026712 | 0.208079 | 0.008118 |
+| Schedule-screened market | 4,424 | 0.5072 | 0.597504 | 0.999444 | 0.199876 | 0.024213 |
+
+The exact paired comparison uses the same **4,424 fixtures** for every model and the market:
+
+| Candidate | Accuracy | Multiclass Brier | Log Loss |
+|---|---:|---:|---:|
+| Dixon–Coles | 0.4806 | 0.616357 | 1.027499 |
+| ML (12 features) | 0.4378 | 0.647471 | 1.074246 |
+| Market-assisted ensemble | 0.4781 | 0.613563 | 1.023018 |
+| Fixed DC/ML-only | 0.4740 | 0.616095 | 1.026842 |
+| Adaptive DC/ML-only | 0.4749 | 0.616305 | 1.027133 |
+| Market | **0.5072** | **0.597504** | **0.999444** |
+
+The market remains better than every candidate on accuracy, Brier and Log Loss. The market-assisted ensemble is the strongest model candidate by Brier/Log Loss but does not close the market gap. ML remains materially weaker. No candidate is promoted as a market-beating production model.
+
+### Prequential calibration on the current head
+
+The regularized multinomial vector-bias/shared-scale calibrator used only prior walk-forward out-of-sample forecasts, excluded same-calendar-day outcomes, used a 500-forecast warm-up, 1,500-row rolling window, minimum 20 observations per class and refit every 30 forecast dates.
+
+- Each model: 4,480 post-warm-up raw/calibrated forecasts.
+- Exact common calibrated model/market sample: 3,847 fixtures.
+- Last calibrator fit: 2026-10-26 using 1,500 prior forecasts.
+- Calibrated market on the common sample: accuracy 0.5082, Brier 0.596714, Log Loss 0.998094.
+- Best calibrated model on that same sample: market-assisted ensemble, accuracy 0.4866, Brier 0.611522, Log Loss 1.019966.
+
+Calibration improves the market's Brier/Log Loss slightly on this sample and reduces its ECE, but the calibrated ensemble remains materially worse. Calibration is validated as a prequential evaluation pipeline, not as evidence of model-market parity or betting profitability.
+
+### Acceptance and remaining limitations
+
+- **P0 non-empty backtests:** validated on the current code head; all five configurations generated 5,011 forecasts with zero errors.
+- **Source eligibility:** the direct surprise-diagnostic bypass is closed and regression-tested.
+- **CI:** 147 tests pass on the current code head.
+- **Historical market comparison:** paired on 4,424 schedule-compatible fixtures. The 587 Friday/Tuesday rows remain ambiguous because exact kickoff timezone and per-fixture odds capture timestamps are unavailable; the market remains a schedule-screened pre-closing snapshot benchmark, not verified closing/executable odds.
+- **Historical feature availability:** strict prior-date filtering is implemented, but exact publication timestamps for historical results are not available; source-level point-in-time proof remains incomplete.
+- **Live LAE adapter:** `KinielaGPTSource.probabilities()` still discards capture-time metadata and `detect_surprises()` does not yet attach a verified timezone-aware kickoff. The fail-closed core therefore intentionally ignores those adapter-supplied LAE values. Do not fabricate timestamps to re-enable them.
+- **P6:** optimizer still needs correlation-aware coverage validation, complete rule/price refresh for actual submission, and defensible expected-payout modelling.
+
+Next priority: repair the live LAE adapter contract by preserving a provider capture timestamp and obtaining an exact timezone-aware kickoff from the fixture source; then continue canonical team identity and correlation-aware ticket-optimization acceptance. Do not promote ML or an ensemble on these results. No merge or changes to `master`.
