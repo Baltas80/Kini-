@@ -1198,3 +1198,58 @@ Validation on `0bf4f7a7c17b5f78550cc3be1564f7fa498081f9`:
 The current endpoint still returns `dia=MAR` and `hora=20:45`, with no calendar date or timezone. LAE remains fail-closed. The last full historical model comparison remains run 43740951689 as documented above.
 
 This verification was completed on documentation-only commit `6041fd8`: live workflow run [43746425602](https://github.com/Baltas80/Kini-/actions/runs/43746425602) passed `changes` and skipped `inspect`; historical run [43746425599](https://github.com/Baltas80/Kini-/actions/runs/43746425599) skipped the backtest. The latest-commit filter therefore avoids a redundant provider GET on audit-only updates.
+
+## Fixture-order crosswalk and workflow baseline corrections — 2026-11-15
+
+### KinielaGPT order-to-percentage crosswalk
+
+The read-only diagnostic now compares `detallePartidos[].orden` against the `num`/ID and home/away names returned by the current percentage XML endpoint.
+
+The check is deliberately conservative:
+
+- Normalize Unicode accents, case and punctuation only.
+- Require an exact normalized home/away pair in the same orientation.
+- Require exactly one percentage row for each pair.
+- Require `orden == num` for every fixture.
+- Require unique detail orders and percentage IDs, equal record counts, one-to-one coverage and no invalid records.
+- Do not use aliases, fuzzy matching, reversed home/away pairs or positional fallback.
+
+Three regression tests cover a valid accent/case-normalized bijection, a reversed fixture whose names point to a different number, and an ambiguous duplicate name pair.
+
+Live validation on the current jornada:
+
+- Diagnostic run [43751980923](https://github.com/Baltas80/Kini-/actions/runs/43751980923) succeeded on the updated branch.
+- Jornada 22, temporada 2027.
+- 15 detail records and 15 percentage records.
+- **15/15 exact name-pair matches; all 15 `orden` values equal their percentage `num`.**
+- Zero duplicate orders, duplicate percentage IDs, invalid records or unmatched percentage IDs.
+- Artifact [kinielagpt-details-diagnostic, ID 14176397533](https://github.com/Baltas80/Kini-/actions/runs/43751980923/artifacts/14176397533), 3,144 bytes.
+
+This verifies the crosswalk for this live jornada snapshot only. It does not establish that the provider's numbering contract is invariant across all seasons or competitions.
+
+### Kickoff-time limitation remains open
+
+The crosswalk does not provide a calendar date or timezone-aware kickoff. In the first five sampled detail records, `dia` was `MAR` and `hora` was `20:45`; both were classified as non-timezone-aware values. The sampled schema still has no timezone-aware ISO kickoff field.
+
+Do not combine weekday plus local clock into a guessed date, and do not treat the root `caducidad` value as kickoff. LAE remains fail-closed and cannot influence the live ensemble or surprise score until an independent fixture source supplies an exact timezone-aware kickoff for the same verified fixture.
+
+### Workflow reliability and efficiency corrections
+
+Two CI scope filters had edge cases that could cause unnecessary work or hide a cancelled validation:
+
+- The historical workflow queried the Actions API with `status=success`, but `status` is a lifecycle filter, not a conclusion. It now queries completed runs and selects the newest run whose actual `backtest` job concluded successfully. A skipped backtest is not accepted as a validation baseline.
+- The live diagnostic filter previously compared only the latest commit. A later documentation/workflow commit could therefore skip a diagnostic whose earlier run had been cancelled. It now compares against the newest completed run whose `inspect` job actually succeeded.
+- Both changes jobs now fetch full history before checking whether the last successful validation commit is an ancestor, avoiding false fallback to a full PR diff caused by shallow history.
+
+Validation:
+- CI [run 43751980894](https://github.com/Baltas80/Kini-/actions/runs/43751980894): Ruff and formatting passed; **159 tests passed**, with four upstream NumPy 2.5 / penaltyblog deprecation warnings.
+- Live diagnostic [run 43751980923](https://github.com/Baltas80/Kini-/actions/runs/43751980923): change filter and live inspection both passed; bounded artifact uploaded.
+- An earlier full historical backtest [run 43751566316](https://github.com/Baltas80/Kini-/actions/runs/43751566316) was started because the old historical baseline query returned no successful SHA. It is still running at this audit update. No predictive model or historical feature code changed in this unit; the last completed benchmark remains run 43740951689 until a new full run completes.
+
+### Next actions
+
+1. Confirm the corrected historical scope filter finds the last successful backtest job and skips the queued workflow-only/diagnostic-only update after run 43751566316 completes.
+2. Continue sourcing exact timezone-aware kickoff timestamps and verify each timestamp against the same crosswalked home/away fixture. Keep LAE disabled until this is demonstrated.
+3. Resume the candidate-feature point-in-time audit and correlation-aware Quiniela ticket-coverage acceptance work.
+
+No direct changes to `master`; PR #9 remains open and unmerged.
