@@ -530,4 +530,4 @@ Official match pages:
 - https://ligaf.es/partido/logrono/sevilla-fc-femenino/202723864/detalle
 - https://ligaf.es/partido/eibar-femenino/real-sociedad-futbol-femenino/202723866/detalle
 
-Validation status at this log update: GitHub Actions is expected to run because the new code, data and tests are included in the CI path filters. Do not treat the evidence layer as validated until the corresponding run passes. No model code, training data or forecast probabilities are changed.
+Validation: CI run [43701107837](https://github.com/Baltas80/Kini-/actions/runs/43701107837) passed on the completed implementation. Ruff checks passed; the two new Liga F Python files passed `ruff format --check`; pytest reported 101 passed and 4 upstream NumPy/penaltyblog deprecation warnings. The historical-data rebuild and full model backtest were excluded because these files are evidence-only and do not change the Football-Data dataset or model inputs. No model code, training data or forecast probabilities were changed.
