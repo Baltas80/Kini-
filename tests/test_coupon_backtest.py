@@ -8,6 +8,7 @@ import pytest
 
 from kini_engine import coupons
 from kini_engine.core import Match, TicketOptimizer
+from scripts.backtest_coupons import validate_coupon_backtest_acceptance
 
 
 def _fixture_rows() -> list[dict[str, object]]:
@@ -242,3 +243,114 @@ def test_coupon_batch_does_not_swallow_unexpected_programming_errors(
     monkeypatch.setattr(coupons, "evaluate_coupon", unexpected_error)
     with pytest.raises(AttributeError, match="unexpected programming defect"):
         coupons.evaluate_coupon_batch([{"coupon_id": "2020-2021:21"}], [])
+
+
+
+def _accepted_coupon_backtest_result() -> tuple[dict[str, object], list[str]]:
+    coupon = _verified_coupon()
+    coupon_id = str(coupon["coupon_id"])
+    probabilities = {"1": 0.5, "X": 0.3, "2": 0.2}
+    model_result = {
+        "status": "success",
+        "n_predictions": 14,
+        "probabilities": [probabilities.copy() for _ in range(14)],
+        "single_sign_hits": 7,
+        "best_column_hits": 8,
+        "covered_14": False,
+        "pleno_hit": False,
+        "full_coupon_covered": False,
+        "column_count": 8,
+        "total_bets": 8,
+        "double_count": 3,
+        "triple_count": 0,
+        "cost_eur": 6.0,
+        "independent_14_coverage_estimate": 0.25,
+    }
+    coupon_result = {
+        "coupon_id": coupon_id,
+        "official_main_matches_verified": True,
+        "official_pleno_verified": True,
+        "fixture_reconciliation_count": 15,
+        "fixture_reconciliation": [{"number": number} for number in range(1, 16)],
+        "first_kickoff_at": coupon["first_kickoff_at"],
+        "training_cutoff_date": coupon["training_cutoff_date"],
+        "training_match_count": 303,
+        "model_fit_match_count": 303,
+        "pleno_prediction": {
+            "model": "dixon_coles",
+            "selection_method": "max_aggregated_category_pair_probability",
+            "home_category": "M",
+            "away_category": "0",
+            "probability_mass": 0.2,
+            "training_match_count": 303,
+        },
+        "models": {
+            mode: {
+                **model_result,
+                "probabilities": [probabilities.copy() for _ in range(14)],
+            }
+            for mode in ("dc", "ml", "ensemble_dc_ml")
+        },
+    }
+    summary_models = {
+        mode: {"evaluated_coupons": 1, "failed_coupons": 0}
+        for mode in ("dc", "ml", "ensemble_dc_ml")
+    }
+    return (
+        {
+            "config": {"budget_columns": 8, "min_history_matches": 300},
+            "summary": {"coupon_count": 1, "models": summary_models},
+            "coupons": [coupon_result],
+        },
+        [coupon_id],
+    )
+
+
+def test_coupon_backtest_acceptance_requires_all_models_and_valid_vectors() -> None:
+    result, coupon_ids = _accepted_coupon_backtest_result()
+    validate_coupon_backtest_acceptance(
+        result,
+        coupon_ids,
+        budget=8,
+        min_history_matches=300,
+    )
+
+
+@pytest.mark.parametrize("mode", ["dc", "ml", "ensemble_dc_ml"])
+def test_coupon_backtest_acceptance_rejects_failed_model(mode: str) -> None:
+    result, coupon_ids = _accepted_coupon_backtest_result()
+    result["coupons"][0]["models"][mode]["status"] = "failed"
+    with pytest.raises(ValueError, match=mode):
+        validate_coupon_backtest_acceptance(
+            result,
+            coupon_ids,
+            budget=8,
+            min_history_matches=300,
+        )
+
+
+def test_coupon_backtest_acceptance_rejects_invalid_probability_vector() -> None:
+    result, coupon_ids = _accepted_coupon_backtest_result()
+    result["coupons"][0]["models"]["ml"]["probabilities"][0]["X"] = 0.9
+    with pytest.raises(ValueError, match="ml fixture 1"):
+        validate_coupon_backtest_acceptance(
+            result,
+            coupon_ids,
+            budget=8,
+            min_history_matches=300,
+        )
+
+
+def test_coupon_backtest_acceptance_rejects_incomplete_model_aggregate() -> None:
+    result, coupon_ids = _accepted_coupon_backtest_result()
+    result["summary"]["models"]["ensemble_dc_ml"] = {
+        "evaluated_coupons": 0,
+        "failed_coupons": 1,
+    }
+    with pytest.raises(ValueError, match="ensemble_dc_ml"):
+        validate_coupon_backtest_acceptance(
+            result,
+            coupon_ids,
+            budget=8,
+            min_history_matches=300,
+        )
