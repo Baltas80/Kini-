@@ -36,7 +36,11 @@ def _season_identity(match: Match) -> tuple[str, str, str]:
             return None
         return raw
 
-    league = source_value(detail.get("League")) or source_value(detail.get("Div")) or "unknown"
+    league = (
+        source_value(detail.get("League"))
+        or source_value(detail.get("Div"))
+        or "unknown"
+    )
     season_code = source_value(detail.get("Season")) or "unknown"
     season_label = season_code
     if len(season_code) == 4 and season_code.isdigit():

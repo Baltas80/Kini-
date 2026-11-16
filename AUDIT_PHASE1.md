@@ -1639,8 +1639,21 @@ The market remains superior on accuracy and both proper scoring rules. No model 
 
 Prequential calibration used 3,847 common post-warm-up model/market fixtures, prior out-of-sample forecasts only, a 500-row minimum history, 1,500-row rolling window and refit every 30 dates. For the main ensemble, Brier/Log Loss moved from 0.611315 / 1.019753 raw to 0.611522 / 1.019966 calibrated; calibration is not promoted. The calibrated market scored 0.596714 / 0.998094 on that same sample.
 
-Cold-start diagnostics report 73/5,011 unseen-team fallbacks (1.4568%) for Dixon–Coles and every DC-dependent ensemble; ML-only reports 0/5,011. The report currently retains only the first 20 dated examples, so the aggregate alone is insufficient to change the fallback policy. The next implementation adds a source-backed league/season breakdown and acceptance checks that reconcile seasonal denominators and fallback totals to the aggregate counts.
+Cold-start diagnostics report 73/5,011 unseen-team fallbacks (1.4568%) for Dixon–Coles and every DC-dependent ensemble; ML-only reports 0/5,011. The report currently retains only the first 20 dated examples, so the aggregate alone is insufficient to change the fallback policy. Commit 6ebd3ad adds a source-backed league/season breakdown and CI acceptance checks that reconcile seasonal denominators and fallback totals to the aggregate counts; final validation is pending.
 
 Historical-data validation [run 43791408933](https://github.com/Baltas80/Kini-/actions/runs/43791408933) succeeded. CI [run 43791408930](https://github.com/Baltas80/Kini-/actions/runs/43791408930) was cancelled before lint or pytest ran; its retry was requested. This cancellation is not counted as a test failure or a passing CI result.
 
 No PR was merged and master was not modified.
+
+
+### Season-level cold-start diagnostics — implementation and data validation
+
+Commit 6ebd3ad adds per-model by_season output to the walk-forward report. Buckets use the source League/Div and Season fields; no season is inferred from fixture dates. Football-Data four-digit season codes are preserved alongside a readable label. The CI acceptance step checks each bucket's identity, uniqueness, denominator, count and rate, reconciles seasonal totals to aggregate totals, and requires every DC-dependent stream to match Dixon–Coles season by season.
+
+The latest historical-data validation [run 43797153277](https://github.com/Baltas80/Kini-/actions/runs/43797153277) succeeded. Artifact [14192069423](https://github.com/Baltas80/Kini-/actions/runs/43791408933/artifacts/14192069423) contains 5,311 completed fixtures across 14 league/season groups, 2020-09-12–2026-11-09. The generated profile reports zero missing team names, missing final scores, incomplete scores, duplicate fixtures, conflicting duplicates, invalid result labels, score/result mismatches or invalid dates with teams. The source cache age was approximately 16.6 hours at profile generation. Sparse bookmaker columns remain a data-availability limitation, not a fixture-integrity failure.
+
+CI [run 43797153246](https://github.com/Baltas80/Kini-/actions/runs/43797153246) passed actionlint and Ruff lint, then failed only the Ruff formatting check on the new league-label assignment in kini_engine/backtest.py; pytest was not reached. This is a formatting defect, not a test or model failure. The assignment is corrected in the follow-up commit; fresh CI is required.
+
+The current-head walk-forward [run 43797153254](https://github.com/Baltas80/Kini-/actions/runs/43797153254) has completed history construction and the first-ML diagnostic and is running the full comparison. Its seasonal fallback output is not yet available, so the 73/5,011 aggregate must not be used to change fallback policy.
+
+No merge or direct master modification.
