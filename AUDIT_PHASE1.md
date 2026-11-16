@@ -1941,3 +1941,8 @@ El crosswalk actual `data/kinielagpt_fixture_kickoffs.json` corresponde a la jor
 Se detectó además que el crosswalk solo aceptaba CET (+01:00), rechazando fechas de verano CEST (+02:00). El validador ahora acepta ambos identificadores únicamente cuando el offset ISO coincide exactamente con el declarado. Se añadieron regresiones de aceptación CEST y rechazo de offset inconsistente. El diagnóstico live ampliado expondrá por fixture los timestamps de captura/evidencia/kickoff, antigüedad de la evidencia, minutos hasta kickoff y razones de exclusión.
 
 La elegibilidad continúa siendo fail-closed: fuente, identidad, vector, URL HTTPS, evidencia anterior y fresca (máximo 24 h) y captura anterior al kickoff. La recepción del XML no demuestra cuándo el proveedor publicó o refrescó originalmente el contenido; esa limitación permanece.
+
+
+### Corrección de la primera regresión CEST
+
+La primera ejecución de CI detectó que la validación del offset ya aceptaba +02:00, pero la validación previa de la fuente seguía exigiendo literalmente `CET` y la salida etiquetaba el fixture siempre como `CET`. Se corrigen ambos puntos: la fuente puede declarar `CET` o `CEST`, el offset debe coincidir y el valor devuelto conserva la zona declarada. La prueba de verano ahora verifica el flujo completo; la prueba negativa mantiene el rechazo de un offset +01:00 declarado como CEST.

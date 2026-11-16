@@ -249,7 +249,7 @@ class KinielaGPTSource:
                 or source_id in sources
                 or not isinstance(url, str)
                 or not url.startswith("https://www.uefa.com/")
-                or source.get("timezone") != "CET"
+                or source.get("timezone") not in {"CET", "CEST"}
                 or not isinstance(source.get("competition"), str)
                 or published_date > checked_at.date()
             ):
@@ -312,7 +312,7 @@ class KinielaGPTSource:
                 "kickoff_source": source["competition"],
                 "kickoff_evidence_url": source["url"],
                 "kickoff_evidence_checked_at_utc": checked_at.isoformat(),
-                "kickoff_timezone": "CET",
+                "kickoff_timezone": source["timezone"],
             }
 
         return mapping
