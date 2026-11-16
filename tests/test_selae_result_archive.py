@@ -1,0 +1,105 @@
+from __future__ import annotations
+
+from urllib.parse import parse_qs, urlsplit
+
+import pytest
+
+from scripts.discover_selae_result_archive import (
+    INDEX_URL,
+    build_component_page_url,
+    extract_pagination_template,
+    extract_result_links,
+)
+
+
+def test_result_link_parses_spanish_date_from_official_slug() -> None:
+    document = """
+    <a href="/es/la-quiniela/resultados/la-quiniela-resultados-del-23-de-noviembre-de-2025">
+      23/11/2025 La Quiniela: resultados del 23 de noviembre de 2025
+    </a>
+    """
+
+    links = extract_result_links(document)
+
+    assert len(links) == 1
+    assert links[0]["draw_date"] == "2025-11-23"
+    assert links[0]["date_source"] == "slug"
+    assert links[0]["slug_date_available"] is True
+    assert links[0]["status"] == "dated_slug"
+
+
+def test_placeholder_slug_keeps_label_date_unverified() -> None:
+    document = """
+    <a href="/es/la-quiniela/resultados/la-quiniela-resultados-del-val-dia-semana-val-dia-de-val-mes-de-val-anyo">
+      15/04/2011 La Quiniela: resultados del [VAL_DIA_SEMANA] [VAL_DIA]
+    </a>
+    """
+
+    links = extract_result_links(document)
+
+    assert len(links) == 1
+    assert links[0]["draw_date"] == "2011-04-15"
+    assert links[0]["date_source"] == "label_only"
+    assert links[0]["slug_date_available"] is False
+    assert links[0]["status"] == "label_date_only"
+
+
+def test_invalid_or_missing_dates_are_not_invented() -> None:
+    document = """
+    <a href="/es/la-quiniela/resultados/la-quiniela-resultados-del-31-de-febrero-de-2025">
+      La Quiniela: resultados
+    </a>
+    <a href="/es/la-quiniela/resultados/la-quiniela-resultados-del-val-dia">
+      La Quiniela: resultados
+    </a>
+    """
+
+    links = extract_result_links(document)
+
+    assert len(links) == 2
+    assert all(item["draw_date"] is None for item in links)
+    assert all(item["date_source"] == "unresolved" for item in links)
+
+
+def test_pagination_template_extracts_component_and_builds_page_url() -> None:
+    document = """
+    <a href="https://www.loteriasyapuestas.es/vgn-ext-templating/render/component?lang=es_ES&amp;page=1&amp;vgnextcomponentid=component&amp;vgnextdisplayincontextedit=false&amp;vgnextoid=oid&amp;vgnextxhr=true">2</a>
+    <a href="https://www.loteriasyapuestas.es/vgn-ext-templating/render/component?lang=es_ES&amp;page=79&amp;vgnextcomponentid=component&amp;vgnextdisplayincontextedit=false&amp;vgnextoid=oid&amp;vgnextxhr=true">80</a>
+    """
+
+    template, maximum = extract_pagination_template(document)
+    page_url = build_component_page_url(template, 2)
+
+    assert maximum == 79
+    assert parse_qs(urlsplit(page_url).query)["page"] == ["2"]
+    assert "vgnextcomponentid=component" in page_url
+    assert "vgnextoid=oid" in page_url
+
+
+def test_pagination_rejects_external_or_incomplete_component_links() -> None:
+    document = """
+    <a href="https://example.com/vgn-ext-templating/render/component?page=79">80</a>
+    <a href="https://www.loteriasyapuestas.es/vgn-ext-templating/render/component?page=1">2</a>
+    """
+
+    with pytest.raises(ValueError, match="no validated pagination links"):
+        extract_pagination_template(document)
+
+
+def test_component_page_builder_rejects_invalid_parameters_and_hosts() -> None:
+    template = (
+        "https://www.loteriasyapuestas.es/vgn-ext-templating/render/component"
+        "?page=1&vgnextcomponentid=component&vgnextoid=oid"
+    )
+
+    with pytest.raises(ValueError, match="positive integer"):
+        build_component_page_url(template, 0)
+
+    with pytest.raises(ValueError, match="official HTTPS"):
+        build_component_page_url(
+            "https://example.com/vgn-ext-templating/render/component"
+            "?page=1&vgnextcomponentid=component&vgnextoid=oid",
+            2,
+        )
+
+    assert INDEX_URL.startswith("https://www.loteriasyapuestas.es/")
