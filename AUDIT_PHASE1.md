@@ -2096,3 +2096,37 @@ Commits:
 - \`be9b5d1dea93d84fec73d10cf78d0bbbf23bb150\` — Ruff formatting.
 
 Validation status: **implemented, not validated**. The most recent visible CI attempt remains [43850954338](https://github.com/Baltas80/Kini-/actions/runs/43850954338), which failed only on Ruff formatting in earlier calendar tests; those formatting corrections and this new patch are committed after that run. No final-head CI run or test artifact has been returned. Do not mark this unit tested or validated until a run on the final commit completes.
+
+
+## 2026-11-16 — final validation checkpoint
+
+### PR #7 importer provenance patch — validated
+
+The final head of \`feat/selae-official-coupon-ingestion\` is \`fb0f01dbd152681a5b79abbd40a18082be0b96d9\`.
+- CI [43850584199](https://github.com/Baltas80/Kini-/actions/runs/43850584199): **87 tests passed**, 4 upstream NumPy/penaltyblog deprecation warnings.
+- Historical-data validation [43850584212](https://github.com/Baltas80/Kini-/actions/runs/43850584212): succeeded; historical dataset/profile built, validated and uploaded (artifact ID \`14217885532\`, 713,793 bytes).
+- This validates the offline sidecar/cache integrity tests and the full existing test suite. It does not prove that GitHub runners can fetch SELAE live pages; that remains a separate 403 source-access limitation.
+
+### PR #9 reconciliation/calendar patch — awaiting final-head CI
+
+The latest implementation commit is \`1a517110c47654f2498fb1b115bc655af8bb6239\`. It includes:
+- Strict SELAE source URL validation (HTTPS, exact host, default/443 port, no user-info).
+- UTC-only public-draw evidence-check timestamps.
+- Strict integer validation for schema version, coupon fixture count and fixture positions.
+- Safe HTTPS checks for crosswalk evidence URLs.
+- Redirect trust checks for the official historical calendar XLS and archive discovery URLs.
+
+The previous PR #9 CI/data-validation attempt [43852090136](https://github.com/Baltas80/Kini-/actions/runs/43852090136) / [43852090288](https://github.com/Baltas80/Kini-/actions/runs/43852090288) was cancelled by subsequent source-formatting commits before lint/pytest or dataset validation ran. The historical-backtest changes job correctly skipped the model backtest because these changes do not touch predictive code; archive discovery also skipped because its own inputs did not change. Do not count either cancelled job as validation.
+
+A documentation-only commit follows this checkpoint so CI can run against the settled source/test head; no further source changes are planned in this cycle.
+
+### Official coupon evidence cross-check
+
+The current official SELAE result page for 8 November 2026 confirms the 14 coupon positions, scores and signs, including position 14 as displayed score 1–0/sign 1. Official Liga F match-detail pages independently confirm the three played women's fixtures and their kickoffs/results:
+- Position 11 Athletic Club–Real Madrid CF, 7 Nov 16:00, 1–1.
+- Position 12 Logroño United–Sevilla FC, 8 Nov 12:00, 2–2.
+- Position 13 SD Eibar–Real Sociedad, 7 Nov 17:00, 1–2.
+
+SELAE's official postponement PDF states that Tenerife–Alavés was scheduled for 8 Nov 13:00, postponed, and would be decided by public draw from 22:00 if it could not be played within 24 hours. This supports keeping position 14 out of football training labels. The separate Liga F evidence manifest continues to declare \`training_eligibility.eligible=false\` because no validated multi-season Liga F training dataset exists.
+
+These official pages are content-level cross-checks only. Their extracted web text is not the original HTML response and has not been substituted for a raw-byte import or SHA-256 provenance artifact.
