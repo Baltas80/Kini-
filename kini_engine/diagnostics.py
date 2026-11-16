@@ -68,8 +68,8 @@ def _metrics(
 
     classwise: dict[str, Any] = {}
     for sign in SIGNS:
-        actual_count = sum(confusion[actual][sign] for actual in SIGNS)
-        predicted_count = sum(confusion[sign][predicted] for predicted in SIGNS)
+        actual_count = sum(confusion[sign][predicted] for predicted in SIGNS)
+        predicted_count = sum(confusion[actual][sign] for actual in SIGNS)
         true_positive = confusion[sign][sign]
         false_positive = predicted_count - true_positive
         false_negative = actual_count - true_positive

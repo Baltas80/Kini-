@@ -245,11 +245,10 @@ def read_prediction_ledger(
         raise ValueError("prediction ledger must start with a run_manifest")
     manifest = {key: value for key, value in first.items() if key != "record_type"}
 
+    _validate_manifest(manifest, len(records) - 1)
     forecast_rows: list[dict[str, Any]] = []
     seen_fixture_ids: set[str] = set()
-    model_modes = set(manifest.get("model_modes", []))
-    if not model_modes:
-        raise ValueError("prediction ledger manifest has no model modes")
+    model_modes = set(manifest["model_modes"])
 
     for row_index, record in enumerate(records[1:], start=1):
         if record.get("record_type") != "forecast":
@@ -282,5 +281,4 @@ def read_prediction_ledger(
 
         forecast_rows.append(row)
 
-    _validate_manifest(manifest, len(forecast_rows))
     return manifest, forecast_rows
