@@ -198,7 +198,6 @@ def _pairwise_comparison(
     }
 
 
-
 def _paired_cluster_bootstrap(
     rows: list[dict[str, Any]],
     mode: str,
@@ -405,9 +404,7 @@ def analyze_prediction_rows(
                     model_modes,
                     min_n=min_segment_n,
                     bootstrap_samples=bootstrap_samples,
-                    seed_material=(
-                        f"{manifest.get('run_id')}|{competition}|{season}"
-                    ),
+                    seed_material=(f"{manifest.get('run_id')}|{competition}|{season}"),
                 ),
             }
         )
