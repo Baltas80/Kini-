@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from scripts.import_selae_press_release import (
+    import_press_release,
     parse_selae_press_release_text,
     validate_draw_date_in_text,
     validate_official_source_url,
@@ -123,3 +126,20 @@ def test_source_url_must_be_official_https_pdf() -> None:
 
     with pytest.raises(ValueError, match="official PDF"):
         validate_official_source_url("https://www.loteriasyapuestas.es/es/la-quiniela")
+
+
+def test_draw_date_rejects_impossible_calendar_date() -> None:
+    with pytest.raises(ValueError, match="draw_date must use ISO format"):
+        validate_draw_date_in_text("Resultados", "2026-02-30")
+
+
+def test_import_rejects_non_pdf_bytes_before_text_extraction(tmp_path: Path) -> None:
+    source = tmp_path / "not-a-pdf.pdf"
+    source.write_bytes(b"not a PDF document")
+
+    with pytest.raises(ValueError, match="PDF signature"):
+        import_press_release(
+            source,
+            "2026-11-08",
+            "https://www.loteriasyapuestas.es/f/loterias/documentos/nota.pdf",
+        )
