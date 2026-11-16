@@ -596,13 +596,18 @@ def test_draw_loader_rejects_unsafe_selae_source_urls(
         load_draw_records(path)
 
 
-def test_draw_loader_requires_utc_public_draw_evidence_timestamp(tmp_path: Path) -> None:
+def test_draw_loader_requires_utc_public_draw_evidence_timestamp(
+    tmp_path: Path,
+) -> None:
     draw = make_draw()
     draw["fixtures"][1]["sign_evidence_checked_at_utc"] = "2026-11-15T08:14:47+01:00"
     path = tmp_path / "draws.jsonl"
     path.write_text(json.dumps(draw) + "\\n", encoding="utf-8")
 
-    with pytest.raises(FixtureReconciliationError, match="sign_evidence_checked_at_utc must be UTC"):
+    with pytest.raises(
+        FixtureReconciliationError,
+        match="sign_evidence_checked_at_utc must be UTC",
+    ):
         load_draw_records(path)
 
 
