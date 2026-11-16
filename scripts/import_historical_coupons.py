@@ -103,6 +103,30 @@ def save_raw(raw_dir: Path | None, name: str, content: bytes) -> None:
     target.write_bytes(content)
 
 
+
+def load_official_snapshot_for_journey(
+    snapshot_dir: Path,
+    season: str,
+    jornada: int,
+) -> tuple[dict[str, object], str, Path]:
+    """Load the reviewed SELAE extract assigned to one season/journey."""
+    if not snapshot_dir.is_dir():
+        raise NotADirectoryError(
+            f"official SELAE snapshot directory does not exist: {snapshot_dir}"
+        )
+    if isinstance(jornada, bool) or not isinstance(jornada, int) or jornada < 1:
+        raise ValueError("journey number must be a positive integer")
+    path = snapshot_dir / f"{season}-{jornada}.json"
+    if path.is_symlink():
+        raise ValueError(f"refusing symlinked official snapshot: {path}")
+    if not path.is_file():
+        raise FileNotFoundError(
+            f"missing official SELAE snapshot for {season} journey {jornada}: {path}"
+        )
+    snapshot, digest = load_official_coupon_snapshot(path)
+    return snapshot, digest, path
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Import historical Quiniela coupons and verify ordered results against SELAE."
@@ -114,6 +138,11 @@ def main() -> None:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--raw-dir", type=Path)
     parser.add_argument("--official-snapshot", type=Path)
+    parser.add_argument(
+        "--official-snapshot-dir",
+        type=Path,
+        help="Directory of reviewed snapshots named SEASON-JOURNEY.json",
+    )
     parser.add_argument("--delay-seconds", type=float, default=0.25)
     args = parser.parse_args()
     if not args.season or "/" in args.season or ".." in args.season:
@@ -126,6 +155,10 @@ def main() -> None:
         parser.error("journeys must contain positive journey numbers")
     if args.output.exists():
         parser.error(f"refusing to overwrite existing output: {args.output}")
+    if args.official_snapshot is not None and args.official_snapshot_dir is not None:
+        parser.error("--official-snapshot and --official-snapshot-dir are mutually exclusive")
+    if args.official_snapshot_dir is not None and not args.official_snapshot_dir.is_dir():
+        parser.error(f"official snapshot directory does not exist: {args.official_snapshot_dir}")
     if args.official_snapshot and (
         args.journeys is None or len(set(args.journeys)) != 1
     ):
@@ -139,6 +172,7 @@ def main() -> None:
         official_snapshot, official_snapshot_sha = load_official_coupon_snapshot(
             args.official_snapshot
         )
+    snapshot_records: list[dict[str, object]] = []
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     session = make_session()
@@ -173,12 +207,33 @@ def main() -> None:
             )
 
         official_bytes = None
-        if official_snapshot is not None:
-            official_url = official_snapshot["source_url"]
+        coupon_snapshot = official_snapshot
+        coupon_snapshot_sha = official_snapshot_sha
+        coupon_snapshot_path = args.official_snapshot
+        if args.official_snapshot_dir is not None:
+            (
+                coupon_snapshot,
+                coupon_snapshot_sha,
+                coupon_snapshot_path,
+            ) = load_official_snapshot_for_journey(
+                args.official_snapshot_dir,
+                args.season,
+                jornada,
+            )
+        if coupon_snapshot is not None:
+            official_url = coupon_snapshot["source_url"]
             coupon = verify_coupon_against_selae_snapshot(
                 coupon,
-                official_snapshot,
-                snapshot_sha256=official_snapshot_sha,
+                coupon_snapshot,
+                snapshot_sha256=coupon_snapshot_sha,
+            )
+            coupon["official_result_snapshot_path"] = str(coupon_snapshot_path)
+            snapshot_records.append(
+                {
+                    "journey": jornada,
+                    "path": str(coupon_snapshot_path),
+                    "sha256": coupon_snapshot_sha,
+                }
             )
         else:
             official_url = selae_result_url(coupon["source_date"])
@@ -240,6 +295,10 @@ def main() -> None:
         "official_snapshot_path": str(args.official_snapshot)
         if args.official_snapshot
         else None,
+        "official_snapshot_dir": str(args.official_snapshot_dir)
+        if args.official_snapshot_dir
+        else None,
+        "official_snapshots": snapshot_records,
         "official_snapshot_sha256": official_snapshot_sha,
     }
     count = write_coupon_jsonl(args.output, coupons, manifest)
