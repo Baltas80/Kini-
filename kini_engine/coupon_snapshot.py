@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from datetime import date, datetime
+from datetime import date
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
@@ -48,12 +48,12 @@ def verify_coupon_against_selae_snapshot(
         raise ValueError("official snapshot verification method is required")
     try:
         snapshot_date = date.fromisoformat(snapshot["draw_date"])
-        published_at = datetime.fromisoformat(coupon["result_published_at"])
+        coupon_draw_date = date.fromisoformat(coupon["source_date"])
     except (KeyError, TypeError, ValueError) as exc:
-        raise ValueError("coupon publication date and official draw date are required") from exc
-    if snapshot_date != published_at.date():
+        raise ValueError("coupon source date label and official draw date are required") from exc
+    if snapshot_date != coupon_draw_date:
         raise ValueError(
-            f"official snapshot draw date {snapshot_date} does not match coupon publication date {published_at.date()}"
+            f"official snapshot draw date {snapshot_date} does not match coupon source date {coupon_draw_date}"
         )
 
     official_fixtures = snapshot.get("fixtures")

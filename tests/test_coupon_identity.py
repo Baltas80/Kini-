@@ -6,8 +6,8 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from kini_engine.coupon_identity import canonicalize_coupon
 from kini_engine.core import Match
+from kini_engine.coupon_identity import canonicalize_coupon
 
 
 def _fixture_data():

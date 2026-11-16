@@ -39,7 +39,8 @@ def _records():
     }
     coupon = {
         "coupon_id": "2020-2021:21",
-        "result_published_at": "2020-12-13T22:57:00+01:00",
+        "source_date": "2020-12-13",
+        "source_date_label_at": "2020-12-13T22:57:00+01:00",
         "fixtures": fixtures + [pleno],
     }
     snapshot = {
@@ -94,3 +95,13 @@ def test_snapshot_loader_hashes_exact_json_bytes(tmp_path: Path) -> None:
     import hashlib
 
     assert digest == hashlib.sha256(raw).hexdigest()
+
+
+
+def test_official_snapshot_rejects_mismatched_source_draw_date() -> None:
+    coupon, snapshot = _records()
+    snapshot["draw_date"] = "2020-12-14"
+    with pytest.raises(ValueError, match="does not match coupon source date"):
+        verify_coupon_against_selae_snapshot(
+            coupon, snapshot, snapshot_sha256="a" * 64
+        )

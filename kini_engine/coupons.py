@@ -14,7 +14,7 @@ from zoneinfo import ZoneInfo
 from .core import SIGNS, KiniEngine, Match
 from .team_identity import normalize_team_name
 
-COUPON_SCHEMA_VERSION = 1
+COUPON_SCHEMA_VERSION = 2
 COUPON_SOURCE = "historicoquiniela.com"
 SELAE_SOURCE = "loteriasyapuestas.es"
 SPAIN_TIMEZONE = ZoneInfo("Europe/Madrid")
@@ -215,14 +215,16 @@ def parse_historicoquiniela_coupon_html(
             f"coupon must contain exactly fixtures 1..15; received {[item['number'] for item in fixtures]}"
         )
     first_kickoff = min(datetime.fromisoformat(item["kickoff_at"]) for item in fixtures)
-    publication_match = re.search(
+    # HistoricalQuiniela labels this summary value "Fecha". It is a page/draw
+    # date label, not evidence of when the final results were published.
+    source_date_match = re.search(
         r"\bFecha\s+(\d{2}/\d{2}/\d{4},\s*\d{2}:\d{2})",
         _clean(" ".join(collector.all_text)),
         flags=re.IGNORECASE,
     )
-    published_at = (
-        _parse_local_datetime(publication_match.group(1), context="coupon publication")
-        if publication_match
+    source_date_label_at = (
+        _parse_local_datetime(source_date_match.group(1), context="coupon source date label")
+        if source_date_match
         else None
     )
     return {
@@ -234,7 +236,8 @@ def parse_historicoquiniela_coupon_html(
         "source_url": source_url,
         "source_sha256": source_sha256,
         "retrieved_at_utc": retrieved_at_utc,
-        "result_published_at": published_at.isoformat() if published_at else None,
+        "source_date": source_date_label_at.date().isoformat() if source_date_label_at else None,
+        "source_date_label_at": source_date_label_at.isoformat() if source_date_label_at else None,
         "first_kickoff_at": first_kickoff.isoformat(),
         "training_cutoff_date": (first_kickoff.date() - timedelta(days=1)).isoformat(),
         "fixtures": fixtures,
@@ -398,6 +401,15 @@ def validate_coupon_record(coupon: dict[str, Any]) -> None:
     cutoff = date.fromisoformat(coupon["training_cutoff_date"])
     if cutoff != first_kickoff.date() - timedelta(days=1):
         raise ValueError(f"{coupon['coupon_id']}: training cutoff must be the previous local calendar day")
+    try:
+        source_date_label_at = datetime.fromisoformat(coupon["source_date_label_at"])
+        source_date = date.fromisoformat(coupon["source_date"])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValueError(f"{coupon['coupon_id']}: source date label is missing or invalid") from exc
+    if source_date_label_at.tzinfo is None or source_date_label_at.utcoffset() is None:
+        raise ValueError(f"{coupon['coupon_id']}: source date label must be timezone-aware")
+    if source_date != source_date_label_at.date():
+        raise ValueError(f"{coupon['coupon_id']}: source date conflicts with its displayed date label")
     for field in ("source_sha256", "official_result_sha256"):
         value = coupon.get(field)
         if not isinstance(value, str) or not re.fullmatch(r"[0-9a-f]{64}", value):
@@ -616,7 +628,7 @@ def evaluate_coupon(
             try:
                 prediction = engine.predict(fixture, mode=mode)
                 predictions.append({sign: float(prediction.probabilities[sign]) for sign in SIGNS})
-            except Exception as exc:
+            except (ArithmeticError, KeyError, RuntimeError, TypeError, ValueError) as exc:
                 error = f"{type(exc).__name__}: {exc}"
                 break
         if error is not None:
@@ -677,7 +689,7 @@ def evaluate_coupon_batch(
                     min_history_matches=min_history_matches,
                 )
             )
-        except Exception as exc:
+        except (ArithmeticError, KeyError, RuntimeError, TypeError, ValueError) as exc:
             results.append(
                 {
                     "coupon_id": coupon.get("coupon_id"),
@@ -741,15 +753,16 @@ def extract_historical_journeys(html: str, *, season: str) -> list[int]:
     return sorted(numbers)
 
 
-def selae_result_url(published_at: str) -> str:
-    """Build the public SELAE result URL from the coupon's published local date."""
+def selae_result_url(draw_date: str) -> str:
+    """Build the public SELAE result URL from the coupon's displayed draw date.
+
+    The source page's summary "Fecha" label is not a result-publication timestamp.
+    """
     months = (
         "enero", "febrero", "marzo", "abril", "mayo", "junio",
         "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
     )
-    parsed = datetime.fromisoformat(published_at)
-    if parsed.tzinfo is None or parsed.utcoffset() is None:
-        raise ValueError("coupon publication timestamp must be timezone-aware")
+    parsed = date.fromisoformat(draw_date)
     return (
         "https://www.loteriasyapuestas.es/es/la-quiniela/resultados/"
         f"la-quiniela-resultados-del-{parsed.day}-de-{months[parsed.month - 1]}-de-{parsed.year}"

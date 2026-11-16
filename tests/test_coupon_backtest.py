@@ -107,6 +107,9 @@ def test_parse_historical_coupon_and_common_cutoff() -> None:
     assert len(coupon["fixtures"]) == 15
     assert coupon["training_cutoff_date"] == "2020-12-11"
     assert coupon["first_kickoff_at"].startswith("2020-12-12T14:00:00")
+    assert coupon["source_date"] == "2020-12-13"
+    assert coupon["source_date_label_at"] == "2020-12-13T22:57:00+01:00"
+    assert "result_published_at" not in coupon
     coupons.validate_coupon_record(coupon)
 
 
@@ -139,7 +142,7 @@ def test_journey_extraction_and_official_url() -> None:
         "<a href='https://www.historicoquiniela.com/historico/2020-2021/22'>Jornada 22</a></html>"
     )
     assert coupons.extract_historical_journeys(index, season="2020-2021") == [21, 22]
-    url = coupons.selae_result_url("2020-12-13T22:57:00+01:00")
+    url = coupons.selae_result_url("2020-12-13")
     assert url.endswith("la-quiniela-resultados-del-13-de-diciembre-de-2020")
 
 
@@ -209,3 +212,15 @@ def test_coupon_backtest_uses_only_results_before_first_kickoff(
     assert result["models"]["dc"]["n_predictions"] == 14
     assert result["models"]["dc"]["cost_eur"] > 0
     assert result["models"]["dc"]["total_bets"] <= 31_104
+
+
+
+def test_coupon_batch_does_not_swallow_unexpected_programming_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def unexpected_error(*args: object, **kwargs: object) -> None:
+        raise AttributeError("unexpected programming defect")
+
+    monkeypatch.setattr(coupons, "evaluate_coupon", unexpected_error)
+    with pytest.raises(AttributeError, match="unexpected programming defect"):
+        coupons.evaluate_coupon_batch([{"coupon_id": "2020-2021:21"}], [])

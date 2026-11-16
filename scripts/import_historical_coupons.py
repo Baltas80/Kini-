@@ -163,9 +163,9 @@ def main() -> None:
             source_sha256=source_sha,
             retrieved_at_utc=datetime.now(UTC).isoformat(),
         )
-        if coupon["result_published_at"] is None:
+        if coupon["source_date"] is None:
             raise ValueError(
-                f"{coupon['coupon_id']}: publication date is missing; cannot derive SELAE result URL"
+                f"{coupon['coupon_id']}: source date label is missing; cannot derive SELAE draw-date URL"
             )
 
         official_bytes = None
@@ -177,7 +177,7 @@ def main() -> None:
                 snapshot_sha256=official_snapshot_sha,
             )
         else:
-            official_url = selae_result_url(coupon["result_published_at"])
+            official_url = selae_result_url(coupon["source_date"])
             official_bytes, official_sha = fetch_page(
                 session,
                 official_url,

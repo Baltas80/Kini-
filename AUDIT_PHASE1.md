@@ -2511,3 +2511,25 @@ Se añade kini_engine/coupon_snapshot.py para verificar el extracto oficial por 
 La prueba local de parser/identidad/snapshot suma 11 tests con motor y registry simulados para las partes de integración; no sustituye la CI real ni la ejecución de DC/ML/ensemble. La verificación independiente de los 15 fixtures contra historical_spain.csv sí se ejecutó sobre el artefacto real: 15/15 fechas, equipos y marcadores exactos tras el crosswalk.
 
 Limitación abierta: el piloto J21 dispone de extracto oficial normalizado, pero no de captura HTML oficial automatizada. Para ampliar a las 63 jornadas hay que probar una vía oficial accesible (RSS/PDF/archivo) o mantener snapshots oficiales individualmente revisados; no se deben fabricar ni inferir resultados.
+
+
+### 2026-11-16 — coupon pilot: source date label is not a publication timestamp
+
+Inspection of the successful pilot artifact from run [43951898206](https://github.com/Baltas80/Kini-/actions/runs/43951898206) exposed a provenance defect in the first coupon-archive schema. The parser had named HistoricalQuiniela's summary field `Fecha 13/12/2020, 22:57` as `result_published_at`. The same coupon includes Pleno fixture Celta–Cádiz with kickoff 14-12-2020 21:00 and final score 4-0. Independent match records confirm that fixture was played on 14-12-2020, so the summary label cannot be interpreted as the publication time of all final results. The value is a page/draw-date label only.
+
+Correction:
+- Coupon archive schema bumped to version 2.
+- Replaced `result_published_at` with `source_date` and `source_date_label_at`; the latter preserves the source label and timezone but is explicitly not a publication timestamp.
+- SELAE result URL selection and normalized-snapshot reconciliation now use the draw date only.
+- The coupon backtest still uses a separate conservative training cutoff (the previous local calendar day before the first kickoff); no source date label is used to establish data availability.
+- Narrowed expected model/coupon exception handling to known data/model failures. Unexpected programming exceptions now propagate instead of being silently converted to failed coupon records.
+- Added regression tests for the date-label distinction, draw-date mismatch and unexpected exception propagation.
+
+Evidence from the pilot HTML:
+- First kickoff: 2020-12-12 14:00 Europe/Madrid.
+- Final Pleno fixture kickoff: 2020-12-14 21:00 Europe/Madrid.
+- HistoricalQuiniela summary label: 2020-12-13 22:57 Europe/Madrid.
+- Independent result coverage confirms Celta 4-0 Cádiz on 2020-12-14, after the displayed summary timestamp.
+- Therefore the previous `result_published_at` semantics were invalid and have been removed.
+
+The pilot's fixture reconciliation and model predictions remain useful as a technical pipeline test, but the archive generated under schema version 1 is not accepted as a point-in-time publication record. The corrected schema must pass CI and the coupon pilot again before any historical expansion. No inference about result availability is made from the source date label.

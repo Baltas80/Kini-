@@ -9,6 +9,7 @@ This pilot introduces a coupon-level evaluation with one immutable training snap
 ## Sources and reconciliation
 
 - Coupon order and local kickoff timestamps are imported from HistoricalQuiniela. This is a secondary source and is not treated as authoritative.
+- Its summary field labelled "Fecha" is stored only as `source_date_label_at` plus its calendar date. It is **not** a result-publication timestamp: Jornada 21/2020-21 displays 13-12-2020 22:57 even though its Pleno fixture Celta–Cádiz kicked off on 14-12-2020. The label is used only to select the corresponding SELAE draw-date URL and is never used as evidence that results were available at that time.
 - The ordered 14 main fixtures, their teams, scores and 1/X/2 signs, plus the Pleno al 15 score/categories, must reconcile exactly against the corresponding public SELAE results page.
 - Raw HTML from HistoricalQuiniela is retained as a workflow artifact. The archive records SHA-256 digests, source URLs and retrieval timestamps.
 - The SELAE detail page returned HTTP 403 from the GitHub Actions runner. For the single pilot coupon, a normalized JSON extract of the public official SELAE page is committed at kini_engine/data/selae_official_coupon_results/2020-2021-21.json. Its SHA-256 covers the JSON extract, not raw HTML; the file records the official URL, verification date and method. This is an explicit manual-source limitation, not an automated raw-page capture.
@@ -16,6 +17,7 @@ This pilot introduces a coupon-level evaluation with one immutable training snap
 - No fuzzy matching or silent alias substitution is allowed. A missing alias, ambiguous identity, missing fixture, duplicate candidate or score/date mismatch rejects the coupon.
 - The full historical results are used only to verify fixture identity/date/result. The model training history is filtered separately to the common pre-first-kickoff cutoff.
 - A coupon is rejected unless all 14 main results and the Pleno al 15 result are reconciled with SELAE, either from live official HTML or a versioned normalized official snapshot.
+- Coupon archive schema version 2 deliberately has no `result_published_at` field. HistoricalQuiniela's date label must not be repurposed as a point-in-time publication timestamp.
 
 ## Temporal protocol
 
