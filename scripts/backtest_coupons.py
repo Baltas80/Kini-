@@ -9,6 +9,7 @@ import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
 
+from kini_engine.coupon_identity import canonicalize_coupon
 from kini_engine.coupons import evaluate_coupon_batch, read_coupon_jsonl
 from kini_engine.dataio import load_matches_csv, validate_matches
 
@@ -56,12 +57,23 @@ def main() -> None:
     matches = load_matches_csv(args.historical_csv)
     validate_matches(matches)
     coupon_manifest, coupons = read_coupon_jsonl(args.coupons_jsonl)
+    resolved_coupons = []
+    reconciliations = {}
+    for coupon in coupons:
+        resolved, reconciliation = canonicalize_coupon(coupon, matches)
+        resolved_coupons.append(resolved)
+        reconciliations[coupon["coupon_id"]] = reconciliation
     result = evaluate_coupon_batch(
-        coupons,
+        resolved_coupons,
         matches,
         budget=args.budget,
         min_history_matches=args.min_history,
     )
+    for coupon_result in result["coupons"]:
+        coupon_id = coupon_result.get("coupon_id")
+        if coupon_id in reconciliations and coupon_result.get("status") != "failed":
+            coupon_result["fixture_reconciliation"] = reconciliations[coupon_id]
+            coupon_result["fixture_reconciliation_count"] = len(reconciliations[coupon_id])
     result["source"] = {
         "historical_dataset": str(args.historical_csv),
         "historical_dataset_sha256": hashlib.sha256(args.historical_csv.read_bytes()).hexdigest(),

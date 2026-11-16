@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "source": "historicoquiniela.com",
+  "target_source": "football-data",
+  "method": "explicit exact source-name to Football-Data alias mapping; each target is resolved through the canonical team registry",
+  "seasons": {
+    "2020-2021": {
+      "Valencia": "Valencia",
+      "Getafe": "Getafe",
+      "Huesca": "Huesca",
+      "Real Madrid": "Real Madrid",
+      "Real Sociedad": "Sociedad",
+      "Betis": "Betis",
+      "Elche": "Elche",
+      "Barcelona": "Barcelona",
+      "Leganés": "Leganes",
+      "Fuenlabrada": "Fuenlabrada",
+      "Logroñés": "Logrones",
+      "Almería": "Almeria",
+      "Las Palmas": "Las Palmas",
+      "Sporting": "Sp Gijon",
+      "Athletic Club": "Ath Bilbao",
+      "Sevilla": "Sevilla",
+      "Alavés": "Alaves",
+      "At. Madrid": "Ath Madrid",
+      "Eibar": "Eibar",
+      "Villarreal": "Villarreal",
+      "Granada": "Granada",
+      "Levante": "Levante",
+      "Mallorca": "Mallorca",
+      "Mirandés": "Mirandes",
+      "Espanyol": "Espanol",
+      "Málaga": "Malaga",
+      "Alcorcón": "Alcorcon",
+      "Zaragoza": "Zaragoza",
+      "Celta": "Celta",
+      "Cádiz": "Cadiz"
+    }
+  }
+}

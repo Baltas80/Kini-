@@ -2479,3 +2479,22 @@ La implementación local ha superado 5 tests de regresión y compilación sintá
 El piloto de una jornada solo valida la ruta técnica; no es una muestra para seleccionar modelos ni inferir rentabilidad. Tras superarlo, ampliar a las 63 jornadas de 2020/21 y reconciliar cada una antes de agregar métricas.
 
 Siguiente acción: revisar CI y el workflow quiniela-coupon-backtest; corregir cualquier discrepancia real de parsing/identidad y no ampliar el histórico hasta que el piloto completo pase.
+
+
+#### Corrección de identidad del piloto antes de aceptar resultados
+
+La revisión del flujo detectó que los nombres de HistoricalQuiniela no coinciden literalmente con los alias de Football-Data (por ejemplo, Athletic Club/Ath Bilbao y At. Madrid/Ath Madrid). No era aceptable dejar que el motor los tratara como equipos desconocidos ni considerar suficiente la coincidencia de marcadores.
+
+Se incorpora un crosswalk explícito y limitado a la temporada 2020/21 en kini_engine/data/historicoquiniela_team_aliases.json. Cada destino se resuelve mediante el registro canónico Football-Data; no se usa fuzzy matching. Un nuevo módulo, kini_engine/coupon_identity.py, reconcilia los 15 fixtures por fecha, equipo local, equipo visitante y marcador con exactamente una fila del histórico Football-Data. La reconciliación utiliza el dataset completo únicamente para verificar identidad/fecha/resultado; la lista de entrenamiento se filtra después y sigue limitada al día anterior al primer kickoff.
+
+Comprobación independiente del artefacto de datos 14261427836:
+- 5.311 partidos.
+- SHA-256 de historical_spain.csv: a01a68393de69c7ad37d2088864093a50108df9e299f1993d855cad87147acab.
+- Jornada 21 de 2020/21: los 15 emparejamientos, fechas y marcadores de la fuente secundaria encuentran exactamente una fila en Football-Data tras aplicar el crosswalk; no hay discrepancias.
+- El crosswalk incluye 30 nombres de equipo de la jornada y todos sus destinos existen como alias únicos en el registro canónico.
+
+El script de backtest canonicaliza copias en memoria del archivo de cupones y conserva source_home/source_away para trazabilidad. El archivo JSONL original no se modifica. El resultado debe incluir fixture_reconciliation_count=15 para superar la puerta de aceptación.
+
+Se añaden tests específicos para alias ausentes, reconciliación completa y discrepancias de fecha/marcador. Se amplían las listas Ruff de CI para incluir los módulos, scripts y tests nuevos. La ejecución anterior del piloto, iniciada antes de esta corrección de identidad, no se acepta como validación del motor; debe repetirse sobre el nuevo commit.
+
+La nueva implementación está probada localmente con 8 tests del módulo de cupones/identidad y compilación sintáctica. El entorno local no tiene Ruff ni penaltyblog; la validación real de lint, parser de fuentes y motor queda delegada a la CI y al workflow específico del piloto. No se amplía a las 63 jornadas hasta que pase la reconciliación oficial, el crosswalk de 15 fixtures, DC, ML, ensemble y optimizador.

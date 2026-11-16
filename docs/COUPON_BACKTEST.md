@@ -8,10 +8,12 @@ This pilot introduces a coupon-level evaluation with one immutable training snap
 
 ## Sources and reconciliation
 
-- Coupon order, local kickoff timestamps, scores and signs are imported from HistoricalQuiniela. This is a secondary source and is not treated as authoritative.
+- Coupon order and local kickoff timestamps are imported from HistoricalQuiniela. This is a secondary source and is not treated as authoritative.
 - The ordered 14 main fixtures, their teams, scores and 1/X/2 signs, plus the Pleno al 15 score/categories, must reconcile exactly against the corresponding public SELAE results page.
 - Raw HTML is retained as a workflow artifact. The archive records SHA-256 digests, source URLs and retrieval timestamps.
-- Team names are compared after Unicode/whitespace normalization only. No fuzzy matching or silent alias substitution is allowed.
+- Team labels from HistoricalQuiniela are mapped through a season-scoped explicit alias file and the canonical Football-Data registry. Every one of the 15 fixtures must match exactly one Football-Data fixture by local calendar date, canonical home/away identity and final score.
+- No fuzzy matching or silent alias substitution is allowed. A missing alias, ambiguous identity, missing fixture, duplicate candidate or score/date mismatch rejects the coupon.
+- The full historical results are used only to verify fixture identity/date/result. The model training history is filtered separately to the common pre-first-kickoff cutoff.
 - A coupon is rejected unless all 14 main results and the Pleno al 15 result are reconciled with SELAE.
 
 ## Temporal protocol
@@ -23,7 +25,7 @@ This pilot introduces a coupon-level evaluation with one immutable training snap
 5. Fit Dixon-Coles once and use the same history snapshot for all 15 fixtures and all model candidates in that coupon.
 6. Do not use historical market odds: this coupon archive does not contain verified pre-kickoff odds-capture timestamps.
 
-The previous-calendar-day cutoff is deliberately conservative because the Football-Data historical dataset has date-only match timestamps and cannot establish the exact completion time of another match on the same day.
+The previous-calendar-day cutoff is deliberately conservative because the Football-Data historical dataset has date-only match timestamps and cannot establish the exact completion time of another match on the same day. The secondary source supplies kickoff times; the Football-Data cross-check validates each fixture's calendar date, team identity and score, but not the exact kickoff minute.
 
 ## Models and ticket evaluation
 
@@ -42,6 +44,6 @@ The independent marginal coverage estimate is reported separately from realized 
 
 ## Pilot scope and limitations
 
-The first CI pilot imports and evaluates Jornada 21 of 2020/2021 only. It validates ingestion, official reconciliation, common cutoff, model execution and optimizer integration. One coupon is not a performance sample and must not be used to select a model or claim an improvement.
+The first CI pilot imports and evaluates Jornada 21 of 2020/2021 only. It validates ingestion, official reconciliation, canonical identity, common cutoff, model execution and optimizer integration. One coupon is not a performance sample and must not be used to select a model or claim an improvement.
 
 After the pilot passes, the importer can retrieve all 63 jornadas for 2020/2021 and later seasons. Full-season expansion requires checking every official reconciliation and documenting missing, postponed or rescheduled fixtures before aggregate ticket metrics are interpreted.

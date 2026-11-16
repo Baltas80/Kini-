@@ -5,9 +5,12 @@ on:
     types: [opened, reopened, synchronize]
     paths:
       - "kini_engine/coupons.py"
+      - "kini_engine/coupon_identity.py"
+      - "kini_engine/data/historicoquiniela_team_aliases.json"
       - "scripts/import_historical_coupons.py"
       - "scripts/backtest_coupons.py"
       - "tests/test_coupon_backtest.py"
+      - "tests/test_coupon_identity.py"
       - "docs/COUPON_BACKTEST.md"
       - ".github/workflows/quiniela-coupon-backtest.yml"
       - "AUDIT_PHASE1.md"
@@ -68,6 +71,8 @@ jobs:
               raise SystemExit("main fixtures were not reconciled with SELAE")
           if coupon.get("official_pleno_verified") is not True:
               raise SystemExit("Pleno al 15 was not reconciled with SELAE")
+          if coupon.get("fixture_reconciliation_count") != 15:
+              raise SystemExit("all 15 coupon fixtures were not reconciled to Football-Data")
           if coupon.get("training_cutoff_date") >= coupon.get("first_kickoff_at", "")[:10]:
               raise SystemExit("training cutoff is not strictly before the first kickoff date")
           if coupon.get("training_match_count", 0) < 300:
@@ -80,7 +85,7 @@ jobs:
                   raise SystemExit(f"{mode} exceeds SELAE's authorized total-bet cap")
               if model.get("column_count", 0) > 8:
                   raise SystemExit(f"{mode} exceeds the configured 8-column budget")
-          print("COUPON_ACCEPTANCE_OK: 15 official results, one pre-kickoff snapshot, 3 x 14 forecasts, optimizer within cap")
+          print("COUPON_ACCEPTANCE_OK: 15 official results, 15 canonical fixtures, one pre-kickoff snapshot, 3 x 14 forecasts, optimizer within cap")
           PY
       - name: Upload coupon pilot evidence
         uses: actions/upload-artifact@v4
