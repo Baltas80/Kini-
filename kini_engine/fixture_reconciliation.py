@@ -133,7 +133,11 @@ def _validate_draw(draw: object, location: str) -> tuple[str, list[dict[str, Any
     if not isinstance(fixtures, list) or len(fixtures) != 14:
         raise FixtureReconciliationError(f"{location}.fixtures must contain exactly 14 entries")
     fixture_count = draw.get("fixture_count")
-    if isinstance(fixture_count, bool) or not isinstance(fixture_count, int) or fixture_count != 14:
+    if (
+        isinstance(fixture_count, bool)
+        or not isinstance(fixture_count, int)
+        or fixture_count != 14
+    ):
         raise FixtureReconciliationError(f"{location}.fixture_count must equal 14")
 
     normalized: list[dict[str, Any]] = []
