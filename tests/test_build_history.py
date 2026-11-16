@@ -71,7 +71,6 @@ def test_fetch_csv_falls_back_to_valid_stale_cache(tmp_path: Path) -> None:
     assert session.calls == 1
 
 
-
 def test_fetch_csv_offline_uses_stale_valid_cache_without_network(
     tmp_path: Path,
 ) -> None:
