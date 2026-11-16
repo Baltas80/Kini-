@@ -2714,3 +2714,27 @@ Odds coverage is not uniform: B365 1X2 odds are missing for 15 fixtures (0.28%),
 P6 ticket persistence, arithmetic, minimum/maximum bet bounds, current unit price, one-pair Pleno scope and realized-hit recomputation are validated. Still open within P6: dependence-aware joint coverage, multi-ticket diversification and payout/expected-value modelling.
 
 Next priority returns to P1/P2: document source provenance and historical variable availability, then audit every model feature and odds timestamp for leakage. The separate live KinielaGPT details diagnostic still receives HTTP 400 for jornada 23 / temporada 2027; this is an external endpoint diagnostic and did not block CI, data validation or the official coupon pilot.
+
+
+## 2026-11-17 — P1/P2 preliminary temporal-data audit
+
+This is a code-and-test audit, not yet a final proof of every source timestamp.
+
+### Verified safeguards
+
+- `backtest.py` predicts all fixtures on a calendar date before adding any result from that date to the training history. The model is refitted from prior dates only; same-day fixtures cannot train one another.
+- `FeatureModel._training_rows` applies the same day-batched rule when creating supervised labels. Its 12 rolling features use completed results from prior dates (overall, home-only and away-only form); standings and arbitrary context fields without publication timestamps are deliberately excluded.
+- Current-fixture ML inference uses the latest permitted feature history without refitting the estimator.
+- Dixon-Coles, ML, recent-form and H2H paths contain explicit prior-history assertions/filters. Tests cover same-day and future-result exclusion, including date-decay behavior.
+- LAE data requires a timezone-aware capture timestamp before kickoff, a matching fixture identity, evidence URL, freshness within 24 hours and a valid probability vector.
+- Market odds are drawn from pre-closing columns, overround is removed, Pinnacle is excluded from 2025-07-23 onward, and missing/unparseable kickoff times plus Tuesday/Friday snapshot days fail closed. The market backtest reports metrics on the eligible common fixture sample; the model-only DC/ML ensemble is separate from the market/LAE ensemble.
+
+### Remaining temporal uncertainty
+
+Football-Data's historical odds rows do not carry an individual capture timestamp or explicit timezone. The current `schedule_compatible` market status is therefore a documented collection-schedule heuristic, not proof that every quoted price was observable before each kickoff. The full ensemble can include this market vector at 7% weight when that heuristic passes. Treat market-only and market-inclusive results as provisional/sensitivity evidence until source-level publication timing is independently documented; do not present them as timestamp-verified. The `ensemble_dc_ml` path remains available without this market dependency.
+
+The latest data profile also shows materially uneven odds coverage (B365 1X2 missing 15/5,322; Pinnacle 734; William Hill 2,230; Interwetten 2,375; Betfair 4,480). Provider comparisons must use each provider's exact common fixture sample and a common model sample; filling absent prices with uniform probabilities would not be a valid market benchmark.
+
+### Next executable unit
+
+Complete P1 provenance for the Football-Data and LAE feeds: locate and record the source's actual collection/publication schedule, distinguish capture time from kickoff time, and decide whether schedule-compatible Football-Data odds stay as a clearly labelled sensitivity benchmark or can be promoted to a timestamp-verified input. Then continue P2 by tracing every remaining feature and calibration/ensemble fitting boundary through the walk-forward ledger.
