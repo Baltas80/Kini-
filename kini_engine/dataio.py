@@ -5,6 +5,7 @@ from math import isfinite
 from pathlib import Path
 import unicodedata
 
+import numpy as np
 import pandas as pd
 
 from .core import Match, SIGNS
@@ -78,6 +79,10 @@ def _market_temporal_status(
 
 
 def _optional_goal(value: object, row_number: int, column: str) -> int | None:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(
+            f"CSV row {row_number}: {column} must be a non-negative integer"
+        )
     if pd.isna(value):
         return None
     try:
