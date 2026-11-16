@@ -95,7 +95,9 @@ $metadata = @{
   raw_sha256 = $hash
   encoding = "utf-8"
 }
-$metadata | ConvertTo-Json | Set-Content -Encoding utf8 ".\data\selae-html\2026-11-08.meta.json"
+$json = $metadata | ConvertTo-Json
+$utf8NoBom = [System.Text.UTF8Encoding]::new($false)
+[System.IO.File]::WriteAllText(".\data\selae-html\2026-11-08.meta.json", $json, $utf8NoBom)
 ```
 
 Después ejecutar:
