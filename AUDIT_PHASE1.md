@@ -2532,7 +2532,7 @@ Evidence from the pilot HTML:
 - Independent result coverage confirms Celta 4-0 Cádiz on 2020-12-14, after the displayed summary timestamp.
 - Therefore the previous `result_published_at` semantics were invalid and have been removed.
 
-The pilot's fixture reconciliation and model predictions remain useful as a technical pipeline test, but the archive generated under schema version 1 is not accepted as a point-in-time publication record. The corrected schema must pass CI and the coupon pilot again before any historical expansion. No inference about result availability is made from the source date label.
+The pilot's fixture reconciliation and model predictions remain useful as a technical pipeline test, but the archive generated under schema version 1 is not accepted as a point-in-time publication record. Schema version 2 subsequently passed CI and the coupon pilot; historical expansion still requires an official reconciliation for every jornada. No inference about result availability is made from the source date label.
 
 
 ### 2026-11-16 — coupon pilot schema v2 validated
@@ -2559,4 +2559,4 @@ Efficiency changes:
 - The historical match-level backtest excludes coupon-only modules from its model-change trigger. Coupon changes are validated by the dedicated coupon workflow and do not require re-running the six-season match-level backtest.
 - Audit-document-only changes no longer trigger the coupon pilot.
 
-These workflow changes are included in the next commit and must pass actionlint/CI. The historical match-level backtest on the earlier head was still queued at the time of this note; the new filter should skip it when only coupon/workflow/audit paths have changed.
+These workflow changes are included in commit `5820a67082eedd2dfa1d91998ca4cb3b2fa1796a` and passed actionlint/CI. The coupon pilot also passed on that commit (run [43954807721](https://github.com/Baltas80/Kini-/actions/runs/43954807721), artifact ID `14271856198`, SHA-256 `c1a36492a5280bc14db4811f5de6c3f2925fb6951413a6b94d5e1a035a0ae54e`). The historical match-level backtest run [43954807605](https://github.com/Baltas80/Kini-/actions/runs/43954807605) remains queued behind an older long-running walk-forward; its updated change filter should skip the coupon-only/workflow/audit changes when it starts.
