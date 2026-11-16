@@ -62,10 +62,16 @@ def _parse_source_csv(
     df: pd.DataFrame | None = None
     for encoding in ("utf-8-sig", "cp1252", "latin-1"):
         try:
-            candidate = pd.read_csv(io.BytesIO(content), encoding=encoding, low_memory=False)
+            candidate = pd.read_csv(
+                io.BytesIO(content), encoding=encoding, low_memory=False
+            )
             df = candidate
             break
-        except (UnicodeDecodeError, pd.errors.ParserError, pd.errors.EmptyDataError) as exc:
+        except (
+            UnicodeDecodeError,
+            pd.errors.ParserError,
+            pd.errors.EmptyDataError,
+        ) as exc:
             errors.append(exc)
     if df is None:
         raise ValueError(f"{source}: no se pudo interpretar el CSV") from errors[-1]
@@ -97,7 +103,9 @@ def _parse_source_csv(
     bad_dates = has_teams & parsed_dates.isna()
     if bool(bad_dates.any()):
         sample = df.loc[bad_dates, "Date"].astype(str).head(3).tolist()
-        raise ValueError(f"{source}: fechas no interpretables en filas con equipos: {sample}")
+        raise ValueError(
+            f"{source}: fechas no interpretables en filas con equipos: {sample}"
+        )
 
     for column in ("FTHG", "FTAG"):
         raw = df[column]
@@ -137,7 +145,11 @@ def _atomic_write(path: Path, content: bytes) -> None:
     temp_name: str | None = None
     try:
         with tempfile.NamedTemporaryFile(
-            mode="wb", dir=path.parent, prefix=f".{path.name}.", suffix=".tmp", delete=False
+            mode="wb",
+            dir=path.parent,
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+            delete=False,
         ) as handle:
             temp_name = handle.name
             handle.write(content)
@@ -204,7 +216,11 @@ def fetch_csv(
         return downloaded
     except (requests.RequestException, ValueError, pd.errors.ParserError) as exc:
         if cached_df is not None and cached_content is not None:
-            log.warning("Fuente no disponible; usando caché válida aunque esté caducada (%s): %s", url, exc)
+            log.warning(
+                "Fuente no disponible; usando caché válida aunque esté caducada (%s): %s",
+                url,
+                exc,
+            )
             return cached_df
         raise RuntimeError(f"No se pudo obtener un CSV válido de {url}: {exc}") from exc
 
@@ -214,8 +230,13 @@ def _atomic_write_dataframe(frame: pd.DataFrame, target: Path) -> None:
     temp_name: str | None = None
     try:
         with tempfile.NamedTemporaryFile(
-            mode="w", encoding="utf-8", newline="", dir=target.parent,
-            prefix=f".{target.name}.", suffix=".tmp", delete=False
+            mode="w",
+            encoding="utf-8",
+            newline="",
+            dir=target.parent,
+            prefix=f".{target.name}.",
+            suffix=".tmp",
+            delete=False,
         ) as handle:
             temp_name = handle.name
             frame.to_csv(handle, index=False)
@@ -229,7 +250,6 @@ def _atomic_write_dataframe(frame: pd.DataFrame, target: Path) -> None:
                 os.unlink(temp_name)
             except FileNotFoundError:
                 pass
-
 
 
 def build_dataset_profile(
@@ -251,7 +271,9 @@ def build_dataset_profile(
     missingness = {
         str(column): {
             "count": int(source_columns[column].isna().sum()),
-            "fraction": float(source_columns[column].isna().mean()) if len(source_columns) else 0.0,
+            "fraction": float(source_columns[column].isna().mean())
+            if len(source_columns)
+            else 0.0,
         }
         for column in source_columns.columns
     }
@@ -301,7 +323,9 @@ def build_dataset_profile(
             if len(score_variants) > 1 or labels.nunique() > 1:
                 conflicting_duplicates += 1
 
-    result_values = raw_frame.get("FTR", pd.Series(index=raw_frame.index, dtype="object"))
+    result_values = raw_frame.get(
+        "FTR", pd.Series(index=raw_frame.index, dtype="object")
+    )
     normalized = result_values.astype("string").str.strip().str.upper()
     result_map = {"H": "1", "D": "X", "A": "2", "1": "1", "X": "X", "2": "2"}
     mapped = normalized.map(result_map)
@@ -331,11 +355,19 @@ def build_dataset_profile(
     if "SourceURL" in raw_frame.columns:
         source_counts = {
             str(source): int(count)
-            for source, count in raw_frame["SourceURL"].value_counts(dropna=False).items()
+            for source, count in raw_frame["SourceURL"]
+            .value_counts(dropna=False)
+            .items()
         }
 
     integrity_passed = not any(
-        (invalid_labels, mismatches, incomplete_scores, invalid_dates_with_teams, conflicting_duplicates)
+        (
+            invalid_labels,
+            mismatches,
+            incomplete_scores,
+            invalid_dates_with_teams,
+            conflicting_duplicates,
+        )
     )
     return {
         "profile_generated_at_utc": profile_generated_at.astimezone(UTC).isoformat(),
@@ -452,7 +484,9 @@ def build_history(
     out = combined.loc[complete].copy()
     complete_rows = out.copy()
     if out.empty:
-        raise ValueError("Las fuentes no contienen ningún partido con resultado completo")
+        raise ValueError(
+            "Las fuentes no contienen ningún partido con resultado completo"
+        )
 
     out["FTHG"] = out["FTHG"].astype(int)
     out["FTAG"] = out["FTAG"].astype(int)
@@ -495,29 +529,53 @@ def build_history(
     _atomic_write_dataframe(out, target)
     log.info(
         "Histórico escrito: %s; partidos=%d; duplicados eliminados=%d; temporadas=%d; ligas=%d; perfil=%s",
-        target, len(out), duplicates_removed, len(selected_seasons), len(selected_leagues), profile_target,
+        target,
+        len(out),
+        duplicates_removed,
+        len(selected_seasons),
+        len(selected_leagues),
+        profile_target,
     )
     return out
 
 
 def _parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Descarga y valida el histórico español de Football-Data.")
-    parser.add_argument("--output", type=Path, default=Path("data/historical_spain.csv"))
+    parser = argparse.ArgumentParser(
+        description="Descarga y valida el histórico español de Football-Data."
+    )
+    parser.add_argument(
+        "--output", type=Path, default=Path("data/historical_spain.csv")
+    )
     parser.add_argument("--cache-dir", type=Path, default=DEFAULT_CACHE_DIR)
-    parser.add_argument("--cache-ttl-hours", type=float, default=DEFAULT_CACHE_TTL_HOURS)
-    parser.add_argument("--refresh", action="store_true", help="Intentar renovar los CSV aunque la caché siga vigente.")
+    parser.add_argument(
+        "--cache-ttl-hours", type=float, default=DEFAULT_CACHE_TTL_HOURS
+    )
+    parser.add_argument(
+        "--refresh",
+        action="store_true",
+        help="Intentar renovar los CSV aunque la caché siga vigente.",
+    )
     parser.add_argument(
         "--offline",
         action="store_true",
         help="Usar exclusivamente caché local; no realizar peticiones HTTP.",
     )
-    parser.add_argument("--seasons", nargs="+", default=list(SEASONS), help="Códigos de temporada, por ejemplo 2526 2627.")
-    parser.add_argument("--leagues", nargs="+", choices=tuple(LEAGUES), default=list(LEAGUES))
+    parser.add_argument(
+        "--seasons",
+        nargs="+",
+        default=list(SEASONS),
+        help="Códigos de temporada, por ejemplo 2526 2627.",
+    )
+    parser.add_argument(
+        "--leagues", nargs="+", choices=tuple(LEAGUES), default=list(LEAGUES)
+    )
     return parser.parse_args()
 
 
 def main() -> None:
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s"
+    )
     args = _parse_args()
     history = build_history(
         seasons=args.seasons,

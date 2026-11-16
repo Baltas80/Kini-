@@ -1190,9 +1190,7 @@ def compare_walk_forward(
     result["strict_common_time_market"] = {
         "n_schedule_eligible": len(market_rows),
         "n_common_time_eligible": strict_common_time_n,
-        "n_excluded_from_common_time_sample": (
-            len(market_rows) - strict_common_time_n
-        ),
+        "n_excluded_from_common_time_sample": (len(market_rows) - strict_common_time_n),
         "exclusion_reason_counts": dict(
             sorted(strict_common_time_exclusion_counts.items())
         ),
