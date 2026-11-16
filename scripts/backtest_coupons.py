@@ -263,7 +263,7 @@ def validate_coupon_backtest_acceptance(
                     raise ValueError(f"{coupon_id} {mode}: invalid {field}")
             for field in ("covered_14", "pleno_hit", "full_coupon_covered"):
                 if not isinstance(model.get(field), bool):
-                    raise ValueError(f"{coupon_id} {mode}: invalid {field}")
+                    raise TypeError(f"{coupon_id} {mode}: invalid {field}")
             if model["full_coupon_covered"] != (
                 model["covered_14"] and model["pleno_hit"]
             ):
