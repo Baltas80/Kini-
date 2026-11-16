@@ -1,21 +1,6 @@
 name: quiniela-coupon-backtest
 
 on:
-  push:
-    branches: ["feat/**", "fix/**"]
-    paths:
-      - "kini_engine/coupons.py"
-      - "kini_engine/coupon_identity.py"
-      - "kini_engine/coupon_snapshot.py"
-      - "kini_engine/data/historicoquiniela_team_aliases.json"
-      - "kini_engine/data/selae_official_coupon_results/2020-2021-21.json"
-      - "scripts/import_historical_coupons.py"
-      - "scripts/backtest_coupons.py"
-      - "tests/test_coupon_backtest.py"
-      - "tests/test_coupon_identity.py"
-      - "tests/test_coupon_snapshot.py"
-      - "docs/COUPON_BACKTEST.md"
-      - ".github/workflows/quiniela-coupon-backtest.yml"
   pull_request:
     types: [opened, reopened, synchronize]
     paths:

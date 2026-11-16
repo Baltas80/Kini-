@@ -2546,3 +2546,17 @@ The official SELAE page for the draw is titled 13-12-2020 and displays a separat
 The coupon result now explicitly records that the Pleno category-pair prediction is produced by Dixon-Coles using the maximum aggregated category-pair probability. ML's current 1/X/2 output is not represented as a Pleno score model. The coupon workflow no longer runs on audit-document-only changes; code, tests, data and workflow changes still trigger it.
 
 CI run [43953991624](https://github.com/Baltas80/Kini-/actions/runs/43953991624) on the preceding code revision passed actionlint, Ruff lint, Ruff format and 270 pytest tests (21 upstream dependency warnings). The next commit adds Pleno provenance metadata and a workflow path-filter efficiency change; those changes require their own CI and pilot rerun before being marked validated.
+
+
+### 2026-11-16 — Pleno provenance and final pilot validation
+
+The Pleno provenance metadata is now present in the coupon backtest result: model `dixon_coles`, selection method `max_aggregated_category_pair_probability`, selected home/away categories, category-pair probability mass and training-match count. This is necessary because ML currently emits only 1/X/2 probabilities and must not be represented as a Pleno score model.
+
+CI for commit `fbc1ce61f36c807cac0dc22164338fc3d42265db`, run [43954418890](https://github.com/Baltas80/Kini-/actions/runs/43954418890), passed actionlint, Ruff lint, Ruff format and 270 pytest tests. There were 21 existing upstream dependency warnings. The coupon pilot, run [43954407921](https://github.com/Baltas80/Kini-/actions/runs/43954407921), passed on the same commit. Artifact ID `14271905847`, SHA-256 `1a8be2606b751db33c39a0fffba5d1e3bd10f2f97cd003c032d8109a9234770c`; schema v2, 15/15 official-snapshot fixture reconciliations, 303 training matches, 14 predictions each for DC, ML and ensemble, and explicit Pleno provenance. The one-coupon hit counts remain a pipeline check only.
+
+Efficiency changes:
+- The coupon pilot now runs on PR changes or manual workflow dispatch, not both push and PR events; this avoids duplicate expensive runs for the same feature-branch commit.
+- The historical match-level backtest excludes coupon-only modules from its model-change trigger. Coupon changes are validated by the dedicated coupon workflow and do not require re-running the six-season match-level backtest.
+- Audit-document-only changes no longer trigger the coupon pilot.
+
+These workflow changes are included in the next commit and must pass actionlint/CI. The historical match-level backtest on the earlier head was still queued at the time of this note; the new filter should skip it when only coupon/workflow/audit paths have changed.
