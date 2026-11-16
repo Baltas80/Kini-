@@ -762,6 +762,25 @@ def test_optimizer_enforces_selae_direct_double_triple_table():
     assert result["cost_eur"] == 23_328.0
 
 
+def test_optimizer_double_triple_table_matches_official_bet_cap():
+    for doubles, maximum_triples in TicketOptimizer.MAX_TRIPLES_BY_DOUBLES.items():
+        allowed = [
+            triples
+            for triples in range(15 - doubles + 1)
+            if (2**doubles) * (3**triples) <= TicketOptimizer.MAX_AUTHORIZED_COLUMNS
+        ]
+        assert maximum_triples == max(allowed)
+        assert (
+            (2**doubles) * (3**maximum_triples)
+            <= TicketOptimizer.MAX_AUTHORIZED_COLUMNS
+        )
+        if maximum_triples < 14 - doubles:
+            assert (
+                (2**doubles) * (3 ** (maximum_triples + 1))
+                > TicketOptimizer.MAX_AUTHORIZED_COLUMNS
+            )
+
+
 def test_optimizer_rejects_budget_above_selae_direct_maximum():
     predictions = [{"1": 0.5, "X": 0.3, "2": 0.2} for _ in range(14)]
     with pytest.raises(ValueError, match="authorized direct columns"):
