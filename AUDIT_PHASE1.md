@@ -2560,3 +2560,19 @@ Efficiency changes:
 - The historical match-level backtest excludes coupon-only modules from its model-change trigger. Coupon changes are validated by the dedicated coupon workflow and do not require re-running the six-season match-level backtest.
 
 These workflow changes are included in commit `5820a67082eedd2dfa1d91998ca4cb3b2fa1796a` and passed actionlint/CI. The coupon pilot also passed on that commit (run [43954807721](https://github.com/Baltas80/Kini-/actions/runs/43954807721), artifact ID `14271856198`, SHA-256 `c1a36492a5280bc14db4811f5de6c3f2925fb6951413a6b94d5e1a035a0ae54e`). The historical match-level backtest run [43954807605](https://github.com/Baltas80/Kini-/actions/runs/43954807605) remains queued behind an older long-running walk-forward; its updated change filter should skip the coupon-only/workflow/audit changes when it starts.
+
+
+### 2026-11-16 — historical backtest/data-validation snapshot mismatch
+
+The completed match-level backtest run [43951898236](https://github.com/Baltas80/Kini-/actions/runs/43951898236) built 5,321 fixtures and emitted 5,021 OOS forecasts (300-match initial training window). Its ledger manifest records dataset SHA-256 `e4b195593118215684ffefc8e70ffe0c8d88b3e28318d9c796f7b3b71c496475` and profile SHA-256 `fb7b216062d5cecf32141634d41a46a327aea6e756074f19a418ab38a7112000`.
+
+The separate data-validation run [43951898519](https://github.com/Baltas80/Kini-/actions/runs/43951898519) at the same commit produced 5,311 fixtures, CSV SHA-256 `a01a68393de69c7ad37d2088864093a50108df9e299f1993d855cad87147acab`, and date coverage ending 2026-11-09. Its cache metadata shows Football-Data files were 10.4 hours old. The backtest job had downloaded fresh source CSVs and its build log reported 5,321 fixtures, with forecasts extending to 2026-11-15. These are different dataset snapshots; the validation artifact cannot be used to validate the backtest artifact. The backtest artifact also omitted the CSV and profile, so its exact dataset bytes cannot be independently recovered from that run. Its metrics are therefore exploratory, not a reproducible baseline.
+
+Correction implemented:
+- Historical data validation now invokes `build_history.py --refresh` and watches its own workflow file, preventing a restored cache from silently validating an older source snapshot.
+- The historical backtest artifact now includes the exact CSV and profile used by that run.
+- `scripts/analyze_prediction_ledger.py` accepts `--dataset-csv` and `--dataset-profile`, verifies their SHA-256 digests and byte size against the ledger manifest, checks profile integrity and row counts, and validates CSV required fields, dates, scores and fixture uniqueness.
+- The historical backtest workflow passes those files to the diagnostic step; any mismatch fails the workflow rather than producing an apparently reproducible report.
+- Added regression tests for exact dataset/profile bytes and tampered CSV rejection.
+
+The next full walk-forward is triggered by the diagnostic-script change. Its artifact must contain the matching dataset/profile and pass the new snapshot verification before its metrics are accepted. The previous run's 5,021 forecast rows were structurally valid (five probability vectors per fixture, valid sums, unique IDs and prior cutoffs), but their dataset snapshot remains unverified because the source bytes were not archived.

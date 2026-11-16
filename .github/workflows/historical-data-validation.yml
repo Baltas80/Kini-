@@ -17,6 +17,7 @@ on:
       - "!kini_engine/data/ligaf_team_identity_registry.json"
       - "pyproject.toml"
       - "requirements*.txt"
+      - ".github/workflows/historical-data-validation.yml"
   pull_request:
     paths:
       - "scripts/build_history.py"
@@ -33,6 +34,7 @@ on:
       - "!kini_engine/data/ligaf_team_identity_registry.json"
       - "pyproject.toml"
       - "requirements*.txt"
+      - ".github/workflows/historical-data-validation.yml"
   workflow_dispatch:
   schedule:
     - cron: "37 4 * * 1"
@@ -59,7 +61,8 @@ jobs:
             football-data-${{ runner.os }}-${{ github.ref_name }}-
             football-data-${{ runner.os }}-
       - name: Build historical data and profile
-        run: python scripts/build_history.py
+        # Validation must use fresh provider files, not a cache restored up to 24h ago.
+        run: python scripts/build_history.py --refresh
       - name: Validate canonical team identities
         run: |
           python -m scripts.validate_team_identity_registry --csv data/historical_spain.csv --output data/team_identity_validation.json

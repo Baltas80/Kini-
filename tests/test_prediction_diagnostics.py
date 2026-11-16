@@ -198,3 +198,65 @@ def test_diagnostics_reject_too_few_bootstrap_samples():
             [_row(1, "1")],
             bootstrap_samples=99,
         )
+
+
+
+def _dataset_snapshot_files(tmp_path):
+    from scripts.analyze_prediction_ledger import _validate_dataset_snapshot
+
+    dataset_path = tmp_path / "historical_spain.csv"
+    profile_path = tmp_path / "historical_spain.profile.json"
+    dataset_payload = (
+        "Date,HomeTeam,AwayTeam,FTHG,FTAG,League,Season\n"
+        "02/01/2025,Home A,Away A,1,0,la-liga,2425\n"
+        "03/01/2025,Home B,Away B,0,0,la-liga,2425\n"
+        "04/01/2025,Home C,Away C,2,1,segunda,2425\n"
+    ).encode("utf-8")
+    profile = {
+        "integrity_passed": True,
+        "rows_after_complete_score_filter": 3,
+        "rows_after_deduplication": 3,
+        "source_urls": ["https://example.invalid/source.csv"],
+        "source_cache_metadata": [{"source_url": "https://example.invalid/source.csv"}],
+        "rows_with_incomplete_scores": 0,
+        "invalid_result_labels": 0,
+        "score_result_mismatches": 0,
+        "conflicting_duplicate_fixtures": 0,
+        "date_coverage": {"invalid_or_missing_with_teams": 0},
+    }
+    profile_payload = json.dumps(profile, sort_keys=True).encode("utf-8")
+    dataset_path.write_bytes(dataset_payload)
+    profile_path.write_bytes(profile_payload)
+    manifest = _manifest()
+    manifest.update(
+        {
+            "dataset_path": "data/historical_spain.csv",
+            "dataset_profile_path": "data/historical_spain.profile.json",
+            "dataset_sha256": hashlib.sha256(dataset_payload).hexdigest(),
+            "dataset_profile_sha256": hashlib.sha256(profile_payload).hexdigest(),
+            "dataset_size_bytes": len(dataset_payload),
+            "dataset_rows": 3,
+        }
+    )
+    return _validate_dataset_snapshot, manifest, dataset_path, profile_path
+
+
+def test_validate_dataset_snapshot_checks_exact_bytes_and_profile(tmp_path):
+    validate, manifest, dataset_path, profile_path = _dataset_snapshot_files(tmp_path)
+
+    snapshot = validate(manifest, dataset_path, profile_path)
+
+    assert snapshot["dataset_rows"] == 3
+    assert snapshot["dataset_sha256"] == manifest["dataset_sha256"]
+    assert snapshot["dataset_profile_sha256"] == manifest["dataset_profile_sha256"]
+
+
+def test_validate_dataset_snapshot_rejects_changed_dataset_bytes(tmp_path):
+    validate, manifest, dataset_path, profile_path = _dataset_snapshot_files(tmp_path)
+    dataset_path.write_text(
+        dataset_path.read_text(encoding="utf-8") + "05/01/2025,Home D,Away D,0,1,segunda,2425\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="dataset CSV SHA-256"):
+        validate(manifest, dataset_path, profile_path)

@@ -24,6 +24,7 @@ on:
       - "!kini_engine/data/**"
       - "scripts/build_history.py"
       - "scripts/diagnose_ml.py"
+      - "scripts/analyze_prediction_ledger.py"
       - "data/**"
       - "!data/selae_fixture_crosswalk.json"
       - "!data/ligaf_fixture_evidence.json"
@@ -522,9 +523,9 @@ jobs:
           )
           PY
 
-      - name: Analyze archived prediction errors
+      - name: Analyze archived prediction errors and verify dataset snapshot
         run: |
-          python scripts/analyze_prediction_ledger.py prediction-ledger.jsonl --results-json backtest-results.json --output prediction-diagnostics.json --min-segment-n 100
+          python scripts/analyze_prediction_ledger.py prediction-ledger.jsonl --results-json backtest-results.json --dataset-csv data/historical_spain.csv --dataset-profile data/historical_spain.profile.json --output prediction-diagnostics.json --min-segment-n 100
 
       - name: Upload backtest results
         uses: actions/upload-artifact@v4
@@ -534,4 +535,6 @@ jobs:
             backtest-results.json
             prediction-ledger.jsonl
             prediction-diagnostics.json
+            data/historical_spain.csv
+            data/historical_spain.profile.json
           retention-days: 90
