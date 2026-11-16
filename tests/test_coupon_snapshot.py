@@ -108,6 +108,7 @@ def test_official_snapshot_rejects_mismatched_source_draw_date() -> None:
     with pytest.raises(ValueError, match="does not match coupon source date"):
         verify_coupon_against_selae_snapshot(coupon, snapshot, snapshot_sha256="a" * 64)
 
+
 def test_snapshot_directory_loads_exact_season_journey_file(tmp_path: Path) -> None:
     snapshot_dir = tmp_path / "snapshots"
     snapshot_dir.mkdir()
@@ -140,11 +141,13 @@ def test_snapshot_directory_rejects_invalid_journey_number(tmp_path: Path) -> No
     with pytest.raises(ValueError, match="positive integer"):
         load_official_snapshot_for_journey(tmp_path, "2020-2021", 0)
 
+
 def test_snapshot_loader_rejects_non_object_json(tmp_path: Path) -> None:
     path = tmp_path / "official.json"
     path.write_text("[]", encoding="utf-8")
     with pytest.raises(ValueError, match="JSON object"):
         load_official_coupon_snapshot(path)
+
 
 def test_snapshot_directory_rejects_unsafe_season_slug(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="YYYY-YYYY"):
