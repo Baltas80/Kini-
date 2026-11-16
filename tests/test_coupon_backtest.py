@@ -235,8 +235,7 @@ def test_coupon_backtest_uses_only_results_before_first_kickoff(
     assert result["models"]["dc"]["cost_eur"] > 0
     assert result["models"]["dc"]["total_bets"] <= 31_104
     assert (
-        len(result["models"]["dc"]["columns"])
-        == result["models"]["dc"]["column_count"]
+        len(result["models"]["dc"]["columns"]) == result["models"]["dc"]["column_count"]
     )
     assert result["models"]["dc"]["total_bets"] == (
         result["models"]["dc"]["column_count"]
@@ -388,6 +387,7 @@ def _accepted_coupon_backtest_result() -> tuple[dict[str, object], list[str]]:
         },
         [coupon_id],
     )
+
 
 def test_coupon_backtest_acceptance_requires_all_models_and_valid_vectors() -> None:
     result, coupon_ids = _accepted_coupon_backtest_result()

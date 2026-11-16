@@ -510,6 +510,7 @@ def validate_coupon_backtest_acceptance(
                     f"{coupon_id} {mode}: independent coverage estimate conflicts with probabilities and persisted columns"
                 )
 
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Evaluate coupons from one common pre-first-kickoff cutoff."
