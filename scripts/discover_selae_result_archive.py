@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import html
 import json
 import re
 import sys
@@ -343,7 +344,7 @@ def _response_diagnostics(response: requests.Response) -> dict[str, object]:
     """Retain transport metadata without storing untrusted response bodies."""
     payload = response.content or b""
     headers = response.headers
-    return {
+    diagnostics: dict[str, object] = {
         "http_status": response.status_code,
         "content_type": headers.get("Content-Type"),
         "downloaded_bytes": len(payload),
@@ -354,6 +355,15 @@ def _response_diagnostics(response: requests.Response) -> dict[str, object]:
         "via": headers.get("Via"),
         "retry_after": headers.get("Retry-After"),
     }
+    if response.status_code >= 400 and payload:
+        encoding = getattr(response, "encoding", None) or "utf-8"
+        preview = payload[:4096].decode(encoding, errors="replace")
+        preview = re.sub(r"(?is)<(script|style)\\b[^>]*>.*?</\\1>", " ", preview)
+        preview = re.sub(r"(?s)<[^>]+>", " ", preview)
+        diagnostics["body_text_preview"] = re.sub(
+            r"\\s+", " ", html.unescape(preview)
+        ).strip()[:240]
+    return diagnostics
 
 
 def probe_alternative_sources(session: requests.Session) -> list[dict[str, object]]:
