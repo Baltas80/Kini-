@@ -247,3 +247,24 @@ def test_bookmaker_vectors_exclude_stale_pinnacle_and_invalid_triplets(tmp_path:
     assert "bet365" in after.detail["market_bookmaker_probabilities"]
     assert "bet365" not in invalid_bet365.detail["market_bookmaker_probabilities"]
     assert invalid_bet365.market is None
+
+
+@pytest.mark.parametrize(
+    ("home_goals", "away_goals", "invalid_column"),
+    [
+        ("True", "False", "FTHG"),
+        ("1", "False", "FTAG"),
+    ],
+)
+def test_load_rejects_boolean_goal_values(
+    tmp_path: Path, home_goals: str, away_goals: str, invalid_column: str
+):
+    path = tmp_path / "boolean_goals.csv"
+    path.write_text(
+        "Date,HomeTeam,AwayTeam,FTHG,FTAG,FTR\\n"
+        f"2025-01-01,A,B,{home_goals},{away_goals},H\\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match=f"{invalid_column} must be a non-negative integer"):
+        load_matches_csv(path)
