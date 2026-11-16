@@ -591,7 +591,7 @@ def fetch_draw(
             cached_bytes = cache_path.read_bytes()
             if not metadata_path.is_file():
                 raise ValueError("Falta el sidecar de procedencia de la caché SELAE")
-            metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+            metadata = json.loads(metadata_path.read_text(encoding="utf-8-sig"))
             if not isinstance(metadata, dict):
                 raise ValueError("El sidecar de caché SELAE no es un objeto JSON")
             cache_source_url = metadata.get("source_url")
@@ -676,7 +676,7 @@ def load_local_draw(
         raise ValueError(
             f"Falta el sidecar {metadata_path.name}; no se infieren URL ni hora de captura desde el nombre o mtime"
         )
-    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8-sig"))
     if not isinstance(metadata, dict):
         raise ValueError("El sidecar del HTML local no es un objeto JSON")
     source_url = metadata.get("source_url")
