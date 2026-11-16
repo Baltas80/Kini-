@@ -185,3 +185,12 @@ All imported records are explicitly `training_label_eligible=false`. The data is
 ### Validation status
 
 The parser, cache, score checks, date cross-checks, completed-season structure and training-exclusion contract have deterministic tests. The expanded live import was executed successfully by GitHub Actions [run 43713031093](https://github.com/Baltas80/Kini-/actions/runs/43713031093) on 2026-11-15. The final assertion passed and artifact `ligaf-history` (ID `14160882756`) was uploaded with ZIP SHA-256 `47ff081024d1252ee0abe4c894e699925445d951f69fa7976b8b7a3dc4335785`. The generated profile reports 1,040 scheduled fixtures, 1,039 played, one postponed, 1,040 unique match IDs, no stale-cache sources and `integrity_passed=true`; it exposes 16 exact team labels in each of the five season ranges. Each completed season (2022/23–2025/26) has 240/240 played fixtures, 16 teams, 30 appearances per team and 15 home/15 away; 2026/27 rounds 1–10 have 80 fixtures (79 played, one postponed). An earlier artifact was independently downloaded and its JSONL SHA-256 was `3348a13b55bcbb37f2f825873a95b98ea5ce3fd151298c7df91d05ad8d9c46f7`; this is a hash of the uncompressed JSONL, not the current ZIP. The dataset remains evidence-only (`training_eligibility.eligible=false`) and is not connected to model training.
+
+
+## Official historical result archive discovery — 2026-11-16
+
+The official results index is https://www.loteriasyapuestas.es/es/la-quiniela/resultados. Its pagination uses an XHR component URL and exposes dated result-detail links. The discovery script records the pagination, official URLs, response hashes and date provenance without treating link labels as verified draw dates.
+
+A result-detail page is not yet a complete historical scenario record. The importer must preserve 14 coupon signs separately from football scores, and must not infer goals when a score is absent. Postponed fixtures and public-draw signs require exact official evidence and explicit outcome semantics.
+
+Run the discovery workflow manually: selae-result-archive-discovery. The generated artifact is a source inventory only; it is not eligible for model training or ticket-performance backtesting until every fixture and outcome is validated.
