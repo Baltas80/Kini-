@@ -12,14 +12,19 @@ from .team_identity import TeamIdentityRegistry
 
 def load_coupon_team_aliases() -> dict[str, Any]:
     """Load the explicit season-scoped HistoricalQuiniela-to-Football-Data crosswalk."""
-    resource = files("kini_engine").joinpath("data").joinpath(
-        "historicoquiniela_team_aliases.json"
+    resource = (
+        files("kini_engine")
+        .joinpath("data")
+        .joinpath("historicoquiniela_team_aliases.json")
     )
     try:
         document = json.loads(resource.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         raise ValueError("cannot read HistoricalQuiniela team alias crosswalk") from exc
-    if document.get("schema_version") != 1 or document.get("source") != "historicoquiniela.com":
+    if (
+        document.get("schema_version") != 1
+        or document.get("source") != "historicoquiniela.com"
+    ):
         raise ValueError("unsupported HistoricalQuiniela team alias crosswalk")
     return document
 
@@ -52,13 +57,22 @@ def canonicalize_coupon(
     The caller must independently filter the model's training history to the
     coupon's pre-first-kickoff cutoff.
     """
-    document = alias_document if alias_document is not None else load_coupon_team_aliases()
-    if document.get("schema_version") != 1 or document.get("source") != "historicoquiniela.com":
+    document = (
+        alias_document if alias_document is not None else load_coupon_team_aliases()
+    )
+    if (
+        document.get("schema_version") != 1
+        or document.get("source") != "historicoquiniela.com"
+    ):
         raise ValueError("invalid coupon team alias document")
     season_aliases = document.get("seasons", {}).get(coupon.get("season"))
     if not isinstance(season_aliases, dict) or not season_aliases:
-        raise ValueError(f"no explicit team alias crosswalk for season {coupon.get('season')}")
-    team_registry = registry if registry is not None else TeamIdentityRegistry.from_default()
+        raise ValueError(
+            f"no explicit team alias crosswalk for season {coupon.get('season')}"
+        )
+    team_registry = (
+        registry if registry is not None else TeamIdentityRegistry.from_default()
+    )
     resolved_coupon = deepcopy(coupon)
     reconciliation = []
     for fixture in resolved_coupon.get("fixtures", []):

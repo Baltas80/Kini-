@@ -21,11 +21,17 @@ def _fixture_data():
         canonical_away = f"Canonical Away {number}"
         kickoff = datetime(2020, 12, 12 + (number > 10), 14, 0)
         home_goals, away_goals = (4, 0) if number == 15 else (1, 0)
-        result = "1" if home_goals > away_goals else ("2" if away_goals > home_goals else "X")
+        result = (
+            "1"
+            if home_goals > away_goals
+            else ("2" if away_goals > home_goals else "X")
+        )
         fixtures.append(
             {
                 "number": number,
-                "kickoff_at": kickoff.replace(tzinfo=ZoneInfo("Europe/Madrid")).isoformat(),
+                "kickoff_at": kickoff.replace(
+                    tzinfo=ZoneInfo("Europe/Madrid")
+                ).isoformat(),
                 "home": source_home,
                 "away": source_away,
                 "home_goals": home_goals,
@@ -36,7 +42,9 @@ def _fixture_data():
         aliases[source_home] = canonical_home
         aliases[source_away] = canonical_away
         matches.append(
-            Match(kickoff, canonical_home, canonical_away, home_goals, away_goals, result)
+            Match(
+                kickoff, canonical_home, canonical_away, home_goals, away_goals, result
+            )
         )
     coupon = {"coupon_id": "2020-2021:21", "season": "2020-2021", "fixtures": fixtures}
     alias_document = {

@@ -44,13 +44,18 @@ def verify_coupon_against_selae_snapshot(
     source_url = urlparse(str(snapshot.get("source_url", "")))
     if source_url.scheme != "https" or source_url.netloc != "www.loteriasyapuestas.es":
         raise ValueError("official snapshot URL must use the SELAE HTTPS host")
-    if not isinstance(snapshot.get("verification_method"), str) or not snapshot["verification_method"].strip():
+    if (
+        not isinstance(snapshot.get("verification_method"), str)
+        or not snapshot["verification_method"].strip()
+    ):
         raise ValueError("official snapshot verification method is required")
     try:
         snapshot_date = date.fromisoformat(snapshot["draw_date"])
         coupon_draw_date = date.fromisoformat(coupon["source_date"])
     except (KeyError, TypeError, ValueError) as exc:
-        raise ValueError("coupon source date label and official draw date are required") from exc
+        raise ValueError(
+            "coupon source date label and official draw date are required"
+        ) from exc
     if snapshot_date != coupon_draw_date:
         raise ValueError(
             f"official snapshot draw date {snapshot_date} does not match coupon source date {coupon_draw_date}"
@@ -58,15 +63,23 @@ def verify_coupon_against_selae_snapshot(
 
     official_fixtures = snapshot.get("fixtures")
     if not isinstance(official_fixtures, list) or len(official_fixtures) != 14:
-        raise ValueError("official snapshot must contain exactly 14 ordered main fixtures")
+        raise ValueError(
+            "official snapshot must contain exactly 14 ordered main fixtures"
+        )
     main_errors = []
-    for expected, actual in zip(coupon["fixtures"][:14], official_fixtures, strict=True):
+    for expected, actual in zip(
+        coupon["fixtures"][:14], official_fixtures, strict=True
+    ):
         number = expected["number"]
         if actual.get("number") != number:
             main_errors.append(f"fixture {number}: official order mismatch")
-        if normalize_team_name(expected["home"]) != normalize_team_name(actual.get("home", "")):
+        if normalize_team_name(expected["home"]) != normalize_team_name(
+            actual.get("home", "")
+        ):
             main_errors.append(f"fixture {number}: home team mismatch")
-        if normalize_team_name(expected["away"]) != normalize_team_name(actual.get("away", "")):
+        if normalize_team_name(expected["away"]) != normalize_team_name(
+            actual.get("away", "")
+        ):
             main_errors.append(f"fixture {number}: away team mismatch")
         home_goals = actual.get("home_goals")
         away_goals = actual.get("away_goals")
@@ -80,7 +93,9 @@ def verify_coupon_against_selae_snapshot(
         if expected["result"] != actual.get("result"):
             main_errors.append(f"fixture {number}: result mismatch")
         if actual.get("result") != _result(home_goals, away_goals):
-            main_errors.append(f"fixture {number}: official sign conflicts with official score")
+            main_errors.append(
+                f"fixture {number}: official sign conflicts with official score"
+            )
 
     expected_pleno = coupon["fixtures"][14]
     official_pleno = snapshot.get("pleno")
@@ -101,13 +116,21 @@ def verify_coupon_against_selae_snapshot(
                 pleno_errors.append("official Pleno home category conflicts with score")
             if official_pleno.get("away_category") != _category(away_goals):
                 pleno_errors.append("official Pleno away category conflicts with score")
-        if normalize_team_name(expected_pleno["home"]) != normalize_team_name(official_pleno.get("home", "")):
+        if normalize_team_name(expected_pleno["home"]) != normalize_team_name(
+            official_pleno.get("home", "")
+        ):
             pleno_errors.append("Pleno home team mismatch")
-        if normalize_team_name(expected_pleno["away"]) != normalize_team_name(official_pleno.get("away", "")):
+        if normalize_team_name(expected_pleno["away"]) != normalize_team_name(
+            official_pleno.get("away", "")
+        ):
             pleno_errors.append("Pleno away team mismatch")
-        if expected_pleno.get("pleno_home_category") != official_pleno.get("home_category"):
+        if expected_pleno.get("pleno_home_category") != official_pleno.get(
+            "home_category"
+        ):
             pleno_errors.append("Pleno home category mismatch")
-        if expected_pleno.get("pleno_away_category") != official_pleno.get("away_category"):
+        if expected_pleno.get("pleno_away_category") != official_pleno.get(
+            "away_category"
+        ):
             pleno_errors.append("Pleno away category mismatch")
 
     errors = main_errors + pleno_errors

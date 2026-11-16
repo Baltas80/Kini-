@@ -73,15 +73,23 @@ def main() -> None:
         coupon_id = coupon_result.get("coupon_id")
         if coupon_id in reconciliations and coupon_result.get("status") != "failed":
             coupon_result["fixture_reconciliation"] = reconciliations[coupon_id]
-            coupon_result["fixture_reconciliation_count"] = len(reconciliations[coupon_id])
+            coupon_result["fixture_reconciliation_count"] = len(
+                reconciliations[coupon_id]
+            )
     result["source"] = {
         "historical_dataset": str(args.historical_csv),
-        "historical_dataset_sha256": hashlib.sha256(args.historical_csv.read_bytes()).hexdigest(),
+        "historical_dataset_sha256": hashlib.sha256(
+            args.historical_csv.read_bytes()
+        ).hexdigest(),
         "historical_dataset_rows": len(matches),
         "coupon_archive": str(args.coupons_jsonl),
-        "coupon_archive_sha256": hashlib.sha256(args.coupons_jsonl.read_bytes()).hexdigest(),
+        "coupon_archive_sha256": hashlib.sha256(
+            args.coupons_jsonl.read_bytes()
+        ).hexdigest(),
         "coupon_archive_manifest": coupon_manifest,
-        "code_revision": os.getenv("KINI_CODE_REVISION") or os.getenv("GITHUB_SHA") or "unknown",
+        "code_revision": os.getenv("KINI_CODE_REVISION")
+        or os.getenv("GITHUB_SHA")
+        or "unknown",
         "generated_at_utc": datetime.now(UTC).isoformat(),
         "python_version": platform.python_version(),
     }

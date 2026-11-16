@@ -108,7 +108,9 @@ def main() -> None:
         description="Import historical Quiniela coupons and verify ordered results against SELAE."
     )
     parser.add_argument("--season", required=True, help="Season slug, e.g. 2020-2021")
-    parser.add_argument("--journeys", type=int, nargs="*", help="Optional explicit journey numbers")
+    parser.add_argument(
+        "--journeys", type=int, nargs="*", help="Optional explicit journey numbers"
+    )
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--raw-dir", type=Path)
     parser.add_argument("--official-snapshot", type=Path)
@@ -124,8 +126,12 @@ def main() -> None:
         parser.error("journeys must contain positive journey numbers")
     if args.output.exists():
         parser.error(f"refusing to overwrite existing output: {args.output}")
-    if args.official_snapshot and (args.journeys is None or len(set(args.journeys)) != 1):
-        parser.error("an official snapshot can only be used with exactly one explicit journey")
+    if args.official_snapshot and (
+        args.journeys is None or len(set(args.journeys)) != 1
+    ):
+        parser.error(
+            "an official snapshot can only be used with exactly one explicit journey"
+        )
 
     official_snapshot = None
     official_snapshot_sha = None
@@ -151,9 +157,7 @@ def main() -> None:
     coupons = []
     for position, jornada in enumerate(journeys, start=1):
         source_url = f"{BASE_URL}/historico/{args.season}/{jornada}"
-        source_bytes, source_sha = fetch_page(
-            session, source_url, referer=season_url
-        )
+        source_bytes, source_sha = fetch_page(session, source_url, referer=season_url)
         source_html = decode_html(source_bytes, source_url)
         coupon = parse_historicoquiniela_coupon_html(
             source_html,
@@ -233,7 +237,9 @@ def main() -> None:
         "official_verification": (
             "14 main fixtures and Pleno al 15 reconciled by exact order, names and scores against SELAE"
         ),
-        "official_snapshot_path": str(args.official_snapshot) if args.official_snapshot else None,
+        "official_snapshot_path": str(args.official_snapshot)
+        if args.official_snapshot
+        else None,
         "official_snapshot_sha256": official_snapshot_sha,
     }
     count = write_coupon_jsonl(args.output, coupons, manifest)

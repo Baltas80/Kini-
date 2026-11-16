@@ -156,7 +156,9 @@ def parse_historicoquiniela_coupon_html(
         if selected_rows is not None:
             break
     if selected_rows is None:
-        raise ValueError("HistoricalQuiniela page has no recognized #/Fecha/Encuentro/Signo table")
+        raise ValueError(
+            "HistoricalQuiniela page has no recognized #/Fecha/Encuentro/Signo table"
+        )
 
     fixtures = []
     for row in selected_rows:
@@ -169,7 +171,9 @@ def parse_historicoquiniela_coupon_html(
         encounter = row[2]
         anchors = [value for value in encounter["anchors"] if value]
         if len(anchors) < 2:
-            raise ValueError(f"coupon fixture {number}: encounter has no exact home/away anchors")
+            raise ValueError(
+                f"coupon fixture {number}: encounter has no exact home/away anchors"
+            )
         home, away = anchors[0], anchors[-1]
         candidates = anchors[1:-1] + [encounter["plain"], encounter["text"]]
         score = None
@@ -181,7 +185,9 @@ def parse_historicoquiniela_coupon_html(
                 continue
         if score is None:
             raise ValueError(f"coupon fixture {number}: score could not be extracted")
-        kickoff = _parse_local_datetime(row[1]["text"], context=f"coupon fixture {number}")
+        kickoff = _parse_local_datetime(
+            row[1]["text"], context=f"coupon fixture {number}"
+        )
         home_goals, away_goals = score
         sign_text = re.sub(r"\s+", "", row[3]["text"]).upper()
         result = _result_from_score(home_goals, away_goals)
@@ -223,7 +229,9 @@ def parse_historicoquiniela_coupon_html(
         flags=re.IGNORECASE,
     )
     source_date_label_at = (
-        _parse_local_datetime(source_date_match.group(1), context="coupon source date label")
+        _parse_local_datetime(
+            source_date_match.group(1), context="coupon source date label"
+        )
         if source_date_match
         else None
     )
@@ -236,8 +244,12 @@ def parse_historicoquiniela_coupon_html(
         "source_url": source_url,
         "source_sha256": source_sha256,
         "retrieved_at_utc": retrieved_at_utc,
-        "source_date": source_date_label_at.date().isoformat() if source_date_label_at else None,
-        "source_date_label_at": source_date_label_at.isoformat() if source_date_label_at else None,
+        "source_date": source_date_label_at.date().isoformat()
+        if source_date_label_at
+        else None,
+        "source_date_label_at": source_date_label_at.isoformat()
+        if source_date_label_at
+        else None,
         "first_kickoff_at": first_kickoff.isoformat(),
         "training_cutoff_date": (first_kickoff.date() - timedelta(days=1)).isoformat(),
         "fixtures": fixtures,
@@ -287,20 +299,28 @@ def parse_selae_result_html(html: str) -> dict[str, Any]:
                 )
             break
     if official_rows is None:
-        raise ValueError("SELAE page does not expose the expected five ordered 14-item lists")
+        raise ValueError(
+            "SELAE page does not expose the expected five ordered 14-item lists"
+        )
 
     pleno = None
     for values in collector.lists:
         if len(values) >= 5 and _clean(values[0]) == "15":
             try:
-                home_goals, away_goals = _score_from_text(values[3], context="SELAE Pleno al 15")
+                home_goals, away_goals = _score_from_text(
+                    values[3], context="SELAE Pleno al 15"
+                )
             except ValueError:
                 continue
             home_category = _pleno_category(home_goals)
             away_category = _pleno_category(away_goals)
-            official_sign = re.sub(r"\s+", "", _clean(values[4])).replace("-", "").upper()
+            official_sign = (
+                re.sub(r"\s+", "", _clean(values[4])).replace("-", "").upper()
+            )
             if official_sign != f"{home_category}{away_category}":
-                raise ValueError("SELAE Pleno al 15 category conflicts with official score")
+                raise ValueError(
+                    "SELAE Pleno al 15 category conflicts with official score"
+                )
             pleno = {
                 "home": _clean(values[1]),
                 "away": _clean(values[2]),
@@ -323,23 +343,35 @@ def verify_coupon_against_selae(
     """Attach exact-order official verification; never fuzzy-match fixtures."""
     official = parse_selae_result_html(official_html)
     main_errors = []
-    for expected, actual in zip(coupon["fixtures"][:14], official["fixtures"], strict=True):
+    for expected, actual in zip(
+        coupon["fixtures"][:14], official["fixtures"], strict=True
+    ):
         number = expected["number"]
         if normalize_team_name(expected["home"]) != normalize_team_name(actual["home"]):
-            main_errors.append(f"fixture {number}: home mismatch {expected['home']!r} != {actual['home']!r}")
+            main_errors.append(
+                f"fixture {number}: home mismatch {expected['home']!r} != {actual['home']!r}"
+            )
         if normalize_team_name(expected["away"]) != normalize_team_name(actual["away"]):
-            main_errors.append(f"fixture {number}: away mismatch {expected['away']!r} != {actual['away']!r}")
+            main_errors.append(
+                f"fixture {number}: away mismatch {expected['away']!r} != {actual['away']!r}"
+            )
         for field in ("home_goals", "away_goals", "result"):
             if expected[field] != actual[field]:
-                main_errors.append(f"fixture {number}: {field} mismatch {expected[field]!r} != {actual[field]!r}")
+                main_errors.append(
+                    f"fixture {number}: {field} mismatch {expected[field]!r} != {actual[field]!r}"
+                )
 
     expected_pleno = coupon["fixtures"][14]
     official_pleno = official["pleno"]
     pleno_errors = []
     if official_pleno is not None:
-        if normalize_team_name(expected_pleno["home"]) != normalize_team_name(official_pleno["home"]):
+        if normalize_team_name(expected_pleno["home"]) != normalize_team_name(
+            official_pleno["home"]
+        ):
             pleno_errors.append("Pleno home team mismatch")
-        if normalize_team_name(expected_pleno["away"]) != normalize_team_name(official_pleno["away"]):
+        if normalize_team_name(expected_pleno["away"]) != normalize_team_name(
+            official_pleno["away"]
+        ):
             pleno_errors.append("Pleno away team mismatch")
         if expected_pleno["home_goals"] != official_pleno["home_goals"]:
             pleno_errors.append("Pleno home score mismatch")
@@ -370,14 +402,18 @@ def validate_coupon_record(coupon: dict[str, Any]) -> None:
     for fixture in fixtures:
         kickoff = datetime.fromisoformat(fixture["kickoff_at"])
         if kickoff.tzinfo is None or kickoff.utcoffset() is None:
-            raise ValueError(f"{coupon['coupon_id']}: kickoff timestamps must be timezone-aware")
+            raise ValueError(
+                f"{coupon['coupon_id']}: kickoff timestamps must be timezone-aware"
+            )
         kickoffs.append(kickoff)
         if not isinstance(fixture.get("home"), str) or not fixture["home"].strip():
             raise ValueError(f"{coupon['coupon_id']}: fixture home team is missing")
         if not isinstance(fixture.get("away"), str) or not fixture["away"].strip():
             raise ValueError(f"{coupon['coupon_id']}: fixture away team is missing")
         if normalize_team_name(fixture["home"]) == normalize_team_name(fixture["away"]):
-            raise ValueError(f"{coupon['coupon_id']}: fixture has identical home and away teams")
+            raise ValueError(
+                f"{coupon['coupon_id']}: fixture has identical home and away teams"
+            )
         home_goals, away_goals = fixture.get("home_goals"), fixture.get("away_goals")
         if (
             isinstance(home_goals, bool)
@@ -387,29 +423,47 @@ def validate_coupon_record(coupon: dict[str, Any]) -> None:
             or home_goals < 0
             or away_goals < 0
         ):
-            raise ValueError(f"{coupon['coupon_id']}: fixture scores must be non-negative integers")
+            raise ValueError(
+                f"{coupon['coupon_id']}: fixture scores must be non-negative integers"
+            )
         if fixture.get("result") != _result_from_score(home_goals, away_goals):
-            raise ValueError(f"{coupon['coupon_id']}: fixture result conflicts with score")
+            raise ValueError(
+                f"{coupon['coupon_id']}: fixture result conflicts with score"
+            )
         if fixture["number"] == 15:
             if fixture.get("pleno_home_category") != _pleno_category(home_goals):
-                raise ValueError(f"{coupon['coupon_id']}: Pleno home category conflicts with score")
+                raise ValueError(
+                    f"{coupon['coupon_id']}: Pleno home category conflicts with score"
+                )
             if fixture.get("pleno_away_category") != _pleno_category(away_goals):
-                raise ValueError(f"{coupon['coupon_id']}: Pleno away category conflicts with score")
+                raise ValueError(
+                    f"{coupon['coupon_id']}: Pleno away category conflicts with score"
+                )
     first_kickoff = min(kickoffs)
     if datetime.fromisoformat(coupon["first_kickoff_at"]) != first_kickoff:
-        raise ValueError(f"{coupon['coupon_id']}: first kickoff metadata is inconsistent")
+        raise ValueError(
+            f"{coupon['coupon_id']}: first kickoff metadata is inconsistent"
+        )
     cutoff = date.fromisoformat(coupon["training_cutoff_date"])
     if cutoff != first_kickoff.date() - timedelta(days=1):
-        raise ValueError(f"{coupon['coupon_id']}: training cutoff must be the previous local calendar day")
+        raise ValueError(
+            f"{coupon['coupon_id']}: training cutoff must be the previous local calendar day"
+        )
     try:
         source_date_label_at = datetime.fromisoformat(coupon["source_date_label_at"])
         source_date = date.fromisoformat(coupon["source_date"])
     except (KeyError, TypeError, ValueError) as exc:
-        raise ValueError(f"{coupon['coupon_id']}: source date label is missing or invalid") from exc
+        raise ValueError(
+            f"{coupon['coupon_id']}: source date label is missing or invalid"
+        ) from exc
     if source_date_label_at.tzinfo is None or source_date_label_at.utcoffset() is None:
-        raise ValueError(f"{coupon['coupon_id']}: source date label must be timezone-aware")
+        raise ValueError(
+            f"{coupon['coupon_id']}: source date label must be timezone-aware"
+        )
     if source_date != source_date_label_at.date():
-        raise ValueError(f"{coupon['coupon_id']}: source date conflicts with its displayed date label")
+        raise ValueError(
+            f"{coupon['coupon_id']}: source date conflicts with its displayed date label"
+        )
     for field in ("source_sha256", "official_result_sha256"):
         value = coupon.get(field)
         if not isinstance(value, str) or not re.fullmatch(r"[0-9a-f]{64}", value):
@@ -418,12 +472,19 @@ def validate_coupon_record(coupon: dict[str, Any]) -> None:
     official_url = urlparse(str(coupon.get("official_result_url", "")))
     if source_url.scheme != "https" or source_url.netloc != "www.historicoquiniela.com":
         raise ValueError(f"{coupon['coupon_id']}: invalid historical coupon source URL")
-    if official_url.scheme != "https" or official_url.netloc != "www.loteriasyapuestas.es":
+    if (
+        official_url.scheme != "https"
+        or official_url.netloc != "www.loteriasyapuestas.es"
+    ):
         raise ValueError(f"{coupon['coupon_id']}: invalid official SELAE source URL")
     if coupon.get("official_main_matches_verified") is not True:
-        raise ValueError(f"{coupon['coupon_id']}: 14 main results are not verified against SELAE")
+        raise ValueError(
+            f"{coupon['coupon_id']}: 14 main results are not verified against SELAE"
+        )
     if coupon.get("official_pleno_verified") is not True:
-        raise ValueError(f"{coupon['coupon_id']}: Pleno al 15 is not verified against SELAE")
+        raise ValueError(
+            f"{coupon['coupon_id']}: Pleno al 15 is not verified against SELAE"
+        )
 
 
 def write_coupon_jsonl(
@@ -431,7 +492,9 @@ def write_coupon_jsonl(
 ) -> int:
     target = Path(path)
     if target.exists():
-        raise FileExistsError(f"refusing to overwrite existing coupon archive: {target}")
+        raise FileExistsError(
+            f"refusing to overwrite existing coupon archive: {target}"
+        )
     if not coupons:
         raise ValueError("at least one coupon is required")
     seen = set()
@@ -441,10 +504,16 @@ def write_coupon_jsonl(
         if coupon_id in seen:
             raise ValueError(f"duplicate coupon_id: {coupon_id}")
         seen.add(coupon_id)
-    header = {"record_type": "manifest", "schema_version": COUPON_SCHEMA_VERSION, **manifest}
+    header = {
+        "record_type": "manifest",
+        "schema_version": COUPON_SCHEMA_VERSION,
+        **manifest,
+    }
     lines = [json.dumps(header, ensure_ascii=False, sort_keys=True)]
     lines.extend(
-        json.dumps({"record_type": "coupon", **coupon}, ensure_ascii=False, sort_keys=True)
+        json.dumps(
+            {"record_type": "coupon", **coupon}, ensure_ascii=False, sort_keys=True
+        )
         for coupon in coupons
     )
     content = ("\n".join(lines) + "\n").encode("utf-8")
@@ -589,7 +658,9 @@ def evaluate_coupon(
             f"{coupon['coupon_id']}: only {len(history)} prior matches; minimum is {min_history_matches}"
         )
     if any(_match_day(match.date) >= first_kickoff.date() for match in history):
-        raise RuntimeError(f"{coupon['coupon_id']}: training history crosses the coupon kickoff date")
+        raise RuntimeError(
+            f"{coupon['coupon_id']}: training history crosses the coupon kickoff date"
+        )
 
     engine = KiniEngine(enable_ml=True).fit(history)
     if not engine.dc.fitted:
@@ -605,7 +676,9 @@ def evaluate_coupon(
         for item in coupon["fixtures"]
     ]
     if any(fixture.date < first_kickoff for fixture in fixtures):
-        raise RuntimeError(f"{coupon['coupon_id']}: fixture kickoff precedes recorded first kickoff")
+        raise RuntimeError(
+            f"{coupon['coupon_id']}: fixture kickoff precedes recorded first kickoff"
+        )
 
     pleno_distribution = engine.dc.pleno15_probs(
         fixtures[14].home,
@@ -627,8 +700,16 @@ def evaluate_coupon(
         for fixture in fixtures[:14]:
             try:
                 prediction = engine.predict(fixture, mode=mode)
-                predictions.append({sign: float(prediction.probabilities[sign]) for sign in SIGNS})
-            except (ArithmeticError, KeyError, RuntimeError, TypeError, ValueError) as exc:
+                predictions.append(
+                    {sign: float(prediction.probabilities[sign]) for sign in SIGNS}
+                )
+            except (
+                ArithmeticError,
+                KeyError,
+                RuntimeError,
+                TypeError,
+                ValueError,
+            ) as exc:
                 error = f"{type(exc).__name__}: {exc}"
                 break
         if error is not None:
@@ -709,7 +790,9 @@ def evaluate_coupon_batch(
             "evaluated_coupons": len(successful),
             "failed_coupons": len(coupons) - len(successful),
             "covered_14_coupons": sum(bool(item["covered_14"]) for item in successful),
-            "full_coupon_covered": sum(bool(item["full_coupon_covered"]) for item in successful),
+            "full_coupon_covered": sum(
+                bool(item["full_coupon_covered"]) for item in successful
+            ),
             "mean_single_sign_hits": (
                 sum(item["single_sign_hits"] for item in successful) / len(successful)
                 if successful
@@ -732,7 +815,10 @@ def evaluate_coupon_batch(
             "coverage": "realized exact direct-column coverage; independent marginal estimate is reported separately",
             "payout": "not estimated; official prize distribution and stake-level expected value are outside this pilot",
         },
-        "config": {"budget_columns": budget, "min_history_matches": min_history_matches},
+        "config": {
+            "budget_columns": budget,
+            "min_history_matches": min_history_matches,
+        },
         "summary": summary,
         "coupons": results,
     }
@@ -759,8 +845,18 @@ def selae_result_url(draw_date: str) -> str:
     The source page's summary "Fecha" label is not a result-publication timestamp.
     """
     months = (
-        "enero", "febrero", "marzo", "abril", "mayo", "junio",
-        "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+        "enero",
+        "febrero",
+        "marzo",
+        "abril",
+        "mayo",
+        "junio",
+        "julio",
+        "agosto",
+        "septiembre",
+        "octubre",
+        "noviembre",
+        "diciembre",
     )
     parsed = date.fromisoformat(draw_date)
     return (

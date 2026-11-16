@@ -27,8 +27,12 @@ def _fixture_rows() -> list[dict[str, object]]:
                 "home_goals": home_goals,
                 "away_goals": away_goals,
                 "result": result,
-                "pleno_home_category": coupons._pleno_category(home_goals) if number == 15 else None,
-                "pleno_away_category": coupons._pleno_category(away_goals) if number == 15 else None,
+                "pleno_home_category": coupons._pleno_category(home_goals)
+                if number == 15
+                else None,
+                "pleno_away_category": coupons._pleno_category(away_goals)
+                if number == 15
+                else None,
             }
         )
     return rows
@@ -43,7 +47,9 @@ def _coupon_html(rows: list[dict[str, object]]) -> str:
             if number == 15
             else str(row["result"])
         )
-        kickoff = datetime.fromisoformat(str(row["kickoff_at"])).strftime("%d/%m/%Y, %H:%M")
+        kickoff = datetime.fromisoformat(str(row["kickoff_at"])).strftime(
+            "%d/%m/%Y, %H:%M"
+        )
         body.append(
             "<tr>"
             f"<td>{number}</td><td>{kickoff}</td>"
@@ -79,7 +85,12 @@ def _official_html(rows: list[dict[str, object]]) -> str:
         f"{pleno['home_goals']}-{pleno['away_goals']}",
         f"{pleno['pleno_home_category']} - {pleno['pleno_away_category']}",
     ]
-    return "<html><body>" + "".join(ul(group) for group in groups) + ul(pleno_values) + "</body></html>"
+    return (
+        "<html><body>"
+        + "".join(ul(group) for group in groups)
+        + ul(pleno_values)
+        + "</body></html>"
+    )
 
 
 def _verified_coupon() -> dict[str, object]:
@@ -175,7 +186,9 @@ def test_coupon_backtest_uses_only_results_before_first_kickoff(
         fit_error = None
         fit_status = "fitted"
 
-        def pleno15_probs(self, home: str, away: str, **kwargs: object) -> list[dict[str, object]]:
+        def pleno15_probs(
+            self, home: str, away: str, **kwargs: object
+        ) -> list[dict[str, object]]:
             return [
                 {"home_goals": "M", "away_goals": "0", "probability": 0.2},
                 {"home_goals": "1", "away_goals": "0", "probability": 0.1},
@@ -212,7 +225,6 @@ def test_coupon_backtest_uses_only_results_before_first_kickoff(
     assert result["models"]["dc"]["n_predictions"] == 14
     assert result["models"]["dc"]["cost_eur"] > 0
     assert result["models"]["dc"]["total_bets"] <= 31_104
-
 
 
 def test_coupon_batch_does_not_swallow_unexpected_programming_errors(

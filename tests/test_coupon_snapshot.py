@@ -72,7 +72,10 @@ def test_official_snapshot_verifies_all_main_matches_and_pleno() -> None:
     )
     assert verified["official_main_matches_verified"] is True
     assert verified["official_pleno_verified"] is True
-    assert verified["official_result_snapshot_type"] == "normalized_json_extract_not_raw_html"
+    assert (
+        verified["official_result_snapshot_type"]
+        == "normalized_json_extract_not_raw_html"
+    )
     assert verified["official_result_sha256"] == "a" * 64
 
 
@@ -80,9 +83,7 @@ def test_official_snapshot_rejects_result_mismatch() -> None:
     coupon, snapshot = _records()
     snapshot["fixtures"][0]["home_goals"] = 0
     with pytest.raises(ValueError, match="snapshot reconciliation failed"):
-        verify_coupon_against_selae_snapshot(
-            coupon, snapshot, snapshot_sha256="a" * 64
-        )
+        verify_coupon_against_selae_snapshot(coupon, snapshot, snapshot_sha256="a" * 64)
 
 
 def test_snapshot_loader_hashes_exact_json_bytes(tmp_path: Path) -> None:
@@ -95,7 +96,6 @@ def test_snapshot_loader_hashes_exact_json_bytes(tmp_path: Path) -> None:
     import hashlib
 
     assert digest == hashlib.sha256(raw).hexdigest()
-
 
 
 def test_official_snapshot_rejects_mismatched_source_draw_date() -> None:
