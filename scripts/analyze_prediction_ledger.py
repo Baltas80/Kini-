@@ -24,7 +24,10 @@ def _load_results(path: Path, ledger_path: Path) -> tuple[dict[str, Any], str]:
         raise TypeError("backtest results do not contain the ledger SHA-256")
     if ledger_metadata.get("rows") != results.get("n_total"):
         raise ValueError("backtest result and ledger forecast counts disagree")
-    if ledger_metadata.get("path") and Path(ledger_metadata["path"]).name != ledger_path.name:
+    if (
+        ledger_metadata.get("path")
+        and Path(ledger_metadata["path"]).name != ledger_path.name
+    ):
         raise ValueError("backtest results point to a different ledger filename")
     return results, expected_hash
 

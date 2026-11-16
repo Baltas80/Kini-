@@ -12,7 +12,11 @@ def _ratio(numerator: int, denominator: int) -> float | None:
 
 
 def _probability_vector(row: dict[str, Any], mode: str) -> dict[str, float]:
-    value = row["market_probabilities"] if mode == "market" else row["model_probabilities"][mode]
+    value = (
+        row["market_probabilities"]
+        if mode == "market"
+        else row["model_probabilities"][mode]
+    )
     return {sign: float(value[sign]) for sign in SIGNS}
 
 
@@ -73,10 +77,9 @@ def _metrics(
             probability_sums[sign] += probability
             binary_brier_sums[sign] += (probability - observed) ** 2
             clipped = min(max(probability, 1e-15), 1.0 - 1e-15)
-            binary_logloss_sums[sign] -= (
-                observed * math.log(clipped)
-                + (1.0 - observed) * math.log1p(-clipped)
-            )
+            binary_logloss_sums[sign] -= observed * math.log(clipped) + (
+                1.0 - observed
+            ) * math.log1p(-clipped)
             if include_bins:
                 bin_index = min(int(probability * 10), 9)
                 bin_rows[sign][bin_index].append((probability, observed))
@@ -198,7 +201,11 @@ def analyze_prediction_rows(
     min_segment_n: int = 100,
 ) -> dict[str, Any]:
     """Build descriptive error diagnostics from archived OOS fixture forecasts."""
-    if isinstance(min_segment_n, bool) or not isinstance(min_segment_n, int) or min_segment_n < 1:
+    if (
+        isinstance(min_segment_n, bool)
+        or not isinstance(min_segment_n, int)
+        or min_segment_n < 1
+    ):
         raise ValueError("min_segment_n must be a positive integer")
     if not rows:
         raise ValueError("prediction diagnostics require at least one forecast row")
@@ -207,10 +214,7 @@ def analyze_prediction_rows(
     if not isinstance(model_modes, list) or not model_modes:
         raise ValueError("manifest must define model_modes")
 
-    models = {
-        mode: _metrics(rows, mode)
-        for mode in model_modes
-    }
+    models = {mode: _metrics(rows, mode) for mode in model_modes}
 
     pairwise = [
         _pairwise_comparison(rows, left, right)
