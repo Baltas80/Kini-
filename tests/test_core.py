@@ -762,6 +762,64 @@ def test_optimizer_enforces_selae_direct_double_triple_table():
     assert result["cost_eur"] == 23_328.0
 
 
+def test_optimizer_applies_pleno_multiplier_to_the_total_bet_cap():
+    predictions = [{"1": 1 / 3, "X": 1 / 3, "2": 1 / 3} for _ in range(14)]
+    categories = ("0", "1", "2", "M")
+
+    result = TicketOptimizer().optimize(
+        predictions,
+        budget=TicketOptimizer.MAX_AUTHORIZED_TOTAL_BETS,
+        pleno15_home_categories=categories,
+        pleno15_away_categories=categories,
+    )
+
+    assert result["pleno15_multiplier"] == 16
+    assert result["pleno15_home_categories"] == list(categories)
+    assert result["pleno15_away_categories"] == list(categories)
+    assert len(result["pleno15_combinations"]) == 16
+    assert result["total_bets"] == 31_104
+    assert result["column_count"] * result["pleno15_multiplier"] == 31_104
+    assert result["cost_eur"] == 23_328.0
+
+
+def test_optimizer_allows_one_14_match_column_when_pleno_meets_minimum_bets():
+    predictions = [{"1": 0.5, "X": 0.3, "2": 0.2} for _ in range(14)]
+
+    result = TicketOptimizer().optimize(
+        predictions,
+        budget=1,
+        pleno15_home_categories=("0", "1"),
+        pleno15_away_categories=("M",),
+    )
+
+    assert result["column_count"] == 1
+    assert result["pleno15_multiplier"] == 2
+    assert result["total_bets"] == 2
+    assert result["cost_eur"] == 1.50
+
+
+def test_optimizer_rejects_invalid_or_partial_pleno_category_sets():
+    predictions = [{"1": 0.5, "X": 0.3, "2": 0.2} for _ in range(14)]
+
+    with pytest.raises(ValueError, match="supplied together"):
+        TicketOptimizer().optimize(
+            predictions,
+            pleno15_home_categories=("0",),
+        )
+    with pytest.raises(ValueError, match="invalid Pleno category"):
+        TicketOptimizer().optimize(
+            predictions,
+            pleno15_home_categories=("0", "3"),
+            pleno15_away_categories=("M",),
+        )
+    with pytest.raises(ValueError, match="duplicate"):
+        TicketOptimizer().optimize(
+            predictions,
+            pleno15_home_categories=("0", "0"),
+            pleno15_away_categories=("M",),
+        )
+
+
 def test_optimizer_double_triple_table_matches_official_bet_cap():
     for doubles, maximum_triples in TicketOptimizer.MAX_TRIPLES_BY_DOUBLES.items():
         allowed = [
@@ -852,6 +910,35 @@ def test_quiniela_returns_16_pleno15_categories():
         * result["pleno_al_15_best"]["probability"]
     )
     assert 0.0 <= result["estimated_full_coupon_coverage_independent"] <= 1.0
+
+
+def test_quiniela_applies_multiple_pleno_categories_to_cost_and_coverage():
+    fixtures = [
+        Match(datetime(2025, 4, 1), f"Home{i}", f"Away{i}")
+        for i in range(15)
+    ]
+    result = KiniEngine(enable_ml=False).fit(sample()).quiniela(
+        fixtures,
+        budget=8,
+        pleno15_home_categories=("0", "1"),
+        pleno15_away_categories=("2", "M"),
+    )
+
+    ticket = result["ticket"]
+    assert ticket["pleno15_multiplier"] == 4
+    assert ticket["total_bets"] == ticket["column_count"] * 4
+    assert ticket["total_bets"] <= TicketOptimizer.MAX_AUTHORIZED_TOTAL_BETS
+    assert len(result["pleno_al_15_selected"]) == 4
+    assert result["pleno_al_15_selected_probability"] == pytest.approx(
+        sum(item["probability"] for item in result["pleno_al_15_selected"])
+    )
+    assert result["estimated_full_coupon_coverage_independent"] == pytest.approx(
+        ticket["independent_coverage_estimate"]
+        * result["pleno_al_15_selected_probability"]
+    )
+    assert result["full_coupon_coverage_assumption"] == (
+        "independent_all_14_matches_and_selected_pleno15_categories"
+    )
 
 
 def test_optimizer_matches_exhaustive_search_for_small_budget():

@@ -1798,3 +1798,16 @@ La nota oficial de prensa del sorteo de 15-11-2026 publica el vector `2 - X - 1 
 - **Estado de integración:** PR #9 continúa en borrador contra `feat/canonical-team-identity-registry`; no se ha modificado `master` ni se ha fusionado ningún PR.
 
 **Siguiente acción prioritaria:** recoger el resultado de la comparación walk-forward que ya está en curso, comprobar que los cinco modelos obligatorios tienen `n == n_total` y cero errores, y revisar cold-start, mercado con cuotas temporalmente elegibles, benchmark Bet365 y calibración prequential. Después, continuar la cobertura P6 del Pleno múltiple y la reconciliación de nuevos cupones con evidencia independiente.
+
+
+---
+## 2026-11-16 — P6: Pleno al 15 multiplier in direct-multiple optimization
+
+**Implementation status: committed; CI/backtest validation pending.**
+
+- TicketOptimizer.optimize() now accepts explicit home and away Pleno category sets using the official categories 0, 1, 2 and M.
+- The Pleno multiplier is the Cartesian product of the selected category counts. The optimizer constrains column_count × pleno15_multiplier to the statutory 31,104 total-bet cap and calculates cost from total payable bets at the configured per-bet price.
+- The default KiniEngine.quiniela() behavior remains the most probable single joint Pleno pair. Callers can request multiple categories; the response reports selected combinations, selected Pleno probability mass and the full-coupon independent coverage estimate.
+- Regression tests cover the 16-combination Pleno multiplier, the 31,104 total-bet boundary, the two-bet minimum with one 14-match column, invalid/partial category sets and end-to-end coverage/cost accounting.
+- The independent-match coverage approximation is unchanged. This work does not add expected-prize modelling, joint dependence across the 14 matches, reduced/conditioned systems or Elige8.
+- Validation evidence will be appended only after CI and the current-head historical backtest gates complete.

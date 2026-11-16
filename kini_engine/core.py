@@ -828,12 +828,15 @@ def _recent_form(history: list[Match], team: str) -> float:
 class TicketOptimizer:
     """SELAE direct-multiple optimizer under an independent-match approximation.
 
-    Only double/triple counts authorized by the direct-method table are
-    considered. Coverage is the probability that every match outcome belongs
-    to its selected sign set; it is not expected payout or profitability.
+    The budget counts 14-match columns. Each selected Pleno category pair
+    multiplies payable bets; the official cap applies after that multiplier.
+    Coverage is not expected payout or profitability.
     """
 
-    MAX_AUTHORIZED_COLUMNS = 31_104
+    MAX_AUTHORIZED_TOTAL_BETS = 31_104
+    # Backwards-compatible name; the statutory cap includes Pleno al 15.
+    MAX_AUTHORIZED_COLUMNS = MAX_AUTHORIZED_TOTAL_BETS
+    PLENO15_CATEGORIES: ClassVar[tuple[str, ...]] = ("0", "1", "2", "M")
     MAX_TRIPLES_BY_DOUBLES: ClassVar[dict[int, int]] = {
         0: 9,
         1: 8,
@@ -874,23 +877,88 @@ class TicketOptimizer:
         self.price_per_column_eur = price
         self.minimum_columns = minimum_columns
 
-    def optimize(self, predictions: list[dict[str, float]], budget: int = 8) -> dict[str, Any]:
-        """Maximize full-ticket coverage within SELAE's direct-system table.
+    @classmethod
+    def _normalize_pleno_categories(
+        cls,
+        categories: Iterable[str] | None,
+        name: str,
+    ) -> tuple[str, ...] | None:
+        if categories is None:
+            return None
+        if isinstance(categories, (str, bytes)):
+            raise TypeError(f"{name} must be an iterable of Pleno categories")
+        try:
+            values = list(categories)
+        except TypeError as exc:
+            raise TypeError(
+                f"{name} must be an iterable of Pleno categories"
+            ) from exc
+        if not values:
+            raise ValueError(f"{name} must contain at least one category")
+        if any(
+            not isinstance(category, str) or category not in cls.PLENO15_CATEGORIES
+            for category in values
+        ):
+            raise ValueError(
+                f"{name} contains an invalid Pleno category; use 0, 1, 2 or M"
+            )
+        if len(set(values)) != len(values):
+            raise ValueError(f"{name} must not contain duplicate categories")
+        return tuple(
+            category for category in cls.PLENO15_CATEGORIES if category in values
+        )
 
-        Budget is the maximum number of 14-match columns. The current engine
-        selects exactly one Pleno al 15 category pair, so its multiplier is 1.
+    def optimize(
+        self,
+        predictions: list[dict[str, float]],
+        budget: int = 8,
+        *,
+        pleno15_home_categories: Iterable[str] | None = None,
+        pleno15_away_categories: Iterable[str] | None = None,
+    ) -> dict[str, Any]:
+        """Maximize 14-match coverage under the direct-system total-bet cap.
+
+        The budget is the maximum number of 14-match columns. Payable bets
+        equal column_count times the Pleno multiplier. The legacy
+        minimum_columns setting is retained but applies to total bets.
         """
         if len(predictions) != 14:
             raise ValueError("standard ticket optimisation needs exactly 14 matches")
         if isinstance(budget, bool) or not isinstance(budget, int):
-            raise TypeError("budget must be a positive integer number of columns")
-        if budget < self.minimum_columns:
-            raise ValueError(
-                f"budget must be at least {self.minimum_columns} columns"
+            raise TypeError(
+                "budget must be a positive integer number of 14-match columns"
             )
-        if budget > self.MAX_AUTHORIZED_COLUMNS:
+        if budget < 1:
+            raise ValueError("budget must be at least one 14-match column")
+        if budget > self.MAX_AUTHORIZED_TOTAL_BETS:
             raise ValueError(
-                f"budget must not exceed {self.MAX_AUTHORIZED_COLUMNS} authorized direct columns"
+                f"budget must not exceed {self.MAX_AUTHORIZED_TOTAL_BETS} "
+                "authorized direct columns"
+            )
+
+        home_categories = self._normalize_pleno_categories(
+            pleno15_home_categories, "pleno15_home_categories"
+        )
+        away_categories = self._normalize_pleno_categories(
+            pleno15_away_categories, "pleno15_away_categories"
+        )
+        if (home_categories is None) != (away_categories is None):
+            raise ValueError(
+                "home and away Pleno category sets must be supplied together"
+            )
+        pleno15_multiplier = (
+            len(home_categories) * len(away_categories)
+            if home_categories is not None and away_categories is not None
+            else 1
+        )
+        if budget * pleno15_multiplier < self.minimum_columns:
+            if pleno15_multiplier == 1:
+                raise ValueError(
+                    f"budget must be at least {self.minimum_columns} columns"
+                )
+            raise ValueError(
+                "budget and Pleno multiplier cannot satisfy the minimum "
+                f"of {self.minimum_columns} total bets"
             )
 
         normalized: list[dict[str, float]] = []
@@ -928,8 +996,7 @@ class TicketOptimizer:
             normalized.append({sign: values[sign] / total for sign in SIGNS})
 
         # State is (number of doubles, number of triples). The SELAE direct
-        # table constrains the authorized triple count for each double count.
-        # For a fixed state, the best sign subset at each match is its top-k.
+        # table constrains triples; the 31,104 cap also applies after Pleno.
         dp: dict[tuple[int, int], tuple[float, list[tuple[str, ...]]]] = {
             (0, 0): (0.0, [])
         }
@@ -949,8 +1016,12 @@ class TicketOptimizer:
                     if new_triples > self.MAX_TRIPLES_BY_DOUBLES[new_doubles]:
                         continue
 
-                    new_used = (2 ** new_doubles) * (3 ** new_triples)
-                    if new_used > budget:
+                    new_columns = (2**new_doubles) * (3**new_triples)
+                    new_total_bets = new_columns * pleno15_multiplier
+                    if (
+                        new_columns > budget
+                        or new_total_bets > self.MAX_AUTHORIZED_TOTAL_BETS
+                    ):
                         continue
 
                     signs = tuple(ordered[:count])
@@ -966,31 +1037,51 @@ class TicketOptimizer:
         eligible = {
             state: value
             for state, value in dp.items()
-            if (2 ** state[0]) * (3 ** state[1]) >= self.minimum_columns
+            if (
+                (2**state[0])
+                * (3**state[1])
+                * pleno15_multiplier
+                >= self.minimum_columns
+            )
         }
         if not eligible:
             raise ValueError(
-                f"budget {budget} cannot satisfy the {self.minimum_columns}-column minimum"
+                f"budget {budget} cannot satisfy the {self.minimum_columns}-bet "
+                "minimum and SELAE total-bet cap"
             )
 
         (double_count, triple_count), (log_mass, picks) = max(
             eligible.items(),
             key=lambda item: item[1][0],
         )
-        used = (2 ** double_count) * (3 ** triple_count)
+        used = (2**double_count) * (3**triple_count)
+        total_bets = used * pleno15_multiplier
         columns = [
             [picks[j][mask[j]] for j in range(14)]
             for mask in np.ndindex(tuple(len(x) for x in picks))
         ]
         if len(columns) != used:
             raise RuntimeError("ticket column count does not match the optimizer state")
+        if total_bets > self.MAX_AUTHORIZED_TOTAL_BETS:
+            raise RuntimeError("ticket exceeds SELAE's authorized total-bet cap")
 
         independent_coverage = float(np.exp(log_mass))
+        pleno15_combinations = (
+            [
+                {"home_goals": home, "away_goals": away}
+                for home in home_categories
+                for away in away_categories
+            ]
+            if home_categories is not None and away_categories is not None
+            else None
+        )
         return {
             "budget": budget,
             "budget_unit": "columns",
+            "budget_scope": "14_match_columns",
             "columns": columns,
             "column_count": len(columns),
+            "total_bets": total_bets,
             "double_count": double_count,
             "triple_count": triple_count,
             "shape": tuple(len(x) for x in picks),
@@ -1000,13 +1091,22 @@ class TicketOptimizer:
             "coverage_assumption": "independent_matches",
             "coverage_method": "product_of_marginal_selected_sign_masses",
             "system_method": "multiple_direct",
-            "maximum_authorized_columns": self.MAX_AUTHORIZED_COLUMNS,
+            "maximum_authorized_columns": self.MAX_AUTHORIZED_TOTAL_BETS,
+            "maximum_authorized_total_bets": self.MAX_AUTHORIZED_TOTAL_BETS,
             "minimum_columns": self.minimum_columns,
+            "minimum_total_bets": self.minimum_columns,
             "price_per_column_eur": self.price_per_column_eur,
-            "pleno15_multiplier": 1,
-            "cost_eur": round(len(columns) * self.price_per_column_eur, 2),
+            "price_per_bet_eur": self.price_per_column_eur,
+            "pleno15_multiplier": pleno15_multiplier,
+            "pleno15_home_categories": (
+                list(home_categories) if home_categories is not None else None
+            ),
+            "pleno15_away_categories": (
+                list(away_categories) if away_categories is not None else None
+            ),
+            "pleno15_combinations": pleno15_combinations,
+            "cost_eur": round(total_bets * self.price_per_column_eur, 2),
         }
-
 
     @staticmethod
     def evaluate_joint_scenario_coverage(
@@ -1307,11 +1407,17 @@ class KiniEngine:
             model_history=model_history,
         )
 
-    def quiniela(self, fixtures: list[Match], budget: int = 8) -> dict[str, Any]:
+    def quiniela(
+        self,
+        fixtures: list[Match],
+        budget: int = 8,
+        *,
+        pleno15_home_categories: Iterable[str] | None = None,
+        pleno15_away_categories: Iterable[str] | None = None,
+    ) -> dict[str, Any]:
         if len(fixtures) != 15:
             raise ValueError("Quiniela needs 15 fixtures")
         preds = [self._predict_one(m, self.history) for m in fixtures]
-        ticket = self.optimizer.optimize([p.probabilities for p in preds[:14]], budget=budget)
         pleno_source = self.dc.prediction_source(
             fixtures[14].home,
             fixtures[14].away,
@@ -1322,19 +1428,49 @@ class KiniEngine:
             allow_unseen_team_fallback=True,
         )
         pleno_best = pleno_distribution[0]
-        coverage_14 = float(ticket["joint_coverage"])
-        pleno15_probability = float(pleno_best["probability"])
+        if pleno15_home_categories is None and pleno15_away_categories is None:
+            # Preserve the existing default: one best joint Pleno category pair.
+            pleno15_home_categories = (str(pleno_best["home_goals"]),)
+            pleno15_away_categories = (str(pleno_best["away_goals"]),)
 
+        ticket = self.optimizer.optimize(
+            [prediction.probabilities for prediction in preds[:14]],
+            budget=budget,
+            pleno15_home_categories=pleno15_home_categories,
+            pleno15_away_categories=pleno15_away_categories,
+        )
+        selected_pairs = {
+            (item["home_goals"], item["away_goals"])
+            for item in ticket["pleno15_combinations"]
+        }
+        selected_distribution = [
+            item
+            for item in pleno_distribution
+            if (item["home_goals"], item["away_goals"]) in selected_pairs
+        ]
+        selected_pleno_probability = float(
+            sum(item["probability"] for item in selected_distribution)
+        )
+        if not selected_distribution or not 0.0 < selected_pleno_probability <= 1.0:
+            raise RuntimeError("selected Pleno categories have invalid probability mass")
+
+        coverage_14 = float(ticket["joint_coverage"])
         return {
-            "predictions": [p.__dict__ for p in preds],
+            "predictions": [prediction.__dict__ for prediction in preds],
             "ticket": ticket,
             "pleno_al_15": pleno_distribution,
             "pleno_al_15_best": pleno_best,
+            "pleno_al_15_selected": selected_distribution,
+            "pleno_al_15_selected_probability": selected_pleno_probability,
+            "pleno_al_15_selected_categories": {
+                "home": ticket["pleno15_home_categories"],
+                "away": ticket["pleno15_away_categories"],
+            },
             "pleno_al_15_model_source": pleno_source,
             "estimated_full_coupon_coverage_independent": (
-                coverage_14 * pleno15_probability
+                coverage_14 * selected_pleno_probability
             ),
             "full_coupon_coverage_assumption": (
-                "independent_all_14_matches_and_pleno15"
+                "independent_all_14_matches_and_selected_pleno15_categories"
             ),
         }
