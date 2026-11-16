@@ -10,6 +10,10 @@ from scipy.stats import poisson
 
 SIGNS = ("1", "X", "2")
 LAE_SOURCE_ID = "quinielista.es:porcentajes_lae.asp"
+
+
+class DixonColesFitError(RuntimeError):
+    """Raised when Dixon-Coles cannot produce a validated fitted model."""
 LAE_KICKOFF_EVIDENCE_MAX_AGE = timedelta(hours=24)
 
 
@@ -285,85 +289,243 @@ class DixonColes:
         self.home_adv = 0.25
         self.fitted = False
         self.model: Any = None
+        self.fit_status = "not_fitted"
+        self.fit_error: str | None = None
+        self.n_training_matches = 0
+        self.n_training_teams = 0
+        self.log_likelihood: float | None = None
+        self.aic: float | None = None
 
     def fit(self, matches: list[Match]) -> DixonColes:
-        usable = [
-            m for m in matches
-            if m.home_goals is not None and m.away_goals is not None
-        ]
+        """Fit the model and validate optimizer state plus a real forecast."""
+        self.fitted = False
+        self.model = None
+        self.teams = []
+        self.fit_status = "fitting"
+        self.fit_error = None
+        self.log_likelihood = None
+        self.aic = None
+
+        usable = sorted(
+            (m for m in matches if m.home_goals is not None and m.away_goals is not None),
+            key=lambda m: _date_num(m.date),
+        )
+        self.n_training_matches = len(usable)
+        self.n_training_teams = len({m.home for m in usable} | {m.away for m in usable})
         if len(usable) < 12:
-            self.fitted = False
+            self.fit_status = "insufficient_history"
+            self.fit_error = f"need at least 12 completed matches; received {len(usable)}"
             return self
 
-        from penaltyblog.models import DixonColesGoalModel, dixon_coles_weights
+        if (
+            isinstance(self.decay, bool)
+            or not np.isfinite(self.decay)
+            or not 0.0 < float(self.decay) <= 1.0
+        ):
+            self.fit_status = "invalid_configuration"
+            self.fit_error = "decay must be finite and in (0, 1]"
+            raise ValueError(self.fit_error)
 
-        self.teams = sorted({m.home for m in usable} | {m.away for m in usable})
-        # penaltyblog expects datetime-like values because it computes timedelta.days.
-        # Parse through the shared date parser so ISO and Football-Data DD/MM/YYYY
-        # inputs follow exactly the same chronological interpretation.
-        dates = [datetime.fromtimestamp(_date_num(m.date)) for m in usable]
+        try:
+            from penaltyblog.models import DixonColesGoalModel, dixon_coles_weights
 
-        xi = max(-np.log(float(self.decay)), 0.0)
-        weights = dixon_coles_weights(dates, xi=xi)
+            self.teams = sorted({m.home for m in usable} | {m.away for m in usable})
+            # penaltyblog expects datetime-like values because it computes timedelta.days.
+            dates = [datetime.fromtimestamp(_date_num(m.date)) for m in usable]
+            weights = dixon_coles_weights(dates, xi=-np.log(float(self.decay)))
 
-        self.model = DixonColesGoalModel(
-            goals_home=np.asarray([m.home_goals for m in usable], dtype=float),
-            goals_away=np.asarray([m.away_goals for m in usable], dtype=float),
-            teams_home=np.asarray([m.home for m in usable], dtype=str),
-            teams_away=np.asarray([m.away for m in usable], dtype=str),
-            weights=weights,
-        )
-        self.model.fit(
-            use_gradient=True,
-            minimizer_options={"maxiter": 1000, "ftol": 1e-7},
-        )
+            model = DixonColesGoalModel(
+                goals_home=np.asarray([m.home_goals for m in usable], dtype=float),
+                goals_away=np.asarray([m.away_goals for m in usable], dtype=float),
+                teams_home=np.asarray([m.home for m in usable], dtype=str),
+                teams_away=np.asarray([m.away for m in usable], dtype=str),
+                weights=weights,
+            )
+            model.fit(
+                use_gradient=True,
+                minimizer_options={"maxiter": 1000, "ftol": 1e-7},
+            )
+            if getattr(model, "fitted", False) is not True:
+                raise RuntimeError("penaltyblog.fit() returned without model.fitted=True")
 
-        self.teams = list(self.model.teams)
-        self.fitted = bool(self.model.fitted)
+            log_likelihood = float(model.loglikelihood)
+            aic = float(model.aic)
+            if not np.isfinite(log_likelihood) or not np.isfinite(aic):
+                raise RuntimeError("Dixon-Coles fit returned non-finite likelihood/AIC")
+
+            probe = model.predict(
+                usable[-1].home,
+                usable[-1].away,
+                max_goals=15,
+                normalize=True,
+            )
+            grid = np.asarray(probe.grid, dtype=float)
+            vector = np.asarray(probe.home_draw_away, dtype=float)
+            if (
+                grid.ndim != 2
+                or grid.size == 0
+                or not np.isfinite(grid).all()
+                or np.any(grid < 0.0)
+                or not np.isclose(float(grid.sum()), 1.0, rtol=0.0, atol=1e-6)
+            ):
+                raise RuntimeError("Dixon-Coles fit produced an invalid score grid")
+            if (
+                vector.shape != (3,)
+                or not np.isfinite(vector).all()
+                or np.any(vector < 0.0)
+                or not np.isclose(float(vector.sum()), 1.0, rtol=0.0, atol=1e-6)
+            ):
+                raise RuntimeError("Dixon-Coles fit produced invalid 1/X/2 probabilities")
+        except Exception as exc:
+            self.model = None
+            self.teams = []
+            self.fitted = False
+            self.fit_status = "fit_failed"
+            self.fit_error = f"{type(exc).__name__}: {exc}"
+            raise DixonColesFitError(
+                f"Dixon-Coles fit failed with {len(usable)} completed matches: {self.fit_error}"
+            ) from exc
+
+        self.model = model
+        self.teams = list(model.teams)
+        self.fitted = True
+        self.fit_status = "fitted"
+        self.fit_error = None
+        self.n_training_teams = len(self.teams)
+        self.log_likelihood = log_likelihood
+        self.aic = aic
         return self
 
-    def expected_goals(self, home: str, away: str) -> tuple[float, float]:
-        if not self.fitted or home not in self.teams or away not in self.teams:
+    def prediction_source(self, home: str, away: str) -> str:
+        """Identify trained forecasts and cold-start fallback cases."""
+        if not self.fitted:
+            return "untrained_fallback"
+        if home not in self.teams or away not in self.teams:
+            return "unseen_team_fallback"
+        return "dixon_coles"
+
+    def expected_goals(
+        self,
+        home: str,
+        away: str,
+        *,
+        allow_untrained_fallback: bool = False,
+        allow_unseen_team_fallback: bool = False,
+    ) -> tuple[float, float]:
+        source = self.prediction_source(home, away)
+        if source == "untrained_fallback":
+            if not allow_untrained_fallback:
+                raise ValueError(
+                    f"Dixon-Coles model is not fitted (fit_status={self.fit_status})"
+                )
             return 1.35, 1.05
+        if source == "unseen_team_fallback":
+            if not allow_unseen_team_fallback:
+                raise ValueError(
+                    "Dixon-Coles cannot predict an unseen team without an explicit cold-start fallback"
+                )
+            return 1.35, 1.05
+
         pred = self.model.predict(home, away, max_goals=15, normalize=True)
+        expected = np.asarray(
+            [pred.home_goal_expectation, pred.away_goal_expectation], dtype=float
+        )
+        if not np.isfinite(expected).all() or np.any(expected <= 0.0):
+            raise ValueError("Dixon-Coles returned invalid expected goals")
         return (
-            float(np.clip(pred.home_goal_expectation, 0.15, 5.0)),
-            float(np.clip(pred.away_goal_expectation, 0.15, 5.0)),
+            float(np.clip(expected[0], 0.15, 5.0)),
+            float(np.clip(expected[1], 0.15, 5.0)),
         )
 
-    def _score_grid(self, home: str, away: str) -> np.ndarray:
-        if not self.fitted or home not in self.teams or away not in self.teams:
-            lh, la = self.expected_goals(home, away)
+    def _score_grid(
+        self,
+        home: str,
+        away: str,
+        *,
+        allow_untrained_fallback: bool = False,
+        allow_unseen_team_fallback: bool = False,
+    ) -> np.ndarray:
+        source = self.prediction_source(home, away)
+        if source != "dixon_coles":
+            lh, la = self.expected_goals(
+                home,
+                away,
+                allow_untrained_fallback=allow_untrained_fallback,
+                allow_unseen_team_fallback=allow_unseen_team_fallback,
+            )
             return score_grid(lh, la, self.rho)
 
         prediction = self.model.predict(home, away, max_goals=15, normalize=True)
         grid = np.asarray(prediction.grid, dtype=float)
         total = float(grid.sum())
-        if not np.isfinite(grid).all() or total <= 0.0:
+        if (
+            not np.isfinite(grid).all()
+            or np.any(grid < 0.0)
+            or total <= 0.0
+        ):
             raise ValueError("Dixon-Coles returned an invalid score grid")
         return grid / total
 
-    def predict(self, home: str, away: str) -> tuple[dict[str, float], list[dict[str, Any]]]:
-        if not self.fitted or home not in self.teams or away not in self.teams:
-            lh, la = self.expected_goals(home, away)
+    def predict(
+        self,
+        home: str,
+        away: str,
+        *,
+        allow_untrained_fallback: bool = False,
+        allow_unseen_team_fallback: bool = False,
+    ) -> tuple[dict[str, float], list[dict[str, Any]]]:
+        source = self.prediction_source(home, away)
+        if source != "dixon_coles":
+            lh, la = self.expected_goals(
+                home,
+                away,
+                allow_untrained_fallback=allow_untrained_fallback,
+                allow_unseen_team_fallback=allow_unseen_team_fallback,
+            )
             grid = score_grid(lh, la, self.rho)
-            probs = grid_to_1x2(grid)
+            probabilities = grid_to_1x2(grid)
         else:
-            pred = self.model.predict(home, away, max_goals=15, normalize=True)
-            grid = np.asarray(pred.grid, dtype=float)
-            probs = dict(zip(SIGNS, map(float, pred.home_draw_away)))
+            prediction = self.model.predict(home, away, max_goals=15, normalize=True)
+            grid = np.asarray(prediction.grid, dtype=float)
+            vector = np.asarray(prediction.home_draw_away, dtype=float)
+            if (
+                grid.ndim != 2
+                or not np.isfinite(grid).all()
+                or np.any(grid < 0.0)
+                or not np.isclose(float(grid.sum()), 1.0, rtol=0.0, atol=1e-6)
+            ):
+                raise ValueError("Dixon-Coles returned an invalid score grid")
+            if (
+                vector.shape != (3,)
+                or not np.isfinite(vector).all()
+                or np.any(vector < 0.0)
+                or not np.isclose(float(vector.sum()), 1.0, rtol=0.0, atol=1e-6)
+            ):
+                raise ValueError("Dixon-Coles returned invalid 1/X/2 probabilities")
+            probabilities = dict(zip(SIGNS, map(float, vector)))
 
         flat = [
             {"score": f"{h}-{a}", "probability": float(grid[h, a])}
             for h, a in np.ndindex(grid.shape)
         ]
-        flat.sort(key=lambda x: x["probability"], reverse=True)
-        return probs, flat[:10]
+        flat.sort(key=lambda item: item["probability"], reverse=True)
+        return probabilities, flat[:10]
 
-
-    def pleno15_probs(self, home: str, away: str) -> list[dict[str, Any]]:
+    def pleno15_probs(
+        self,
+        home: str,
+        away: str,
+        *,
+        allow_untrained_fallback: bool = False,
+        allow_unseen_team_fallback: bool = False,
+    ) -> list[dict[str, Any]]:
         """Aggregate the score grid into SELAE Pleno al 15 goal categories."""
-        grid = self._score_grid(home, away)
+        grid = self._score_grid(
+            home,
+            away,
+            allow_untrained_fallback=allow_untrained_fallback,
+            allow_unseen_team_fallback=allow_unseen_team_fallback,
+        )
         categories = {
             (home_goals, away_goals): 0.0
             for home_goals in ("0", "1", "2", "M")
@@ -386,7 +548,6 @@ class DixonColes:
         ]
         result.sort(key=lambda item: item["probability"], reverse=True)
         return result
-
 
 
 class FeatureModel:
@@ -999,11 +1160,32 @@ class KiniEngine:
 
     def fit(self, history: list[Match]) -> KiniEngine:
         self.history = sorted(history, key=lambda m: _date_num(m.date))
-        self.dc.fit(self.history)
+        self.dc_fit_error: str | None = None
+        try:
+            self.dc.fit(self.history)
+        except DixonColesFitError as exc:
+            # Keep the failure visible while allowing independent ML/market/LAE modes.
+            self.dc_fit_error = str(exc)
         if self.ml is not None and hasattr(self.ml, "invalidate"):
             self.ml.invalidate()
-        self.fitted = True
+        self.fitted = bool(self.dc.fitted)
         return self
+
+    def model_diagnostics(self) -> dict[str, Any]:
+        """Return explicit per-model fit state rather than inferring readiness."""
+        return {
+            "history_loaded": bool(self.history),
+            "dixon_coles": {
+                "fitted": self.dc.fitted,
+                "status": self.dc.fit_status,
+                "training_matches": self.dc.n_training_matches,
+                "training_teams": self.dc.n_training_teams,
+                "log_likelihood": self.dc.log_likelihood,
+                "aic": self.dc.aic,
+                "error": self.dc.fit_error or self.dc_fit_error,
+            },
+            "ml_enabled": self.ml is not None,
+        }
 
     def _predict_one(
         self,
@@ -1012,14 +1194,46 @@ class KiniEngine:
         mode: str = "ensemble",
         model_history: list[Match] | None = None,
     ) -> Prediction:
-        _assert_training_history_precedes_fixture(self.history, m, "Dixon-Coles")
-        dc_probs, scores = self.dc.predict(m.home, m.away)
-        # The fitted estimator uses model_history; current features and context
-        # use all results available before this fixture.
+        allowed_modes = {
+            "ensemble", "ensemble_dc_ml", "dc", "ml", "lae", "market"
+        }
+        if mode not in allowed_modes:
+            raise ValueError(
+                "mode must be one of: ensemble, ensemble_dc_ml, dc, ml, lae, market"
+            )
+
+        needs_dc = mode in {"ensemble", "ensemble_dc_ml", "dc"}
+        dc_reasons: list[str] = []
+        if needs_dc:
+            _assert_training_history_precedes_fixture(
+                self.history, m, "Dixon-Coles"
+            )
+            if not self.dc.fitted:
+                reason = self.dc.fit_error or self.dc_fit_error or self.dc.fit_status
+                raise ValueError(
+                    "Dixon-Coles model is not available for this forecast "
+                    f"(fit_status={self.dc.fit_status}; reason={reason})"
+                )
+            dc_source = self.dc.prediction_source(m.home, m.away)
+            dc_probs, scores = self.dc.predict(
+                m.home,
+                m.away,
+                allow_unseen_team_fallback=True,
+            )
+            if dc_source == "unseen_team_fallback":
+                dc_reasons.append(
+                    "Dixon-Coles cold-start fallback used for an unseen team"
+                )
+        else:
+            dc_probs, scores = None, []
+
+        # ML has its own fit lifecycle and can run when Dixon-Coles is unavailable.
         needs_ml = mode in {"ml", "ensemble", "ensemble_dc_ml"}
         training_history = model_history if model_history is not None else history
         ml = (
-            self.ml.fit_predict_proba(training_history, m, feature_history=history)
+            self.ml.fit_predict_proba(
+                training_history, m, feature_history=history
+            )
             if self.ml is not None and needs_ml else None
         )
         ml_probs = None if ml is None else dict(zip(SIGNS, map(float, ml)))
@@ -1027,8 +1241,6 @@ class KiniEngine:
         # schedule-screened odds may influence a forecast.
         market_probs = m.market if m.has_temporally_eligible_market else None
         lae_probs = m.lae if m.has_temporally_eligible_lae else None
-        if mode not in {"ensemble", "ensemble_dc_ml", "dc", "ml", "lae", "market"}:
-            raise ValueError("mode must be one of: ensemble, ensemble_dc_ml, dc, ml, lae, market")
 
         if mode == "dc":
             base = dc_probs
@@ -1044,15 +1256,19 @@ class KiniEngine:
             base = _blend((lae_probs, 1.0))
         elif mode == "market":
             if not market_probs:
-                raise ValueError("market probabilities are unavailable or not temporally eligible")
+                raise ValueError(
+                    "market probabilities are unavailable or not temporally eligible"
+                )
             base = _blend((market_probs, 1.0))
         elif mode == "ensemble_dc_ml":
-            if ml_probs is None:
-                raise ValueError("model-only ensemble requires valid ML probabilities")
-            # Preserve the relative DC/ML weights of the existing ensemble,
-            # normalized to 100%; market and LAE are deliberately excluded.
+            if dc_probs is None or ml_probs is None:
+                raise ValueError(
+                    "model-only ensemble requires fitted DC and valid ML probabilities"
+                )
             base = _blend((dc_probs, 0.58), (ml_probs, 0.17))
         else:
+            if dc_probs is None:
+                raise ValueError("ensemble mode requires a fitted Dixon-Coles model")
             blend_items = [(dc_probs, 0.58)]
             if ml_probs:
                 blend_items.append((ml_probs, 0.17))
@@ -1066,6 +1282,7 @@ class KiniEngine:
             adjusted, reasons = context_adjust(base, m, history)
         else:
             adjusted, reasons = base, []
+        reasons.extend(dc_reasons)
         surprise = surprise_signal(adjusted, lae_probs, market_probs, m, history)
         sign = max(SIGNS, key=lambda s: adjusted[s])
         return Prediction(m.home, m.away, adjusted, sign, scores, surprise, reasons)
@@ -1094,9 +1311,14 @@ class KiniEngine:
             raise ValueError("Quiniela needs 15 fixtures")
         preds = [self._predict_one(m, self.history) for m in fixtures]
         ticket = self.optimizer.optimize([p.probabilities for p in preds[:14]], budget=budget)
+        pleno_source = self.dc.prediction_source(
+            fixtures[14].home,
+            fixtures[14].away,
+        )
         pleno_distribution = self.dc.pleno15_probs(
             fixtures[14].home,
             fixtures[14].away,
+            allow_unseen_team_fallback=True,
         )
         pleno_best = pleno_distribution[0]
         coverage_14 = float(ticket["joint_coverage"])
@@ -1107,6 +1329,7 @@ class KiniEngine:
             "ticket": ticket,
             "pleno_al_15": pleno_distribution,
             "pleno_al_15_best": pleno_best,
+            "pleno_al_15_model_source": pleno_source,
             "estimated_full_coupon_coverage_independent": (
                 coverage_14 * pleno15_probability
             ),
