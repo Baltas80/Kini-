@@ -7,6 +7,11 @@ on:
     paths:
       - "scripts/discover_selae_result_archive.py"
       - ".github/workflows/selae-result-archive-discovery.yml"
+  pull_request:
+    types: [opened, reopened, synchronize]
+    paths:
+      - "scripts/discover_selae_result_archive.py"
+      - ".github/workflows/selae-result-archive-discovery.yml"
   workflow_dispatch:
 
 permissions:
@@ -30,7 +35,7 @@ jobs:
       - name: Discover official archive pages and draw links
         shell: bash
         run: |
-          if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
+          if [[ "$GITHUB_EVENT_NAME" != "workflow_dispatch" ]]; then
             python -m scripts.discover_selae_result_archive \
               --max-archive-page 2 \
               --output-dir artifacts/selae-result-archive
