@@ -64,12 +64,18 @@ def _validate_manifest(manifest: dict[str, Any], row_count: int) -> None:
         or not isinstance(forecast_count, int)
         or forecast_count != row_count
     ):
-        raise ValueError("prediction ledger manifest forecast_count disagrees with rows")
+        raise ValueError(
+            "prediction ledger manifest forecast_count disagrees with rows"
+        )
     model_modes = manifest.get("model_modes")
-    if not isinstance(model_modes, list) or not model_modes or any(
-        not isinstance(mode, str) or not mode.strip() for mode in model_modes
+    if (
+        not isinstance(model_modes, list)
+        or not model_modes
+        or any(not isinstance(mode, str) or not mode.strip() for mode in model_modes)
     ):
-        raise ValueError("prediction ledger manifest model_modes must be a non-empty list")
+        raise ValueError(
+            "prediction ledger manifest model_modes must be a non-empty list"
+        )
 
 
 def _validate_forecast_row(row: dict[str, Any], row_index: int) -> None:
@@ -88,7 +94,9 @@ def _validate_forecast_row(row: dict[str, Any], row_index: int) -> None:
     for field in ("training_match_count", "model_fit_match_count", "forecast_index"):
         value = row.get(field)
         if isinstance(value, bool) or not isinstance(value, int) or value < 1:
-            raise ValueError(f"forecast row {row_index}: {field} must be a positive integer")
+            raise ValueError(
+                f"forecast row {row_index}: {field} must be a positive integer"
+            )
     if row["model_fit_match_count"] > row["training_match_count"]:
         raise ValueError(
             f"forecast row {row_index}: model fit sample exceeds available training history"

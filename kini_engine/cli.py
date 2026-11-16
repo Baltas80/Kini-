@@ -31,8 +31,12 @@ def main() -> None:
     matches = load_csv(args.csv)
     if args.command == "backtest":
         if args.ledger_jsonl is not None or args.include_forecast_rows:
-            ap.error("forecast ledger options are available only for the compare command")
-        result = walk_forward(matches, min_train=args.min_train, refit_every=args.refit_every)
+            ap.error(
+                "forecast ledger options are available only for the compare command"
+            )
+        result = walk_forward(
+            matches, min_train=args.min_train, refit_every=args.refit_every
+        )
         output = result["metrics"]
     else:
         result = compare_walk_forward(
@@ -42,10 +46,10 @@ def main() -> None:
         if args.ledger_jsonl is not None:
             dataset_path = Path(args.csv)
             dataset_bytes = dataset_path.read_bytes()
-            profile_path = dataset_path.with_name(
-                f"{dataset_path.stem}.profile.json"
+            profile_path = dataset_path.with_name(f"{dataset_path.stem}.profile.json")
+            profile_bytes = (
+                profile_path.read_bytes() if profile_path.is_file() else None
             )
-            profile_bytes = profile_path.read_bytes() if profile_path.is_file() else None
             model_modes = (
                 sorted(forecast_rows[0].get("model_probabilities", {}))
                 if forecast_rows
@@ -84,9 +88,7 @@ def main() -> None:
             ledger_rows = write_prediction_ledger(
                 args.ledger_jsonl, manifest, forecast_rows
             )
-            ledger_sha256 = hashlib.sha256(
-                args.ledger_jsonl.read_bytes()
-            ).hexdigest()
+            ledger_sha256 = hashlib.sha256(args.ledger_jsonl.read_bytes()).hexdigest()
             result["forecast_ledger"] = {
                 "schema_version": 1,
                 "path": str(args.ledger_jsonl),

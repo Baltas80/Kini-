@@ -825,7 +825,6 @@ def test_compare_reports_bet365_on_its_exact_common_fixture_sample(monkeypatch):
         assert sample["bet365"]["n"] == 2
 
 
-
 def test_compare_exports_fixture_level_forecast_rows(monkeypatch):
     class FakeEngine:
         def __init__(self, enable_ml=False):

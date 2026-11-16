@@ -49,8 +49,7 @@ def test_write_prediction_ledger_is_jsonl_and_refuses_overwrite(tmp_path):
 
     assert count == 1
     records = [
-        json.loads(line)
-        for line in target.read_text(encoding="utf-8").splitlines()
+        json.loads(line) for line in target.read_text(encoding="utf-8").splitlines()
     ]
     assert len(records) == 2
     assert records[0]["record_type"] == "run_manifest"

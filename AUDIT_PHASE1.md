@@ -2227,3 +2227,8 @@ Complete CI and the full walk-forward for the forecast-ledger implementation, in
 ### Forecast-ledger lint correction
 
 The first CI run for the ledger implementation [43902333075](https://github.com/Baltas80/Kini-/actions/runs/43902333075) reached Ruff and identified three invalid-type checks using `ValueError` plus a redundant UTC suffix replacement. These were corrected to use `TypeError` for wrong input types and Python's native ISO-8601 parser for the timezone-aware timestamp. The full backtest run [43902333077](https://github.com/Baltas80/Kini-/actions/runs/43902333077) is independently exercising the ledger implementation; its final result is still pending.
+
+
+### Forecast-ledger formatting follow-up
+
+The first corrected CI run [43902672952](https://github.com/Baltas80/Kini-/actions/runs/43902672952) passed Ruff lint but failed the repository's non-mutating Ruff format check on five newly touched files. The formatter's exact layout changes have been applied; pytest had not yet run in that attempt. CI is being rerun on the formatted commit.

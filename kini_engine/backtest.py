@@ -66,7 +66,9 @@ def _ledger_text(value: Any) -> str | None:
     return text
 
 
-def _fixture_ledger_identity(match: Match, forecast_date: str) -> tuple[str, str | None]:
+def _fixture_ledger_identity(
+    match: Match, forecast_date: str
+) -> tuple[str, str | None]:
     """Return a deterministic source-scoped fixture ID and any provider fixture ID."""
     detail = match.detail if isinstance(match.detail, dict) else {}
     league, season_code, _ = _season_identity(match)
@@ -893,9 +895,7 @@ def compare_walk_forward(
                 else None
             )
             bet365_probabilities = (
-                _bookmaker_probability(match, "bet365")
-                if market_is_eligible
-                else None
+                _bookmaker_probability(match, "bet365") if market_is_eligible else None
             )
             detail = match.detail if isinstance(match.detail, dict) else {}
             league, season_code, season_label = _season_identity(match)
