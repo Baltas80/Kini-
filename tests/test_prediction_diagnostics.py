@@ -113,6 +113,8 @@ def test_draw_diagnostics_distinguish_top_sign_from_probability(tmp_path):
     assert ml_x["true_positive"] == 1
     assert ml_x["precision"] == pytest.approx(0.5)
     assert ml_x["recall"] == 1.0
+    assert report["overall"]["dc"]["top_two_candidate_coverage"]["empirical_coverage"] == 1.0
+    assert report["overall"]["dc"]["top_two_candidate_coverage"]["draw_coverage"] == 1.0
     assert report["market_common_sample"]["n"] == 2
     assert len(report["segments"]["groups"]) == 1
     assert report["segments"]["groups"][0]["n"] == 3

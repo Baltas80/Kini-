@@ -40,11 +40,26 @@ def _metrics(
     multiclass_brier = 0.0
     multiclass_logloss = 0.0
     correct = 0
+    top_two_covered = 0
+    draw_count = 0
+    draw_top_two_covered = 0
+    top_two_probability_mass = 0.0
 
     for row in rows:
         actual = row["actual_result"]
         predicted = _predicted_sign(row, mode)
         probabilities = _probability_vector(row, mode)
+        ranked_signs = sorted(
+            SIGNS,
+            key=probabilities.__getitem__,
+            reverse=True,
+        )
+        top_two = set(ranked_signs[:2])
+        top_two_covered += actual in top_two
+        top_two_probability_mass += sum(probabilities[sign] for sign in top_two)
+        if actual == "X":
+            draw_count += 1
+            draw_top_two_covered += "X" in top_two
         confusion[actual][predicted] += 1
         correct += predicted == actual
         multiclass_brier += sum(
@@ -127,6 +142,12 @@ def _metrics(
         "accuracy": _ratio(correct, n),
         "brier": _ratio_float(multiclass_brier, n),
         "logloss": _ratio_float(multiclass_logloss, n),
+        "top_two_candidate_coverage": {
+            "empirical_coverage": _ratio(top_two_covered, n),
+            "draw_coverage": _ratio(draw_top_two_covered, draw_count),
+            "draw_count": draw_count,
+            "mean_probability_mass": _ratio_float(top_two_probability_mass, n),
+        },
         "confusion_matrix": confusion,
         "classwise": classwise,
     }
