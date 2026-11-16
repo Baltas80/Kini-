@@ -1920,7 +1920,7 @@ Se revisaron `kini_engine/core.py`, `kini_engine/backtest.py`, `kini_engine/data
 | Dixon–Coles | Marcadores completados, equipos y fechas para fuerzas y decaimiento temporal | Backtest agrupa por día y añade el grupo al entrenamiento solo después de pronosticar todos sus partidos; el motor rechaza resultados de fecha igual o posterior | Sin leakage de calendario en walk-forward; la hora de publicación de resultados no está disponible |
 | Ensemble adaptativo/calibrador | Predicciones OOF anteriores y resultados asociados | Pesos/calibradores se fijan antes de la primera predicción del día; resultados se agregan tras completar el grupo diario | Prequential y aislado por día, validado por los gates del backtest |
 | Mercado | Cuotas pre-cierre B365/WH/VC/Pinnacle, sin margen por casa | Filtro conservador: viernes/martes excluidos; Pinnacle retirado desde 23-07-2025 por feed obsoleto | Solo compatibilidad de calendario; sin captura individual ni zona horaria acreditadas |
-| LAE | Vector 1/X/2 con fuente, identidad de fixture, evidencia de kickoff y timestamps | Captura con zona horaria, anterior al kickoff; evidencia de calendario reciente | Fail-closed. El adaptador MCP actual no conserva todos los metadatos, por lo que LAE no afecta a sus pronósticos hasta completar esa integración |
+| LAE (porcentajes XML vía Quinielista) | Vector 1/X/2, hora de recepción de la respuesta, identidad de fixture y evidencia de kickoff | Crosswalk por nombre local/visitante + orden; captura posterior a la comprobación de calendario, dentro de 24 h y anterior al kickoff | El adaptador MCP sí transmite los metadatos. El proveedor no ofrece timestamp de publicación/actualización; la hora registrada es recepción del cliente |
 | Clasificación, alineaciones, lesiones, clima | No entran en la matriz ML de 12 features | No aplicable | Excluidos por falta de procedencia/publicación point-in-time |
 
 ### Corrección de reproducibilidad temporal
@@ -1930,3 +1930,14 @@ La revisión encontró que Dixon–Coles convertía `Match.date` a timestamp y l
 ### Límite P2 que permanece abierto
 
 La auditoría estática no puede certificar el instante de publicación de los resultados históricos ni el timestamp de captura de cuotas: Football-Data no los proporciona en el CSV utilizado. Por tanto, el estado correcto es **sin leakage de calendario en la implementación revisada**, no una demostración absoluta de disponibilidad real de cada dato en el instante de predicción. No se incorporan alineaciones, lesiones, clima ni tablas reconstruidas a posteriori.
+
+
+### Corrección de la auditoría LAE y zonas CET/CEST
+
+La revisión del adaptador confirma que `KinielaGPTSource.probabilities` adjunta `lae_source`, `lae_captured_at`, `kickoff_at`, URL y hora de comprobación de evidencia, y que `mcp_server.py` transmite esos campos a `Match.detail`. La afirmación anterior de que el adaptador MCP no conservaba los metadatos era incorrecta y queda sustituida por la fila de la tabla.
+
+El crosswalk actual `data/kinielagpt_fixture_kickoffs.json` corresponde a la jornada 22/temporada 2027 y declara 15/15 fixtures verificados por pareja exacta normalizada local/visitante y número de orden, sin alias ni fuzzy matching. El diagnóstico [43752475866](https://github.com/Baltas80/Kini-/actions/runs/43752475866) confirmó el esquema de 15 detalles y 15/15 correspondencias. Su artefacto no incluía todavía el resumen de elegibilidad temporal por fixture; por eso no se atribuye un recuento de LAE elegible a esa ejecución.
+
+Se detectó además que el crosswalk solo aceptaba CET (+01:00), rechazando fechas de verano CEST (+02:00). El validador ahora acepta ambos identificadores únicamente cuando el offset ISO coincide exactamente con el declarado. Se añadieron regresiones de aceptación CEST y rechazo de offset inconsistente. El diagnóstico live ampliado expondrá por fixture los timestamps de captura/evidencia/kickoff, antigüedad de la evidencia, minutos hasta kickoff y razones de exclusión.
+
+La elegibilidad continúa siendo fail-closed: fuente, identidad, vector, URL HTTPS, evidencia anterior y fresca (máximo 24 h) y captura anterior al kickoff. La recepción del XML no demuestra cuándo el proveedor publicó o refrescó originalmente el contenido; esa limitación permanece.

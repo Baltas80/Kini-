@@ -256,6 +256,50 @@ def test_probabilities_attach_official_kickoff_after_verified_identity_and_evide
     assert row["kickoff_timezone"] == "CET"
 
 
+
+def test_probabilities_attach_official_kickoff_with_cest_schedule_source(
+    monkeypatch, tmp_path
+):
+    fixed = datetime(2026, 7, 15, 19, 30, tzinfo=UTC)
+    _freeze_source_clock(monkeypatch, fixed)
+    payload = _kickoff_crosswalk_payload(
+        schedule_checked_at="2026-07-15T19:00:00Z"
+    )
+    payload["timezone"] = "CEST"
+    payload["crosswalk_evidence"]["checked_at_utc"] = "2026-07-15T18:00:00Z"
+    payload["schedule_sources"][0]["published_date"] = "2026-07-15"
+    payload["schedule_sources"][0]["timezone"] = "CEST"
+    payload["fixtures"][0]["provider_day_label"] = "VIE"
+    payload["fixtures"][0]["kickoff_at"] = "2026-07-17T20:45:00+02:00"
+    path = tmp_path / "kinielagpt_fixture_kickoffs.json"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    monkeypatch.setattr(KinielaGPTSource, "KICKOFF_CROSSWALK_PATH", path)
+
+    source = KinielaGPTSource()
+    source.session = FakeSession(
+        {
+            "porcentajes_lae.asp": xml_fixture("Local", "Visitante", (60, 20, 20)),
+            "porcentajes.asp?": xml_fixture("Local", "Visitante", (20, 30, 50)),
+        }
+    )
+
+    row = source.probabilities(12, 2026)[0]
+
+    assert row["fixture_identity_status"] == "verified"
+    assert row["kickoff_at"] == "2026-07-17T20:45:00+02:00"
+    assert row["kickoff_timezone"] == "CEST"
+
+
+def test_kickoff_crosswalk_rejects_mismatched_cest_utc_offset(tmp_path, monkeypatch):
+    payload = _kickoff_crosswalk_payload()
+    payload["schedule_sources"][0]["timezone"] = "CEST"
+    path = tmp_path / "kinielagpt_fixture_kickoffs.json"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    monkeypatch.setattr(KinielaGPTSource, "KICKOFF_CROSSWALK_PATH", path)
+
+    assert KinielaGPTSource._load_kickoff_crosswalk(12, 2026) == {}
+
+
 def test_probabilities_do_not_attach_kickoff_when_lae_fixture_names_disagree(
     monkeypatch, tmp_path
 ):

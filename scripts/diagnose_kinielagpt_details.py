@@ -416,7 +416,7 @@ def _valid_three_way_vector(value: Any) -> bool:
 
 
 def summarize_kickoff_attachment(rows: Any, lae_source: str) -> dict[str, Any]:
-    """Summarize only fixture identity, timestamp ordering and LAE vector validity."""
+    """Expose timestamp evidence and the exact reason a LAE row is not eligible."""
     records = rows if isinstance(rows, list) else []
     fixtures = []
     for row in records:
@@ -428,6 +428,10 @@ def summarize_kickoff_attachment(rows: Any, lae_source: str) -> dict[str, Any]:
             row.get("kickoff_evidence_checked_at_utc")
         )
         vector_valid = _valid_three_way_vector(row.get("lae"))
+        evidence_url = row.get("kickoff_evidence_url")
+        evidence_url_valid = (
+            isinstance(evidence_url, str) and evidence_url.startswith("https://")
+        )
         evidence_before_capture = (
             evidence_checked_at is not None
             and captured_at is not None
@@ -438,35 +442,59 @@ def summarize_kickoff_attachment(rows: Any, lae_source: str) -> dict[str, Any]:
             if evidence_checked_at is not None and captured_at is not None
             else None
         )
+        evidence_age_seconds = (
+            evidence_age.total_seconds() if evidence_age is not None else None
+        )
         evidence_fresh_at_capture = (
-            evidence_age is not None
-            and 0
-            <= evidence_age.total_seconds()
-            <= LAE_KICKOFF_EVIDENCE_MAX_AGE.total_seconds()
+            evidence_age_seconds is not None
+            and 0 <= evidence_age_seconds <= LAE_KICKOFF_EVIDENCE_MAX_AGE.total_seconds()
         )
         capture_before_kickoff = (
             captured_at is not None
             and kickoff_at is not None
             and captured_at < kickoff_at
         )
-        eligible = (
-            row.get("fixture_identity_status") == "verified"
-            and row.get("lae_source") == lae_source
-            and vector_valid
-            and evidence_before_capture
-            and evidence_fresh_at_capture
-            and capture_before_kickoff
+        minutes_until_kickoff = (
+            (kickoff_at - captured_at).total_seconds() / 60.0
+            if captured_at is not None and kickoff_at is not None
+            else None
         )
+        reasons = []
+        if row.get("fixture_identity_status") != "verified":
+            reasons.append("fixture_identity_not_verified")
+        if row.get("lae_source") != lae_source:
+            reasons.append("lae_source_mismatch")
+        if not vector_valid:
+            reasons.append("invalid_lae_probability_vector")
+        if not evidence_url_valid:
+            reasons.append("missing_or_invalid_kickoff_evidence_url")
+        if not evidence_before_capture:
+            reasons.append("kickoff_evidence_not_before_capture")
+        if not evidence_fresh_at_capture:
+            reasons.append("kickoff_evidence_stale_or_missing")
+        if not capture_before_kickoff:
+            reasons.append("lae_capture_not_before_kickoff")
+        eligible = not reasons
         fixtures.append(
             {
                 "id": row.get("id"),
                 "fixture_identity_status": row.get("fixture_identity_status"),
+                "lae_source": row.get("lae_source"),
+                "lae_captured_at": row.get("lae_captured_at"),
+                "kickoff_evidence_checked_at_utc": row.get(
+                    "kickoff_evidence_checked_at_utc"
+                ),
+                "kickoff_evidence_url": evidence_url,
                 "kickoff_at": row.get("kickoff_at"),
+                "evidence_url_valid": evidence_url_valid,
+                "evidence_age_seconds": evidence_age_seconds,
+                "minutes_until_kickoff": minutes_until_kickoff,
                 "lae_vector_valid": vector_valid,
                 "evidence_before_capture": evidence_before_capture,
                 "evidence_fresh_at_capture": evidence_fresh_at_capture,
                 "capture_before_kickoff": capture_before_kickoff,
                 "temporally_eligible_lae": eligible,
+                "eligibility_reasons": reasons,
             }
         )
 
@@ -492,7 +520,6 @@ def summarize_kickoff_attachment(rows: Any, lae_source: str) -> dict[str, Any]:
         ),
         "fixtures": fixtures[:30],
     }
-
 
 def collect_live_diagnostic() -> dict[str, Any]:
     report: dict[str, Any] = {

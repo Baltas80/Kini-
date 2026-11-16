@@ -134,6 +134,7 @@ def test_kickoff_attachment_summary_requires_verified_identity_and_temporal_orde
         "kickoff_at": "2026-11-17T20:45:00+01:00",
         "kickoff_evidence_checked_at_utc": "2026-11-15T19:00:00+00:00",
         "lae_captured_at": "2026-11-15T19:30:00+00:00",
+        "kickoff_evidence_url": "https://www.uefa.com/test-schedule/",
         "lae_source": "official-lae",
         "lae": {"1": 0.5, "X": 0.25, "2": 0.25},
     }
@@ -176,6 +177,14 @@ def test_kickoff_attachment_summary_requires_verified_identity_and_temporal_orde
     assert summary["temporally_eligible_lae_count"] == 1
     assert summary["fixtures"][0]["temporally_eligible_lae"] is True
     assert summary["fixtures"][0]["evidence_fresh_at_capture"] is True
+    assert summary["fixtures"][0]["lae_captured_at"] == valid["lae_captured_at"]
+    assert summary["fixtures"][0]["evidence_age_seconds"] == 1800
+    assert summary["fixtures"][0]["minutes_until_kickoff"] == 2895
+    assert summary["fixtures"][0]["eligibility_reasons"] == []
+    assert summary["fixtures"][1]["eligibility_reasons"] == [
+        "fixture_identity_not_verified"
+    ]
+    assert "kickoff_evidence_stale_or_missing" in summary["fixtures"][3]["eligibility_reasons"]
     assert summary["fixtures"][3]["evidence_fresh_at_capture"] is False
     assert all(
         fixture["temporally_eligible_lae"] is False

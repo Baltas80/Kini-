@@ -282,12 +282,22 @@ class KinielaGPTSource:
             day_label = fixture.get("provider_day_label")
             clock_time = fixture.get("provider_clock_time")
 
+            source_timezone = source.get("timezone") if source is not None else None
+            expected_offset = (
+                {"CET": timedelta(hours=1), "CEST": timedelta(hours=2)}.get(
+                    source_timezone
+                )
+                if isinstance(source_timezone, str)
+                else None
+            )
+
             if (
                 number in seen_numbers
                 or home is None
                 or away is None
                 or kickoff is None
-                or kickoff.utcoffset() != timedelta(hours=1)
+                or expected_offset is None
+                or kickoff.utcoffset() != expected_offset
                 or kickoff <= checked_at
                 or source is None
                 or weekday_numbers.get(day_label) != kickoff.weekday()
