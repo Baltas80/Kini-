@@ -9,7 +9,6 @@ import pytest
 from kini_engine.core import (
     LAE_SOURCE_ID,
     DixonColes,
-    DixonColesFitError,
     FeatureModel,
     KiniEngine,
     Match,
