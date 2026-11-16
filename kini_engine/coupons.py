@@ -747,6 +747,14 @@ def evaluate_coupon(
         "training_cutoff_date": coupon["training_cutoff_date"],
         "training_match_count": len(history),
         "model_fit_match_count": engine.dc.n_training_matches,
+        "pleno_prediction": {
+            "model": "dixon_coles",
+            "selection_method": "max_aggregated_category_pair_probability",
+            "home_category": pleno_home,
+            "away_category": pleno_away,
+            "probability_mass": pleno_probability,
+            "training_match_count": engine.dc.n_training_matches,
+        },
         "budget_columns": budget,
         "models": model_results,
     }

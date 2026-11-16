@@ -2533,3 +2533,16 @@ Evidence from the pilot HTML:
 - Therefore the previous `result_published_at` semantics were invalid and have been removed.
 
 The pilot's fixture reconciliation and model predictions remain useful as a technical pipeline test, but the archive generated under schema version 1 is not accepted as a point-in-time publication record. The corrected schema must pass CI and the coupon pilot again before any historical expansion. No inference about result availability is made from the source date label.
+
+
+### 2026-11-16 — coupon pilot schema v2 validated
+
+The corrected coupon archive schema v2 passed the real GitHub Actions pilot on run [43953765300](https://github.com/Baltas80/Kini-/actions/runs/43953765300). Artifact `quiniela-coupon-pilot` ID `14268717790`, SHA-256 `c588b8909f3fbd381a62e43f6a34a16393127c2429265f177a34db1e1f3fa71b`. The archive manifest and coupon both declare schema version 2. `source_date=2020-12-13`, `source_date_label_at=2020-12-13T22:57:00+01:00`; no `result_published_at` is emitted.
+
+The pilot coupon was reconciled with 15/15 fixtures against the normalized official SELAE snapshot (14 main results and Pleno al 15). Its first kickoff is 2020-12-12 14:00 Europe/Madrid; training cutoff 2020-12-11; 303 historical matches entered the fit. DC, ML and DC/ML ensemble each emitted 14 valid predictions. With 8 columns (3 doubles, no triples), cost was €6.00. Single-sign hits were DC 7, ML 5 and ensemble 7; best-column hits were 7, 6 and 8 respectively. No model covered all 14, and none hit Pleno. This is one jornada only: these counts validate the pipeline, not model quality, ticket profitability or the optimizer's general performance.
+
+The official SELAE page for the draw is titled 13-12-2020 and displays a separate page date 14-12-2020; it lists the Celta–Cádiz Pleno result 4-0. This confirms why a source page date label must not be relabelled as a result-publication timestamp. The match itself was played on 14-12-2020 at 21:00 CET and was reported after the match. Sources: https://www.loteriasyapuestas.es/es/la-quiniela/resultados/la-quiniela-resultados-del-13-de-diciembre-de-2020 and https://as.com/futbol/2020/12/14/primera/1607971433_793614.html.
+
+The coupon result now explicitly records that the Pleno category-pair prediction is produced by Dixon-Coles using the maximum aggregated category-pair probability. ML's current 1/X/2 output is not represented as a Pleno score model. The coupon workflow no longer runs on audit-document-only changes; code, tests, data and workflow changes still trigger it.
+
+CI run [43953991624](https://github.com/Baltas80/Kini-/actions/runs/43953991624) on the preceding code revision passed actionlint, Ruff lint, Ruff format and 270 pytest tests (21 upstream dependency warnings). The next commit adds Pleno provenance metadata and a workflow path-filter efficiency change; those changes require their own CI and pilot rerun before being marked validated.

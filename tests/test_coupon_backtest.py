@@ -221,6 +221,12 @@ def test_coupon_backtest_uses_only_results_before_first_kickoff(
     )
     assert captured["history_count"] == 300
     assert result["training_cutoff_date"] == "2020-12-11"
+    assert result["pleno_prediction"]["model"] == "dixon_coles"
+    assert (
+        result["pleno_prediction"]["selection_method"]
+        == "max_aggregated_category_pair_probability"
+    )
+    assert result["pleno_prediction"]["training_match_count"] == 300
     assert result["models"]["dc"]["status"] == "success"
     assert result["models"]["dc"]["n_predictions"] == 14
     assert result["models"]["dc"]["cost_eur"] > 0

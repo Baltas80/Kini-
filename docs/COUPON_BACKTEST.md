@@ -32,7 +32,7 @@ The previous-calendar-day cutoff is deliberately conservative because the Footba
 
 ## Models and ticket evaluation
 
-The pilot evaluates Dixon-Coles, ML and the fixed DC/ML ensemble on the first 14 matches. Pleno al 15 is estimated from the Dixon-Coles score grid and is explicitly labelled as such; it is not presented as an ML forecast.
+The pilot evaluates Dixon-Coles, ML and the fixed DC/ML ensemble on the first 14 matches. Pleno al 15 is estimated from Dixon-Coles' aggregated 4×4 score-category probabilities. The result records the model, selection rule, selected probability mass and training count; it is not presented as an ML forecast because ML currently emits only 1/X/2 probabilities.
 
 Each model's probabilities are passed unchanged to the existing multiple-direct TicketOptimizer. The budget is the maximum number of 14-match columns. The evaluation records:
 
