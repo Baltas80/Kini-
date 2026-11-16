@@ -235,7 +235,7 @@ def read_prediction_ledger(
                 f"prediction ledger line {line_number} is not valid JSON"
             ) from exc
         if not isinstance(record, dict):
-            raise ValueError(
+            raise TypeError(
                 f"prediction ledger line {line_number} must contain a JSON object"
             )
         records.append(record)
@@ -272,7 +272,7 @@ def read_prediction_ledger(
 
         model_signs = row.get("model_signs")
         if not isinstance(model_signs, dict):
-            raise ValueError(f"forecast row {row_index} has no model_signs mapping")
+            raise TypeError(f"forecast row {row_index} has no model_signs mapping")
         for mode in model_modes:
             if model_signs.get(mode) not in SIGNS:
                 raise ValueError(
