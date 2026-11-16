@@ -7,6 +7,7 @@ import pytest
 
 from kini_engine.diagnostics import analyze_prediction_rows
 from kini_engine.ledger import read_prediction_ledger, write_prediction_ledger
+from scripts.analyze_prediction_ledger import _validate_dataset_snapshot
 
 
 def _manifest(forecast_count: int = 3) -> dict[str, object]:
@@ -202,8 +203,6 @@ def test_diagnostics_reject_too_few_bootstrap_samples():
 
 
 def _dataset_snapshot_files(tmp_path):
-    from scripts.analyze_prediction_ledger import _validate_dataset_snapshot
-
     dataset_path = tmp_path / "historical_spain.csv"
     profile_path = tmp_path / "historical_spain.profile.json"
     dataset_payload = (
