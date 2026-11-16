@@ -9,3 +9,9 @@ dist/
 build/
 *.egg-info/
 data/historical_spain.csv
+
+# SELAE source cache and imported local coupon data
+.cache/
+data/selae_quiniela_draws.jsonl
+data/selae_quiniela_draws.profile.json
+data/selae-html/

@@ -467,3 +467,110 @@ The public `KiniEngine.quiniela` result now includes `estimated_full_coupon_cove
 - The accepted predictive benchmark remains [run 43666544162](https://github.com/Baltas80/Kini-/actions/runs/43666544162). This change only adds a clearly labelled derived coverage field; it does not change model probabilities, the 14-match DP objective or benchmark forecasts.
 
 PR #5 remains open and is still the prerequisite for integrating PR #6. PR #6 remains draft. No PR has been merged and `master` remains untouched.
+
+
+## SELAE official coupon ingestion foundation — 2026-11-15
+
+A separate feature branch, `feat/selae-official-coupon-ingestion`, has been created from the current audit branch head. It adds a strict importer for date-specific SELAE escrutinio pages:
+
+- `scripts/import_selae_results.py`: explicit-date CLI, bounded HTTP retries, validated cache, atomic JSONL/profile output, source URL, retrieval timestamp and SHA-256 provenance.
+- `tests/test_import_selae_results.py`: deterministic parser, sign/score consistency, incomplete-draw rejection, cache and output-profile tests.
+- `docs/SELAE_INGESTION.md`: source contract and limitations.
+- `.github/workflows/selae-coupon-validation.yml`: integration smoke test against the known completed draw of 2026-11-08.
+
+The schema intentionally leaves `draw_id`, `kickoff_date` and `kickoff_time` unresolved. The date on the escrutinio page is the draw date, not proof of each fixture's kickoff date. Results/signs are target labels and must not become pre-match features. Prize winners and unit prizes do not reconstruct expected payout.
+
+The first deterministic parser run exposed over-escaped regular expressions (4 failures). They were corrected in commit `b09dc3f1024cafebff4552e8914cf62ff6e546cb`. The final suite now passes **73 tests with four dependency warnings** in [CI run 43681510193](https://github.com/Baltas80/Kini-/actions/runs/43681510193); Ruff reports **all checks passed** in [SELAE workflow 43681510200](https://github.com/Baltas80/Kini-/actions/runs/43681510200). The latter workflow also attempted the live import, received HTTP 403, skipped source acceptance and emitted an explicit warning. Its green workflow conclusion does not mean the source was validated.
+
+### SELAE source access and importer state
+
+The importer now has these safeguards:
+
+- Explicit draw dates only; it does not probe every calendar day.
+- Strict 14-match validation, score/sign consistency, Pleno parsing and prize-tier validation.
+- Raw-response SHA-256, source URL and retrieval timestamp.
+- Bounded retries, validated cache and atomic writes.
+- Idempotent incremental JSONL merge. A changed source hash for an existing draw stops by default; `--replace-existing` is required to replace it.
+- Offline mode via `--html-dir`, using files named `YYYY-MM-DD.html`, for environments that can access SELAE but where the automated runner cannot.
+
+GitHub-hosted runners received HTTP 403 from all five tested official SELAE routes: the date-specific escrutinio page, static HTML result, RSS variant, results listing and official press-release PDF. The evidence is in [source-probe workflow 43680763521](https://github.com/Baltas80/Kini-/actions/runs/43680763521). Browser-like headers and the official-site referer did not change the result. The live-source step is therefore non-blocking in CI, but its failure is not treated as successful data validation. The importer must be run from an environment with legitimate access (for example, the user's local machine in Spain), or with locally saved official HTML. The precise cause of the 403 (geographic restriction versus anti-automation/WAF policy) has not been established. No proxy/geoblock circumvention is introduced.
+
+An independent historical site was evaluated only as a diagnostic reference. It states that it is not official; its robots policy explicitly disallows GPTBot and other AI crawlers, and no explicit data-reuse licence was identified. It is **not** adopted as an automated provider and no crawler is being built for it.
+
+### Latest model benchmark
+
+[Historical backtest workflow 43680544471](https://github.com/Baltas80/Kini-/actions/runs/43680544471) completed successfully. It used the Football-Data history with 300 initial training matches and produced 5,011 out-of-sample predictions from 2020-12-11 through 2026-11-09. This confirms that the prior empty-prediction condition did not recur in that run; it does not establish that every future dataset/configuration is safe.
+
+On the same 4,424-match market-eligible sample:
+
+| Model | Accuracy | Brier (lower is better) | Log Loss (lower is better) |
+|---|---:|---:|---:|
+| Dixon-Coles | 48.06% | 0.616357 | 1.027499 |
+| ML | 43.83% | 0.646939 | 1.073301 |
+| Ensemble | 48.15% | 0.613467 | 1.022929 |
+| Market | 50.72% | 0.597504 | 0.999444 |
+
+The ensemble improves modestly over Dixon-Coles on this sample, but the market remains better than every model. ML is materially worse. Do not promote ML or the ensemble over the market on these results.
+
+Prequential calibration used 3,847 common observations. Brier/Log Loss were: Dixon-Coles 0.613232/1.022458; ML 0.632559/1.050517; ensemble 0.611412/1.019795; market 0.596714/0.998094. Calibration improves Dixon-Coles and ML slightly, worsens the ensemble slightly, and the market remains best.
+
+The market eligibility audit classified 4,424/5,011 matches as schedule-compatible and excluded 587 as ambiguous. It is only a schedule screen: exact per-fixture odds capture timestamps are unavailable, and Friday/Tuesday fixtures are excluded because kickoff timezone is unspecified. Treat the market comparison as a strong benchmark, not as proof of perfectly timestamped historical odds.
+
+### Continuity and next action
+
+- The earlier 5,311-record integrity audit remains: 0 duplicates and 0 duplicate conflicts.
+- `.github/workflows/historical-backtest.yml` now triggers expensive backtests only for engine/data and history/model-diagnostic changes, not every script under `scripts/`.
+- Feature branch: `feat/selae-official-coupon-ingestion`, based on `audit/phase-1-temporal-validation`.
+- `master` is untouched. No PR has been merged.
+- Next: verify the final deterministic CI; then prepare a dependent draft PR against the audit branch. After the importer is run from Spain, reconcile coupon fixtures with canonical team IDs, competitions and actual kickoff dates. Until that join is complete, the coupon data must not enter model training or full-coupon backtests.
+
+
+## SELAE: exclusión de marcadores asignados por sorteo público — 2026-11-15
+
+La revisión de la jornada 2026-11-08 detectó un riesgo de integridad en el importador: el escrutinio muestra `Tenerife (F) – Alavés (F)` en la posición 14 con una representación `1-0`, pero el aviso oficial de SELAE indica que el encuentro fue aplazado y que, si no se disputaba dentro de las 24 horas siguientes, el signo se determinaría mediante sorteo público a las 22:00 del 8 de noviembre bajo las normas 38.ª y 39.ª. La nota de prensa oficial confirma que el signo obtenido fue `1`. Ese `1-0` no debe convertirse en goles reales ni utilizarse como etiqueta futbolística.
+
+Se ha añadido `data/selae_fixture_overrides.json` y el importador aplica sus excepciones solo si coinciden la fecha del sorteo, posición, signo y marcador mostrado. El fixture conserva `reported_score_raw=1-0`, pero `score_raw`, `home_goals` y `away_goals` quedan en `null`; `score_status=not_played` y `sign_determination=public_draw`. El signo `1` se mantiene exclusivamente para evaluar el cupón. La validación del JSONL rechaza un partido no disputado que vuelva a incluir goles numéricos.
+
+Fuentes oficiales:
+- Aviso de aplazamiento: https://www.loteriasyapuestas.es/f/loterias/web_corporativa/Comunicacion/Avisos_de_interes/APLAZAMIENTO%20JORNADA%2020%20DE%20LA%20QUINIELA%207_8%20NOVIEMBRE%202026%20%28002%29.pdf
+- Resultado del 08-11-2026: https://www.loteriasyapuestas.es/es/la-quiniela/resultados/la-quiniela-resultados-del-08-de-noviembre-de-2026
+- Nota de prensa: https://www.loteriasyapuestas.es/f/loterias/documentos/Quiniela/Notas%20de%20prensa/NOTA_DE_PRENSA_LA_QUINIELA_08_11_26.pdf
+
+La suite de regresión incorpora comprobaciones de coincidencia exacta de la excepción, dominio oficial, conservación del signo de cupón, goles nulos y recuentos separados de partidos aptos para resultados futbolísticos. La ingesta de escrutinios sigue sin proporcionar fechas reales de inicio ni competición por sí sola; esta corrección no habilita aún el entrenamiento con el histórico SELAE.
+
+### Latest SELAE outcome-semantics correction — 2026-11-15
+
+- Added schema v2 fixture fields: reported_score_raw, score_status, sign_determination, and official evidence metadata.
+- Added curated override for draw 2026-11-08, fixture 14 (Tenerife (F) – Alavés (F)): the coupon sign 1 was determined by public draw after postponement; the displayed 1-0 is preserved only as reported_score_raw, while actual football goals and score_raw are null.
+- The importer applies the manifest by exact draw date, position, displayed score and sign. A changed source value fails closed.
+- The JSONL validator accepts schema v1 for existing history and schema v2 for new imports; profile counts played and non-played fixtures separately.
+- Six regression tests were added for exact matching, score/sign drift, official-host validation, profile counts and rejection of fabricated football goals. The SELAE source-validation workflow now asserts the same semantics if live access succeeds.
+- The new code/docs are committed on feat/selae-official-coupon-ingestion, latest commit 52a25278fa83e326ac78a6a3bf2297745c3c0694; PR #7 remains a draft against audit/phase-1-temporal-validation.
+- Validation status: no new Actions run ID or commit status was exposed for this head in this execution. The previous 73-test run predates this change and is not evidence for the new code. Do not mark the new correction as CI-validated until the updated tests and workflow have actually run.
+- Preliminary artifact inspection of the 5,311-row Football-Data dataset found exact pair/date/score matches for the ten men's 1/X/2 coupon fixtures and the Pleno al 15 match from 2026-11-08. Three women's fixtures remain outside SP1/SP2, and the postponed women's fixture is not a played match. This was an exploratory cross-check only; no cross-provider aliases or automated fixture joins have yet been committed.
+
+
+## SELAE override parsing and CI correction — 2026-11-15
+
+A follow-up review of the public-draw override found that the parser checked the displayed score against the coupon sign before applying the official exception. That ordering would reject a legitimate public-draw sign if it differed from the displayed score. The parser now receives the validated override manifest in online, cache and offline modes. A score/sign mismatch is tolerated only for the exact draw date, fixture position, displayed score and coupon sign recorded in the official manifest; all other mismatches still fail closed. The override is then applied and the football goals are nulled before JSONL integrity validation.
+
+Regression coverage now includes both an official public-draw sign that differs from the displayed score and rejection when the manifest does not match the source score.
+
+The first source-validation attempt after the outcome-semantics change exposed two separate CI defects:
+- Ruff reported five lint violations in the importer (exception type, redundant UTC replacement and nested conditional).
+- The source-validation workflow did not watch the SELAE override manifest, so the first test run occurred before that required manifest was present on the branch.
+
+Both have been corrected. The workflow now watches the manifest and supports manual dispatch.
+
+### Validation on latest head
+
+- Validated implementation commit: 46ccff9e64560dba8b5e3f8e1fd8659cc336e2fc (the subsequent 974ecc353b38c7e0cfa49bcfcc843ff90fea2a21 commit changes documentation only).
+- SELAE source-validation: [run 43693816806](https://github.com/Baltas80/Kini-/actions/runs/43693816806) — **23 parser/integrity tests passed; Ruff all checks passed**. The live fetch still receives HTTP 403 from the GitHub-hosted runner; the workflow records a warning and correctly does not claim live-source acceptance or upload a validated source artifact.
+- Full repository CI: [run 43693820720](https://github.com/Baltas80/Kini-/actions/runs/43693820720) — **81 passed, 4 third-party warnings**.
+- Historical-data validation: [run 43693820723](https://github.com/Baltas80/Kini-/actions/runs/43693820723) — **5,311 complete fixtures, zero duplicates, zero conflicting duplicates, integrity_passed=true**.
+
+No model code, model probabilities, training data, backtest metrics or optimizer objective were changed. SELAE coupon records still lack independently verified kickoff timestamps and competition IDs; they remain ineligible for model training. PR #7 remains a draft against audit/phase-1-temporal-validation; no PR has been merged and master remains untouched.
+
+### Next action
+
+Continue the source reconciliation only with independently evidenced aliases, competition IDs and actual fixture kickoff dates. Do not infer identities from gender markers, name similarity, draw date or coupon position. If the official source does not expose the required metadata, preserve the fixture as unresolved and excluded from training.

@@ -1,0 +1,100 @@
+name: selae-coupon-source-validation
+
+on:
+  push:
+    branches:
+      - feat/selae-official-coupon-ingestion
+    paths:
+      - "scripts/import_selae_results.py"
+      - "tests/test_import_selae_results.py"
+      - "data/selae_fixture_overrides.json"
+      - ".github/workflows/selae-coupon-validation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: selae-coupon-validation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install project and test dependencies
+        run: python -m pip install -e ".[dev]"
+      - name: Run deterministic parser and integrity tests
+        run: pytest -q tests/test_import_selae_results.py
+      - name: Lint importer and regression tests
+        run: ruff check scripts/import_selae_results.py tests/test_import_selae_results.py
+      - name: Attempt live import from the official SELAE page
+        id: fetch_selae
+        continue-on-error: true
+        run: |
+          python scripts/import_selae_results.py \
+            --dates 2026-11-08 \
+            --output /tmp/selae-quiniela.jsonl \
+            --cache-dir /tmp/selae-cache
+      - name: Validate the live official-source artifact
+        if: steps.fetch_selae.outcome == 'success'
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from urllib.parse import urlparse
+
+          dataset = Path("/tmp/selae-quiniela.jsonl")
+          profile = Path("/tmp/selae-quiniela.profile.json")
+          lines = dataset.read_text(encoding="utf-8").splitlines()
+          if len(lines) != 1:
+              raise SystemExit(f"Expected one draw record, got {len(lines)}")
+          draw = json.loads(lines[0])
+          audit = json.loads(profile.read_text(encoding="utf-8"))
+          if draw["draw_date"] != "2026-11-08":
+              raise SystemExit("Unexpected draw date")
+          if draw["fixture_count"] != 14 or len(draw["fixtures"]) != 14:
+              raise SystemExit("Official coupon does not contain exactly 14 fixtures")
+          if any(item["sign"] not in {"1", "X", "2"} for item in draw["fixtures"]):
+              raise SystemExit("Invalid 1/X/2 sign in official coupon")
+          postponed = draw["fixtures"][13]
+          if postponed.get("score_status") != "not_played":
+              raise SystemExit("Fixture 14 must be marked as not played under the official override")
+          if postponed.get("sign_determination") != "public_draw" or postponed.get("sign") != "1":
+              raise SystemExit("Fixture 14 public-draw coupon sign is missing or inconsistent")
+          if postponed.get("score_raw") is not None or postponed.get("home_goals") is not None or postponed.get("away_goals") is not None:
+              raise SystemExit("A public-draw fixture must not be represented as a football score")
+          if postponed.get("reported_score_raw") != "1-0":
+              raise SystemExit("Unexpected SELAE displayed score for the overridden fixture")
+          if audit.get("not_played_fixture_count") != 1 or audit.get("football_result_usable_fixture_count") != 13:
+              raise SystemExit("SELAE profile did not separate played and non-played fixtures")
+          if urlparse(draw["source_url"]).hostname != "www.loteriasyapuestas.es":
+              raise SystemExit("Source URL is not the official SELAE host")
+          if len(draw["raw_sha256"]) != 64:
+              raise SystemExit("Missing raw response SHA-256")
+          if audit.get("integrity_passed") is not True:
+              raise SystemExit("SELAE data integrity profile failed")
+          if audit.get("match_kickoff_dates_available") is not False:
+              raise SystemExit("Kickoff-date limitation must remain explicit")
+          print(f"SELAE_LIVE_SOURCE_ACCEPTANCE_OK: {len(draw['fixtures'])} fixtures")
+          print(f"RAW_SHA256: {draw['raw_sha256']}")
+          PY
+      - name: Report external source access limitation
+        if: steps.fetch_selae.outcome == 'failure'
+        run: |
+          echo "::warning::SELAE returned HTTP 403 to GitHub-hosted runners for the result page, static HTML result, RSS, results listing and official press-release PDF. Live source acceptance is not claimed. Use the importer from a Spain-based environment or the --html-dir offline mode."
+      - name: Upload imported draw and provenance profile
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: selae-quiniela-2026-11-08
+          path: |
+            /tmp/selae-quiniela.jsonl
+            /tmp/selae-quiniela.profile.json
+          if-no-files-found: warn
+          retention-days: 30
