@@ -523,6 +523,7 @@ def summarize_kickoff_attachment(rows: Any, lae_source: str) -> dict[str, Any]:
         "fixtures": fixtures[:30],
     }
 
+
 def collect_live_diagnostic() -> dict[str, Any]:
     report: dict[str, Any] = {
         "diagnostic": "kinielagpt_detalle_partido_schema",

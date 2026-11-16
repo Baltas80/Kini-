@@ -256,7 +256,6 @@ def test_probabilities_attach_official_kickoff_after_verified_identity_and_evide
     assert row["kickoff_timezone"] == "CET"
 
 
-
 def test_probabilities_attach_official_kickoff_with_cest_schedule_source(
     monkeypatch, tmp_path
 ):
