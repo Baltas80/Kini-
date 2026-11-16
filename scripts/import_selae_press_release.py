@@ -105,9 +105,25 @@ def validate_draw_date_in_text(text: str, draw_date: str) -> str:
 
 
 def validate_official_source_url(source_url: str) -> str:
-    parsed = urlsplit(source_url)
-    if parsed.scheme != "https" or parsed.hostname not in OFFICIAL_HOSTS:
-        raise ValueError("source_url must be an HTTPS URL on an official SELAE host")
+    try:
+        parsed = urlsplit(source_url)
+        port = parsed.port
+    except ValueError as exc:
+        raise ValueError(
+            "source_url must be a valid HTTPS URL on an official SELAE host"
+        ) from exc
+
+    if (
+        parsed.scheme != "https"
+        or parsed.hostname not in OFFICIAL_HOSTS
+        or port not in {None, 443}
+        or parsed.username is not None
+        or parsed.password is not None
+    ):
+        raise ValueError(
+            "source_url must use an official SELAE HTTPS host, standard port "
+            "and no user-info"
+        )
     if not parsed.path.lower().endswith(".pdf"):
         raise ValueError("source_url must point to an official PDF")
     return source_url
