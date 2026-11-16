@@ -90,7 +90,10 @@ class _FakeResponse:
         self.url = url
         self.content = content
         self.status_code = status_code
-        self.headers = {"Content-Type": "text/html", "Content-Length": str(len(content))}
+        self.headers = {
+            "Content-Type": "text/html",
+            "Content-Length": str(len(content)),
+        }
         self.text = content.decode("utf-8", errors="replace")
 
     def __enter__(self):
@@ -124,17 +127,25 @@ class _FakeSession:
 def test_official_source_url_requires_https_and_exact_selae_host() -> None:
     assert _is_official_https_url(INDEX_URL)
     assert not _is_official_https_url(INDEX_URL.replace("https://", "http://"))
-    assert not _is_official_https_url("https://www.loteriasyapuestas.es.evil.example/file.xls")
+    assert not _is_official_https_url(
+        "https://www.loteriasyapuestas.es.evil.example/file.xls"
+    )
     assert not _is_official_https_url("https://user@www.loteriasyapuestas.es/file.xls")
     assert not _is_official_https_url("https://www.loteriasyapuestas.es:8443/file.xls")
 
 
-def test_historical_calendar_download_rejects_non_official_redirect(tmp_path, monkeypatch) -> None:
-    session = _FakeSession([
-        _FakeResponse(INDEX_URL, b"<html>index</html>"),
-        _FakeResponse(SAMPLE_RESULT_URL, b"<html>sample</html>"),
-        _FakeResponse("https://example.com/HistoricoQuiniela.xls", XLS_SIGNATURE + bytes(504)),
-    ])
+def test_historical_calendar_download_rejects_non_official_redirect(
+    tmp_path, monkeypatch
+) -> None:
+    session = _FakeSession(
+        [
+            _FakeResponse(INDEX_URL, b"<html>index</html>"),
+            _FakeResponse(SAMPLE_RESULT_URL, b"<html>sample</html>"),
+            _FakeResponse(
+                "https://example.com/HistoricoQuiniela.xls", XLS_SIGNATURE + bytes(504)
+            ),
+        ]
+    )
     monkeypatch.setattr(
         "scripts.inspect_selae_historical_calendar.requests.Session",
         lambda: session,
