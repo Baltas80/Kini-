@@ -356,7 +356,9 @@ def probe_alternative_sources(session: requests.Session) -> list[dict[str, objec
                         "http_status": response.status_code,
                         "content_type": response.headers.get("Content-Type"),
                         "downloaded_bytes": len(payload),
-                        "sha256": hashlib.sha256(payload).hexdigest() if payload else None,
+                        "sha256": hashlib.sha256(payload).hexdigest()
+                        if payload
+                        else None,
                         "official_redirect": official_redirect,
                         "accessible": response.status_code == 200 and official_redirect,
                     }
@@ -567,10 +569,13 @@ def main(argv: list[str] | None = None) -> int:
 
         if not report.get("success"):
             report_path.write_text(
-                json.dumps(report, ensure_ascii=False, indent=2, allow_nan=False) + "\n",
+                json.dumps(report, ensure_ascii=False, indent=2, allow_nan=False)
+                + "\n",
                 encoding="utf-8",
             )
-            print(f"SELAE_ARCHIVE_DISCOVERY_BLOCKED: {report['error']}", file=sys.stderr)
+            print(
+                f"SELAE_ARCHIVE_DISCOVERY_BLOCKED: {report['error']}", file=sys.stderr
+            )
             return 2
 
         links = report.pop("links")

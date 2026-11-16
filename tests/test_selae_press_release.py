@@ -18,8 +18,20 @@ def test_parse_official_2026_11_08_press_release_vector() -> None:
     outcome = parse_selae_press_release_text(text)
 
     assert outcome.signs == (
-        "2", "X", "2", "2", "1", "X", "1",
-        "2", "2", "2", "X", "X", "2", "1",
+        "2",
+        "X",
+        "2",
+        "2",
+        "1",
+        "X",
+        "1",
+        "2",
+        "2",
+        "2",
+        "X",
+        "X",
+        "2",
+        "1",
     )
     assert outcome.pleno_home == "1"
     assert outcome.pleno_away == "2"
@@ -49,8 +61,20 @@ def test_parse_official_2026_11_01_press_release_vector() -> None:
     outcome = parse_selae_press_release_text(text)
 
     assert outcome.signs == (
-        "2", "1", "1", "1", "1", "2", "2",
-        "X", "2", "X", "X", "1", "2", "1",
+        "2",
+        "1",
+        "1",
+        "1",
+        "1",
+        "2",
+        "2",
+        "X",
+        "2",
+        "X",
+        "X",
+        "1",
+        "2",
+        "1",
     )
     assert outcome.pleno_code == "21"
 

@@ -103,8 +103,6 @@ def test_pagination_rejects_external_or_incomplete_component_links() -> None:
         extract_pagination_template(document)
 
 
-
-
 class _FakeResponse:
     def __init__(self, url: str, status_code: int) -> None:
         self.url = url
@@ -125,7 +123,9 @@ class _FakeSession:
         return _FakeResponse(url, status_code)
 
 
-def test_alternative_official_endpoints_are_probed_without_interpreting_payloads() -> None:
+def test_alternative_official_endpoints_are_probed_without_interpreting_payloads() -> (
+    None
+):
     results = probe_alternative_sources(_FakeSession())
 
     assert len(results) == 5

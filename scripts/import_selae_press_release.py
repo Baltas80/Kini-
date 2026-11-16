@@ -79,9 +79,7 @@ def parse_selae_press_release_text(text: str) -> SelaePressReleaseOutcome:
             "no complete 14-sign plus Pleno vector found after a Results/Resultados heading"
         )
 
-    unique = {
-        (item.signs, item.pleno_home, item.pleno_away): item for item in outcomes
-    }
+    unique = {(item.signs, item.pleno_home, item.pleno_away): item for item in outcomes}
     if len(unique) != 1:
         raise ValueError("press-release text contains conflicting result vectors")
     return next(iter(unique.values()))
@@ -129,7 +127,9 @@ def extract_pdf_text(pdf_path: Path) -> str:
             raise ValueError("press-release PDF is encrypted")
         text = "\n".join(page.extract_text() or "" for page in reader.pages)
     except Exception as exc:
-        raise ValueError(f"unable to extract text from press-release PDF: {exc}") from exc
+        raise ValueError(
+            f"unable to extract text from press-release PDF: {exc}"
+        ) from exc
 
     if not text.strip():
         raise ValueError("press-release PDF contains no extractable text")
@@ -186,12 +186,16 @@ def main(argv: list[str] | None = None) -> int:
         )
     )
     parser.add_argument("--pdf", type=Path, required=True)
-    parser.add_argument("--draw-date", required=True, help="Expected draw date YYYY-MM-DD")
+    parser.add_argument(
+        "--draw-date", required=True, help="Expected draw date YYYY-MM-DD"
+    )
     parser.add_argument("--source-url", required=True, help="Official SELAE PDF URL")
     parser.add_argument("--output", type=Path)
     args = parser.parse_args(argv)
 
-    output_path = args.output or Path("artifacts/selae-press-releases") / f"{args.draw_date}.json"
+    output_path = (
+        args.output or Path("artifacts/selae-press-releases") / f"{args.draw_date}.json"
+    )
     try:
         record = import_press_release(args.pdf, args.draw_date, args.source_url)
         output_path.parent.mkdir(parents=True, exist_ok=True)
