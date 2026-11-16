@@ -1,13 +1,15 @@
 from __future__ import annotations
 
+import math
 from datetime import datetime, timedelta
+from itertools import product
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
 from kini_engine import coupons
-from kini_engine.core import Match, TicketOptimizer
+from kini_engine.core import SIGNS, Match, TicketOptimizer
 from scripts.backtest_coupons import validate_coupon_backtest_acceptance
 
 
@@ -232,6 +234,18 @@ def test_coupon_backtest_uses_only_results_before_first_kickoff(
     assert result["models"]["dc"]["n_predictions"] == 14
     assert result["models"]["dc"]["cost_eur"] > 0
     assert result["models"]["dc"]["total_bets"] <= 31_104
+    assert len(result["models"]["dc"]["columns"]) == result["models"]["dc"]["column_count"]
+    assert result["models"]["dc"]["total_bets"] == (
+        result["models"]["dc"]["column_count"]
+        * result["models"]["dc"]["pleno15_multiplier"]
+    )
+    assert result["models"]["dc"]["cost_eur"] == pytest.approx(
+        result["models"]["dc"]["total_bets"]
+        * result["models"]["dc"]["price_per_bet_eur"]
+    )
+    assert result["actual_main_results"] == [
+        fixture["result"] for fixture in coupon["fixtures"][:14]
+    ]
 
 
 def test_coupon_batch_does_not_swallow_unexpected_programming_errors(
@@ -248,29 +262,97 @@ def test_coupon_batch_does_not_swallow_unexpected_programming_errors(
 def _accepted_coupon_backtest_result() -> tuple[dict[str, object], list[str]]:
     coupon = _verified_coupon()
     coupon_id = str(coupon["coupon_id"])
-    probabilities = {"1": 0.5, "X": 0.3, "2": 0.2}
+    actual_main_results = [fixture["result"] for fixture in coupon["fixtures"][:14]]
+    actual_pleno = {
+        "home": coupon["fixtures"][14]["pleno_home_category"],
+        "away": coupon["fixtures"][14]["pleno_away_category"],
+    }
+
+    selected_by_fixture = []
+    for index, actual in enumerate(actual_main_results):
+        if index < 3:
+            selected_by_fixture.append(("1", "X"))
+        elif index < 9:
+            selected_by_fixture.append((actual,))
+        else:
+            selected_by_fixture.append(
+                (next(sign for sign in SIGNS if sign != actual),)
+            )
+    columns = [
+        list(prefix) + [selected[0] for selected in selected_by_fixture[3:]]
+        for prefix in product(*selected_by_fixture[:3])
+    ]
+
+    vectors = []
+    for index, actual in enumerate(actual_main_results):
+        predicted = actual if index < 7 else next(
+            sign for sign in SIGNS if sign != actual
+        )
+        ordered = [predicted] + [sign for sign in SIGNS if sign != predicted]
+        vectors.append({ordered[0]: 0.6, ordered[1]: 0.25, ordered[2]: 0.15})
+
+    selected_signs = [
+        {column[index] for column in columns} for index in range(14)
+    ]
+    independent_coverage = math.prod(
+        sum(vectors[index][sign] for sign in selected_signs[index])
+        for index in range(14)
+    )
+    actual_vector = tuple(actual_main_results)
+    best_column_hits = max(
+        sum(sign == actual_vector[index] for index, sign in enumerate(column))
+        for column in columns
+    )
+    single_sign_hits = sum(
+        max(SIGNS, key=vectors[index].__getitem__) == actual_vector[index]
+        for index in range(14)
+    )
+    covered_14 = actual_vector in {tuple(column) for column in columns}
+
     model_result = {
         "status": "success",
         "n_predictions": 14,
-        "probabilities": [probabilities.copy() for _ in range(14)],
-        "single_sign_hits": 7,
-        "best_column_hits": 8,
-        "covered_14": False,
+        "probabilities": vectors,
+        "columns": columns,
+        "single_sign_hits": single_sign_hits,
+        "best_column_hits": best_column_hits,
+        "covered_14": covered_14,
         "pleno_hit": False,
         "full_coupon_covered": False,
         "column_count": 8,
         "total_bets": 8,
         "double_count": 3,
         "triple_count": 0,
+        "pleno15_multiplier": 1,
+        "pleno15_home_categories": ["0"],
+        "pleno15_away_categories": ["M"],
+        "price_per_bet_eur": 0.75,
         "cost_eur": 6.0,
-        "independent_14_coverage_estimate": 0.25,
+        "independent_14_coverage_estimate": independent_coverage,
+        "pleno_model": "dixon_coles",
+        "pleno_selected_home_category": "0",
+        "pleno_selected_away_category": "M",
+        "pleno_selected_probability_mass": 0.2,
     }
+    reconciliation = [
+        {
+            "number": fixture["number"],
+            "home_goals": fixture["home_goals"],
+            "away_goals": fixture["away_goals"],
+            "result": fixture["result"],
+            "pleno_home_category": fixture.get("pleno_home_category"),
+            "pleno_away_category": fixture.get("pleno_away_category"),
+        }
+        for fixture in coupon["fixtures"]
+    ]
     coupon_result = {
         "coupon_id": coupon_id,
         "official_main_matches_verified": True,
         "official_pleno_verified": True,
         "fixture_reconciliation_count": 15,
-        "fixture_reconciliation": [{"number": number} for number in range(1, 16)],
+        "fixture_reconciliation": reconciliation,
+        "actual_main_results": actual_main_results,
+        "actual_pleno_categories": actual_pleno,
         "first_kickoff_at": coupon["first_kickoff_at"],
         "training_cutoff_date": coupon["training_cutoff_date"],
         "training_match_count": 303,
@@ -278,15 +360,16 @@ def _accepted_coupon_backtest_result() -> tuple[dict[str, object], list[str]]:
         "pleno_prediction": {
             "model": "dixon_coles",
             "selection_method": "max_aggregated_category_pair_probability",
-            "home_category": "M",
-            "away_category": "0",
+            "home_category": "0",
+            "away_category": "M",
             "probability_mass": 0.2,
             "training_match_count": 303,
         },
         "models": {
             mode: {
                 **model_result,
-                "probabilities": [probabilities.copy() for _ in range(14)],
+                "probabilities": [vector.copy() for vector in vectors],
+                "columns": [column.copy() for column in columns],
             }
             for mode in ("dc", "ml", "ensemble_dc_ml")
         },
@@ -297,13 +380,13 @@ def _accepted_coupon_backtest_result() -> tuple[dict[str, object], list[str]]:
     }
     return (
         {
+            "schema_version": 2,
             "config": {"budget_columns": 8, "min_history_matches": 300},
             "summary": {"coupon_count": 1, "models": summary_models},
             "coupons": [coupon_result],
         },
         [coupon_id],
     )
-
 
 def test_coupon_backtest_acceptance_requires_all_models_and_valid_vectors() -> None:
     result, coupon_ids = _accepted_coupon_backtest_result()
@@ -364,4 +447,91 @@ def test_coupon_backtest_acceptance_rejects_non_boolean_coverage_flag() -> None:
             coupon_ids,
             budget=8,
             min_history_matches=300,
+        )
+
+
+def test_coupon_backtest_acceptance_rejects_missing_persisted_columns() -> None:
+    result, coupon_ids = _accepted_coupon_backtest_result()
+    result["coupons"][0]["models"]["dc"]["columns"].pop()
+    with pytest.raises(ValueError, match="persisted direct columns"):
+        validate_coupon_backtest_acceptance(
+            result, coupon_ids, budget=8, min_history_matches=300
+        )
+
+
+def test_coupon_backtest_acceptance_rejects_incomplete_multiple_system() -> None:
+    result, coupon_ids = _accepted_coupon_backtest_result()
+    result["coupons"][0]["models"]["ml"]["double_count"] = 2
+    with pytest.raises(ValueError, match="2\\^d \\* 3\\^t"):
+        validate_coupon_backtest_acceptance(
+            result, coupon_ids, budget=8, min_history_matches=300
+        )
+
+
+def test_coupon_backtest_acceptance_rejects_duplicate_direct_columns() -> None:
+    result, coupon_ids = _accepted_coupon_backtest_result()
+    columns = result["coupons"][0]["models"]["ensemble_dc_ml"]["columns"]
+    columns[-1] = columns[0].copy()
+    with pytest.raises(ValueError, match="duplicate direct columns"):
+        validate_coupon_backtest_acceptance(
+            result, coupon_ids, budget=8, min_history_matches=300
+        )
+
+
+def test_coupon_backtest_acceptance_rejects_pleno_multiplier_mismatch() -> None:
+    result, coupon_ids = _accepted_coupon_backtest_result()
+    result["coupons"][0]["models"]["dc"]["pleno15_multiplier"] = 2
+    with pytest.raises(ValueError, match="Pleno multiplier"):
+        validate_coupon_backtest_acceptance(
+            result, coupon_ids, budget=8, min_history_matches=300
+        )
+
+
+def test_coupon_backtest_acceptance_rejects_total_bet_or_cost_mismatch() -> None:
+    result, coupon_ids = _accepted_coupon_backtest_result()
+    result["coupons"][0]["models"]["dc"]["total_bets"] = 9
+    with pytest.raises(ValueError, match="total bets do not equal"):
+        validate_coupon_backtest_acceptance(
+            result, coupon_ids, budget=8, min_history_matches=300
+        )
+
+    result, coupon_ids = _accepted_coupon_backtest_result()
+    result["coupons"][0]["models"]["dc"]["cost_eur"] = 6.01
+    with pytest.raises(ValueError, match="ticket cost"):
+        validate_coupon_backtest_acceptance(
+            result, coupon_ids, budget=8, min_history_matches=300
+        )
+
+
+def test_coupon_backtest_acceptance_recomputes_realized_coverage_and_hits() -> None:
+    result, coupon_ids = _accepted_coupon_backtest_result()
+    result["coupons"][0]["models"]["dc"]["covered_14"] = True
+    with pytest.raises(ValueError, match="covered_14"):
+        validate_coupon_backtest_acceptance(
+            result, coupon_ids, budget=8, min_history_matches=300
+        )
+
+    result, coupon_ids = _accepted_coupon_backtest_result()
+    result["coupons"][0]["models"]["dc"]["best_column_hits"] = 7
+    with pytest.raises(ValueError, match="best_column_hits"):
+        validate_coupon_backtest_acceptance(
+            result, coupon_ids, budget=8, min_history_matches=300
+        )
+
+
+def test_coupon_backtest_acceptance_rejects_actual_result_reconciliation_mismatch() -> None:
+    result, coupon_ids = _accepted_coupon_backtest_result()
+    result["coupons"][0]["actual_main_results"][0] = "X"
+    with pytest.raises(ValueError, match="actual result 1"):
+        validate_coupon_backtest_acceptance(
+            result, coupon_ids, budget=8, min_history_matches=300
+        )
+
+
+def test_coupon_backtest_acceptance_recomputes_pleno_hit() -> None:
+    result, coupon_ids = _accepted_coupon_backtest_result()
+    result["coupons"][0]["models"]["dc"]["pleno_hit"] = True
+    with pytest.raises(ValueError, match="pleno_hit"):
+        validate_coupon_backtest_acceptance(
+            result, coupon_ids, budget=8, min_history_matches=300
         )

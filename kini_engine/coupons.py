@@ -622,10 +622,15 @@ def _evaluate_ticket(
         "covered_14": covered_14,
         "pleno_hit": pleno_hit,
         "full_coupon_covered": covered_14 and pleno_hit,
+        "columns": [list(column) for column in columns],
         "column_count": ticket["column_count"],
         "total_bets": ticket["total_bets"],
         "double_count": ticket["double_count"],
         "triple_count": ticket["triple_count"],
+        "pleno15_multiplier": ticket["pleno15_multiplier"],
+        "pleno15_home_categories": ticket["pleno15_home_categories"],
+        "pleno15_away_categories": ticket["pleno15_away_categories"],
+        "price_per_bet_eur": ticket["price_per_bet_eur"],
         "cost_eur": ticket["cost_eur"],
         "independent_14_coverage_estimate": ticket["independent_coverage_estimate"],
         "pleno_model": "dixon_coles",
@@ -745,6 +750,11 @@ def evaluate_coupon(
         "official_pleno_verified": coupon["official_pleno_verified"],
         "first_kickoff_at": coupon["first_kickoff_at"],
         "training_cutoff_date": coupon["training_cutoff_date"],
+        "actual_main_results": list(actual),
+        "actual_pleno_categories": {
+            "home": actual_pleno_home,
+            "away": actual_pleno_away,
+        },
         "training_match_count": len(history),
         "model_fit_match_count": engine.dc.n_training_matches,
         "pleno_prediction": {
@@ -814,7 +824,7 @@ def evaluate_coupon_batch(
             "total_cost_eur": round(sum(item["cost_eur"] for item in successful), 2),
         }
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "method": {
             "cutoff": "all training results dated strictly before the local calendar date of the earliest coupon kickoff",
             "training_history": "one fitted snapshot shared by all 15 coupon fixtures and all model candidates in that coupon",

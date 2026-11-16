@@ -126,6 +126,11 @@ def canonicalize_coupon(
                 "canonical_home": canonical_home,
                 "canonical_away": canonical_away,
                 "football_data_date": fixture_day,
+                "home_goals": match.home_goals,
+                "away_goals": match.away_goals,
+                "result": match.outcome(),
+                "pleno_home_category": fixture.get("pleno_home_category"),
+                "pleno_away_category": fixture.get("pleno_away_category"),
                 "football_data_division": (
                     match.detail.get("Div") if isinstance(match.detail, dict) else None
                 ),

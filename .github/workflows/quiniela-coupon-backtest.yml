@@ -175,6 +175,14 @@ jobs:
                   raise SystemExit(f"{mode} exceeds SELAE's authorized total-bet cap")
               if model.get("column_count", 0) > 8:
                   raise SystemExit(f"{mode} exceeds the configured 8-column budget")
+              columns = model.get("columns")
+              if not isinstance(columns, list) or len(columns) != model.get("column_count"):
+                  raise SystemExit(f"{mode} does not persist its exact direct columns")
+              if model.get("total_bets") != model.get("column_count") * model.get("pleno15_multiplier"):
+                  raise SystemExit(f"{mode} total bets do not include the Pleno multiplier")
+              expected_cost = round(model.get("total_bets") * model.get("price_per_bet_eur"), 2)
+              if abs(model.get("cost_eur") - expected_cost) > 0.005:
+                  raise SystemExit(f"{mode} cost does not match total bets and price")
           print("COUPON_ACCEPTANCE_OK: 15 official results, 15 canonical fixtures, one pre-kickoff snapshot, 3 x 14 forecasts, optimizer within cap")
           PY
       - name: Upload coupon pilot evidence

@@ -70,6 +70,11 @@ def test_canonicalize_coupon_reconciles_all_15_fixtures() -> None:
     assert resolved["fixtures"][0]["source_home"] == "Home 1"
     assert resolved["fixtures"][0]["home"] == "Canonical Home 1"
     assert coupon["fixtures"][0]["home"] == "Home 1"
+    assert reconciliation[0]["home_goals"] == 1
+    assert reconciliation[0]["away_goals"] == 0
+    assert reconciliation[0]["result"] == "1"
+    assert reconciliation[14]["pleno_home_category"] == "M"
+    assert reconciliation[14]["pleno_away_category"] == "0"
 
 
 def test_canonicalize_coupon_rejects_unmapped_team() -> None:

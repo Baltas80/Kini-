@@ -41,7 +41,11 @@ Each model's probabilities are passed unchanged to the existing multiple-direct 
 - exact 14-match coverage by the generated columns;
 - Pleno al 15 category hit;
 - combined 14 + Pleno coverage;
-- doubles, triples, total bets and cost.
+- the exact ordered list of generated 14-sign direct columns;
+- doubles, triples, the Pleno category multiplier, total payable bets, unit price and cost;
+- realized 14-match coverage, best-column hits and single-sign hits, recomputed from the persisted columns and actual reconciled results.
+
+The acceptance gate independently verifies that the number of direct columns is exactly 2^d × 3^t, that the selected signs form the complete Cartesian multiple, that total bets equal direct columns multiplied by the Pleno category-pair count, and that cost equals total bets multiplied by the configured price per bet. It recomputes realized coverage and hit counts from the saved columns rather than trusting summary fields.
 
 The independent marginal coverage estimate is reported separately from realized exact coverage. No expected payout or profitability is claimed: prize distributions, pari-mutuel effects, participation-level stakes and historical payout data are not modelled in this pilot.
 
@@ -73,3 +77,20 @@ python scripts/import_historical_coupons.py --season 2020-2021 --journeys 21 22 
 ```
 
 This option makes multi-journey import reproducible when official pages have been independently reviewed and normalized. It does not make the snapshots official automatically and does not remove the requirement to verify every journey individually.
+
+
+## Reproducible direct-ticket audit
+
+Coupon backtest result schema version 2 stores the exact generated columns for each model candidate. Each column contains 14 ordered 1/X/2 signs. The result also stores the actual 14 main outcomes, the actual Pleno categories, selected Pleno category sets, and the price per payable bet.
+
+The acceptance validator requires:
+
+1. Unique columns, each containing exactly 14 valid signs.
+2. One, two or three selected signs per fixture, with the observed double/triple counts matching the declared counts.
+3. A complete direct multiple with exactly 2^d × 3^t columns.
+4. Total payable bets equal to direct columns × (selected home Pleno categories × selected away Pleno categories), and no more than 31,104.
+5. Cost equal to total payable bets × price per bet, rounded to cents.
+6. Actual outcomes consistent with the canonical Football-Data score/result reconciliation.
+7. covered_14, best-column hits, single-sign hits, Pleno hit, full-coupon coverage and independent coverage recomputed from the saved columns, probabilities and actual outcomes.
+
+This makes the generated ticket reproducible and the reported coverage auditable. It does not estimate prizes, expected payout or profitability.

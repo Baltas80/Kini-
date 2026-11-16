@@ -15,7 +15,7 @@ def load_official_coupon_snapshot(path: str | Path) -> tuple[dict[str, Any], str
     raw = Path(path).read_bytes()
     snapshot = json.loads(raw)
     if not isinstance(snapshot, dict):
-        raise ValueError("official coupon snapshot must be a JSON object")
+        raise TypeError("official coupon snapshot must be a JSON object")
     return snapshot, hashlib.sha256(raw).hexdigest()
 
 

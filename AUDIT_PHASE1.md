@@ -2648,3 +2648,21 @@ Status: one-coupon common-cutoff execution and acceptance gate validated on the 
 - Current branch head: `e063921e3eb78e8ca1ea42cd0963d720bd94f0da`. Latest CI [43969385341](https://github.com/Baltas80/Kini-/actions/runs/43969385341) is in progress. The directory-mode coupon pilot [43969385258](https://github.com/Baltas80/Kini-/actions/runs/43969385258) is queued; the completed pilot above validates the same importer logic on the immediately preceding code head.
 
 Status: multi-snapshot import implemented and exercised end-to-end on one journey; latest full CI still pending. Full-season 2020/21 snapshots, calendar-to-result reconciliation for all 63 journeys, and multi-coupon ticket performance remain unvalidated. Next priority: finish latest CI, then strengthen coupon acceptance by persisting generated direct columns and validating the mathematical relation between doubles/triples, column count, Pleno multiplier, total bets and cost.
+
+
+## 2026-11-17 — P6 direct-ticket persistence and acceptance hardening
+
+The optimizer already generated its complete direct-column expansion, but the coupon backtest discarded those columns and retained only aggregate counts. That made it impossible for the acceptance gate to independently prove the 2^d × 3^t structure or recompute realized coverage from the actual 14-match result vector.
+
+Implemented on feat/selae-fixture-reconciliation:
+
+- Coupon backtest result schema advanced to version 2.
+- Every model result now persists the exact ordered 14-sign columns, Pleno home/away category sets, Pleno multiplier and price per payable bet.
+- Coupon results persist the actual 14 main outcomes and actual Pleno categories.
+- Canonical Football-Data reconciliation now retains home/away goals and the derived result sign for each of the 15 fixtures; the Pleno categories are retained on fixture 15.
+- The acceptance validator now proves column uniqueness and shape, the complete Cartesian direct multiple, column_count = 2^d × 3^t, the double/triple counts, total_bets = column_count × pleno15_multiplier, the 31,104 cap and cost = total_bets × price_per_bet.
+- It recomputes single-sign hits, best-column hits, exact 14-match coverage, Pleno hit, full-coupon coverage and independent marginal coverage from the persisted columns, probabilities and reconciled actual outcomes.
+- Added regression coverage for missing/duplicate columns, invalid multiple structure, Pleno multiplier, bet/cost arithmetic, actual-result reconciliation and recomputed coverage.
+- Corrected the CI Ruff TRY004 finding in the official snapshot loader: a valid JSON document with a non-object root now raises TypeError, with a matching regression expectation.
+
+Validation status at this entry: implementation and regression tests are committed to the PR branch; latest-head CI and the real Jornada 21 coupon pilot must complete before this unit is marked validated. The existing one-coupon pilot remains a pipeline check only. No full-season coupon performance or profitability claim is made. No change to master; no PR merge.
