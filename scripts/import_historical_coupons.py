@@ -12,6 +12,10 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
+from kini_engine.coupon_snapshot import (
+    load_official_coupon_snapshot,
+    verify_coupon_against_selae_snapshot,
+)
 from kini_engine.coupons import (
     extract_historical_journeys,
     parse_historicoquiniela_coupon_html,
@@ -22,6 +26,7 @@ from kini_engine.coupons import (
 
 BASE_URL = "https://www.historicoquiniela.com"
 SELAE_HOST = "www.loteriasyapuestas.es"
+SELAE_INDEX_URL = "https://www.loteriasyapuestas.es/es/la-quiniela/resultados"
 log = logging.getLogger("kini.coupon_import")
 
 
@@ -40,8 +45,13 @@ def make_session() -> requests.Session:
     session.mount("https://", HTTPAdapter(max_retries=retry))
     session.headers.update(
         {
-            "User-Agent": "Kini-Coupon-Archive/1.0 (+https://github.com/Baltas80/Kini-)",
-            "Accept": "text/html,application/xhtml+xml;q=0.9,*/*;q=0.8",
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/131.0.0.0 Safari/537.36"
+            ),
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "es-ES,es;q=0.9,en;q=0.8",
         }
     )
     return session
@@ -56,18 +66,30 @@ def decode_html(content: bytes, url: str) -> str:
     raise ValueError(f"{url}: response is not decodable HTML")
 
 
-def fetch_page(session: requests.Session, url: str) -> tuple[bytes, str]:
+def fetch_page(
+    session: requests.Session,
+    url: str,
+    *,
+    referer: str | None = None,
+) -> tuple[bytes, str]:
     parsed = urlparse(url)
-    if parsed.scheme != "https" or not parsed.netloc:
-        raise ValueError(f"refusing non-HTTPS source URL: {url}")
-    if parsed.netloc not in {"www.historicoquiniela.com", SELAE_HOST}:
-        raise ValueError(f"refusing unexpected source host: {parsed.netloc}")
-    response = session.get(url, timeout=(8, 35))
+    if parsed.scheme != "https" or parsed.netloc not in {
+        "www.historicoquiniela.com",
+        SELAE_HOST,
+    }:
+        raise ValueError(f"refusing unexpected source URL: {url}")
+    response = session.get(
+        url,
+        headers={"Referer": referer} if referer else None,
+        timeout=(10, 35),
+        allow_redirects=True,
+    )
     response.raise_for_status()
-    if "text/html" not in response.headers.get("Content-Type", "").casefold():
-        raise ValueError(
-            f"{url}: expected text/html, got {response.headers.get('Content-Type')!r}"
-        )
+    if urlparse(response.url).netloc != parsed.netloc:
+        raise ValueError(f"{url}: unexpected redirect to {response.url}")
+    content_type = response.headers.get("Content-Type", "").casefold()
+    if "html" not in content_type:
+        raise ValueError(f"{url}: expected HTML, got {content_type!r}")
     return response.content, hashlib.sha256(response.content).hexdigest()
 
 
@@ -89,6 +111,7 @@ def main() -> None:
     parser.add_argument("--journeys", type=int, nargs="*", help="Optional explicit journey numbers")
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--raw-dir", type=Path)
+    parser.add_argument("--official-snapshot", type=Path)
     parser.add_argument("--delay-seconds", type=float, default=0.25)
     args = parser.parse_args()
     if not args.season or "/" in args.season or ".." in args.season:
@@ -101,12 +124,23 @@ def main() -> None:
         parser.error("journeys must contain positive journey numbers")
     if args.output.exists():
         parser.error(f"refusing to overwrite existing output: {args.output}")
+    if args.official_snapshot and (args.journeys is None or len(set(args.journeys)) != 1):
+        parser.error("an official snapshot can only be used with exactly one explicit journey")
+
+    official_snapshot = None
+    official_snapshot_sha = None
+    if args.official_snapshot:
+        official_snapshot, official_snapshot_sha = load_official_coupon_snapshot(
+            args.official_snapshot
+        )
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     session = make_session()
     season_url = f"{BASE_URL}/historico/{args.season}"
     if args.journeys is None:
-        season_bytes, season_sha = fetch_page(session, season_url)
+        season_bytes, season_sha = fetch_page(
+            session, season_url, referer=f"{BASE_URL}/"
+        )
         season_html = decode_html(season_bytes, season_url)
         journeys = extract_historical_journeys(season_html, season=args.season)
         save_raw(args.raw_dir, f"{args.season}/season-index.html", season_bytes)
@@ -117,7 +151,9 @@ def main() -> None:
     coupons = []
     for position, jornada in enumerate(journeys, start=1):
         source_url = f"{BASE_URL}/historico/{args.season}/{jornada}"
-        source_bytes, source_sha = fetch_page(session, source_url)
+        source_bytes, source_sha = fetch_page(
+            session, source_url, referer=season_url
+        )
         source_html = decode_html(source_bytes, source_url)
         coupon = parse_historicoquiniela_coupon_html(
             source_html,
@@ -131,14 +167,28 @@ def main() -> None:
             raise ValueError(
                 f"{coupon['coupon_id']}: publication date is missing; cannot derive SELAE result URL"
             )
-        official_url = selae_result_url(coupon["result_published_at"])
-        official_bytes, official_sha = fetch_page(session, official_url)
-        coupon = verify_coupon_against_selae(
-            coupon,
-            decode_html(official_bytes, official_url),
-            official_url=official_url,
-            official_sha256=official_sha,
-        )
+
+        official_bytes = None
+        if official_snapshot is not None:
+            official_url = official_snapshot["source_url"]
+            coupon = verify_coupon_against_selae_snapshot(
+                coupon,
+                official_snapshot,
+                snapshot_sha256=official_snapshot_sha,
+            )
+        else:
+            official_url = selae_result_url(coupon["result_published_at"])
+            official_bytes, official_sha = fetch_page(
+                session,
+                official_url,
+                referer=SELAE_INDEX_URL,
+            )
+            coupon = verify_coupon_against_selae(
+                coupon,
+                decode_html(official_bytes, official_url),
+                official_url=official_url,
+                official_sha256=official_sha,
+            )
         if coupon["official_main_matches_verified"] is not True:
             raise ValueError(
                 f"{coupon['coupon_id']}: SELAE result reconciliation failed: "
@@ -153,18 +203,20 @@ def main() -> None:
             f"{args.season}/jornada-{jornada:02d}-historicoquiniela.html",
             source_bytes,
         )
-        save_raw(
-            args.raw_dir,
-            f"{args.season}/jornada-{jornada:02d}-selae.html",
-            official_bytes,
-        )
+        if official_bytes is not None:
+            save_raw(
+                args.raw_dir,
+                f"{args.season}/jornada-{jornada:02d}-selae.html",
+                official_bytes,
+            )
         coupons.append(coupon)
         log.info(
-            "Verified %s (%d/%d): 15 fixtures, first kickoff %s",
+            "Verified %s (%d/%d): 15 fixtures, first kickoff %s, Pleno verified=%s",
             coupon["coupon_id"],
             position,
             len(journeys),
             coupon["first_kickoff_at"],
+            coupon["official_pleno_verified"],
         )
         if position < len(journeys) and args.delay_seconds:
             time.sleep(args.delay_seconds)
@@ -179,8 +231,10 @@ def main() -> None:
         "retrieved_at_utc": datetime.now(UTC).isoformat(),
         "timezone": "Europe/Madrid",
         "official_verification": (
-            "14 main fixtures and Pleno al 15 reconciled by exact order, names and scores against SELAE HTML"
+            "14 main fixtures and Pleno al 15 reconciled by exact order, names and scores against SELAE"
         ),
+        "official_snapshot_path": str(args.official_snapshot) if args.official_snapshot else None,
+        "official_snapshot_sha256": official_snapshot_sha,
     }
     count = write_coupon_jsonl(args.output, coupons, manifest)
     log.info("COUPON_IMPORT_OK: %d verified coupons written to %s", count, args.output)

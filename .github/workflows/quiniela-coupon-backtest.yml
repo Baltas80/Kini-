@@ -6,11 +6,14 @@ on:
     paths:
       - "kini_engine/coupons.py"
       - "kini_engine/coupon_identity.py"
+      - "kini_engine/coupon_snapshot.py"
       - "kini_engine/data/historicoquiniela_team_aliases.json"
+      - "kini_engine/data/selae_official_coupon_results/2020-2021-21.json"
       - "scripts/import_historical_coupons.py"
       - "scripts/backtest_coupons.py"
       - "tests/test_coupon_backtest.py"
       - "tests/test_coupon_identity.py"
+      - "tests/test_coupon_snapshot.py"
       - "docs/COUPON_BACKTEST.md"
       - ".github/workflows/quiniela-coupon-backtest.yml"
       - "AUDIT_PHASE1.md"
@@ -43,7 +46,8 @@ jobs:
             --season 2020-2021 \
             --journeys 21 \
             --output coupon-archive.jsonl \
-            --raw-dir coupon-raw
+            --raw-dir coupon-raw \
+            --official-snapshot kini_engine/data/selae_official_coupon_results/2020-2021-21.json
       - name: Run common-cutoff coupon backtest
         env:
           KINI_CODE_REVISION: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -57,10 +61,22 @@ jobs:
       - name: Enforce coupon-level acceptance
         run: |
           python - <<'PY'
+          import hashlib
           import json
           from pathlib import Path
 
           result = json.loads(Path("coupon-backtest.json").read_text(encoding="utf-8"))
+          archive = [
+              json.loads(line)
+              for line in Path("coupon-archive.jsonl").read_text(encoding="utf-8").splitlines()
+              if line.strip()
+          ]
+          snapshot_path = Path("kini_engine/data/selae_official_coupon_results/2020-2021-21.json")
+          snapshot_sha = hashlib.sha256(snapshot_path.read_bytes()).hexdigest()
+          if len(archive) != 2 or archive[1].get("official_result_sha256") != snapshot_sha:
+              raise SystemExit("coupon archive does not reference the exact official snapshot bytes")
+          if archive[1].get("official_result_snapshot_type") != "normalized_json_extract_not_raw_html":
+              raise SystemExit("official result snapshot type is not declared")
           coupons = result.get("coupons", [])
           if len(coupons) != 1:
               raise SystemExit(f"expected one pilot coupon, received {len(coupons)}")
@@ -71,12 +87,12 @@ jobs:
               raise SystemExit("main fixtures were not reconciled with SELAE")
           if coupon.get("official_pleno_verified") is not True:
               raise SystemExit("Pleno al 15 was not reconciled with SELAE")
-          if coupon.get("fixture_reconciliation_count") != 15:
-              raise SystemExit("all 15 coupon fixtures were not reconciled to Football-Data")
           if coupon.get("training_cutoff_date") >= coupon.get("first_kickoff_at", "")[:10]:
               raise SystemExit("training cutoff is not strictly before the first kickoff date")
           if coupon.get("training_match_count", 0) < 300:
               raise SystemExit("coupon training history is below the required minimum")
+          if coupon.get("fixture_reconciliation_count") != 15:
+              raise SystemExit("all 15 coupon fixtures were not reconciled to Football-Data")
           for mode in ("dc", "ml", "ensemble_dc_ml"):
               model = coupon.get("models", {}).get(mode, {})
               if model.get("status") != "success" or model.get("n_predictions") != 14:
@@ -95,4 +111,5 @@ jobs:
             coupon-archive.jsonl
             coupon-backtest.json
             coupon-raw/**/*.html
+            kini_engine/data/selae_official_coupon_results/2020-2021-21.json
           retention-days: 90

@@ -2498,3 +2498,16 @@ El script de backtest canonicaliza copias en memoria del archivo de cupones y co
 Se añaden tests específicos para alias ausentes, reconciliación completa y discrepancias de fecha/marcador. Se amplían las listas Ruff de CI para incluir los módulos, scripts y tests nuevos. La ejecución anterior del piloto, iniciada antes de esta corrección de identidad, no se acepta como validación del motor; debe repetirse sobre el nuevo commit.
 
 La nueva implementación está probada localmente con 8 tests del módulo de cupones/identidad y compilación sintáctica. El entorno local no tiene Ruff ni penaltyblog; la validación real de lint, parser de fuentes y motor queda delegada a la CI y al workflow específico del piloto. No se amplía a las 63 jornadas hasta que pase la reconciliación oficial, el crosswalk de 15 fixtures, DC, ML, ensemble y optimizador.
+
+
+#### SELAE HTTP 403 y snapshot oficial normalizado para el piloto
+
+La primera ejecución del importador, run [43949917492](https://github.com/Baltas80/Kini-/actions/runs/43949917492), descargó la página de HistoricalQuiniela pero recibió HTTP 403 al solicitar el detalle oficial SELAE desde el runner de GitHub Actions. No se aceptó ese intento como verificación oficial. Se mejoraron User-Agent y Referer para futuras consultas HTML, pero el piloto no depende de que el runner pueda acceder directamente a ese endpoint.
+
+Se incorpora kini_engine/data/selae_official_coupon_results/2020-2021-21.json: extracto JSON normalizado de la página pública oficial SELAE de 13-12-2020, revisado manualmente y reconciliado con la página secundaria y el histórico Football-Data. El archivo no es HTML original. Su SHA-256 293660df4bbdd044c944998b2979935451dd19c8dcde5639a6a2f5fc76a35488 cubre exactamente los bytes del JSON normalizado. El registro del cupón conservará el URL oficial, el hash, el tipo de snapshot y el método/fecha de verificación. No se presenta ese hash como digest de la página HTML.
+
+Se añade kini_engine/coupon_snapshot.py para verificar el extracto oficial por orden, nombres, marcadores, signos y Pleno al 15. El importador acepta --official-snapshot para el piloto; el flujo conserva el HTML bruto de HistoricalQuiniela y el snapshot oficial normalizado como evidencia separada. Se añaden tres tests de snapshot y se amplía CI para lint/formato de los módulos y scripts nuevos.
+
+La prueba local de parser/identidad/snapshot suma 11 tests con motor y registry simulados para las partes de integración; no sustituye la CI real ni la ejecución de DC/ML/ensemble. La verificación independiente de los 15 fixtures contra historical_spain.csv sí se ejecutó sobre el artefacto real: 15/15 fechas, equipos y marcadores exactos tras el crosswalk.
+
+Limitación abierta: el piloto J21 dispone de extracto oficial normalizado, pero no de captura HTML oficial automatizada. Para ampliar a las 63 jornadas hay que probar una vía oficial accesible (RSS/PDF/archivo) o mantener snapshots oficiales individualmente revisados; no se deben fabricar ni inferir resultados.

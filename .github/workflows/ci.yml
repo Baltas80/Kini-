@@ -74,6 +74,8 @@ jobs:
           tests/test_prediction_diagnostics.py
           kini_engine/coupons.py
           kini_engine/coupon_identity.py
+          kini_engine/coupon_snapshot.py
+          tests/test_coupon_snapshot.py
           scripts/import_historical_coupons.py
           scripts/backtest_coupons.py
           tests/test_coupon_backtest.py
@@ -107,6 +109,8 @@ jobs:
           tests/test_prediction_diagnostics.py
           kini_engine/coupons.py
           kini_engine/coupon_identity.py
+          kini_engine/coupon_snapshot.py
+          tests/test_coupon_snapshot.py
           scripts/import_historical_coupons.py
           scripts/backtest_coupons.py
           tests/test_coupon_backtest.py
