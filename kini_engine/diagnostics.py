@@ -194,6 +194,46 @@ def _pairwise_comparison(
     }
 
 
+def _market_common_comparison(
+    rows: list[dict[str, Any]],
+    model_modes: list[str],
+    *,
+    min_n: int = 1,
+) -> dict[str, Any]:
+    """Compare every model with the market on the exact same eligible fixtures."""
+    market_rows = [
+        row
+        for row in rows
+        if row.get("market_eligible") is True
+        and row.get("market_probabilities") is not None
+    ]
+    n = len(market_rows)
+    comparison: dict[str, Any] = {
+        "n": n,
+        "minimum_n": min_n,
+        "status": "ok" if n >= min_n else "below_minimum",
+        "market": None,
+        "models": {},
+    }
+    if n < min_n:
+        return comparison
+
+    market_metrics = _metrics(market_rows, "market")
+    comparison["market"] = market_metrics
+    for mode in model_modes:
+        model_metrics = _metrics(market_rows, mode)
+        comparison["models"][mode] = {
+            "metrics": model_metrics,
+            "delta_vs_market": {
+                "accuracy": model_metrics["accuracy"] - market_metrics["accuracy"],
+                "brier": model_metrics["brier"] - market_metrics["brier"],
+                "logloss": model_metrics["logloss"] - market_metrics["logloss"],
+            },
+            "sign_comparison": _pairwise_comparison(market_rows, mode, "market"),
+        }
+    return comparison
+
+
 def analyze_prediction_rows(
     manifest: dict[str, Any],
     rows: list[dict[str, Any]],
@@ -241,35 +281,15 @@ def analyze_prediction_rows(
                     mode: _metrics(segment_rows, mode, include_bins=False)
                     for mode in model_modes
                 },
+                "market_common_sample": _market_common_comparison(
+                    segment_rows,
+                    model_modes,
+                    min_n=min_segment_n,
+                ),
             }
         )
 
-    market_rows = [
-        row
-        for row in rows
-        if row.get("market_eligible") is True
-        and row.get("market_probabilities") is not None
-    ]
-    market_comparison: dict[str, Any] = {
-        "n": len(market_rows),
-        "market": _metrics(market_rows, "market") if market_rows else None,
-        "models": {},
-    }
-    for mode in model_modes:
-        if not market_rows:
-            break
-        model_metrics = _metrics(market_rows, mode)
-        market_metrics = market_comparison["market"]
-        comparison = _pairwise_comparison(market_rows, mode, "market")
-        market_comparison["models"][mode] = {
-            "metrics": model_metrics,
-            "delta_vs_market": {
-                "accuracy": model_metrics["accuracy"] - market_metrics["accuracy"],
-                "brier": model_metrics["brier"] - market_metrics["brier"],
-                "logloss": model_metrics["logloss"] - market_metrics["logloss"],
-            },
-            "sign_comparison": comparison,
-        }
+    market_comparison = _market_common_comparison(rows, model_modes)
 
     return {
         "schema_version": 1,
