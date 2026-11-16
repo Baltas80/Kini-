@@ -102,6 +102,4 @@ def test_official_snapshot_rejects_mismatched_source_draw_date() -> None:
     coupon, snapshot = _records()
     snapshot["draw_date"] = "2020-12-14"
     with pytest.raises(ValueError, match="does not match coupon source date"):
-        verify_coupon_against_selae_snapshot(
-            coupon, snapshot, snapshot_sha256="a" * 64
-        )
+        verify_coupon_against_selae_snapshot(coupon, snapshot, snapshot_sha256="a" * 64)
