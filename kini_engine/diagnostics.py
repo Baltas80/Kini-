@@ -219,12 +219,10 @@ def _paired_cluster_bootstrap(
         model_probabilities = _probability_vector(row, mode)
         market_probabilities = _probability_vector(row, "market")
         model_brier = sum(
-            (model_probabilities[sign] - float(sign == actual)) ** 2
-            for sign in SIGNS
+            (model_probabilities[sign] - float(sign == actual)) ** 2 for sign in SIGNS
         )
         market_brier = sum(
-            (market_probabilities[sign] - float(sign == actual)) ** 2
-            for sign in SIGNS
+            (market_probabilities[sign] - float(sign == actual)) ** 2 for sign in SIGNS
         )
         model_logloss = -math.log(max(model_probabilities[actual], 1e-15))
         market_logloss = -math.log(max(market_probabilities[actual], 1e-15))
@@ -271,9 +269,7 @@ def _paired_cluster_bootstrap(
             dtype=np.int32,
         )
         sampled_sums = totals_matrix[indices].sum(axis=1)
-        bootstrap_means[start:stop] = (
-            sampled_sums[:, :3] / sampled_sums[:, 3, None]
-        )
+        bootstrap_means[start:stop] = sampled_sums[:, :3] / sampled_sums[:, 3, None]
 
     lower, upper = np.quantile(bootstrap_means, [0.025, 0.975], axis=0)
     return {

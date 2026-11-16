@@ -181,7 +181,10 @@ def test_market_comparison_reports_reproducible_week_cluster_intervals():
     assert uncertainty["cluster_unit"] == "iso_calendar_week"
     assert uncertainty["cluster_count"] == 12
     assert uncertainty["bootstrap_samples"] == 500
-    assert uncertainty == second["market_common_sample"]["models"]["dc"]["paired_uncertainty"]
+    assert (
+        uncertainty
+        == second["market_common_sample"]["models"]["dc"]["paired_uncertainty"]
+    )
     intervals = uncertainty["confidence_interval_95"]
     assert intervals["brier"]["lower"] > 0.0
     assert intervals["logloss"]["lower"] > 0.0
