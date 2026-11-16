@@ -449,3 +449,20 @@ def test_fetch_draw_refetches_cache_when_sidecar_hash_is_tampered(tmp_path: Path
     assert first["raw_sha256"] == second["raw_sha256"]
     assert refresh_session.calls == 1
     assert json.loads(metadata_path.read_text(encoding="utf-8"))["raw_sha256"] == first["raw_sha256"]
+
+
+def test_load_local_draw_rejects_non_utc_capture_timestamp(tmp_path: Path) -> None:
+    raw = make_html().encode("utf-8")
+    (tmp_path / "2026-11-08.html").write_bytes(raw)
+    (tmp_path / "2026-11-08.meta.json").write_text(
+        json.dumps({
+            "source_url": make_draw_url(DRAW_DATE),
+            "source_retrieved_at_utc": "2026-11-09T01:00:00+01:00",
+            "raw_sha256": hashlib.sha256(raw).hexdigest(),
+            "encoding": "utf-8",
+        }),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="hora de captura.*UTC"):
+        load_local_draw(DRAW_DATE, tmp_path)
