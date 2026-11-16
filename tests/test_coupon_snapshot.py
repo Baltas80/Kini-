@@ -146,3 +146,7 @@ def test_snapshot_loader_rejects_non_object_json(tmp_path: Path) -> None:
     path.write_text("[]", encoding="utf-8")
     with pytest.raises(ValueError, match="JSON object"):
         load_official_coupon_snapshot(path)
+
+def test_snapshot_directory_rejects_unsafe_season_slug(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="YYYY-YYYY"):
+        load_official_snapshot_for_journey(tmp_path, "../2020-2021", 21)
