@@ -2622,3 +2622,14 @@ Validation history:
 - The exact latest-head CI and coupon pilot are pending; the earlier successful pilot does not replace validation of the latest code head.
 
 Status: acceptance implementation committed; latest-head CI/pilot validation pending. No multi-jornada expansion has been accepted. Full-season import still requires official evidence for every coupon; no result is inferred from the secondary source's page-date label.
+
+### 2026-11-16 — coupon pilot artifact inspected; Ruff type-error fix
+
+- The common-cutoff coupon pilot on head `e65d9d2a0a05a7d5e10e57f2acaf56137f9e57a2`, workflow [43958738341](https://github.com/Baltas80/Kini-/actions/runs/43958738341), completed successfully. Artifact `14272863093` (ZIP SHA-256 `5ca98c4e6cf7824fc1e692812fbddc80cbf62278a598fdfe309aa81f73c2409f`) contains the archive, raw secondary-source HTML, normalized SELAE snapshot and coupon backtest JSON.
+- Independent artifact inspection confirms one coupon only (`2020-2021:21`), 15/15 canonical fixture mappings, official normalized snapshot flags for 14 main results and Pleno, first kickoff `2020-12-12T14:00:00+01:00`, conservative training cutoff `2020-12-11`, 303 training matches, and 14 probability vectors for each of DC, ML and fixed DC/ML ensemble. All three models completed with valid normalized vectors.
+- With an 8-column budget the pilot produced 8 direct columns, 3 doubles, no triples and €6.00 cost. Best-column hits were DC 7, ML 6 and ensemble 8; no model covered all 14 results and Pleno was not hit. This is a pipeline pilot, not a performance sample; no model-selection conclusion is drawn.
+- The rebuilt historical CSV in this run contained 5,321 rows (SHA-256 `e4b195593118215684efc8e70ffe0c8d88b3e28318d9c796f7b3b71c496475`), so this run's dataset snapshot differs from earlier 5,311-row profiles. The coupon's 303-match training slice is before its cutoff.
+- CI [43958738354](https://github.com/Baltas80/Kini-/actions/runs/43958738354) stopped at Ruff before formatting and pytest. The sole reported finding was `TRY004` at `scripts/backtest_coupons.py:266`: a malformed boolean field is a type error and must raise `TypeError`, not `ValueError`.
+- Corrected the exception type in commit [f15498d](https://github.com/Baltas80/Kini-/commit/f15498d6400b59d9826a698bee9f0d2080221fa8) and added a regression test for a string supplied as `covered_14` in [d91232b](https://github.com/Baltas80/Kini-/commit/d91232bf1b8a6eac151ca5457b1fabb320817373). This verifies that malformed boolean fields fail with a type-specific exception.
+
+Status: one-coupon common-cutoff execution and acceptance gate validated on the prior code head; Ruff correction and regression test committed. CI on the updated head is pending. Multi-coupon/full-season evidence and joint ticket performance remain unvalidated.
