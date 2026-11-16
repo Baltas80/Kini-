@@ -44,6 +44,11 @@ def _match_day(value: datetime | str) -> str:
     raise ValueError(f"invalid historical match date: {value!r}")
 
 
+def _pleno_category(goals: int) -> str:
+    """Map a reconciled score to the official Pleno al 15 goal category."""
+    return str(goals) if goals < 3 else "M"
+
+
 def canonicalize_coupon(
     coupon: dict[str, Any],
     historical_matches: list[Match],
@@ -129,8 +134,16 @@ def canonicalize_coupon(
                 "home_goals": match.home_goals,
                 "away_goals": match.away_goals,
                 "result": match.outcome(),
-                "pleno_home_category": fixture.get("pleno_home_category"),
-                "pleno_away_category": fixture.get("pleno_away_category"),
+                "pleno_home_category": (
+                    _pleno_category(match.home_goals)
+                    if fixture["number"] == 15 and match.home_goals is not None
+                    else None
+                ),
+                "pleno_away_category": (
+                    _pleno_category(match.away_goals)
+                    if fixture["number"] == 15 and match.away_goals is not None
+                    else None
+                ),
                 "football_data_division": (
                     match.detail.get("Div") if isinstance(match.detail, dict) else None
                 ),
