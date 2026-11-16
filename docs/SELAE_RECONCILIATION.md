@@ -194,3 +194,10 @@ The official results index is https://www.loteriasyapuestas.es/es/la-quiniela/re
 A result-detail page is not yet a complete historical scenario record. The importer must preserve 14 coupon signs separately from football scores, and must not infer goals when a score is absent. Postponed fixtures and public-draw signs require exact official evidence and explicit outcome semantics.
 
 Run the discovery workflow manually: selae-result-archive-discovery. The generated artifact is a source inventory only; it is not eligible for model training or ticket-performance backtesting until every fixture and outcome is validated.
+
+
+## Regulatory boundary: Pleno al 15 and direct-ticket cap — 2026-11-16
+
+The SELAE rules linked from its official regulations page specify that the Pleno al 15 selection multiplies the 14-match combinations by the number of selected goal categories for each team, up to 16; the direct-method maximum is 31,104 bets per ticket including Pleno al 15. The current optimizer intentionally uses one Pleno category pair (multiplier 1). Multiple Pleno selections are not supported by the current ticket optimizer and must not be enabled without applying the multiplier to the total-bet cap and cost.
+
+Official rules: https://www.loteriasyapuestas.es/f/loterias/documentos/normativa/Normativa%20de%20los%20juegos/Normas_de_la_Quiniela_y_Elige8_Octubre_2019.pdf
