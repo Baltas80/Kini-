@@ -201,3 +201,14 @@ Run the discovery workflow manually: selae-result-archive-discovery. The generat
 The SELAE rules linked from its official regulations page specify that the Pleno al 15 selection multiplies the 14-match combinations by the number of selected goal categories for each team, up to 16; the direct-method maximum is 31,104 bets per ticket including Pleno al 15. The current optimizer intentionally uses one Pleno category pair (multiplier 1). Multiple Pleno selections are not supported by the current ticket optimizer and must not be enabled without applying the multiplier to the total-bet cap and cost.
 
 Official rules: https://www.loteriasyapuestas.es/f/loterias/documentos/normativa/Normativa%20de%20los%20juegos/Normas_de_la_Quiniela_y_Elige8_Octubre_2019.pdf
+
+
+## Official press-release PDF scenario importer — 2026-11-16
+
+GitHub-hosted runners receive HTTP 403 from all tested official SELAE endpoints (Spanish and English result indexes, result RSS, dated result-file endpoint, press-release PDF and XHR component). The official pages remain readable through the web research surface, but automated runner egress is blocked.
+
+To avoid fabricating data or relying on unverified third-party mirrors, scripts/import_selae_press_release.py imports a locally downloaded official PDF. Install the optional dependency with pip install -e ".[selae]", then run:
+
+    python -m scripts.import_selae_press_release --pdf <file.pdf> --draw-date YYYY-MM-DD --source-url <official-pdf-url>
+
+The importer checks the PDF signature, official HTTPS host, explicit date text, exactly 14 ordered signs and the two Pleno categories. It stores the PDF SHA-256 and marks the record scenario_imported_unreconciled. It deliberately does not infer fixture identities, football scores, postponed-match semantics or draw IDs. A local official PDF download is still required; no historical batch has been imported yet.
