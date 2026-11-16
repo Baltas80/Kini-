@@ -355,6 +355,7 @@ def test_coupon_backtest_acceptance_rejects_incomplete_model_aggregate() -> None
             min_history_matches=300,
         )
 
+
 def test_coupon_backtest_acceptance_rejects_non_boolean_coverage_flag() -> None:
     result, coupon_ids = _accepted_coupon_backtest_result()
     result["coupons"][0]["models"]["dc"]["covered_14"] = "false"
