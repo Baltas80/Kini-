@@ -365,9 +365,9 @@ def _response_diagnostics(response: requests.Response) -> dict[str, object]:
             flags=re.IGNORECASE | re.DOTALL,
         )
         preview = re.sub(r"<[^>]+>", " ", preview)
-        diagnostics["body_text_preview"] = " ".join(
-            html.unescape(preview).split()
-        )[:240]
+        diagnostics["body_text_preview"] = " ".join(html.unescape(preview).split())[
+            :240
+        ]
     return diagnostics
 
 
