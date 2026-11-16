@@ -358,11 +358,16 @@ def _response_diagnostics(response: requests.Response) -> dict[str, object]:
     if response.status_code >= 400 and payload:
         encoding = getattr(response, "encoding", None) or "utf-8"
         preview = payload[:4096].decode(encoding, errors="replace")
-        preview = re.sub(r"(?is)<(script|style)\\b[^>]*>.*?</\\1>", " ", preview)
-        preview = re.sub(r"(?s)<[^>]+>", " ", preview)
-        diagnostics["body_text_preview"] = re.sub(
-            r"\\s+", " ", html.unescape(preview)
-        ).strip()[:240]
+        preview = re.sub(
+            r"<script[^>]*>.*?</script>|<style[^>]*>.*?</style>",
+            " ",
+            preview,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+        preview = re.sub(r"<[^>]+>", " ", preview)
+        diagnostics["body_text_preview"] = " ".join(
+            html.unescape(preview).split()
+        )[:240]
     return diagnostics
 
 
