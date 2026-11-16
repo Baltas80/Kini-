@@ -59,3 +59,17 @@ The batch runner must not report success when only Dixon-Coles completes. Before
 The acceptance gate also verifies official SELAE result and Pleno reconciliation, all 15 canonical fixture identities, the previous-local-calendar-day cutoff, minimum and fitted training counts, explicit Dixon-Coles Pleno provenance, optimizer column budget, the 31,104 direct-system cap, ticket metrics and consistency of the combined 14 + Pleno coverage flag. A partial model run or malformed vector exits non-zero and no successful result artifact is written.
 
 This is a software acceptance gate, not evidence that the models are accurate or that the ticket is profitable. Full-season expansion remains blocked until each coupon has its own official SELAE reconciliation evidence.
+
+## Importing multiple reviewed official snapshots
+
+The importer accepts either one \`--official-snapshot\` for exactly one explicit journey, or \`--official-snapshot-dir\` for a batch. Directory mode expects one reviewed normalized extract per journey, named \`SEASON-JOURNEY.json\` (for example \`2020-2021-21.json\`). When \`--journeys\` is omitted, the secondary season index supplies the candidate journey list; every corresponding official snapshot must exist or the import fails closed. Directory mode never silently falls back to a live request or another journey's snapshot.
+
+The manifest records the snapshot path and SHA-256 per journey, and each coupon record retains the exact snapshot path, official URL, verification method and normalized-extract digest. The digest covers the JSON bytes, not the original SELAE HTML. Missing files, symlinks, invalid JSON roots, wrong draw dates, fixture-order/team/score mismatches or Pleno mismatches reject the import before the output archive is written.
+
+Example:
+
+\`\`\`powershell
+python scripts/import_historical_coupons.py --season 2020-2021 --journeys 21 22 23 --official-snapshot-dir data/selae-snapshots --output data/coupons-2020-2021.jsonl --raw-dir artifacts/coupon-source
+\`\`\`
+
+This option makes multi-journey import reproducible when official pages have been independently reviewed and normalized. It does not make the snapshots official automatically and does not remove the requirement to verify every journey individually.
