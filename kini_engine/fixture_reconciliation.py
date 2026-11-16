@@ -57,6 +57,28 @@ def _required_text(value: object, field: str) -> str:
     return value.strip()
 
 
+def _is_safe_https_url(value: object) -> bool:
+    if not isinstance(value, str):
+        return False
+    try:
+        parsed = urlparse(value)
+        return (
+            parsed.scheme == "https"
+            and bool(parsed.hostname)
+            and parsed.port in {None, 443}
+            and parsed.username is None
+            and parsed.password is None
+        )
+    except ValueError:
+        return False
+
+
+def _is_official_selae_url(value: object) -> bool:
+    if not _is_safe_https_url(value):
+        return False
+    return urlparse(str(value)).hostname == "www.loteriasyapuestas.es"
+
+
 def _parse_datetime(value: object, field: str) -> datetime:
     raw = _required_text(value, field)
     try:
@@ -86,7 +108,7 @@ def _validate_draw(draw: object, location: str) -> tuple[str, list[dict[str, Any
     if not isinstance(draw, dict):
         raise FixtureReconciliationError(f"{location} must be an object")
     schema_version = draw.get("schema_version")
-    if isinstance(schema_version, bool) or schema_version not in {1, 2}:
+    if type(schema_version) is not int or schema_version not in {1, 2}:
         raise FixtureReconciliationError(f"{location} has an unsupported schema_version")
     if draw.get("provider") != "SELAE":
         raise FixtureReconciliationError(f"{location}.provider must be SELAE")
@@ -95,9 +117,10 @@ def _validate_draw(draw: object, location: str) -> tuple[str, list[dict[str, Any
 
     draw_date = _parse_date(draw.get("draw_date"), f"{location}.draw_date")
     source_url = _required_text(draw.get("source_url"), f"{location}.source_url")
-    source = urlparse(source_url)
-    if source.scheme != "https" or source.hostname != "www.loteriasyapuestas.es":
-        raise FixtureReconciliationError(f"{location}.source_url must be an official SELAE URL")
+    if not _is_official_selae_url(source_url):
+        raise FixtureReconciliationError(
+            f"{location}.source_url must be an official SELAE HTTPS URL"
+        )
     raw_sha256 = _required_text(draw.get("raw_sha256"), f"{location}.raw_sha256")
     if re.fullmatch(r"[0-9a-fA-F]{64}", raw_sha256) is None:
         raise FixtureReconciliationError(f"{location}.raw_sha256 must be a SHA-256 hex digest")
@@ -105,7 +128,7 @@ def _validate_draw(draw: object, location: str) -> tuple[str, list[dict[str, Any
     fixtures = draw.get("fixtures")
     if not isinstance(fixtures, list) or len(fixtures) != 14:
         raise FixtureReconciliationError(f"{location}.fixtures must contain exactly 14 entries")
-    if draw.get("fixture_count") != 14:
+    if type(draw.get("fixture_count")) is not int or draw.get("fixture_count") != 14:
         raise FixtureReconciliationError(f"{location}.fixture_count must equal 14")
 
     normalized: list[dict[str, Any]] = []
@@ -114,7 +137,7 @@ def _validate_draw(draw: object, location: str) -> tuple[str, list[dict[str, Any
         if not isinstance(raw_fixture, dict):
             raise FixtureReconciliationError(f"{fixture_location} must be an object")
         position = raw_fixture.get("position")
-        if isinstance(position, bool) or position != expected_position:
+        if type(position) is not int or position != expected_position:
             raise FixtureReconciliationError(
                 f"{fixture_location}.position must equal {expected_position}"
             )
@@ -190,18 +213,18 @@ def _validate_draw(draw: object, location: str) -> tuple[str, list[dict[str, Any
                     f"{fixture_location} non-played fixture contains a football result "
                     "or lacks its reported coupon score"
                 )
-            evidence_url = urlparse(str(raw_fixture.get("sign_evidence_url") or ""))
-            if (
-                evidence_url.scheme != "https"
-                or evidence_url.hostname != "www.loteriasyapuestas.es"
-            ):
+            if not _is_official_selae_url(raw_fixture.get("sign_evidence_url")):
                 raise FixtureReconciliationError(
                     f"{fixture_location} non-played fixture lacks official SELAE evidence"
                 )
-            _parse_datetime(
+            evidence_checked_at = _parse_datetime(
                 raw_fixture.get("sign_evidence_checked_at_utc"),
                 f"{fixture_location}.sign_evidence_checked_at_utc",
             )
+            if evidence_checked_at.utcoffset() != timedelta(0):
+                raise FixtureReconciliationError(
+                    f"{fixture_location}.sign_evidence_checked_at_utc must be UTC"
+                )
             _required_text(raw_fixture.get("status_reason"), f"{fixture_location}.status_reason")
             item["home_goals"] = None
             item["away_goals"] = None
@@ -318,8 +341,7 @@ def load_fixture_crosswalk(path: str | Path) -> dict[tuple[str, int], dict[str, 
             raise FixtureReconciliationError(
                 f"{location}.evidence_checked_at_utc must be UTC"
             )
-        evidence_url = urlparse(entry["evidence_url"])
-        if evidence_url.scheme != "https" or not evidence_url.hostname:
+        if not _is_safe_https_url(entry["evidence_url"]):
             raise FixtureReconciliationError(f"{location}.evidence_url must be an HTTPS URL")
 
         source_fixture_id = entry["source_fixture_id"]
