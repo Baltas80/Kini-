@@ -7,11 +7,11 @@ import pytest
 from scripts.discover_selae_result_archive import (
     ENGLISH_INDEX_URL,
     INDEX_URL,
+    _is_official_url,
     build_component_page_url,
     extract_pagination_template,
     extract_result_links,
     probe_alternative_sources,
-    _is_official_url,
 )
 
 
