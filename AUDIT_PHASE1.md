@@ -2130,3 +2130,20 @@ The current official SELAE result page for 8 November 2026 confirms the 14 coupo
 SELAE's official postponement PDF states that Tenerife–Alavés was scheduled for 8 Nov 13:00, postponed, and would be decided by public draw from 22:00 if it could not be played within 24 hours. This supports keeping position 14 out of football training labels. The separate Liga F evidence manifest continues to declare \`training_eligibility.eligible=false\` because no validated multi-season Liga F training dataset exists.
 
 These official pages are content-level cross-checks only. Their extracted web text is not the original HTML response and has not been substituted for a raw-byte import or SHA-256 provenance artifact.
+
+
+## 2026-11-16 — P1 reconciliation CI and data reproducibility passed
+
+Final source/test head before this documentation update: \`abaea2a35d018b4685852d7962abf8699aee6552\`.
+
+- CI [43852804478](https://github.com/Baltas80/Kini-/actions/runs/43852804478): **244 passed**, 21 upstream deprecation warnings. Workflow validation, Ruff lint and Ruff format all passed.
+- Historical-data validation [43852804294](https://github.com/Baltas80/Kini-/actions/runs/43852804294): successful build, canonical team identity validation, dataset/profile validation and artifact upload.
+- Historical-data artifact ID: \`14219255876\`; ZIP digest: \`sha256:3b3ff9bf56f2816baf7e4078901192ca52a5854176c54f5d3e1a26a4c6664c53\`.
+- The generated \`historical_spain.csv\` SHA-256 is \`a01a68393de69c7ad37d2088864093a50108df9e299f1993d855cad87147acab\`. It is byte-identical to the CSV from PR #7 data-validation artifact \`14217885532\` and the preceding PR #9 validation artifact \`14219400394\`.
+- Profile: 5,311/5,311 complete rows, date coverage 2020-09-12 through 2026-11-09, 0 missing team names, 0 missing final scores, 0 incomplete scores, 0 duplicate fixtures, 0 conflicting duplicates, 0 invalid result labels, 0 score/result mismatches; \`integrity_passed=true\`.
+- The historical-backtest workflow [43852804242](https://github.com/Baltas80/Kini-/actions/runs/43852804242) correctly skipped the model backtest because this P1 change does not modify predictive code.
+- Archive discovery [43852804421](https://github.com/Baltas80/Kini-/actions/runs/43852804421) skipped its discovery step because archive-discovery inputs did not change; no new archive inventory is claimed.
+
+The preceding CI attempt [43852613210](https://github.com/Baltas80/Kini-/actions/runs/43852613210) reached pytest and reported 238 passed / 6 failed. All six failures shared one test-fixture defect: the new JSONL regression tests wrote a literal backslash-n instead of a line-feed, so the loader correctly rejected the malformed JSONL before reaching the intended assertions. The test fixture was corrected in commit \`abaea2a\`; the final CI above confirms the corrected suite passes.
+
+P1 URL/provenance hardening in PR #9 is now **implemented and validated by CI**. Live SELAE source access, complete official archive inventory and original raw HTML/XLS capture remain separate open evidence items.
