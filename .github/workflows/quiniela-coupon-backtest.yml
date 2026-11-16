@@ -105,14 +105,14 @@ jobs:
         run: python -m pip install -e ".[ml,dev]"
       - name: Build historical training dataset
         run: python scripts/build_history.py
-      - name: Import Jornada 21 and reconcile all 15 results with SELAE
+      - name: Import Jornada 21 from reviewed snapshot directory
         run: |
           python scripts/import_historical_coupons.py \
             --season 2020-2021 \
             --journeys 21 \
             --output coupon-archive.jsonl \
             --raw-dir coupon-raw \
-            --official-snapshot kini_engine/data/selae_official_coupon_results/2020-2021-21.json
+            --official-snapshot-dir kini_engine/data/selae_official_coupon_results
       - name: Run common-cutoff coupon backtest
         env:
           KINI_CODE_REVISION: ${{ github.event.pull_request.head.sha || github.sha }}
