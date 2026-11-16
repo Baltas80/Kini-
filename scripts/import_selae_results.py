@@ -681,7 +681,9 @@ def load_local_draw(
         raise ValueError("El sidecar del HTML local no es un objeto JSON")
     source_url = metadata.get("source_url")
     if not _is_official_selae_url(source_url) or source_url != make_draw_url(draw_date):
-        raise ValueError("El HTML local no declara la URL HTTPS exacta del escrutinio oficial SELAE")
+        raise ValueError(
+            "El HTML local no tiene procedencia SELAE válida: se exige la URL HTTPS exacta del escrutinio oficial"
+        )
     retrieved_at = _validated_utc_timestamp(metadata.get("source_retrieved_at_utc"))
     if retrieved_at is None:
         raise ValueError("El HTML local no declara una hora de captura ISO-8601 en UTC")
