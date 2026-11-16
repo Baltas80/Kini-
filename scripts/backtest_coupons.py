@@ -2,17 +2,17 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-import math
 import json
+import math
 import os
 import platform
 import tempfile
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
+from kini_engine.core import SIGNS
 from kini_engine.coupon_identity import canonicalize_coupon
 from kini_engine.coupons import evaluate_coupon_batch, read_coupon_jsonl
-from kini_engine.core import SIGNS
 from kini_engine.dataio import load_matches_csv, validate_matches
 
 
@@ -67,7 +67,7 @@ def validate_coupon_backtest_acceptance(
 
     coupons = result.get("coupons")
     if not isinstance(coupons, list):
-        raise ValueError("coupon backtest result has no coupon list")
+        raise TypeError("coupon backtest result has no coupon list")
     actual_ids = [
         item.get("coupon_id") if isinstance(item, dict) else None
         for item in coupons
@@ -81,7 +81,7 @@ def validate_coupon_backtest_acceptance(
     summary = result.get("summary")
     config = result.get("config")
     if not isinstance(summary, dict) or not isinstance(config, dict):
-        raise ValueError("coupon backtest summary/config is missing")
+        raise TypeError("coupon backtest summary/config is missing")
     if summary.get("coupon_count") != len(expected_coupon_ids):
         raise ValueError("coupon summary count does not match the verified archive")
     if config.get("budget_columns") != budget:
@@ -94,11 +94,11 @@ def validate_coupon_backtest_acceptance(
     modes = ("dc", "ml", "ensemble_dc_ml")
     model_summary = summary.get("models")
     if not isinstance(model_summary, dict):
-        raise ValueError("coupon model summary is missing")
+        raise TypeError("coupon model summary is missing")
     for mode in modes:
         aggregate = model_summary.get(mode)
         if not isinstance(aggregate, dict):
-            raise ValueError(f"{mode}: aggregate model summary is missing")
+            raise TypeError(f"{mode}: aggregate model summary is missing")
         evaluated = aggregate.get("evaluated_coupons")
         failed = aggregate.get("failed_coupons")
         if evaluated != len(expected_coupon_ids) or failed != 0:
@@ -182,7 +182,7 @@ def validate_coupon_backtest_acceptance(
 
         model_results = coupon.get("models")
         if not isinstance(model_results, dict):
-            raise ValueError(f"{coupon_id}: model results are missing")
+            raise TypeError(f"{coupon_id}: model results are missing")
         for mode in modes:
             model = model_results.get(mode)
             if not isinstance(model, dict) or model.get("status") != "success":
@@ -242,7 +242,7 @@ def validate_coupon_backtest_acceptance(
                     or not isinstance(count, int)
                     or not 0 <= count <= 14
                 ):
-                    raise ValueError(f"{coupon_id} {mode}: invalid {field}")
+                    raise TypeError(f"{coupon_id} {mode}: invalid {field}")
             if model["double_count"] + model["triple_count"] > 14:
                 raise ValueError(f"{coupon_id} {mode}: a fixture is double-counted")
             cost = model.get("cost_eur")
