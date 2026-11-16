@@ -120,6 +120,21 @@ def test_source_url_must_be_official_https_pdf() -> None:
     assert validate_official_source_url(
         "https://www.loteriasyapuestas.es/f/loterias/documentos/nota.pdf"
     ).startswith("https://")
+    assert validate_official_source_url(
+        "https://www.loteriasyapuestas.es:443/f/loterias/documentos/nota.pdf"
+    ).startswith("https://")
+
+    unsafe_urls = (
+        "http://www.loteriasyapuestas.es/f/loterias/documentos/nota.pdf",
+        "https://www.loteriasyapuestas.es:8443/f/loterias/documentos/nota.pdf",
+        "https://user@www.loteriasyapuestas.es/f/loterias/documentos/nota.pdf",
+        "https://user:secret@www.loteriasyapuestas.es/f/loterias/documentos/nota.pdf",
+        "https://www.loteriasyapuestas.es.evil.example/f/loterias/documentos/nota.pdf",
+        "https://www.loteriasyapuestas.es:notaport/f/loterias/documentos/nota.pdf",
+    )
+    for unsafe_url in unsafe_urls:
+        with pytest.raises(ValueError, match="official SELAE host"):
+            validate_official_source_url(unsafe_url)
 
     with pytest.raises(ValueError, match="official SELAE host"):
         validate_official_source_url("https://example.com/nota.pdf")
