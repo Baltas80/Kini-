@@ -627,6 +627,8 @@ def _evaluate_ticket(
         "total_bets": ticket["total_bets"],
         "double_count": ticket["double_count"],
         "triple_count": ticket["triple_count"],
+        "minimum_total_bets": ticket["minimum_total_bets"],
+        "maximum_authorized_total_bets": ticket["maximum_authorized_total_bets"],
         "pleno15_multiplier": ticket["pleno15_multiplier"],
         "pleno15_home_categories": ticket["pleno15_home_categories"],
         "pleno15_away_categories": ticket["pleno15_away_categories"],

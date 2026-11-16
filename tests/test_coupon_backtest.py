@@ -323,6 +323,8 @@ def _accepted_coupon_backtest_result() -> tuple[dict[str, object], list[str]]:
         "total_bets": 8,
         "double_count": 3,
         "triple_count": 0,
+        "minimum_total_bets": 2,
+        "maximum_authorized_total_bets": 31_104,
         "pleno15_multiplier": 1,
         "pleno15_home_categories": ["0"],
         "pleno15_away_categories": ["M"],
@@ -535,6 +537,36 @@ def test_coupon_backtest_acceptance_recomputes_pleno_hit() -> None:
     result, coupon_ids = _accepted_coupon_backtest_result()
     result["coupons"][0]["models"]["dc"]["pleno_hit"] = True
     with pytest.raises(ValueError, match="pleno_hit"):
+        validate_coupon_backtest_acceptance(
+            result, coupon_ids, budget=8, min_history_matches=300
+        )
+
+
+def test_coupon_backtest_acceptance_enforces_selae_minimum_and_price() -> None:
+    result, coupon_ids = _accepted_coupon_backtest_result()
+    result["coupons"][0]["models"]["dc"]["total_bets"] = 1
+    with pytest.raises(ValueError, match="minimum or maximum"):
+        validate_coupon_backtest_acceptance(
+            result, coupon_ids, budget=8, min_history_matches=300
+        )
+
+    result, coupon_ids = _accepted_coupon_backtest_result()
+    result["coupons"][0]["models"]["dc"]["price_per_bet_eur"] = 0.7
+    result["coupons"][0]["models"]["dc"]["cost_eur"] = 5.6
+    with pytest.raises(ValueError, match="current SELAE price"):
+        validate_coupon_backtest_acceptance(
+            result, coupon_ids, budget=8, min_history_matches=300
+        )
+
+
+def test_coupon_backtest_acceptance_rejects_unsupported_multi_pleno_ticket() -> None:
+    result, coupon_ids = _accepted_coupon_backtest_result()
+    model = result["coupons"][0]["models"]["dc"]
+    model["pleno15_home_categories"] = ["0", "1"]
+    model["pleno15_multiplier"] = 2
+    model["total_bets"] = 16
+    model["cost_eur"] = 12.0
+    with pytest.raises(ValueError, match="single predicted Pleno pair"):
         validate_coupon_backtest_acceptance(
             result, coupon_ids, budget=8, min_history_matches=300
         )

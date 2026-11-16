@@ -2666,3 +2666,11 @@ Implemented on feat/selae-fixture-reconciliation:
 - Corrected the CI Ruff TRY004 finding in the official snapshot loader: a valid JSON document with a non-object root now raises TypeError, with a matching regression expectation.
 
 Validation status at this entry: implementation and regression tests are committed to the PR branch; latest-head CI and the real Jornada 21 coupon pilot must complete before this unit is marked validated. The existing one-coupon pilot remains a pipeline check only. No full-season coupon performance or profitability claim is made. No change to master; no PR merge.
+
+
+### 2026-11-17 — SELAE minimum participation and single-Pleno-pair acceptance
+
+- Tightened the coupon acceptance gate to verify the optimizer's minimum-total-bets metadata (2), maximum authorized total bets (31,104) and current official unit price (0.75 EUR).
+- The coupon backtest now explicitly requires the one predicted Pleno category pair used by the current evaluation path. The lower-level optimizer still supports multiple categories, but this backtest rejects them until their combined Pleno probability mass and set-based realized coverage are modelled.
+- Added regression tests for the two-bet minimum, official price and unsupported multi-category Pleno ticket. The workflow's independent artifact check now verifies the same monetary bounds.
+- Validation on this commit is pending CI and the Jornada 21 pilot.

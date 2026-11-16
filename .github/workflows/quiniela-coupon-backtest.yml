@@ -180,6 +180,12 @@ jobs:
                   raise SystemExit(f"{mode} does not persist its exact direct columns")
               if model.get("total_bets") != model.get("column_count") * model.get("pleno15_multiplier"):
                   raise SystemExit(f"{mode} total bets do not include the Pleno multiplier")
+              if model.get("total_bets", 0) < model.get("minimum_total_bets", 2):
+                  raise SystemExit(f"{mode} is below SELAE's minimum participation")
+              if model.get("total_bets", 0) > model.get("maximum_authorized_total_bets", 0):
+                  raise SystemExit(f"{mode} exceeds SELAE's authorized total-bet cap")
+              if model.get("price_per_bet_eur") != 0.75:
+                  raise SystemExit(f"{mode} price per bet differs from current SELAE price")
               expected_cost = round(model.get("total_bets") * model.get("price_per_bet_eur"), 2)
               if abs(model.get("cost_eur") - expected_cost) > 0.005:
                   raise SystemExit(f"{mode} cost does not match total bets and price")

@@ -94,3 +94,6 @@ The acceptance validator requires:
 7. covered_14, best-column hits, single-sign hits, Pleno hit, full-coupon coverage and independent coverage recomputed from the saved columns, probabilities and actual outcomes.
 
 This makes the generated ticket reproducible and the reported coverage auditable. It does not estimate prizes, expected payout or profitability.
+
+
+The current coupon backtest scope is one selected Pleno category pair (multiplier 1), matching the default prediction path. The acceptance gate also verifies SELAE's two-bet minimum, 31,104 maximum total-bet cap and current 0.75 EUR unit price. Explicit multi-category Pleno tickets remain supported by the lower-level optimizer but are rejected by this backtest until Pleno probability mass and realized category-set coverage are evaluated consistently.

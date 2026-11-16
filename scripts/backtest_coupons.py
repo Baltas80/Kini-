@@ -16,6 +16,11 @@ from kini_engine.coupons import evaluate_coupon_batch, read_coupon_jsonl
 from kini_engine.dataio import load_matches_csv, validate_matches
 
 
+OFFICIAL_QUINIELA_BET_PRICE_EUR = 0.75
+MINIMUM_QUINIELA_BETS = 2
+MAXIMUM_QUINIELA_BETS = 31_104
+
+
 def atomic_json(path: Path, value: dict[str, object]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temp_name = None
@@ -295,10 +300,10 @@ def validate_coupon_backtest_acceptance(
             if (
                 isinstance(total_bets, bool)
                 or not isinstance(total_bets, int)
-                or not 1 <= total_bets <= 31_104
+                or not MINIMUM_QUINIELA_BETS <= total_bets <= MAXIMUM_QUINIELA_BETS
             ):
                 raise ValueError(
-                    f"{coupon_id} {mode}: total bets exceed SELAE's direct-system cap"
+                    f"{coupon_id} {mode}: total bets violate SELAE's minimum or maximum"
                 )
 
             double_count = model.get("double_count")
@@ -375,6 +380,13 @@ def validate_coupon_backtest_acceptance(
                     or len(set(values)) != len(values)
                 ):
                     raise ValueError(f"{coupon_id} {mode}: invalid {field}")
+            if (
+                home_categories != [pleno["home_category"]]
+                or away_categories != [pleno["away_category"]]
+            ):
+                raise ValueError(
+                    f"{coupon_id} {mode}: coupon backtest requires the single predicted Pleno pair"
+                )
             pleno_multiplier = model.get("pleno15_multiplier")
             expected_multiplier = len(home_categories) * len(away_categories)
             if (
@@ -384,6 +396,19 @@ def validate_coupon_backtest_acceptance(
             ):
                 raise ValueError(
                     f"{coupon_id} {mode}: Pleno multiplier conflicts with selected categories"
+                )
+            minimum_total_bets = model.get("minimum_total_bets")
+            maximum_total_bets = model.get("maximum_authorized_total_bets")
+            if (
+                minimum_total_bets != MINIMUM_QUINIELA_BETS
+                or maximum_total_bets != MAXIMUM_QUINIELA_BETS
+            ):
+                raise ValueError(
+                    f"{coupon_id} {mode}: ticket minimum/maximum metadata differs from SELAE rules"
+                )
+            if total_bets < minimum_total_bets or total_bets > maximum_total_bets:
+                raise ValueError(
+                    f"{coupon_id} {mode}: total bets violate the recorded ticket bounds"
                 )
             if total_bets != column_count * pleno_multiplier:
                 raise ValueError(
@@ -406,6 +431,12 @@ def validate_coupon_backtest_acceptance(
                 or cost <= 0
             ):
                 raise ValueError(f"{coupon_id} {mode}: invalid ticket cost")
+            if not math.isclose(
+                price, OFFICIAL_QUINIELA_BET_PRICE_EUR, rel_tol=0.0, abs_tol=1e-12
+            ):
+                raise ValueError(
+                    f"{coupon_id} {mode}: price per bet differs from current SELAE price"
+                )
             expected_cost = round(total_bets * price, 2)
             if not math.isclose(cost, expected_cost, rel_tol=0.0, abs_tol=0.005):
                 raise ValueError(
