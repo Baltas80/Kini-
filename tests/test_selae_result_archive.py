@@ -9,6 +9,7 @@ from scripts.discover_selae_result_archive import (
     INDEX_URL,
     _is_official_url,
     build_component_page_url,
+    discover_archive,
     extract_pagination_template,
     extract_result_links,
     probe_alternative_sources,
@@ -108,7 +109,13 @@ class _FakeResponse:
     def __init__(self, url: str, status_code: int) -> None:
         self.url = url
         self.status_code = status_code
-        self.headers = {"Content-Type": "application/xml"}
+        self.headers = {
+            "Content-Type": "application/xml",
+            "Server": "cloudflare",
+            "CF-Ray": "test-ray-id",
+            "CF-Cache-Status": "DYNAMIC",
+            "Retry-After": "30",
+        }
         self.content = b"<rss/>" if status_code == 200 else b"forbidden"
 
     def __enter__(self):
@@ -168,3 +175,27 @@ def test_official_url_requires_https_standard_port_and_no_userinfo() -> None:
     assert not _is_official_url(
         "https://www.loteriasyapuestas.es.evil.example/es/la-quiniela/resultados"
     )
+
+
+class _AllForbiddenSession:
+    def get(self, url: str, **kwargs):
+        return _FakeResponse(url, 403)
+
+
+def test_archive_failure_preserves_safe_transport_diagnostics() -> None:
+    report = discover_archive(_AllForbiddenSession())
+
+    assert report["success"] is False
+    first_attempt = report["index_attempts"][0]
+    diagnostics = first_attempt["response_diagnostics"]
+    assert diagnostics["http_status"] == 403
+    assert diagnostics["server"] == "cloudflare"
+    assert diagnostics["cf_ray"] == "test-ray-id"
+    assert diagnostics["cf_cache_status"] == "DYNAMIC"
+    assert diagnostics["retry_after"] == "30"
+
+    rss_probe = report["alternative_source_probes"][0]
+    assert rss_probe["http_status"] == 403
+    assert rss_probe["cf_ray"] == "test-ray-id"
+    assert rss_probe["sha256"]
+    assert "body" not in rss_probe
