@@ -1,6 +1,12 @@
 name: selae-result-archive-discovery
 
 on:
+  push:
+    branches:
+      - feat/selae-fixture-reconciliation
+    paths:
+      - "scripts/discover_selae_result_archive.py"
+      - ".github/workflows/selae-result-archive-discovery.yml"
   workflow_dispatch:
 
 permissions:
@@ -13,7 +19,7 @@ concurrency:
 jobs:
   discover:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -22,9 +28,16 @@ jobs:
       - name: Install discovery dependencies
         run: python -m pip install -e ".[dev]"
       - name: Discover official archive pages and draw links
-        run: >-
-          python -m scripts.discover_selae_result_archive
-          --output-dir artifacts/selae-result-archive
+        shell: bash
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
+            python -m scripts.discover_selae_result_archive \
+              --max-archive-page 2 \
+              --output-dir artifacts/selae-result-archive
+          else
+            python -m scripts.discover_selae_result_archive \
+              --output-dir artifacts/selae-result-archive
+          fi
       - name: Upload discovery report
         if: always()
         uses: actions/upload-artifact@v4
