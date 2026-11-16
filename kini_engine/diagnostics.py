@@ -297,6 +297,7 @@ def _paired_cluster_bootstrap(
         ),
     }
 
+
 def _market_common_comparison(
     rows: list[dict[str, Any]],
     model_modes: list[str],
