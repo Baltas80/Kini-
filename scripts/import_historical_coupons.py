@@ -114,6 +114,8 @@ def load_official_snapshot_for_journey(
         raise NotADirectoryError(
             f"official SELAE snapshot directory does not exist: {snapshot_dir}"
         )
+    if not re.fullmatch(r"\d{4}-\d{4}", season):
+        raise ValueError("season must be a YYYY-YYYY slug")
     if isinstance(jornada, bool) or not isinstance(jornada, int) or jornada < 1:
         raise ValueError("journey number must be a positive integer")
     path = snapshot_dir / f"{season}-{jornada}.json"
@@ -153,6 +155,8 @@ def main() -> None:
         not args.journeys or any(value < 1 for value in args.journeys)
     ):
         parser.error("journeys must contain positive journey numbers")
+    if args.journeys is not None and len(set(args.journeys)) != len(args.journeys):
+        parser.error("journeys must be unique")
     if args.output.exists():
         parser.error(f"refusing to overwrite existing output: {args.output}")
     if args.official_snapshot is not None and args.official_snapshot_dir is not None:
