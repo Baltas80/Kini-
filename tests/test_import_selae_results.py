@@ -75,13 +75,14 @@ class FakeResponse:
 
 
 class FakeSession:
-    def __init__(self, content: bytes) -> None:
+    def __init__(self, content: bytes, response_url: str | None = None) -> None:
         self.content = content
+        self.response_url = response_url
         self.calls = 0
 
     def get(self, url: str, timeout: tuple[int, int]) -> FakeResponse:
         self.calls += 1
-        return FakeResponse(self.content, url)
+        return FakeResponse(self.content, self.response_url or url)
 
 
 def test_make_draw_url_uses_spanish_date_slug() -> None:
@@ -216,6 +217,7 @@ def test_load_local_draw_uses_original_bytes_and_metadata(tmp_path: Path) -> Non
         json.dumps({
             "source_url": make_draw_url(DRAW_DATE),
             "source_retrieved_at_utc": "2026-11-09T00:00:00+00:00",
+            "raw_sha256": hashlib.sha256(raw).hexdigest(),
             "encoding": "utf-8",
         }),
         encoding="utf-8",
@@ -376,3 +378,74 @@ def test_write_draws_rejects_existing_record_with_score_sign_conflict(tmp_path: 
     output = tmp_path / "selae.jsonl"
     with pytest.raises(ValueError, match="integridad"):
         write_draws([corrupted], output)
+
+
+def test_load_local_draw_requires_provenance_sidecar(tmp_path: Path) -> None:
+    (tmp_path / "2026-11-08.html").write_bytes(make_html().encode("utf-8"))
+
+    with pytest.raises(ValueError, match="sidecar"):
+        load_local_draw(DRAW_DATE, tmp_path)
+
+
+def test_load_local_draw_rejects_sidecar_hash_mismatch(tmp_path: Path) -> None:
+    raw = make_html().encode("utf-8")
+    (tmp_path / "2026-11-08.html").write_bytes(raw)
+    (tmp_path / "2026-11-08.meta.json").write_text(
+        json.dumps({
+            "source_url": make_draw_url(DRAW_DATE),
+            "source_retrieved_at_utc": "2026-11-09T00:00:00+00:00",
+            "raw_sha256": "0" * 64,
+            "encoding": "utf-8",
+        }),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="SHA-256"):
+        load_local_draw(DRAW_DATE, tmp_path)
+
+
+def test_load_local_draw_rejects_http_even_on_official_hostname(tmp_path: Path) -> None:
+    raw = make_html().encode("utf-8")
+    (tmp_path / "2026-11-08.html").write_bytes(raw)
+    (tmp_path / "2026-11-08.meta.json").write_text(
+        json.dumps({
+            "source_url": make_draw_url(DRAW_DATE).replace("https://", "http://"),
+            "source_retrieved_at_utc": "2026-11-09T00:00:00+00:00",
+            "raw_sha256": hashlib.sha256(raw).hexdigest(),
+            "encoding": "utf-8",
+        }),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="URL HTTPS exacta"):
+        load_local_draw(DRAW_DATE, tmp_path)
+
+
+def test_fetch_draw_rejects_http_redirect_to_official_hostname(tmp_path: Path) -> None:
+    raw = make_html().encode("utf-8")
+    session = FakeSession(
+        raw,
+        response_url=make_draw_url(DRAW_DATE).replace("https://", "http://"),
+    )
+
+    with pytest.raises(RuntimeError, match="no HTTPS"):
+        fetch_draw(DRAW_DATE, cache_dir=tmp_path, session=session)
+
+    assert not (tmp_path / "2026-11-08.html").exists()
+
+
+def test_fetch_draw_refetches_cache_when_sidecar_hash_is_tampered(tmp_path: Path) -> None:
+    raw = make_html().encode("utf-8")
+    first_session = FakeSession(raw)
+    first = fetch_draw(DRAW_DATE, cache_dir=tmp_path, session=first_session)
+    metadata_path = tmp_path / "2026-11-08.meta.json"
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    metadata["raw_sha256"] = "0" * 64
+    metadata_path.write_text(json.dumps(metadata), encoding="utf-8")
+
+    refresh_session = FakeSession(raw)
+    second = fetch_draw(DRAW_DATE, cache_dir=tmp_path, session=refresh_session)
+
+    assert first["raw_sha256"] == second["raw_sha256"]
+    assert refresh_session.calls == 1
+    assert json.loads(metadata_path.read_text(encoding="utf-8"))["raw_sha256"] == first["raw_sha256"]
