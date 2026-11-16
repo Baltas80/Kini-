@@ -104,7 +104,6 @@ def save_raw(raw_dir: Path | None, name: str, content: bytes) -> None:
     target.write_bytes(content)
 
 
-
 def load_official_snapshot_for_journey(
     snapshot_dir: Path,
     season: str,
@@ -156,14 +155,27 @@ def main() -> None:
         not args.journeys or any(value < 1 for value in args.journeys)
     ):
         parser.error("journeys must contain positive journey numbers")
-    if args.journeys is not None and len(set(args.journeys)) != len(args.journeys):
+    if (
+        args.journeys is not None
+        and len(set(args.journeys)) != len(args.journeys)
+    ):
         parser.error("journeys must be unique")
     if args.output.exists():
         parser.error(f"refusing to overwrite existing output: {args.output}")
-    if args.official_snapshot is not None and args.official_snapshot_dir is not None:
-        parser.error("--official-snapshot and --official-snapshot-dir are mutually exclusive")
-    if args.official_snapshot_dir is not None and not args.official_snapshot_dir.is_dir():
-        parser.error(f"official snapshot directory does not exist: {args.official_snapshot_dir}")
+    if (
+        args.official_snapshot is not None
+        and args.official_snapshot_dir is not None
+    ):
+        parser.error(
+            "--official-snapshot and --official-snapshot-dir are mutually exclusive"
+        )
+    if (
+        args.official_snapshot_dir is not None
+        and not args.official_snapshot_dir.is_dir()
+    ):
+        parser.error(
+            f"official snapshot directory does not exist: {args.official_snapshot_dir}"
+        )
     if args.official_snapshot and (
         args.journeys is None or len(set(args.journeys)) != 1
     ):
