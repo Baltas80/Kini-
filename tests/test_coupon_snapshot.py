@@ -9,6 +9,9 @@ from kini_engine.coupon_snapshot import (
     load_official_coupon_snapshot,
     verify_coupon_against_selae_snapshot,
 )
+from scripts.import_historical_coupons import (
+    load_official_snapshot_for_journey,
+)
 
 
 def _records():
@@ -103,3 +106,37 @@ def test_official_snapshot_rejects_mismatched_source_draw_date() -> None:
     snapshot["draw_date"] = "2020-12-14"
     with pytest.raises(ValueError, match="does not match coupon source date"):
         verify_coupon_against_selae_snapshot(coupon, snapshot, snapshot_sha256="a" * 64)
+
+def test_snapshot_directory_loads_exact_season_journey_file(tmp_path: Path) -> None:
+    snapshot_dir = tmp_path / "snapshots"
+    snapshot_dir.mkdir()
+    snapshot = {"source": "SELAE", "draw_date": "2020-12-13"}
+    raw = json.dumps(snapshot, ensure_ascii=False).encode("utf-8")
+    expected = snapshot_dir / "2020-2021-21.json"
+    expected.write_bytes(raw)
+    (snapshot_dir / "2020-2021-22.json").write_text(
+        json.dumps({"source": "SELAE", "draw_date": "2020-12-20"}),
+        encoding="utf-8",
+    )
+
+    loaded, digest, path = load_official_snapshot_for_journey(
+        snapshot_dir,
+        "2020-2021",
+        21,
+    )
+
+    import hashlib
+
+    assert loaded == snapshot
+    assert path == expected
+    assert digest == hashlib.sha256(raw).hexdigest()
+
+
+def test_snapshot_directory_rejects_missing_journey_snapshot(tmp_path: Path) -> None:
+    with pytest.raises(FileNotFoundError, match="2020-2021 journey 22"):
+        load_official_snapshot_for_journey(tmp_path, "2020-2021", 22)
+
+
+def test_snapshot_directory_rejects_invalid_journey_number(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="positive integer"):
+        load_official_snapshot_for_journey(tmp_path, "2020-2021", 0)
