@@ -51,6 +51,38 @@ SLUG_DATE_RE = re.compile(
     re.IGNORECASE,
 )
 LABEL_DATE_RE = re.compile(r"\b(\d{1,2})/(\d{1,2})/(\d{4})\b")
+ALTERNATIVE_SOURCE_PROBES = (
+    (
+        "results_rss_es",
+        "https://www.loteriasyapuestas.es/es/la-quiniela/resultados/.formatoRSS",
+        "https://www.loteriasyapuestas.es/es/canales-rss",
+        "application/rss+xml,application/xml,text/xml,*/*",
+    ),
+    (
+        "static_result_file_20261108",
+        "https://www.loteriasyapuestas.es/f/loterias/resultados/quiniela.html?game_id=LAQU&fecha_sorteo=20261108",
+        "https://www.loteriasyapuestas.es/es/resultados-medios/resultados-ultimos-sorteos",
+        "text/html,*/*",
+    ),
+    (
+        "press_release_pdf_20261108",
+        "https://www.loteriasyapuestas.es/f/loterias/documentos/Quiniela/Notas%20de%20prensa/NOTA_DE_PRENSA_LA_QUINIELA_08_11_26.pdf",
+        "https://www.loteriasyapuestas.es/es/la-quiniela/resultados",
+        "application/pdf,*/*",
+    ),
+    (
+        "archive_component_page2_es",
+        "https://www.loteriasyapuestas.es/vgn-ext-templating/render/component?lang=es_ES&page=1&vgnextcomponentid=480bbe14bb6e8310VgnVCM100000e044a8c0RCRD&vgnextdisplayincontextedit=false&vgnextoid=480b32fab11a9310VgnVCM100000e044a8c0RCRD&vgnextxhr=true",
+        INDEX_URL,
+        "text/html,*/*",
+    ),
+    (
+        "archive_component_page2_en",
+        "https://www.loteriasyapuestas.es/vgn-ext-templating/render/component?lang=en_GB&page=1&vgnextcomponentid=480bbe14bb6e8310VgnVCM100000e044a8c0RCRD&vgnextdisplayincontextedit=false&vgnextoid=480b32fab11a9310VgnVCM100000e044a8c0RCRD&vgnextxhr=true",
+        ENGLISH_INDEX_URL,
+        "text/html,*/*",
+    ),
+)
 
 
 class _AnchorParser(HTMLParser):
@@ -301,6 +333,47 @@ def _fetch_html(
     return document, metadata
 
 
+def probe_alternative_sources(session: requests.Session) -> list[dict[str, object]]:
+    """Probe documented official result endpoints without interpreting their payloads."""
+    results: list[dict[str, object]] = []
+    for name, url, referer, accept in ALTERNATIVE_SOURCE_PROBES:
+        try:
+            response = session.get(
+                url,
+                headers={"Referer": referer, "Accept": accept},
+                timeout=TIMEOUT,
+                allow_redirects=True,
+            )
+            with response:
+                payload = response.content
+                final_url = response.url
+                official_redirect = _is_official_url(final_url)
+                results.append(
+                    {
+                        "name": name,
+                        "url": url,
+                        "final_url": final_url,
+                        "http_status": response.status_code,
+                        "content_type": response.headers.get("Content-Type"),
+                        "downloaded_bytes": len(payload),
+                        "sha256": hashlib.sha256(payload).hexdigest() if payload else None,
+                        "official_redirect": official_redirect,
+                        "accessible": response.status_code == 200 and official_redirect,
+                    }
+                )
+        except requests.RequestException as exc:
+            results.append(
+                {
+                    "name": name,
+                    "url": url,
+                    "error_type": type(exc).__name__,
+                    "error": str(exc),
+                    "accessible": False,
+                }
+            )
+    return results
+
+
 def discover_archive(
     session: requests.Session,
     max_archive_page: int | None = None,
@@ -333,7 +406,20 @@ def discover_archive(
         failures = " | ".join(
             f"{item['url']}: {item['error']}" for item in index_attempts
         )
-        raise ValueError(f"all official SELAE index routes failed: {failures}")
+        return {
+            "schema_version": 1,
+            "success": False,
+            "source": "SELAE",
+            "index_url": None,
+            "retrieved_at_utc": datetime.now(UTC).isoformat(),
+            "index_attempts": index_attempts,
+            "alternative_source_probes": probe_alternative_sources(session),
+            "error": f"all official SELAE index routes failed: {failures}",
+            "interpretation_status": (
+                "no historical archive inventory produced; alternative endpoint "
+                "probes are transport diagnostics only"
+            ),
+        }
 
     template_url, max_component_page = extract_pagination_template(
         index_html,
@@ -478,6 +564,14 @@ def main(argv: list[str] | None = None) -> int:
             session.headers.update(HEADERS)
             session.mount("https://", HTTPAdapter(max_retries=retry))
             report = discover_archive(session, args.max_archive_page)
+
+        if not report.get("success"):
+            report_path.write_text(
+                json.dumps(report, ensure_ascii=False, indent=2, allow_nan=False) + "\n",
+                encoding="utf-8",
+            )
+            print(f"SELAE_ARCHIVE_DISCOVERY_BLOCKED: {report['error']}", file=sys.stderr)
+            return 2
 
         links = report.pop("links")
         links_path.write_text(
