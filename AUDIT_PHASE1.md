@@ -2222,3 +2222,8 @@ Validation of this implementation is pending. The first full walk-forward on the
 ### Next action
 
 Complete CI and the full walk-forward for the forecast-ledger implementation, inspect the artifact and verify fixture uniqueness, probability validity, prior-date cutoffs and manifest hashes. Then begin the comparative error-analysis module using the archived fixture-level rows. No direct changes to `master` and no PR merges.
+
+
+### Forecast-ledger lint correction
+
+The first CI run for the ledger implementation [43902333075](https://github.com/Baltas80/Kini-/actions/runs/43902333075) reached Ruff and identified three invalid-type checks using `ValueError` plus a redundant UTC suffix replacement. These were corrected to use `TypeError` for wrong input types and Python's native ISO-8601 parser for the timezone-aware timestamp. The full backtest run [43902333077](https://github.com/Baltas80/Kini-/actions/runs/43902333077) is independently exercising the ledger implementation; its final result is still pending.

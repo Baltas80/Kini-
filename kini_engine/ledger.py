@@ -31,7 +31,7 @@ def _valid_probability_vector(value: Any) -> bool:
 
 def _iso_date(value: Any, field: str, row_index: int) -> date:
     if not isinstance(value, str):
-        raise ValueError(f"forecast row {row_index}: {field} must be an ISO date")
+        raise TypeError(f"forecast row {row_index}: {field} must be an ISO date")
     try:
         return date.fromisoformat(value)
     except ValueError as exc:
@@ -51,9 +51,9 @@ def _validate_manifest(manifest: dict[str, Any], row_count: int) -> None:
         raise ValueError("prediction ledger manifest requires a code revision")
     generated_at = manifest.get("generated_at_utc")
     if not isinstance(generated_at, str):
-        raise ValueError("prediction ledger manifest requires generated_at_utc")
+        raise TypeError("prediction ledger manifest requires generated_at_utc")
     try:
-        generated = datetime.fromisoformat(generated_at.replace("Z", "+00:00"))
+        generated = datetime.fromisoformat(generated_at)
     except ValueError as exc:
         raise ValueError("prediction ledger generated_at_utc is invalid") from exc
     if generated.tzinfo is None or generated.utcoffset() is None:
@@ -116,7 +116,7 @@ def _validate_forecast_row(row: dict[str, Any], row_index: int) -> None:
         eligible = row.get(eligibility_field)
         probabilities = row.get(probability_field)
         if not isinstance(eligible, bool):
-            raise ValueError(
+            raise TypeError(
                 f"forecast row {row_index}: {eligibility_field} must be boolean"
             )
         if eligible and not _valid_probability_vector(probabilities):
