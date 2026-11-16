@@ -166,7 +166,9 @@ def extract_result_links(
     return results
 
 
-def extract_pagination_template(document: str, base_url: str = INDEX_URL) -> tuple[str, int]:
+def extract_pagination_template(
+    document: str, base_url: str = INDEX_URL
+) -> tuple[str, int]:
     """Return one validated component URL and the highest observed page parameter."""
     groups: dict[tuple[str, str, str], list[tuple[int, str]]] = {}
     for anchor in _anchors(document):
@@ -209,7 +211,9 @@ def extract_pagination_template(document: str, base_url: str = INDEX_URL) -> tup
         first_count = len({page for page, _ in ranked[0][1]})
         second_count = len({page for page, _ in ranked[1][1]})
         if first_count == second_count:
-            raise ValueError("SELAE results index exposes ambiguous pagination components")
+            raise ValueError(
+                "SELAE results index exposes ambiguous pagination components"
+            )
 
     rows = ranked[0][1]
     template_url = rows[0][1]
@@ -292,9 +296,7 @@ def discover_archive(
     if isinstance(target_pages, bool) or not isinstance(target_pages, int):
         raise TypeError("max_archive_page must be an integer")
     if target_pages < 1 or target_pages > available_pages:
-        raise ValueError(
-            f"max_archive_page must be between 1 and {available_pages}"
-        )
+        raise ValueError(f"max_archive_page must be between 1 and {available_pages}")
 
     page_summaries: list[dict[str, object]] = []
     links: list[dict[str, object]] = []
@@ -370,9 +372,7 @@ def discover_archive(
             item["date_source"] == "unresolved" for item in links
         ),
         "slug_date_range": (
-            {"first": min(slug_dates), "last": max(slug_dates)}
-            if slug_dates
-            else None
+            {"first": min(slug_dates), "last": max(slug_dates)} if slug_dates else None
         ),
         "label_only_date_range": (
             {"first": min(label_only_dates), "last": max(label_only_dates)}
