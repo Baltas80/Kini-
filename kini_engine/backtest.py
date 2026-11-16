@@ -894,8 +894,9 @@ def compare_walk_forward(
                 if lae_is_eligible
                 else None
             )
+            raw_bet365_probabilities = _bookmaker_probability(match, "bet365")
             bet365_probabilities = (
-                _bookmaker_probability(match, "bet365") if market_is_eligible else None
+                raw_bet365_probabilities if market_is_eligible else None
             )
             detail = match.detail if isinstance(match.detail, dict) else {}
             league, season_code, season_label = _season_identity(match)
@@ -1041,22 +1042,24 @@ def compare_walk_forward(
                                     actual,
                                 )
                             )
-            if bet365_probabilities is not None:
-                bet365_unfiltered_rows.append((bet365_probabilities, actual))
+            if raw_bet365_probabilities is not None:
+                bet365_unfiltered_rows.append((raw_bet365_probabilities, actual))
                 temporal_status = str(
                     match.detail.get("market_temporal_status", "unclassified")
                 )
                 bet365_status_counts[temporal_status] = (
                     bet365_status_counts.get(temporal_status, 0) + 1
                 )
-                if match.has_temporally_eligible_market:
-                    bet365_rows.append((bet365_probabilities, actual))
+                if market_is_eligible:
+                    bet365_rows.append((raw_bet365_probabilities, actual))
                     for mode, probabilities in predictions.items():
                         common_bet365_model_rows[mode].append((probabilities, actual))
                         common_bet365_consensus_rows[mode].append(
                             (match.market, actual)
                         )
-                        common_bet365_rows[mode].append((bet365_probabilities, actual))
+                        common_bet365_rows[mode].append(
+                            (raw_bet365_probabilities, actual)
+                        )
 
             n_total += 1
             test_dates.append(forecast_date)
