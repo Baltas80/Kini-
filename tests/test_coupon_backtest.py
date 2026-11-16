@@ -234,7 +234,10 @@ def test_coupon_backtest_uses_only_results_before_first_kickoff(
     assert result["models"]["dc"]["n_predictions"] == 14
     assert result["models"]["dc"]["cost_eur"] > 0
     assert result["models"]["dc"]["total_bets"] <= 31_104
-    assert len(result["models"]["dc"]["columns"]) == result["models"]["dc"]["column_count"]
+    assert (
+        len(result["models"]["dc"]["columns"])
+        == result["models"]["dc"]["column_count"]
+    )
     assert result["models"]["dc"]["total_bets"] == (
         result["models"]["dc"]["column_count"]
         * result["models"]["dc"]["pleno15_multiplier"]
@@ -285,15 +288,13 @@ def _accepted_coupon_backtest_result() -> tuple[dict[str, object], list[str]]:
 
     vectors = []
     for index, actual in enumerate(actual_main_results):
-        predicted = actual if index < 7 else next(
-            sign for sign in SIGNS if sign != actual
+        predicted = (
+            actual if index < 7 else next(sign for sign in SIGNS if sign != actual)
         )
         ordered = [predicted] + [sign for sign in SIGNS if sign != predicted]
         vectors.append({ordered[0]: 0.6, ordered[1]: 0.25, ordered[2]: 0.15})
 
-    selected_signs = [
-        {column[index] for column in columns} for index in range(14)
-    ]
+    selected_signs = [{column[index] for column in columns} for index in range(14)]
     independent_coverage = math.prod(
         sum(vectors[index][sign] for sign in selected_signs[index])
         for index in range(14)
@@ -519,7 +520,9 @@ def test_coupon_backtest_acceptance_recomputes_realized_coverage_and_hits() -> N
         )
 
 
-def test_coupon_backtest_acceptance_rejects_actual_result_reconciliation_mismatch() -> None:
+def test_coupon_backtest_acceptance_rejects_actual_result_reconciliation_mismatch() -> (
+    None
+):
     result, coupon_ids = _accepted_coupon_backtest_result()
     result["coupons"][0]["actual_main_results"][0] = "X"
     with pytest.raises(ValueError, match="actual result 1"):

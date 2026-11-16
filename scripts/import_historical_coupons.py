@@ -155,17 +155,11 @@ def main() -> None:
         not args.journeys or any(value < 1 for value in args.journeys)
     ):
         parser.error("journeys must contain positive journey numbers")
-    if (
-        args.journeys is not None
-        and len(set(args.journeys)) != len(args.journeys)
-    ):
+    if args.journeys is not None and len(set(args.journeys)) != len(args.journeys):
         parser.error("journeys must be unique")
     if args.output.exists():
         parser.error(f"refusing to overwrite existing output: {args.output}")
-    if (
-        args.official_snapshot is not None
-        and args.official_snapshot_dir is not None
-    ):
+    if args.official_snapshot is not None and args.official_snapshot_dir is not None:
         parser.error(
             "--official-snapshot and --official-snapshot-dir are mutually exclusive"
         )
