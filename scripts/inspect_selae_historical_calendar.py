@@ -9,6 +9,7 @@ from collections import deque
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 import requests
 import xlrd
@@ -29,6 +30,7 @@ SAMPLE_RESULT_URL = (
     "la-quiniela-resultados-del-23-de-noviembre-de-2025"
 )
 MAX_PROBE_BYTES = 2 * 1024 * 1024
+OFFICIAL_HOSTS = {"www.loteriasyapuestas.es", "loteriasyapuestas.es"}
 HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -41,6 +43,20 @@ HEADERS = {
     ),
     "Accept-Language": "es-ES,es;q=0.9,en;q=0.8",
 }
+
+
+def _is_official_https_url(value: str) -> bool:
+    try:
+        parsed = urlsplit(value)
+        return (
+            parsed.scheme == "https"
+            and parsed.hostname in OFFICIAL_HOSTS
+            and parsed.port in {None, 443}
+            and parsed.username is None
+            and parsed.password is None
+        )
+    except ValueError:
+        return False
 
 
 def _finite_number(value: Any) -> int | float:
@@ -192,6 +208,11 @@ def _download_calendar(
                 "referer": INDEX_URL,
                 "access_probes": probes,
             }
+            if not _is_official_https_url(response.url):
+                raise SelaeSourceError(
+                    f"SELAE historical XLS redirected to a non-official HTTPS URL: {response.url}",
+                    {"probes": probes, "xls": response_metadata},
+                )
             if response.status_code != 200:
                 preview = response.text[:500]
                 diagnostics = {
