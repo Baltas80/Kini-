@@ -379,10 +379,9 @@ def validate_coupon_backtest_acceptance(
                     or len(set(values)) != len(values)
                 ):
                     raise ValueError(f"{coupon_id} {mode}: invalid {field}")
-            if (
-                home_categories != [pleno["home_category"]]
-                or away_categories != [pleno["away_category"]]
-            ):
+            if home_categories != [pleno["home_category"]] or away_categories != [
+                pleno["away_category"]
+            ]:
                 raise ValueError(
                     f"{coupon_id} {mode}: coupon backtest requires the single predicted Pleno pair"
                 )
