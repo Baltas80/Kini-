@@ -157,6 +157,50 @@ jobs:
           print(f"BACKTEST_ACCEPTANCE_OK: {total} fixtures for {', '.join(required)}")
           PY
 
+      - name: Enforce cold-start fallback diagnostics
+        run: |
+          python - <<'PY'
+          import json
+          import math
+          from pathlib import Path
+
+          result = json.loads(Path("backtest-results.json").read_text())
+          report = result.get("cold_start_fallbacks", {})
+          models = report.get("models", {})
+          required = ("dc", "ml", "ensemble", "ensemble_dc_ml", "ensemble_dc_ml_adaptive")
+
+          if not report.get("source") or not isinstance(models, dict):
+              raise SystemExit("Cold-start fallback diagnostics are missing")
+          counts = {}
+          for name in required:
+              summary = models.get(name, {})
+              n_predictions = int(summary.get("n_predictions", 0))
+              count = int(summary.get("count", -1))
+              examples = summary.get("examples", [])
+              rate = summary.get("rate")
+              expected_n = int(result.get(name, {}).get("n", 0))
+              if n_predictions != expected_n or expected_n != int(result.get("n_total", 0)):
+                  raise SystemExit(
+                      f"{name} cold-start denominator {n_predictions} does not match "
+                      f"successful forecasts {expected_n}"
+                  )
+              if count < 0 or count > n_predictions:
+                  raise SystemExit(f"{name} has invalid cold-start count {count}/{n_predictions}")
+              if not math.isclose(float(rate), count / n_predictions, rel_tol=0.0, abs_tol=1e-12):
+                  raise SystemExit(f"{name} cold-start rate disagrees with its count")
+              if not isinstance(examples, list) or len(examples) != min(count, 20):
+                  raise SystemExit(f"{name} cold-start examples are incomplete")
+              counts[name] = count
+
+          if counts["ml"] != 0:
+              raise SystemExit("ML-only forecasts must not report Dixon-Coles cold-start use")
+          dc_dependent = ("ensemble", "ensemble_dc_ml", "ensemble_dc_ml_adaptive")
+          if any(counts[name] != counts["dc"] for name in dc_dependent):
+              raise SystemExit(f"DC-dependent streams disagree on fallback use: {counts}")
+
+          print(f"COLD_START_DIAGNOSTICS_OK: {counts}")
+          PY
+
       - name: Enforce schedule-screened market sample acceptance
         run: |
           python - <<'PY'
