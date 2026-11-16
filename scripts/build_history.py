@@ -7,9 +7,9 @@ import logging
 import os
 import tempfile
 import time
-from datetime import datetime, timezone
+from collections.abc import Iterable
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Iterable
 
 import numpy as np
 import pandas as pd
@@ -242,7 +242,7 @@ def build_dataset_profile(
     profile_generated_at: datetime | None = None,
 ) -> dict[str, object]:
     """Summarize provenance, coverage, missingness and integrity before modeling."""
-    profile_generated_at = profile_generated_at or datetime.now(timezone.utc)
+    profile_generated_at = profile_generated_at or datetime.now(UTC)
     dates = raw_frame.get("_ParsedDate")
     if dates is None:
         dates = pd.to_datetime(raw_frame["Date"], dayfirst=True, errors="coerce")
@@ -338,13 +338,13 @@ def build_dataset_profile(
         (invalid_labels, mismatches, incomplete_scores, invalid_dates_with_teams, conflicting_duplicates)
     )
     return {
-        "profile_generated_at_utc": profile_generated_at.astimezone(timezone.utc).isoformat(),
+        "profile_generated_at_utc": profile_generated_at.astimezone(UTC).isoformat(),
         "source_urls": sorted(set(source_urls)),
         "source_cache_metadata": source_metadata or [],
         "source_row_counts": source_counts,
-        "rows_before_filter": int(len(raw_frame)),
-        "rows_after_complete_score_filter": int(len(complete_frame)),
-        "rows_after_deduplication": int(len(final_frame)),
+        "rows_before_filter": len(raw_frame),
+        "rows_after_complete_score_filter": len(complete_frame),
+        "rows_after_deduplication": len(final_frame),
         "rows_missing_team_names": int((~team_mask).sum()),
         "rows_missing_final_scores": missing_scores,
         "rows_with_incomplete_scores": incomplete_scores,
@@ -391,7 +391,7 @@ def build_history(
     frames: list[pd.DataFrame] = []
     source_urls: list[str] = []
     source_metadata: list[dict[str, object]] = []
-    profile_generated_at = datetime.now(timezone.utc)
+    profile_generated_at = datetime.now(UTC)
     client = session if session is not None else (None if offline else make_session())
     cache_root = Path(cache_dir)
 
@@ -417,7 +417,7 @@ def build_history(
                         "source_url": url,
                         "cache_path": str(cache_path),
                         "cache_file_mtime_utc": datetime.fromtimestamp(
-                            cache_mtime, timezone.utc
+                            cache_mtime, UTC
                         ).isoformat(),
                         "cache_age_hours": round(
                             max(0.0, time.time() - cache_mtime) / 3600.0, 3

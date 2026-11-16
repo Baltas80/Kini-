@@ -7,17 +7,16 @@ from pathlib import Path
 import pandas as pd
 import pytest
 import requests
-
 from scripts.build_history import build_dataset_profile, build_history, fetch_csv
 
 
 VALID_CSV = (
-    "Div,Date,HomeTeam,AwayTeam,FTHG,FTAG,FTR\n"
-    "SP1,02/01/2022,B,C,1,0,H\n"
-    "SP1,01/01/2022,A,B,0,0,D\n"
-    "SP1,02/01/2022,B,C,1,0,H\n"
-    "SP1,05/01/2022,D,E,,,\n"
-).encode("utf-8")
+    b"Div,Date,HomeTeam,AwayTeam,FTHG,FTAG,FTR\n"
+    b"SP1,02/01/2022,B,C,1,0,H\n"
+    b"SP1,01/01/2022,A,B,0,0,D\n"
+    b"SP1,02/01/2022,B,C,1,0,H\n"
+    b"SP1,05/01/2022,D,E,,,\n"
+)
 
 
 class FakeResponse:
@@ -202,7 +201,7 @@ def test_fetch_csv_rejects_boolean_scores_before_caching(
     content = (
         "Div,Date,HomeTeam,AwayTeam,FTHG,FTAG,FTR\n"
         f"SP1,02/01/2022,A,B,{home_goals},{away_goals},H\n"
-    ).encode("utf-8")
+    ).encode()
     cache = tmp_path / "boolean_scores.csv"
 
     with pytest.raises(RuntimeError, match=f"booleanos.*{invalid_column}"):
