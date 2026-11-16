@@ -51,7 +51,10 @@ def validate_coupon_backtest_acceptance(
     min_history_matches: int,
 ) -> None:
     """Fail closed unless every coupon and every candidate model is fully evaluated."""
-    if not expected_coupon_ids or len(set(expected_coupon_ids)) != len(expected_coupon_ids):
+    if (
+        not expected_coupon_ids
+        or len(set(expected_coupon_ids)) != len(expected_coupon_ids)
+    ):
         raise ValueError("expected coupon IDs must be non-empty and unique")
     if isinstance(budget, bool) or not isinstance(budget, int) or budget < 1:
         raise ValueError("coupon budget must be a positive integer")
@@ -84,7 +87,9 @@ def validate_coupon_backtest_acceptance(
     if config.get("budget_columns") != budget:
         raise ValueError("coupon result budget differs from the requested budget")
     if config.get("min_history_matches") != min_history_matches:
-        raise ValueError("coupon result minimum history differs from the requested value")
+        raise ValueError(
+            "coupon result minimum history differs from the requested value"
+        )
 
     modes = ("dc", "ml", "ensemble_dc_ml")
     model_summary = summary.get("models")
@@ -110,11 +115,15 @@ def validate_coupon_backtest_acceptance(
                 f"{coupon_id}: coupon evaluation failed: {coupon.get('error')}"
             )
         if coupon.get("official_main_matches_verified") is not True:
-            raise ValueError(f"{coupon_id}: 14 main results are not verified against SELAE")
+            raise ValueError(
+                f"{coupon_id}: 14 main results are not verified against SELAE"
+            )
         if coupon.get("official_pleno_verified") is not True:
             raise ValueError(f"{coupon_id}: Pleno al 15 is not verified against SELAE")
         if coupon.get("fixture_reconciliation_count") != 15:
-            raise ValueError(f"{coupon_id}: all 15 fixtures are not canonically reconciled")
+            raise ValueError(
+                f"{coupon_id}: all 15 fixtures are not canonically reconciled"
+            )
         reconciliation = coupon.get("fixture_reconciliation")
         if (
             not isinstance(reconciliation, list)
@@ -177,16 +186,21 @@ def validate_coupon_backtest_acceptance(
         for mode in modes:
             model = model_results.get(mode)
             if not isinstance(model, dict) or model.get("status") != "success":
-                raise ValueError(f"{coupon_id} {mode}: model did not complete successfully")
+                raise ValueError(
+                    f"{coupon_id} {mode}: model did not complete successfully"
+                )
             if model.get("n_predictions") != 14:
                 raise ValueError(f"{coupon_id} {mode}: expected 14 predictions")
             vectors = model.get("probabilities")
             if not isinstance(vectors, list) or len(vectors) != 14:
-                raise ValueError(f"{coupon_id} {mode}: probability vectors are incomplete")
+                raise ValueError(
+                    f"{coupon_id} {mode}: probability vectors are incomplete"
+                )
             for index, vector in enumerate(vectors, start=1):
                 if not isinstance(vector, dict) or set(vector) != set(SIGNS):
                     raise ValueError(
-                        f"{coupon_id} {mode} fixture {index}: malformed probability vector"
+                        f"{coupon_id} {mode} fixture {index}: "
+                        "malformed probability vector"
                     )
                 values = [vector[sign] for sign in SIGNS]
                 if any(
@@ -199,7 +213,8 @@ def validate_coupon_backtest_acceptance(
                     sum(values), 1.0, rel_tol=0.0, abs_tol=1e-6
                 ):
                     raise ValueError(
-                        f"{coupon_id} {mode} fixture {index}: invalid 1/X/2 probabilities"
+                        f"{coupon_id} {mode} fixture {index}: "
+                        "invalid 1/X/2 probabilities"
                     )
 
             column_count = model.get("column_count")
@@ -252,7 +267,9 @@ def validate_coupon_backtest_acceptance(
             if model["full_coupon_covered"] != (
                 model["covered_14"] and model["pleno_hit"]
             ):
-                raise ValueError(f"{coupon_id} {mode}: full-coupon coverage is inconsistent")
+                raise ValueError(
+                    f"{coupon_id} {mode}: full-coupon coverage is inconsistent"
+                )
             coverage = model.get("independent_14_coverage_estimate")
             if (
                 isinstance(coverage, bool)
@@ -267,7 +284,7 @@ def validate_coupon_backtest_acceptance(
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Run coupon-level evaluation from one common pre-first-kickoff cutoff."
+        description="Evaluate coupons from one common pre-first-kickoff cutoff."
     )
     parser.add_argument("historical_csv", type=Path)
     parser.add_argument("coupons_jsonl", type=Path)
