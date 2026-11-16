@@ -42,9 +42,11 @@ jobs:
           scripts/reconcile_selae_fixtures.py
           scripts/inspect_selae_historical_calendar.py
           scripts/discover_selae_result_archive.py
+          scripts/import_selae_press_release.py
           tests/test_fixture_reconciliation.py
           tests/test_selae_historical_calendar.py
           tests/test_selae_result_archive.py
+          tests/test_selae_press_release.py
           kini_engine/ligaf_evidence.py
           tests/test_ligaf_evidence.py
           kini_engine/ligaf_history.py
@@ -67,8 +69,10 @@ jobs:
           ruff format --check
           scripts/inspect_selae_historical_calendar.py
           scripts/discover_selae_result_archive.py
+          scripts/import_selae_press_release.py
           tests/test_selae_historical_calendar.py
           tests/test_selae_result_archive.py
+          tests/test_selae_press_release.py
           kini_engine/ligaf_evidence.py
           tests/test_ligaf_evidence.py
           kini_engine/ligaf_team_profiles.py
