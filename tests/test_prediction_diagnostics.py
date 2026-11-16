@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from datetime import UTC, date, datetime, timedelta
 
 import pytest
@@ -201,16 +202,15 @@ def test_diagnostics_reject_too_few_bootstrap_samples():
         )
 
 
-
 def _dataset_snapshot_files(tmp_path):
     dataset_path = tmp_path / "historical_spain.csv"
     profile_path = tmp_path / "historical_spain.profile.json"
     dataset_payload = (
-        "Date,HomeTeam,AwayTeam,FTHG,FTAG,League,Season\n"
-        "02/01/2025,Home A,Away A,1,0,la-liga,2425\n"
-        "03/01/2025,Home B,Away B,0,0,la-liga,2425\n"
-        "04/01/2025,Home C,Away C,2,1,segunda,2425\n"
-    ).encode("utf-8")
+        b"Date,HomeTeam,AwayTeam,FTHG,FTAG,League,Season\n"
+        b"02/01/2025,Home A,Away A,1,0,la-liga,2425\n"
+        b"03/01/2025,Home B,Away B,0,0,la-liga,2425\n"
+        b"04/01/2025,Home C,Away C,2,1,segunda,2425\n"
+    )
     profile = {
         "integrity_passed": True,
         "rows_after_complete_score_filter": 3,
