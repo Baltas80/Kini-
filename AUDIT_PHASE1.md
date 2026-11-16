@@ -2738,3 +2738,22 @@ The latest data profile also shows materially uneven odds coverage (B365 1X2 mis
 ### Next executable unit
 
 Complete P1 provenance for the Football-Data and LAE feeds: locate and record the source's actual collection/publication schedule, distinguish capture time from kickoff time, and decide whether schedule-compatible Football-Data odds stay as a clearly labelled sensitivity benchmark or can be promoted to a timestamp-verified input. Then continue P2 by tracing every remaining feature and calibration/ensemble fitting boundary through the walk-forward ledger.
+
+
+## 2026-11-17 — Football-Data odds timing and usage terms verified
+
+Official source pages reviewed:
+
+- `https://football-data.co.uk/data.php`: since 2019/20, the unsuffixed first odds set is collected after market opening at the times on the fixtures page; closing odds use the additional `C` suffix. The source also warns that Pinnacle's public feed has been systematically stale since 2025-07-23.
+- `https://football-data.co.uk/matches.php`: weekend snapshots are collected Friday afternoons, generally no later than 17:00 British time; midweek snapshots Tuesday, no later than 13:00 British time.
+- `https://football-data.co.uk/notes.txt`: `Date` and `Time` mean match date and kickoff time; the unsuffixed bookmaker columns are pre-closing, while the closing versions carry `C`.
+- `https://football-data.co.uk/contact.php`: the free CSV service is stated to be for private/personal betting or academic research, at most light automated downloads (twice weekly maximum); commercial and AI/data-training use is not granted by default.
+
+### Consequences for this project
+
+1. The existing code's pre-closing column selection, exclusion of Tuesday/Friday fixtures, missing-kickoff rejection and Pinnacle cutoff are consistent with the provider's published schedule. This supports a schedule-compatible classification, but the CSV still has no per-fixture capture timestamp or timezone.
+2. A fair market comparison needs a common information cutoff. The current walk-forward model for a Saturday/Sunday fixture can include Friday/Saturday results, while the corresponding odds snapshot was taken Friday by 17:00. For Wednesday/Thursday fixtures, model history can include Tuesday results after the Tuesday 13:00 snapshot. The existing same-match sample therefore does not, by itself, prove equal information sets.
+3. The next implementation should derive the documented snapshot day for each market row and add a strict common-time comparison. At minimum, exclude a row from that strict sample if the model's feature/training history contains any result dated on or after the odds snapshot day. Keep the larger schedule-compatible market sample as a separately labelled sensitivity benchmark.
+4. The source's usage terms are a production blocker if Quiniela Predictor is distributed commercially or uses the data for commercial AI training. Do not increase automated download frequency; the existing weekly scheduled refresh is within the source's stated light-download limit, but written permission or a licensed provider is required before commercial use. TheStatsAPI is the source's named subscription alternative.
+
+This finding does not invalidate the existing historical-data integrity checks. It limits what can be claimed about market timing and what use of the data is permitted.
