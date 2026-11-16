@@ -105,7 +105,7 @@ jobs:
                 ;;
               data/selae_fixture_crosswalk.json|data/kinielagpt_fixture_kickoffs.json|data/ligaf_fixture_evidence.json|data/ligaf_history.jsonl|data/ligaf_history.profile.json|data/ligaf_team_profile_crosswalk.json)
                 ;;
-              kini_engine/*|scripts/build_history.py|scripts/diagnose_ml.py|data/*|pyproject.toml|requirements*.txt)
+              kini_engine/*|scripts/build_history.py|scripts/diagnose_ml.py|scripts/analyze_prediction_ledger.py|data/*|pyproject.toml|requirements*.txt)
                 run_backtest=true
                 ;;
             esac
@@ -519,6 +519,10 @@ jobs:
           )
           PY
 
+      - name: Analyze archived prediction errors
+        run: |
+          python scripts/analyze_prediction_ledger.py prediction-ledger.jsonl --results-json backtest-results.json --output prediction-diagnostics.json --min-segment-n 100
+
       - name: Upload backtest results
         uses: actions/upload-artifact@v4
         with:
@@ -526,4 +530,5 @@ jobs:
           path: |
             backtest-results.json
             prediction-ledger.jsonl
+            prediction-diagnostics.json
           retention-days: 90

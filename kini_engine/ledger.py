@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 import re
@@ -190,3 +191,96 @@ def write_prediction_ledger(
         stream.write("\n".join(serialized))
         stream.write("\n")
     return len(forecast_rows)
+
+
+def read_prediction_ledger(
+    path: str | Path,
+    expected_sha256: str | None = None,
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """Read and fully validate an immutable JSONL prediction-ledger artifact."""
+    target = Path(path)
+    try:
+        payload = target.read_bytes()
+    except OSError as exc:
+        raise ValueError(f"cannot read prediction ledger: {target}") from exc
+
+    if expected_sha256 is not None:
+        if not isinstance(expected_sha256, str) or not _SHA256_RE.fullmatch(
+            expected_sha256
+        ):
+            raise ValueError("expected_sha256 must be a lowercase SHA-256 digest")
+        actual_sha256 = hashlib.sha256(payload).hexdigest()
+        if actual_sha256 != expected_sha256:
+            raise ValueError(
+                "prediction ledger SHA-256 does not match the backtest manifest"
+            )
+
+    try:
+        content = payload.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise ValueError("prediction ledger must be UTF-8") from exc
+
+    lines = content.splitlines()
+    if not lines:
+        raise ValueError("prediction ledger is empty")
+    if any(not line.strip() for line in lines):
+        raise ValueError("prediction ledger contains a blank JSONL record")
+
+    records: list[dict[str, Any]] = []
+    for line_number, line in enumerate(lines, start=1):
+        try:
+            record = json.loads(line)
+        except json.JSONDecodeError as exc:
+            raise ValueError(
+                f"prediction ledger line {line_number} is not valid JSON"
+            ) from exc
+        if not isinstance(record, dict):
+            raise ValueError(
+                f"prediction ledger line {line_number} must contain a JSON object"
+            )
+        records.append(record)
+
+    first = records[0]
+    if first.get("record_type") != "run_manifest":
+        raise ValueError("prediction ledger must start with a run_manifest")
+    manifest = {key: value for key, value in first.items() if key != "record_type"}
+
+    forecast_rows: list[dict[str, Any]] = []
+    seen_fixture_ids: set[str] = set()
+    model_modes = set(manifest.get("model_modes", []))
+    if not model_modes:
+        raise ValueError("prediction ledger manifest has no model modes")
+
+    for row_index, record in enumerate(records[1:], start=1):
+        if record.get("record_type") != "forecast":
+            raise ValueError(
+                f"prediction ledger line {row_index + 1} is not a forecast"
+            )
+        row = {key: value for key, value in record.items() if key != "record_type"}
+        _validate_forecast_row(row, row_index)
+
+        fixture_id = row["fixture_id"]
+        if fixture_id in seen_fixture_ids:
+            raise ValueError(f"duplicate fixture_id in prediction ledger: {fixture_id}")
+        seen_fixture_ids.add(fixture_id)
+
+        missing_modes = model_modes - set(row["model_probabilities"])
+        if missing_modes:
+            raise ValueError(
+                f"forecast row {row_index} is missing model probability vectors: "
+                f"{sorted(missing_modes)}"
+            )
+
+        model_signs = row.get("model_signs")
+        if not isinstance(model_signs, dict):
+            raise ValueError(f"forecast row {row_index} has no model_signs mapping")
+        for mode in model_modes:
+            if model_signs.get(mode) not in SIGNS:
+                raise ValueError(
+                    f"forecast row {row_index} has an invalid sign for model {mode!r}"
+                )
+
+        forecast_rows.append(row)
+
+    _validate_manifest(manifest, len(forecast_rows))
+    return manifest, forecast_rows
