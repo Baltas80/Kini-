@@ -1822,3 +1822,86 @@ La nota oficial de prensa del sorteo de 15-11-2026 publica el vector `2 - X - 1 
 - On the 4,424-match schedule-screened common market sample, the market achieved Brier 0.59750 and log loss 0.99944. The best model-only result was the ensemble at Brier 0.61356 and log loss 1.02302; the market remained better. ML alone was weakest (Brier 0.64747, log loss 1.07425). Do not select an ensemble on accuracy alone.
 - The fixed Bet365 benchmark had 4,417 eligible rows (Brier 0.59735, log loss 0.99932). The market eligibility screen excluded 587 of 5,011 odds rows because kickoff timing was ambiguous. It is only a schedule-compatibility screen: exact per-fixture odds capture timestamps are unavailable, so strict point-in-time availability is not yet proven.
 - Current-head historical-backtest run 43815638254 was still running at the time of this update. Its results are not yet counted as passed. The pending run for the documentation/test-only follow-up will be allowed to skip after the f512f9c walk-forward completes successfully.
+
+
+---
+## 2026-11-16 — Validación completa del head c16a917 (P0/P4/P6)
+
+Esta sección sustituye los estados pendientes anteriores del backtest tras la ampliación del optimizador Pleno al 15. El head validado es `c16a9178fbd9a560b50c70f78928de419a56f6a5`; el cambio funcional del optimizador está en `468b34417d9cace03675404121ec41cbe9aa1a6a`, y el commit de este head actualiza el registro de auditoría.
+
+### CI y calidad de datos
+
+- CI [43816268711](https://github.com/Baltas80/Kini-/actions/runs/43816268711): actionlint, 7 workflows sin errores; Ruff lint y format correctos; **226 tests pasados** en 1,87 s. Persisten 21 warnings de deprecación originados en `penaltyblog/models/dixon_coles.py:257` por la asignación de `.shape` a un array con NumPy 2.5; no son fallos del proyecto.
+- Validación histórica [43816268627](https://github.com/Baltas80/Kini-/actions/runs/43816268627): **5.311 partidos completados**, cero nombres de equipo ausentes, cero marcadores finales ausentes, cero duplicados eliminados o conflictivos y cero discrepancias marcador/signo. El registro de identidad resolvió **10.622/10.622 referencias**, 56 IDs canónicos, cero no resueltas y cero ambiguas; `integrity_passed=true`.
+- Artefacto `kini-historical-data`, ID `14202965335`, 714.131 bytes, SHA-256 `c3ff06eddf03965270fe095b69018ca2adfd12eb2141396561affefece22462e`.
+
+### Backtest walk-forward: P0/P3/P4/P5
+
+Backtest [43816268634](https://github.com/Baltas80/Kini-/actions/runs/43816268634), artefacto `historical-backtest` ID `14204028183`, 178.715 bytes, SHA-256 `ffb2c6c5e5d15ab84a3824757e98efe47a8c6b84b3fb54240868ec2aa56ba194`.
+
+- Histórico total: 5.311; ventana inicial de entrenamiento: 300; test walk-forward: **5.011 partidos**, del 11-12-2020 al 09-11-2026.
+- Dixon–Coles, ML, ensemble principal, ensemble DC/ML fijo y adaptativo: **5.011/5.011 predicciones cada uno**, cero errores de predicción. Los gates del workflow para muestras no vacías, cold-start, mercado, Bet365 y calibración prequential terminaron correctamente.
+- Métricas sobre los 5.011 partidos de test (el mercado solo existe en la submuestra temporalmente filtrada de 4.424):
+
+| Candidato | n | Accuracy | Brier | Log Loss | RPS | ECE |
+|---|---:|---:|---:|---:|---:|---:|
+| Dixon–Coles | 5.011 | 48,174 % | 0,616668 | 1,027806 | 0,208245 | 0,011423 |
+| ML | 5.011 | 44,143 % | 0,645534 | 1,071417 | 0,219951 | 0,044087 |
+| Ensemble principal | 5.011 | 47,935 % | 0,613630 | 1,023028 | 0,207026 | 0,012840 |
+| DC/ML fijo | 5.011 | 47,575 % | 0,615866 | 1,026405 | 0,208008 | 0,009508 |
+| DC/ML adaptativo | 5.011 | 47,715 % | 0,616077 | 1,026712 | 0,208079 | 0,008118 |
+| Mercado multi-casa filtrado | 4.424 | **50,723 %** | **0,597504** | **0,999444** | **0,199876** | 0,024213 |
+
+Comparación adicional sobre la muestra idéntica de **4.417** partidos con Bet365 y los cinco streams de modelo:
+
+| Candidato | Accuracy | Brier | Log Loss |
+|---|---:|---:|---:|
+| Dixon–Coles | 48,056 % | 0,616231 | 1,027290 |
+| ML | 43,784 % | 0,647471 | 1,074246 |
+| Ensemble principal | 47,807 % | 0,613563 | 1,023018 |
+| DC/ML fijo | 47,401 % | 0,616095 | 1,026842 |
+| DC/ML adaptativo | 47,491 % | 0,616305 | 1,027133 |
+| Consenso multi-casa sin margen | **50,736 %** | **0,597332** | **0,999185** |
+| Bet365 sin margen | **50,804 %** | **0,597352** | **0,999324** |
+
+El mercado sigue superando a todos los candidatos en las métricas probabilísticas principales. No se promueve ML ni ningún ensemble como sustituto del mercado. El mercado continúa siendo un benchmark con filtro de calendario, no una cotización cuya captura pre-partido esté demostrada.
+
+### Calibración prequential
+
+La calibración usa exclusivamente predicciones OOF walk-forward anteriores y excluye resultados del mismo día. Configuración: warm-up mínimo 500, ventana 1.500, refit cada 30 fechas, mínimo 20 observaciones por clase y regularización 0,05. Se evaluaron 4.480 predicciones post-warm-up por modelo y una intersección común modelo/mercado de 3.847 partidos.
+
+Brier / Log Loss en esa intersección (raw → calibrado):
+
+| Candidato | Brier raw → calibrado | Log Loss raw → calibrado |
+|---|---:|---:|
+| Dixon–Coles | 0,613791 → 0,613232 | 1,023639 → 1,022458 |
+| ML | 0,638702 → 0,632937 | 1,060984 → 1,051149 |
+| Ensemble principal | 0,611315 → 0,611522 | 1,019753 → 1,019966 |
+| DC/ML fijo | 0,613518 → 0,613653 | 1,023036 → 1,023129 |
+| DC/ML adaptativo | 0,613703 → 0,613727 | 1,023289 → 1,023189 |
+| Mercado | 0,597564 → 0,596714 | 0,999533 → 0,998094 |
+
+**Decisión:** no activar calibración como salida predeterminada del ensemble: empeora ligeramente Brier y Log Loss del ensemble principal y el mercado mantiene una ventaja clara. DC y ML mejoran agregadamente, pero no cierran la brecha. La calibración queda como diagnóstico/experimento prequential.
+
+### Cold-start
+
+En los 5.011 partidos, el fallback se activó en 73 predicciones de Dixon–Coles y los ensembles (1,457 %); ML registró cero. Los diagnósticos se conservaron por modelo y temporada. Esto no sustituye una evaluación separada de equipos nuevos fuera de muestra.
+
+### P6 — Pleno al 15 y límite reglamentario
+
+La ampliación del commit `468b344` permite pasar conjuntos explícitos de categorías 0/1/2/M para local y visitante. El multiplicador es el producto cartesiano de ambos conjuntos. El DP limita simultáneamente columnas de 14 partidos y apuestas totales, aplicando el máximo SELAE de **31.104 apuestas incluido el Pleno** y el coste sobre el total pagadero.
+
+- Con las 4 categorías para cada equipo: multiplicador 16, máximo de 1.944 columnas de 14 partidos y 31.104 apuestas totales.
+- Coste al precio configurado de 0,75 EUR: 23.328,00 EUR para el máximo reglamentario.
+- Se mantienen el mínimo de dos apuestas y la tabla oficial de dobles/triples.
+- Las pruebas cubren multiplicador 16, límite exacto, mínimo de dos apuestas con una columna, categorías parciales/duplicadas/ inválidas y el flujo de extremo a extremo de coste y cobertura.
+- La cobertura sigue siendo una aproximación de independencia entre los 14 partidos y las categorías seleccionadas del Pleno. No estima premios, correlación real, rentabilidad ni sistemas reducidos/condicionados o Elige8.
+
+### Límites y siguiente trabajo
+
+- 587 registros de cuotas siguen excluidos por ambigüedad temporal (viernes/martes); no existen timestamps de captura por partido. El benchmark Bet365 tiene 4.417/5.004 filas elegibles.
+- No se ha completado la auditoría de disponibilidad temporal/publicación de cada feature histórica. El corte por fecha estrictamente anterior es conservador, pero no acredita por sí solo el instante de publicación de cada resultado.
+- El workflow de descubrimiento del archivo SELAE [43816268620](https://github.com/Baltas80/Kini-/actions/runs/43816268620) se omitió correctamente porque el código de descubrimiento no cambió. La inspección activa anterior [43808823319](https://github.com/Baltas80/Kini-/actions/runs/43808823319) registró HTTP 403 desde el runner en los endpoints oficiales; no se declara importación histórica completa de cupones.
+- Próximas prioridades: (1) auditoría feature-by-feature de observación, publicación, ventana y disponibilidad antes del kickoff; (2) conseguir un flujo reproducible de PDFs oficiales SELAE descargados localmente o acceso oficial estable y reconciliar jornadas completas; (3) ampliar la evaluación del optimizador con escenarios conjuntos y premios históricos cuando existan datos oficiales suficientes.
+
+PR #9 sigue en borrador y basado en `feat/canonical-team-identity-registry`. No se ha modificado `master` ni se ha fusionado ninguna PR.
