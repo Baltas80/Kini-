@@ -15,7 +15,6 @@ from kini_engine.coupon_identity import canonicalize_coupon
 from kini_engine.coupons import evaluate_coupon_batch, read_coupon_jsonl
 from kini_engine.dataio import load_matches_csv, validate_matches
 
-
 OFFICIAL_QUINIELA_BET_PRICE_EUR = 0.75
 MINIMUM_QUINIELA_BETS = 2
 MAXIMUM_QUINIELA_BETS = 31_104
