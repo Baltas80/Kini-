@@ -213,14 +213,14 @@ def test_load_local_draw_uses_original_bytes_and_metadata(tmp_path: Path) -> Non
     raw = make_html().encode("utf-8")
     html_path = tmp_path / "2026-11-08.html"
     html_path.write_bytes(raw)
-    html_path.with_suffix(".meta.json").write_text(
-        json.dumps({
-            "source_url": make_draw_url(DRAW_DATE),
-            "source_retrieved_at_utc": "2026-11-09T00:00:00+00:00",
-            "raw_sha256": hashlib.sha256(raw).hexdigest(),
-            "encoding": "utf-8",
-        }),
-        encoding="utf-8",
+    metadata = {
+        "source_url": make_draw_url(DRAW_DATE),
+        "source_retrieved_at_utc": "2026-11-09T00:00:00+00:00",
+        "raw_sha256": hashlib.sha256(raw).hexdigest(),
+        "encoding": "utf-8",
+    }
+    html_path.with_suffix(".meta.json").write_bytes(
+        json.dumps(metadata).encode("utf-8-sig")
     )
 
     draw = load_local_draw(DRAW_DATE, tmp_path)
