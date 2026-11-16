@@ -115,7 +115,27 @@ def test_draw_diagnostics_distinguish_top_sign_from_probability(tmp_path):
     assert report["overall"]["dc"]["top_two_candidate_coverage"]["draw_coverage"] == 1.0
     assert report["market_common_sample"]["n"] == 2
     assert len(report["segments"]["groups"]) == 1
-    assert report["segments"]["groups"][0]["n"] == 3
+    segment = report["segments"]["groups"][0]
+    assert segment["n"] == 3
+    assert segment["market_common_sample"]["n"] == 2
+    assert segment["market_common_sample"]["status"] == "ok"
+    assert segment["market_common_sample"]["market"]["n"] == 2
+    assert segment["market_common_sample"]["models"]["dc"]["metrics"]["n"] == 2
+    assert segment["market_common_sample"]["models"]["ml"]["metrics"]["n"] == 2
+
+
+def test_segment_market_comparison_is_withheld_below_minimum_sample():
+    rows = [_row(1, "1"), _row(2, "X"), _row(3, "2")]
+    report = analyze_prediction_rows(_manifest(), rows, min_segment_n=3)
+
+    segment = report["segments"]["groups"][0]
+    comparison = segment["market_common_sample"]
+
+    assert comparison["n"] == 2
+    assert comparison["minimum_n"] == 3
+    assert comparison["status"] == "below_minimum"
+    assert comparison["market"] is None
+    assert comparison["models"] == {}
 
 
 def test_diagnostics_reject_invalid_segment_threshold():
