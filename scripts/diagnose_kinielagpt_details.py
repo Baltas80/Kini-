@@ -429,8 +429,8 @@ def summarize_kickoff_attachment(rows: Any, lae_source: str) -> dict[str, Any]:
         )
         vector_valid = _valid_three_way_vector(row.get("lae"))
         evidence_url = row.get("kickoff_evidence_url")
-        evidence_url_valid = (
-            isinstance(evidence_url, str) and evidence_url.startswith("https://")
+        evidence_url_valid = isinstance(evidence_url, str) and evidence_url.startswith(
+            "https://"
         )
         evidence_before_capture = (
             evidence_checked_at is not None
@@ -447,7 +447,9 @@ def summarize_kickoff_attachment(rows: Any, lae_source: str) -> dict[str, Any]:
         )
         evidence_fresh_at_capture = (
             evidence_age_seconds is not None
-            and 0 <= evidence_age_seconds <= LAE_KICKOFF_EVIDENCE_MAX_AGE.total_seconds()
+            and 0
+            <= evidence_age_seconds
+            <= LAE_KICKOFF_EVIDENCE_MAX_AGE.total_seconds()
         )
         capture_before_kickoff = (
             captured_at is not None

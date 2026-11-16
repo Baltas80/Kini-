@@ -184,7 +184,10 @@ def test_kickoff_attachment_summary_requires_verified_identity_and_temporal_orde
     assert summary["fixtures"][1]["eligibility_reasons"] == [
         "fixture_identity_not_verified"
     ]
-    assert "kickoff_evidence_stale_or_missing" in summary["fixtures"][3]["eligibility_reasons"]
+    assert (
+        "kickoff_evidence_stale_or_missing"
+        in summary["fixtures"][3]["eligibility_reasons"]
+    )
     assert summary["fixtures"][3]["evidence_fresh_at_capture"] is False
     assert all(
         fixture["temporally_eligible_lae"] is False

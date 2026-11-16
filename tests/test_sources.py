@@ -262,9 +262,7 @@ def test_probabilities_attach_official_kickoff_with_cest_schedule_source(
 ):
     fixed = datetime(2026, 7, 15, 19, 30, tzinfo=UTC)
     _freeze_source_clock(monkeypatch, fixed)
-    payload = _kickoff_crosswalk_payload(
-        schedule_checked_at="2026-07-15T19:00:00Z"
-    )
+    payload = _kickoff_crosswalk_payload(schedule_checked_at="2026-07-15T19:00:00Z")
     payload["timezone"] = "CEST"
     payload["crosswalk_evidence"]["checked_at_utc"] = "2026-07-15T18:00:00Z"
     payload["schedule_sources"][0]["published_date"] = "2026-07-15"
