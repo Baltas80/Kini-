@@ -7,8 +7,8 @@ from pathlib import Path
 import pandas as pd
 import pytest
 import requests
-from scripts.build_history import build_dataset_profile, build_history, fetch_csv
 
+from scripts.build_history import build_dataset_profile, build_history, fetch_csv
 
 VALID_CSV = (
     b"Div,Date,HomeTeam,AwayTeam,FTHG,FTAG,FTR\n"
