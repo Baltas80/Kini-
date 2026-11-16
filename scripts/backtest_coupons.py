@@ -2,15 +2,17 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import math
 import json
 import os
 import platform
 import tempfile
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 from kini_engine.coupon_identity import canonicalize_coupon
 from kini_engine.coupons import evaluate_coupon_batch, read_coupon_jsonl
+from kini_engine.core import SIGNS
 from kini_engine.dataio import load_matches_csv, validate_matches
 
 
@@ -49,11 +51,6 @@ def validate_coupon_backtest_acceptance(
     min_history_matches: int,
 ) -> None:
     """Fail closed unless every coupon and every candidate model is fully evaluated."""
-    import math
-    from datetime import date, datetime
-
-    from kini_engine.core import SIGNS
-
     if not expected_coupon_ids or len(set(expected_coupon_ids)) != len(expected_coupon_ids):
         raise ValueError("expected coupon IDs must be non-empty and unique")
     if isinstance(budget, bool) or not isinstance(budget, int) or budget < 1:
@@ -109,7 +106,9 @@ def validate_coupon_backtest_acceptance(
     for coupon in coupons:
         coupon_id = coupon["coupon_id"]
         if coupon.get("status") == "failed":
-            raise ValueError(f"{coupon_id}: coupon evaluation failed: {coupon.get('error')}")
+            raise ValueError(
+                f"{coupon_id}: coupon evaluation failed: {coupon.get('error')}"
+            )
         if coupon.get("official_main_matches_verified") is not True:
             raise ValueError(f"{coupon_id}: 14 main results are not verified against SELAE")
         if coupon.get("official_pleno_verified") is not True:
@@ -117,10 +116,15 @@ def validate_coupon_backtest_acceptance(
         if coupon.get("fixture_reconciliation_count") != 15:
             raise ValueError(f"{coupon_id}: all 15 fixtures are not canonically reconciled")
         reconciliation = coupon.get("fixture_reconciliation")
-        if not isinstance(reconciliation, list) or len(reconciliation) != 15:
-            raise ValueError(f"{coupon_id}: canonical fixture reconciliation evidence is incomplete")
-        if [item.get("number") for item in reconciliation] != list(range(1, 16)):
-            raise ValueError(f"{coupon_id}: canonical fixture reconciliation order is invalid")
+        if (
+            not isinstance(reconciliation, list)
+            or len(reconciliation) != 15
+            or any(not isinstance(item, dict) for item in reconciliation)
+            or [item.get("number") for item in reconciliation] != list(range(1, 16))
+        ):
+            raise ValueError(
+                f"{coupon_id}: canonical fixture reconciliation evidence is incomplete"
+            )
 
         try:
             first_kickoff = datetime.fromisoformat(coupon["first_kickoff_at"])
@@ -129,8 +133,11 @@ def validate_coupon_backtest_acceptance(
             raise ValueError(f"{coupon_id}: invalid common-cutoff metadata") from exc
         if first_kickoff.tzinfo is None or first_kickoff.utcoffset() is None:
             raise ValueError(f"{coupon_id}: first kickoff must be timezone-aware")
-        if cutoff != first_kickoff.date().fromordinal(first_kickoff.date().toordinal() - 1):
-            raise ValueError(f"{coupon_id}: training cutoff is not the previous local calendar day")
+        if cutoff != first_kickoff.date() - timedelta(days=1):
+            raise ValueError(
+                f"{coupon_id}: training cutoff is not the previous local calendar day"
+            )
+
         training_count = coupon.get("training_match_count")
         fit_count = coupon.get("model_fit_match_count")
         if (
@@ -139,17 +146,27 @@ def validate_coupon_backtest_acceptance(
             or training_count < min_history_matches
             or fit_count != training_count
         ):
-            raise ValueError(f"{coupon_id}: common training history is below minimum or inconsistent")
+            raise ValueError(
+                f"{coupon_id}: common training history is below minimum or inconsistent"
+            )
 
         pleno = coupon.get("pleno_prediction")
         if not isinstance(pleno, dict) or pleno.get("model") != "dixon_coles":
             raise ValueError(f"{coupon_id}: Pleno prediction provenance is missing")
         if pleno.get("selection_method") != "max_aggregated_category_pair_probability":
             raise ValueError(f"{coupon_id}: Pleno selection method is not explicit")
-        if pleno.get("home_category") not in categories or pleno.get("away_category") not in categories:
+        if (
+            pleno.get("home_category") not in categories
+            or pleno.get("away_category") not in categories
+        ):
             raise ValueError(f"{coupon_id}: Pleno category is invalid")
         mass = pleno.get("probability_mass")
-        if isinstance(mass, bool) or not isinstance(mass, (int, float)) or not math.isfinite(mass) or not 0.0 < mass <= 1.0:
+        if (
+            isinstance(mass, bool)
+            or not isinstance(mass, (int, float))
+            or not math.isfinite(mass)
+            or not 0.0 < mass <= 1.0
+        ):
             raise ValueError(f"{coupon_id}: Pleno probability mass is invalid")
         if pleno.get("training_match_count") != training_count:
             raise ValueError(f"{coupon_id}: Pleno training provenance is inconsistent")
@@ -168,7 +185,9 @@ def validate_coupon_backtest_acceptance(
                 raise ValueError(f"{coupon_id} {mode}: probability vectors are incomplete")
             for index, vector in enumerate(vectors, start=1):
                 if not isinstance(vector, dict) or set(vector) != set(SIGNS):
-                    raise ValueError(f"{coupon_id} {mode} fixture {index}: malformed probability vector")
+                    raise ValueError(
+                        f"{coupon_id} {mode} fixture {index}: malformed probability vector"
+                    )
                 values = [vector[sign] for sign in SIGNS]
                 if any(
                     isinstance(value, bool)
@@ -176,8 +195,12 @@ def validate_coupon_backtest_acceptance(
                     or not math.isfinite(value)
                     or not 0.0 <= value <= 1.0
                     for value in values
-                ) or not math.isclose(sum(values), 1.0, rel_tol=0.0, abs_tol=1e-6):
-                    raise ValueError(f"{coupon_id} {mode} fixture {index}: invalid 1/X/2 probabilities")
+                ) or not math.isclose(
+                    sum(values), 1.0, rel_tol=0.0, abs_tol=1e-6
+                ):
+                    raise ValueError(
+                        f"{coupon_id} {mode} fixture {index}: invalid 1/X/2 probabilities"
+                    )
 
             column_count = model.get("column_count")
             total_bets = model.get("total_bets")
@@ -186,23 +209,50 @@ def validate_coupon_backtest_acceptance(
                 or not isinstance(column_count, int)
                 or not 1 <= column_count <= budget
             ):
-                raise ValueError(f"{coupon_id} {mode}: column count exceeds the requested budget")
-            if isinstance(total_bets, bool) or not isinstance(total_bets, int) or not 1 <= total_bets <= 31_104:
-                raise ValueError(f"{coupon_id} {mode}: total bets exceed SELAE's direct-system cap")
+                raise ValueError(
+                    f"{coupon_id} {mode}: column count exceeds the requested budget"
+                )
+            if (
+                isinstance(total_bets, bool)
+                or not isinstance(total_bets, int)
+                or not 1 <= total_bets <= 31_104
+            ):
+                raise ValueError(
+                    f"{coupon_id} {mode}: total bets exceed SELAE's direct-system cap"
+                )
             for field in ("double_count", "triple_count"):
                 count = model.get(field)
-                if isinstance(count, bool) or not isinstance(count, int) or not 0 <= count <= 14:
+                if (
+                    isinstance(count, bool)
+                    or not isinstance(count, int)
+                    or not 0 <= count <= 14
+                ):
                     raise ValueError(f"{coupon_id} {mode}: invalid {field}")
+            if model["double_count"] + model["triple_count"] > 14:
+                raise ValueError(f"{coupon_id} {mode}: a fixture is double-counted")
             cost = model.get("cost_eur")
-            if isinstance(cost, bool) or not isinstance(cost, (int, float)) or not math.isfinite(cost) or cost <= 0:
+            if (
+                isinstance(cost, bool)
+                or not isinstance(cost, (int, float))
+                or not math.isfinite(cost)
+                or cost <= 0
+            ):
                 raise ValueError(f"{coupon_id} {mode}: invalid ticket cost")
             for field in ("single_sign_hits", "best_column_hits"):
                 hits = model.get(field)
-                if isinstance(hits, bool) or not isinstance(hits, int) or not 0 <= hits <= 14:
+                if (
+                    isinstance(hits, bool)
+                    or not isinstance(hits, int)
+                    or not 0 <= hits <= 14
+                ):
                     raise ValueError(f"{coupon_id} {mode}: invalid {field}")
             for field in ("covered_14", "pleno_hit", "full_coupon_covered"):
                 if not isinstance(model.get(field), bool):
                     raise ValueError(f"{coupon_id} {mode}: invalid {field}")
+            if model["full_coupon_covered"] != (
+                model["covered_14"] and model["pleno_hit"]
+            ):
+                raise ValueError(f"{coupon_id} {mode}: full-coupon coverage is inconsistent")
             coverage = model.get("independent_14_coverage_estimate")
             if (
                 isinstance(coverage, bool)
@@ -210,7 +260,9 @@ def validate_coupon_backtest_acceptance(
                 or not math.isfinite(coverage)
                 or not 0.0 <= coverage <= 1.0
             ):
-                raise ValueError(f"{coupon_id} {mode}: invalid independent coverage estimate")
+                raise ValueError(
+                    f"{coupon_id} {mode}: invalid independent coverage estimate"
+                )
 
 
 def main() -> None:
