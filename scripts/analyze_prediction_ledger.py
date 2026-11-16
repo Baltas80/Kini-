@@ -18,10 +18,10 @@ def _load_results(path: Path, ledger_path: Path) -> tuple[dict[str, Any], str]:
 
     ledger_metadata = results.get("forecast_ledger")
     if not isinstance(ledger_metadata, dict):
-        raise ValueError("backtest results do not contain forecast_ledger metadata")
+        raise TypeError("backtest results do not contain forecast_ledger metadata")
     expected_hash = ledger_metadata.get("sha256")
     if not isinstance(expected_hash, str):
-        raise ValueError("backtest results do not contain the ledger SHA-256")
+        raise TypeError("backtest results do not contain the ledger SHA-256")
     if ledger_metadata.get("rows") != results.get("n_total"):
         raise ValueError("backtest result and ledger forecast counts disagree")
     if ledger_metadata.get("path") and Path(ledger_metadata["path"]).name != ledger_path.name:
