@@ -160,9 +160,12 @@ def fetch_csv(
     session: requests.Session | None = None,
     cache_ttl_hours: float = DEFAULT_CACHE_TTL_HOURS,
     refresh: bool = False,
+    offline: bool = False,
     expected_division: str | None = None,
 ) -> pd.DataFrame:
     """Read a validated cache or download the source, retrying and falling back safely."""
+    if offline and refresh:
+        raise ValueError("offline mode cannot be combined with refresh")
     path = Path(cache_path)
     cached_content: bytes | None = None
     cached_df: pd.DataFrame | None = None
@@ -178,6 +181,14 @@ def fetch_csv(
                 return validated
         except (OSError, ValueError, pd.errors.ParserError) as exc:
             log.warning("Ignorando caché inválida %s: %s", path, exc)
+
+    if offline:
+        if cached_df is not None:
+            log.info("Offline cache hit: %s", path)
+            return cached_df
+        raise RuntimeError(
+            f"No existe una caché válida para {url}; el modo offline impide descargar"
+        )
 
     client = session or make_session()
     try:
@@ -361,6 +372,7 @@ def build_history(
     cache_dir: str | Path = DEFAULT_CACHE_DIR,
     cache_ttl_hours: float = DEFAULT_CACHE_TTL_HOURS,
     refresh: bool = False,
+    offline: bool = False,
     session: requests.Session | None = None,
 ) -> pd.DataFrame:
     """Build a validated, de-duplicated chronological history from cached/source CSVs."""
@@ -373,12 +385,14 @@ def build_history(
         raise ValueError("Debe especificarse al menos una temporada")
     if cache_ttl_hours < 0:
         raise ValueError("cache_ttl_hours no puede ser negativo")
+    if offline and refresh:
+        raise ValueError("offline mode cannot be combined with refresh")
 
     frames: list[pd.DataFrame] = []
     source_urls: list[str] = []
     source_metadata: list[dict[str, object]] = []
     profile_generated_at = datetime.now(timezone.utc)
-    client = session or make_session()
+    client = session if session is not None else (None if offline else make_session())
     cache_root = Path(cache_dir)
 
     for season in selected_seasons:
@@ -392,6 +406,7 @@ def build_history(
                 session=client,
                 cache_ttl_hours=cache_ttl_hours,
                 refresh=refresh,
+                offline=offline,
                 expected_division=code,
             )
             source_urls.append(url)
@@ -491,6 +506,11 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--cache-dir", type=Path, default=DEFAULT_CACHE_DIR)
     parser.add_argument("--cache-ttl-hours", type=float, default=DEFAULT_CACHE_TTL_HOURS)
     parser.add_argument("--refresh", action="store_true", help="Intentar renovar los CSV aunque la caché siga vigente.")
+    parser.add_argument(
+        "--offline",
+        action="store_true",
+        help="Usar exclusivamente caché local; no realizar peticiones HTTP.",
+    )
     parser.add_argument("--seasons", nargs="+", default=list(SEASONS), help="Códigos de temporada, por ejemplo 2526 2627.")
     parser.add_argument("--leagues", nargs="+", choices=tuple(LEAGUES), default=list(LEAGUES))
     return parser.parse_args()
@@ -506,6 +526,7 @@ def main() -> None:
         cache_dir=args.cache_dir,
         cache_ttl_hours=args.cache_ttl_hours,
         refresh=args.refresh,
+        offline=args.offline,
     )
     print(f"Wrote {len(history)} matches to {args.output}")
 

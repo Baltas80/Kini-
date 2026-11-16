@@ -66,6 +66,42 @@ def test_fetch_csv_falls_back_to_valid_stale_cache(tmp_path: Path) -> None:
     assert session.calls == 1
 
 
+
+
+
+def test_fetch_csv_offline_uses_stale_valid_cache_without_network(tmp_path: Path) -> None:
+    cache = tmp_path / "2122_SP1.csv"
+    cache.write_bytes(VALID_CSV)
+    old = time.time() - 48 * 3600
+    os.utime(cache, (old, old))
+    session = FakeSession(error=requests.ConnectionError("offline must not call network"))
+
+    df = fetch_csv(
+        "https://example.test/source.csv",
+        cache,
+        session=session,
+        cache_ttl_hours=24,
+        offline=True,
+    )
+
+    assert len(df) == 4
+    assert session.calls == 0
+
+
+def test_fetch_csv_offline_fails_closed_without_valid_cache(tmp_path: Path) -> None:
+    session = FakeSession(content=VALID_CSV)
+
+    with pytest.raises(RuntimeError, match="modo offline impide descargar"):
+        fetch_csv(
+            "https://example.test/source.csv",
+            tmp_path / "missing.csv",
+            session=session,
+            offline=True,
+        )
+
+    assert session.calls == 0
+
+
 def test_fetch_csv_rejects_non_csv_provider_response(tmp_path: Path) -> None:
     session = FakeSession(content=b"<html><body>service unavailable</body></html>")
 
@@ -76,7 +112,10 @@ def test_fetch_csv_rejects_non_csv_provider_response(tmp_path: Path) -> None:
 def test_build_history_sorts_deduplicates_and_drops_unplayed(tmp_path: Path) -> None:
     cache_dir = tmp_path / "cache"
     cache_dir.mkdir()
-    (cache_dir / "2122_SP1.csv").write_bytes(VALID_CSV)
+    cache_path = cache_dir / "2122_SP1.csv"
+    cache_path.write_bytes(VALID_CSV)
+    old = time.time() - 48 * 3600
+    os.utime(cache_path, (old, old))
     output = tmp_path / "data" / "historical.csv"
     session = FakeSession(error=requests.ConnectionError("fresh cache expected"))
 
@@ -86,6 +125,7 @@ def test_build_history_sorts_deduplicates_and_drops_unplayed(tmp_path: Path) -> 
         output=output,
         cache_dir=cache_dir,
         cache_ttl_hours=24,
+        offline=True,
         session=session,
     )
 

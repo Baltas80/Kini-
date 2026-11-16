@@ -2757,3 +2757,12 @@ Official source pages reviewed:
 4. The source's usage terms are a production blocker if Quiniela Predictor is distributed commercially or uses the data for commercial AI training. Do not increase automated download frequency; the existing weekly scheduled refresh is within the source's stated light-download limit, but written permission or a licensed provider is required before commercial use. TheStatsAPI is the source's named subscription alternative.
 
 This finding does not invalidate the existing historical-data integrity checks. It limits what can be claimed about market timing and what use of the data is permitted.
+
+
+## 2026-11-17 — Football-Data download frequency guard
+
+The historical-data validation workflow previously ran `build_history.py --refresh` for every matching push/PR event as well as its weekly schedule. Because refresh bypasses the 24-hour cache, repeated PR synchronizations could cause repeated automated downloads, conflicting with the provider's twice-weekly maximum.
+
+Implemented a fail-closed `--offline` mode in `scripts/build_history.py`: it accepts a valid stale cache but never creates an HTTP request; it fails if the cache is absent or invalid. The workflow now refreshes only on the weekly schedule or an explicitly opted-in manual dispatch. Push/PR validation uses offline cache only. Regression tests prove stale-cache reuse and no-network failure when no cache exists.
+
+This limits automated refresh to once weekly by default and preserves a manual second refresh only when explicitly requested. Commercial/AI-training permission remains unresolved and must be obtained before commercial deployment.

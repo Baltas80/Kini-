@@ -36,6 +36,12 @@ on:
       - "requirements*.txt"
       - ".github/workflows/historical-data-validation.yml"
   workflow_dispatch:
+    inputs:
+      refresh_source:
+        description: "Refresh Football-Data only if still within the provider's weekly download allowance"
+        type: boolean
+        required: false
+        default: false
   schedule:
     - cron: "37 4 * * 1"
 
@@ -61,8 +67,14 @@ jobs:
             football-data-${{ runner.os }}-${{ github.ref_name }}-
             football-data-${{ runner.os }}-
       - name: Build historical data and profile
-        # Validation must use fresh provider files, not a cache restored up to 24h ago.
-        run: python scripts/build_history.py --refresh
+        env:
+          REFRESH_SOURCE: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.refresh_source) }}
+        run: |
+          if [ "$REFRESH_SOURCE" = "true" ]; then
+            python scripts/build_history.py --refresh
+          else
+            python scripts/build_history.py --offline
+          fi
       - name: Validate canonical team identities
         run: |
           python -m scripts.validate_team_identity_registry --csv data/historical_spain.csv --output data/team_identity_validation.json
