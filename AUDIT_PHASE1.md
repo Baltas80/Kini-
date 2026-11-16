@@ -1720,9 +1720,10 @@ Métricas Bet365 en su muestra elegible: accuracy 0.508037, Brier 0.597352, Log 
 
 ### CI y seguimiento
 
-- La ejecución de CI #43803266992 superó el lint, pero falló en ruff format --check por formato en backtest.py y tests/test_backtest.py; pytest no llegó a ejecutarse en esa ejecución.
-- Se corrige el formato y se vuelve a ejecutar CI sobre el nuevo commit.
-- La siguiente prioridad es cerrar CI y, después, auditar la optimización de boletos P6 sin alterar las probabilidades base.
+- CI #43806439030: success sobre el commit d567dc3; actionlint, Ruff lint, Ruff format y pytest completados. Resultado: 208 passed, 20 warnings de deprecación procedentes de penaltyblog/NumPy 2.5.
+- La validación de datos #43806306436 terminó success; reconstruyó y validó el histórico y el registro canónico de equipos.
+- El backtest #43805280611 continúa ejecutando la comparación walk-forward; todavía no hay métricas finales nuevas que publicar.
+- La siguiente prioridad P6 es cerrar el contrato de Pleno al 15 y su multiplicador antes de usar la cobertura como cobertura de boleto completo.
 
 
 ---
@@ -1745,3 +1746,19 @@ La inspección de una ficha del 23-11-2025 confirma el mismo formato de 14 signo
 ### Siguiente paso P6
 
 Ejecutar el descubrimiento desde un entorno con acceso a SELAE. Si la descarga es accesible, inspeccionar las fichas de resultado por lotes y definir un esquema versionado que distinga partidos disputados, aplazados y signos determinados por sorteo público. Después, reconciliar cada jornada con sus 14 fixtures y Pleno al 15 antes de calcular cobertura histórica. Si SELAE bloquea el entorno, conservar el error y el diagnóstico; no sustituir la fuente oficial por datos no verificados.
+
+
+---
+## 2026-11-16 — Validación reglamentaria del múltiple directo y Pleno al 15 (P6)
+
+Se contrastó el optimizador con las normas oficiales de SELAE, documento Normas que regulan el juego La Quiniela con Elige8 (octubre de 2019), actualmente enlazado desde la página oficial de normativa.
+
+- La norma 18.2 establece que el Pleno al 15 multiplica las apuestas desarrolladas con los otros 14 partidos según el número de categorías marcadas para cada equipo; el multiplicador puede llegar a 16.
+- La norma 21.3 exige tener en cuenta el Pleno al 15 al determinar el máximo de apuestas autorizadas en los métodos múltiples.
+- La norma 22 remite al Anexo I para las combinaciones autorizadas del método múltiple directo.
+- El apartado D de apuestas que participan fija un mínimo de 2 y un máximo de 31.104 apuestas por boleto, incluido el Pleno al 15.
+- La norma 5 fija el precio en 0,75 EUR por apuesta.
+
+El límite de 31.104 y la tabla de dobles/triples implementados en TicketOptimizer son coherentes para un único pronóstico del Pleno (multiplicador 1). El contrato actual declara explícitamente pleno15_multiplier=1 y KiniEngine selecciona una única categoría de Pleno para el cálculo de cobertura independiente. Por tanto, el optimizador no debe presentarse como compatible con boletos que marquen varias categorías del Pleno: en ese caso el multiplicador debe reducir el número de combinaciones de los 14 partidos para que el total siga siendo <= 31.104. La selección múltiple del Pleno queda pendiente de implementación y prueba; no se modifica silenciosamente el presupuesto actual.
+
+Fuente normativa oficial: https://www.loteriasyapuestas.es/f/loterias/documentos/normativa/Normativa%20de%20los%20juegos/Normas_de_la_Quiniela_y_Elige8_Octubre_2019.pdf
