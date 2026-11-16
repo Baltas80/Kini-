@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from itertools import pairwise
 from typing import Any
 
 import numpy as np
@@ -30,7 +31,7 @@ def _classwise_calibration(
     calibration_bins: int,
 ) -> dict[str, dict[str, Any]]:
     """Return one-vs-rest reliability diagnostics for each 1/X/2 class."""
-    n = int(len(target_indices))
+    n = len(target_indices)
     edges = np.linspace(0.0, 1.0, calibration_bins + 1)
     diagnostics: dict[str, dict[str, Any]] = {}
 
@@ -41,7 +42,7 @@ def _classwise_calibration(
         bins: list[dict[str, float | int]] = []
         ece = 0.0
 
-        for bin_index, (lower, upper) in enumerate(zip(edges[:-1], edges[1:])):
+        for bin_index, (lower, upper) in enumerate(pairwise(edges)):
             if bin_index == calibration_bins - 1:
                 mask = (predicted >= lower) & (predicted <= upper)
             else:
@@ -152,7 +153,7 @@ def multiclass_metrics(
     n = len(rows)
     ece = 0.0
     edges = np.linspace(0.0, 1.0, calibration_bins + 1)
-    for lo, hi in zip(edges[:-1], edges[1:]):
+    for lo, hi in pairwise(edges):
         mask = [
             i for i, confidence in enumerate(confidences)
             if (confidence >= lo and confidence < hi)

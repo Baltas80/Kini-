@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 
 import numpy as np
 
-import kini_engine.backtest as backtest
+from kini_engine import backtest
 from kini_engine.backtest import multiclass_metrics
 from kini_engine.core import LAE_SOURCE_ID, Match
 
