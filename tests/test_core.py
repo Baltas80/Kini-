@@ -346,7 +346,7 @@ def test_dc_forecast_does_not_train_optional_ml_model():
         def fit_predict_proba(self, history, current):
             raise AssertionError("ML must not run for a DC-only forecast")
 
-    engine = KiniEngine(enable_ml=True)
+    engine = KiniEngine(enable_ml=True).fit(sample())
     engine.ml = ExplodingML()
     prediction = engine.predict(Match(datetime(2025, 4, 1), "A", "D"), mode="dc")
 
@@ -356,8 +356,8 @@ def test_dc_forecast_does_not_train_optional_ml_model():
 
 
 def test_ensemble_ignores_lae_without_capture_provenance():
-    engine = KiniEngine()
-    engine.dc.predict = lambda home, away: (
+    engine = KiniEngine().fit(sample())
+    engine.dc.predict = lambda home, away, **kwargs: (
         {"1": 0.80, "X": 0.10, "2": 0.10},
         [],
     )
@@ -378,8 +378,8 @@ def test_ensemble_ignores_lae_without_capture_provenance():
 
 
 def test_lae_mode_and_ensemble_accept_timezone_verified_pre_match_input():
-    engine = KiniEngine()
-    engine.dc.predict = lambda home, away: (
+    engine = KiniEngine().fit(sample())
+    engine.dc.predict = lambda home, away, **kwargs: (
         {"1": 0.80, "X": 0.10, "2": 0.10},
         [],
     )
@@ -461,8 +461,8 @@ def test_model_only_ensemble_excludes_market_and_lae():
         def fit_predict_proba(self, training_history, current, feature_history=None):
             return np.asarray([0.60, 0.20, 0.20])
 
-    engine = KiniEngine(enable_ml=True)
-    engine.dc.predict = lambda home, away: (
+    engine = KiniEngine(enable_ml=True).fit(sample())
+    engine.dc.predict = lambda home, away, **kwargs: (
         {"1": 0.80, "X": 0.10, "2": 0.10},
         [],
     )
@@ -488,8 +488,8 @@ def test_model_only_ensemble_excludes_market_and_lae():
 
 
 def test_ensemble_ignores_temporally_ineligible_market_and_surprise_reference():
-    engine = KiniEngine()
-    engine.dc.predict = lambda home, away: (
+    engine = KiniEngine().fit(sample())
+    engine.dc.predict = lambda home, away, **kwargs: (
         {"1": 0.80, "X": 0.10, "2": 0.10},
         [],
     )
@@ -532,8 +532,8 @@ def test_market_mode_rejects_temporally_ineligible_odds():
 
 
 def test_ensemble_uses_schedule_screened_market():
-    engine = KiniEngine()
-    engine.dc.predict = lambda home, away: (
+    engine = KiniEngine().fit(sample())
+    engine.dc.predict = lambda home, away, **kwargs: (
         {"1": 0.80, "X": 0.10, "2": 0.10},
         [],
     )
@@ -799,7 +799,7 @@ def test_optimizer_enforces_minimum_stake_and_price():
 
 def test_pleno15_aggregates_official_goal_categories():
     model = DixonColes()
-    distribution = model.pleno15_probs("A", "B")
+    distribution = model.pleno15_probs("A", "B", allow_untrained_fallback=True)
 
     assert len(distribution) == 16
     assert {row["home_goals"] for row in distribution} == {"0", "1", "2", "M"}
@@ -818,10 +818,10 @@ def test_pleno15_aggregates_official_goal_categories():
 
 def test_quiniela_returns_16_pleno15_categories():
     fixtures = [
-        Match(datetime(2025, 1, 1), f"Home{i}", f"Away{i}")
+        Match(datetime(2025, 4, 1), f"Home{i}", f"Away{i}")
         for i in range(15)
     ]
-    result = KiniEngine(enable_ml=False).quiniela(fixtures, budget=2)
+    result = KiniEngine(enable_ml=False).fit(sample()).quiniela(fixtures, budget=2)
     assert len(result["pleno_al_15"]) == 16
     assert sum(row["probability"] for row in result["pleno_al_15"]) == pytest.approx(1.0)
     assert result["pleno_al_15_best"] == result["pleno_al_15"][0]
