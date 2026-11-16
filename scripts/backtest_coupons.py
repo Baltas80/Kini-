@@ -51,9 +51,8 @@ def validate_coupon_backtest_acceptance(
     min_history_matches: int,
 ) -> None:
     """Fail closed unless every coupon and every candidate model is fully evaluated."""
-    if (
-        not expected_coupon_ids
-        or len(set(expected_coupon_ids)) != len(expected_coupon_ids)
+    if not expected_coupon_ids or len(set(expected_coupon_ids)) != len(
+        expected_coupon_ids
     ):
         raise ValueError("expected coupon IDs must be non-empty and unique")
     if isinstance(budget, bool) or not isinstance(budget, int) or budget < 1:
@@ -69,8 +68,7 @@ def validate_coupon_backtest_acceptance(
     if not isinstance(coupons, list):
         raise TypeError("coupon backtest result has no coupon list")
     actual_ids = [
-        item.get("coupon_id") if isinstance(item, dict) else None
-        for item in coupons
+        item.get("coupon_id") if isinstance(item, dict) else None for item in coupons
     ]
     if actual_ids != expected_coupon_ids:
         raise ValueError(
@@ -209,9 +207,7 @@ def validate_coupon_backtest_acceptance(
                     or not math.isfinite(value)
                     or not 0.0 <= value <= 1.0
                     for value in values
-                ) or not math.isclose(
-                    sum(values), 1.0, rel_tol=0.0, abs_tol=1e-6
-                ):
+                ) or not math.isclose(sum(values), 1.0, rel_tol=0.0, abs_tol=1e-6):
                     raise ValueError(
                         f"{coupon_id} {mode} fixture {index}: "
                         "invalid 1/X/2 probabilities"
