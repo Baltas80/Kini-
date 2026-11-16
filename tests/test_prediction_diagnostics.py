@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import hashlib
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, timedelta
 
 import pytest
 
@@ -141,3 +141,57 @@ def test_segment_market_comparison_is_withheld_below_minimum_sample():
 def test_diagnostics_reject_invalid_segment_threshold():
     with pytest.raises(ValueError, match="min_segment_n"):
         analyze_prediction_rows(_manifest(), [_row(1, "1")], min_segment_n=0)
+
+
+def test_market_comparison_reports_reproducible_week_cluster_intervals():
+    rows = []
+    first_date = date(2024, 1, 1)
+    for index in range(12):
+        row = _row(index + 1, "1")
+        forecast_date = first_date + timedelta(days=7 * index)
+        row["forecast_as_of_date"] = forecast_date.isoformat()
+        row["training_cutoff_date"] = (forecast_date - timedelta(days=1)).isoformat()
+        row["model_fit_cutoff_date"] = (forecast_date - timedelta(days=1)).isoformat()
+        row["actual_result"] = "1"
+        row["model_probabilities"] = {
+            "dc": {"1": 0.1, "X": 0.8, "2": 0.1},
+            "ml": {"1": 0.1, "X": 0.8, "2": 0.1},
+        }
+        row["model_signs"] = {"dc": "X", "ml": "X"}
+        row["market_eligible"] = True
+        row["market_probabilities"] = {"1": 0.8, "X": 0.1, "2": 0.1}
+        rows.append(row)
+
+    manifest = _manifest(forecast_count=len(rows))
+    first = analyze_prediction_rows(
+        manifest,
+        rows,
+        min_segment_n=1,
+        bootstrap_samples=500,
+    )
+    second = analyze_prediction_rows(
+        manifest,
+        rows,
+        min_segment_n=1,
+        bootstrap_samples=500,
+    )
+
+    uncertainty = first["market_common_sample"]["models"]["dc"]["paired_uncertainty"]
+    assert uncertainty["status"] == "ok"
+    assert uncertainty["cluster_unit"] == "iso_calendar_week"
+    assert uncertainty["cluster_count"] == 12
+    assert uncertainty["bootstrap_samples"] == 500
+    assert uncertainty == second["market_common_sample"]["models"]["dc"]["paired_uncertainty"]
+    intervals = uncertainty["confidence_interval_95"]
+    assert intervals["brier"]["lower"] > 0.0
+    assert intervals["logloss"]["lower"] > 0.0
+    assert intervals["accuracy"]["upper"] < 0.0
+
+
+def test_diagnostics_reject_too_few_bootstrap_samples():
+    with pytest.raises(ValueError, match="bootstrap_samples"):
+        analyze_prediction_rows(
+            _manifest(),
+            [_row(1, "1")],
+            bootstrap_samples=99,
+        )

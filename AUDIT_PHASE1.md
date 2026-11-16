@@ -2374,3 +2374,16 @@ Antes de disponer del nuevo artefacto segmentado, se calculó de forma independi
 | Segunda | 2026/27 parcial | 138 | 0.60822 | 0.62338 | +0.01516 |
 
 El mercado obtiene mejor Brier en los 14/14 segmentos. La diferencia más pequeña es LaLiga 2025/26 (+0.00545) y la mayor LaLiga 2020/21 (+0.03878). Es evidencia descriptiva, no prueba de significancia: no se han calculado intervalos de confianza ni corregido comparaciones múltiples. Las temporadas 2026/27 son parciales y sus muestras son menores. La elegibilidad temporal del mercado sigue siendo el filtro de calendario documentado, no una captura exacta por fixture.
+
+
+### 2026-11-16 — Incertidumbre pareada de la ventaja del mercado
+
+El artefacto del run 43928779926 ha sido descargado e inspeccionado independientemente. El SHA-256 del ZIP coincide con el digest publicado por GitHub Actions: b657b474d34a99e195cd1a3ceceb63de1e6e245412152ba20b3b891b11f50c99. Contiene 5.021 predicciones individuales, resultados agregados y el diagnóstico segmentado. El manifiesto identifica el código c4995d462257abaa2ef63de9529558299258cfeb, el histórico SHA-256 e4b195593118215684ffefc8e70ffe0c8d88b3e28318d9c796f7b3b71c496475 y 5.021 filas.
+
+La comparación segmentada se confirmó en el artefacto: 14 segmentos competición-temporada, cada uno con 100 o más partidos comunes con el mercado. Los 14 deltas puntuales de Brier favorecen al mercado. Esto no significa que los 14 segmentos sean individualmente concluyentes: varias muestras no son suficientemente precisas para excluir cero.
+
+Se añade a kini_engine/diagnostics.py un intervalo de incertidumbre pareado para las diferencias modelo menos mercado en Brier, Log Loss y accuracy. La unidad de remuestreo es la semana ISO; cada réplica extrae semanas con reemplazo y conserva juntos todos los partidos elegibles de cada semana. La semilla deriva del run, segmento y modelo para hacer reproducible el resultado. Se publican intervalos percentiles del 95%, no p-valores. Los intervalos por segmento son exploratorios y no están ajustados por comparaciones múltiples. No se calcula intervalo si hay menos de ocho semanas distintas.
+
+La CLI acepta --bootstrap-samples (mínimo 100; predeterminado 10.000). Las métricas puntuales no cambian. La convención de signo es modelo menos mercado: delta Brier/Log Loss positivo favorece al mercado; delta accuracy negativo favorece al mercado.
+
+Este análisis no resuelve la limitación temporal de las cuotas: el benchmark sigue siendo schedule-screened y no dispone de timestamp de captura por fixture. Tampoco demuestra rentabilidad futura.

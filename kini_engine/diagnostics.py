@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import hashlib
 import math
 from collections import defaultdict
+from datetime import date
 from typing import Any
+
+import numpy as np
 
 SIGNS = ("1", "X", "2")
 
@@ -194,11 +198,117 @@ def _pairwise_comparison(
     }
 
 
+
+def _paired_cluster_bootstrap(
+    rows: list[dict[str, Any]],
+    mode: str,
+    *,
+    bootstrap_samples: int,
+    seed_material: str,
+    minimum_clusters: int = 8,
+) -> dict[str, Any]:
+    """Estimate paired model-minus-market uncertainty by ISO-week cluster bootstrap."""
+    cluster_totals: dict[str, list[float]] = {}
+    for row in rows:
+        forecast_date = date.fromisoformat(row["forecast_as_of_date"])
+        iso = forecast_date.isocalendar()
+        cluster = f"{iso.year}-W{iso.week:02d}"
+        totals = cluster_totals.setdefault(cluster, [0.0, 0.0, 0.0, 0.0])
+
+        actual = row["actual_result"]
+        model_probabilities = _probability_vector(row, mode)
+        market_probabilities = _probability_vector(row, "market")
+        model_brier = sum(
+            (model_probabilities[sign] - float(sign == actual)) ** 2
+            for sign in SIGNS
+        )
+        market_brier = sum(
+            (market_probabilities[sign] - float(sign == actual)) ** 2
+            for sign in SIGNS
+        )
+        model_logloss = -math.log(max(model_probabilities[actual], 1e-15))
+        market_logloss = -math.log(max(market_probabilities[actual], 1e-15))
+        model_correct = float(_predicted_sign(row, mode) == actual)
+        market_correct = float(_predicted_sign(row, "market") == actual)
+
+        totals[0] += model_brier - market_brier
+        totals[1] += model_logloss - market_logloss
+        totals[2] += model_correct - market_correct
+        totals[3] += 1.0
+
+    clusters = sorted(cluster_totals)
+    cluster_count = len(clusters)
+    if cluster_count < minimum_clusters:
+        return {
+            "status": "insufficient_clusters",
+            "cluster_unit": "iso_calendar_week",
+            "cluster_count": cluster_count,
+            "minimum_clusters": minimum_clusters,
+            "bootstrap_samples": bootstrap_samples,
+            "confidence_interval_95": None,
+        }
+
+    totals_matrix = np.asarray(
+        [cluster_totals[cluster] for cluster in clusters],
+        dtype=np.float64,
+    )
+    observed_sums = totals_matrix.sum(axis=0)
+    observed = observed_sums[:3] / observed_sums[3]
+
+    seed = int.from_bytes(
+        hashlib.sha256(seed_material.encode("utf-8")).digest()[:8],
+        byteorder="big",
+    )
+    rng = np.random.default_rng(seed)
+    bootstrap_means = np.empty((bootstrap_samples, 3), dtype=np.float64)
+    batch_size = 1_000
+    for start in range(0, bootstrap_samples, batch_size):
+        stop = min(start + batch_size, bootstrap_samples)
+        indices = rng.integers(
+            0,
+            cluster_count,
+            size=(stop - start, cluster_count),
+            dtype=np.int32,
+        )
+        sampled_sums = totals_matrix[indices].sum(axis=1)
+        bootstrap_means[start:stop] = (
+            sampled_sums[:, :3] / sampled_sums[:, 3, None]
+        )
+
+    lower, upper = np.quantile(bootstrap_means, [0.025, 0.975], axis=0)
+    return {
+        "status": "ok",
+        "cluster_unit": "iso_calendar_week",
+        "cluster_count": cluster_count,
+        "bootstrap_samples": bootstrap_samples,
+        "seed": seed,
+        "delta_vs_market": {
+            "brier": float(observed[0]),
+            "logloss": float(observed[1]),
+            "accuracy": float(observed[2]),
+        },
+        "confidence_interval_95": {
+            metric: {
+                "lower": float(lower[index]),
+                "upper": float(upper[index]),
+            }
+            for index, metric in enumerate(("brier", "logloss", "accuracy"))
+        },
+        "method": (
+            "Paired percentile cluster bootstrap: ISO calendar weeks are sampled "
+            "with replacement and all eligible fixtures in each sampled week are "
+            "retained. Intervals are exploratory and are not adjusted for multiple "
+            "comparisons."
+        ),
+    }
+
 def _market_common_comparison(
     rows: list[dict[str, Any]],
     model_modes: list[str],
     *,
     min_n: int = 1,
+    bootstrap_samples: int = 10_000,
+    seed_material: str = "",
 ) -> dict[str, Any]:
     """Compare every model with the market on the exact same eligible fixtures."""
     market_rows = [
@@ -230,6 +340,12 @@ def _market_common_comparison(
                 "logloss": model_metrics["logloss"] - market_metrics["logloss"],
             },
             "sign_comparison": _pairwise_comparison(market_rows, mode, "market"),
+            "paired_uncertainty": _paired_cluster_bootstrap(
+                market_rows,
+                mode,
+                bootstrap_samples=bootstrap_samples,
+                seed_material=f"{seed_material}|{mode}",
+            ),
         }
     return comparison
 
@@ -239,6 +355,7 @@ def analyze_prediction_rows(
     rows: list[dict[str, Any]],
     *,
     min_segment_n: int = 100,
+    bootstrap_samples: int = 10_000,
 ) -> dict[str, Any]:
     """Build descriptive error diagnostics from archived OOS fixture forecasts."""
     if (
@@ -247,6 +364,12 @@ def analyze_prediction_rows(
         or min_segment_n < 1
     ):
         raise ValueError("min_segment_n must be a positive integer")
+    if (
+        isinstance(bootstrap_samples, bool)
+        or not isinstance(bootstrap_samples, int)
+        or bootstrap_samples < 100
+    ):
+        raise ValueError("bootstrap_samples must be an integer of at least 100")
     if not rows:
         raise ValueError("prediction diagnostics require at least one forecast row")
 
@@ -285,11 +408,20 @@ def analyze_prediction_rows(
                     segment_rows,
                     model_modes,
                     min_n=min_segment_n,
+                    bootstrap_samples=bootstrap_samples,
+                    seed_material=(
+                        f"{manifest.get('run_id')}|{competition}|{season}"
+                    ),
                 ),
             }
         )
 
-    market_comparison = _market_common_comparison(rows, model_modes)
+    market_comparison = _market_common_comparison(
+        rows,
+        model_modes,
+        bootstrap_samples=bootstrap_samples,
+        seed_material=f"{manifest.get('run_id')}|overall",
+    )
 
     return {
         "schema_version": 1,
@@ -314,5 +446,9 @@ def analyze_prediction_rows(
             "scope": "descriptive out-of-sample diagnostics; no causal claims or significance tests",
             "draw_sign": "X precision and recall refer to the single most-probable sign, not double coverage",
             "market": "market comparisons use only rows marked market_eligible by the existing temporal screen",
+            "uncertainty": (
+                "paired 95% percentile cluster-bootstrap intervals resample ISO weeks; "
+                "they are exploratory and are not adjusted for multiple comparisons"
+            ),
         },
     }

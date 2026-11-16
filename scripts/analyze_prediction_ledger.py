@@ -40,6 +40,7 @@ def main() -> int:
     parser.add_argument("--results-json", type=Path)
     parser.add_argument("--output", type=Path)
     parser.add_argument("--min-segment-n", type=int, default=100)
+    parser.add_argument("--bootstrap-samples", type=int, default=10_000)
     args = parser.parse_args()
 
     try:
@@ -72,6 +73,7 @@ def main() -> int:
             manifest,
             rows,
             min_segment_n=args.min_segment_n,
+            bootstrap_samples=args.bootstrap_samples,
         )
         report["source"]["ledger_sha256"] = hashlib.sha256(
             args.ledger.read_bytes()
