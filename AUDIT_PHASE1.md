@@ -1988,3 +1988,52 @@ Two follow-ups identified in the previous audit entry are now implemented.
 The two specific ingestion defects above are **implemented and covered by passing tests**. The broader P1 audit is not closed: source publication provenance, exact market-capture timestamps, historical SELAE coupon completeness and any additional provider-specific integrity constraints remain open. The successful dataset profile establishes structural integrity for the observed Football-Data snapshot, not point-in-time publication completeness.
 
 Next action: inspect the walk-forward artifact and acceptance gates, then continue the remaining source-provenance and official coupon ingestion work without changing the model-selection decision (the market remains the strongest benchmark).
+
+
+## 2026-11-16 — completed walk-forward after P1 ingestion hardening
+
+The historical walk-forward started on the implementation commit `eb72fa61435dc7d19fa0313efa0271d43025d18b` has now completed. Workflow [43840991448](https://github.com/Baltas80/Kini-/actions/runs/43840991448) finished successfully: the history build, first-ML diagnostic, historical comparison, non-empty prediction gate, cold-start diagnostics, schedule-screened market acceptance, fixed-book Bet365 benchmark acceptance, prequential-calibration acceptance and artifact upload all passed.
+
+Artifact:
+- `historical-backtest`, ID `14215051364`, 178,715 bytes.
+- ZIP SHA-256: `b0a58e1d9ca13885b5689ffb57465653d45c8f2a4403d7d4fc7e23b5d7f143b7`.
+- Dataset/test interval: 5,011 walk-forward fixtures, 2020-12-11 through 2026-11-09; initial training sample 300.
+- All five configurations (`dc`, `ml`, `ensemble`, `ensemble_dc_ml`, `ensemble_dc_ml_adaptive`) generated 5,011/5,011 predictions. Recorded prediction errors: zero for every configuration.
+- Cold-start fallback diagnostics reconcile to all 5,011 successful forecasts: Dixon–Coles and each DC-dependent ensemble used the explicit unseen-team fallback 73 times (1.4568%); ML used it zero times. Per-season diagnostics and examples were present and passed the workflow gate.
+
+### Same-fixture comparison with the schedule-screened market
+
+The model/market comparison uses the identical 4,424 fixtures for which the historical odds passed the conservative schedule screen. Metrics below are multiclass accuracy, Brier score, Log Loss, RPS and ECE respectively.
+
+| Candidate | n | Accuracy | Brier | Log Loss | RPS | ECE |
+|---|---:|---:|---:|---:|---:|---:|
+| Dixon–Coles | 4,424 | 0.480561 | 0.616357 | 1.027499 | 0.207959 | 0.016274 |
+| ML | 4,424 | 0.437839 | 0.647471 | 1.074246 | 0.220661 | 0.048768 |
+| Baseline ensemble | 4,424 | 0.478074 | 0.613563 | 1.023018 | 0.206841 | 0.016342 |
+| Fixed DC/ML ensemble | 4,424 | 0.474005 | 0.616095 | 1.026842 | 0.207953 | 0.012912 |
+| Adaptive DC/ML ensemble | 4,424 | 0.474910 | 0.616305 | 1.027133 | 0.208019 | 0.012296 |
+| Schedule-screened market | 4,424 | **0.507233** | **0.597504** | **0.999444** | **0.199876** | 0.024213 |
+
+The market is better on accuracy, Brier, Log Loss and RPS. The baseline ensemble is the strongest of the uncalibrated model candidates by Brier/Log Loss, but remains materially behind the market. ECE alone does not reverse the conclusion.
+
+### Prequential calibration
+
+Calibration was fitted only from prior walk-forward out-of-sample forecasts; same-calendar-day outcomes were excluded. The common calibrated model/market sample contains 3,847 fixtures. On that sample:
+- Market: raw Brier/Log Loss 0.597564/0.999533; calibrated 0.596714/0.998094.
+- Dixon–Coles: raw 0.613791/1.023639; calibrated 0.613232/1.022458.
+- ML: raw 0.638702/1.060984; calibrated 0.632937/1.051149.
+- Baseline ensemble: raw 0.611315/1.019753; calibrated 0.611522/1.019966.
+- Fixed DC/ML: raw 0.613518/1.023036; calibrated 0.613653/1.023129.
+- Adaptive DC/ML: raw 0.613703/1.023289; calibrated 0.613727/1.023189.
+
+Calibration improves some model scores modestly but does not close the market gap; it slightly worsens the baseline ensemble's Brier and Log Loss on this common calibrated sample. No candidate is promoted as market-beating.
+
+### Market-data limitations
+
+There are 5,011 fixtures with odds in the raw snapshot; 4,424 pass the schedule-compatibility screen and 587 remain ambiguous/excluded. Friday/Tuesday fixtures are excluded because the kickoff timezone is unspecified. Exact per-fixture odds-capture timestamps are unavailable. The benchmark therefore establishes a schedule-screened historical comparison, not proof that every quoted price was captured before the relevant kickoff. It does not establish executable profitability.
+
+### Relationship to the current PR head
+
+The walk-forward ran on `eb72fa6`. Comparing that commit with current PR head `05109b3a9c089f5f602c5819a5da95e6a3b4f1f6` shows exactly two later commits and only two changed files: `tests/test_build_history.py` (fixture delimiter correction) and this audit record. No predictive code, features, model configuration or backtest implementation changed after the completed walk-forward. Current-head CI [43841433607](https://github.com/Baltas80/Kini-/actions/runs/43841433607) passed; current-head historical-data validation [43841433631](https://github.com/Baltas80/Kini-/actions/runs/43841433631) passed. Current-head backtest workflow [43841433598](https://github.com/Baltas80/Kini-/actions/runs/43841433598) correctly skipped its expensive job because the two post-backtest commits changed only a test fixture and this document.
+
+P0 is now **validated for the current predictive code**: every required model produced a non-empty, error-free walk-forward sample and the workflow acceptance gates passed. This closes the previous `n=0` blocker. It does not close P1 source provenance or P2 exact publication/capture-time proof. The PR remains a draft and unmerged; no direct change to `master`.
