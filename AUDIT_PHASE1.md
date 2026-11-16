@@ -1966,3 +1966,25 @@ The historical backtest for the boolean-score hardening is queued as [run 438337
 - `kini_engine.dataio.build_dataset_profile` indexes its parsed-date list with DataFrame index labels rather than row positions. Non-RangeIndex frames can undercount duplicate fixtures; fix the positional association and add a regression test.
 
 Next priority: close these two data-quality defects, then require the resulting historical-data validation and full backtest runs to pass before marking P1 complete.
+
+## 2026-11-16 — P1 ingestion defects fixed and revalidated
+
+Two follow-ups identified in the previous audit entry are now implemented.
+
+- `scripts/build_history.py::_parse_source_csv` rejects Python and NumPy boolean values in `FTHG`/`FTAG` before `pd.to_numeric`. This prevents `True`/`False` from being accepted as 1/0 and prevents invalid source content from replacing the last known-good cache.
+- `kini_engine.dataio.build_dataset_profile` now associates parsed dates with DataFrame rows by position, not index label. It also creates a correctly sized missing-date sequence when a frame has no `Date` column. Non-RangeIndex frames no longer undercount duplicate fixtures or index the parsed-date list incorrectly.
+- Regression tests cover boolean scores in both home/away columns at the source-download/cache boundary, cache non-replacement, non-RangeIndex duplicate detection and missing-date frames.
+
+### Validation on current PR head
+
+- Implementation commit: [eb72fa6](https://github.com/Baltas80/Kini-/commit/eb72fa61435dc7d19fa0313efa0271d43025d18b).
+- Test-fixture correction: [0f17916](https://github.com/Baltas80/Kini-/commit/0f17916dfa0cfa7fc0671f6f41e9f4ac200305a3). The first CI attempt exposed literal backslash-n delimiters in the new CSV fixture; the fixture was corrected and the fresh run below is the accepted result.
+- CI [43841173353](https://github.com/Baltas80/Kini-/actions/runs/43841173353): success. Ruff passed, 18 files passed formatting, and **235 tests passed**. The 21 NumPy 2.5 / penaltyblog deprecation warnings remain upstream dependency warnings.
+- Historical-data validation [43841173572](https://github.com/Baltas80/Kini-/actions/runs/43841173572): success. **5,311/5,311 completed fixtures**, 0 missing team names, 0 missing/incomplete final scores, 0 duplicates removed, 0 conflicting duplicates and 0 score/result mismatches. Canonical identity validation resolved **10,622/10,622** team references to 56 IDs, with 0 unresolved and 0 ambiguous; `integrity_passed=true`.
+- Historical walk-forward [43840991448](https://github.com/Baltas80/Kini-/actions/runs/43840991448), running on implementation commit `eb72fa6`, was still executing its historical comparison at the time of this record. The current-head run [43841173346](https://github.com/Baltas80/Kini-/actions/runs/43841173346) was queued behind it. No new model metrics are claimed until one of those runs completes and its non-empty prediction and market acceptance gates pass.
+
+### P1 status
+
+The two specific ingestion defects above are **implemented and covered by passing tests**. The broader P1 audit is not closed: source publication provenance, exact market-capture timestamps, historical SELAE coupon completeness and any additional provider-specific integrity constraints remain open. The successful dataset profile establishes structural integrity for the observed Football-Data snapshot, not point-in-time publication completeness.
+
+Next action: inspect the walk-forward artifact and acceptance gates, then continue the remaining source-provenance and official coupon ingestion work without changing the model-selection decision (the market remains the strongest benchmark).
