@@ -2673,4 +2673,44 @@ Validation status at this entry: implementation and regression tests are committ
 - Tightened the coupon acceptance gate to verify the optimizer's minimum-total-bets metadata (2), maximum authorized total bets (31,104) and current official unit price (0.75 EUR).
 - The coupon backtest now explicitly requires the one predicted Pleno category pair used by the current evaluation path. The lower-level optimizer still supports multiple categories, but this backtest rejects them until their combined Pleno probability mass and set-based realized coverage are modelled.
 - Added regression tests for the two-bet minimum, official price and unsupported multi-category Pleno ticket. The workflow's independent artifact check now verifies the same monetary bounds.
-- Validation on this commit is pending CI and the Jornada 21 pilot.
+- Validation was completed on the subsequent validated head (see the 2026-11-17 P6 validation record below).
+
+
+## 2026-11-17 — P6 coupon-ticket acceptance validated
+
+Validated branch head: ca03ad7fc9455d2cc6ab6c4e4cec8f8eb3f19279 (PR #9, feat/selae-fixture-reconciliation). No changes to master and no merge.
+
+### Evidence
+
+- CI run 43980635311: success. Ruff lint, Ruff formatting and the full test suite passed; 294 tests passed.
+- Coupon pilot run 43980635409: success. The real official Jornada 21 snapshot passed the common-cutoff backtest and coupon-level acceptance gate. Artifact: quiniela-coupon-pilot, run artifact 14282859019.
+- Historical data validation run 43980635296: success. Artifact: kini-historical-data, run artifact 14283197530.
+- Historical model backtest was skipped by its change filter because this unit did not modify predictive model code; no new Brier/Log Loss or season-level model result is claimed.
+
+### Coupon pilot facts
+
+Coupon 2020-2021:21; first kickoff 2020-12-12 14:00 Europe/Madrid; common training cutoff 2020-12-11; 303 historical matches used by each model. Fourteen main results and Pleno categories were reconciled against the reviewed official snapshot and Football-Data scores.
+
+All three candidates produced 14 valid 1/X/2 probability vectors and a reproducible 8-column direct system with 3 doubles, 0 triples, one Pleno category pair, 8 payable bets, 0.75 EUR per bet and 6.00 EUR total cost.
+
+| Candidate | Single-sign hits | Best column hits | Exact 14 covered | Pleno hit | Full coupon | Independent marginal coverage |
+|---|---:|---:|---|---|---|---:|
+| Dixon-Coles | 7/14 | 7/14 | No | No | No | 0.0008682 |
+| ML | 5/14 | 6/14 | No | No | No | 0.0004538 |
+| Ensemble | 7/14 | 8/14 | No | No | No | 0.0004306 |
+
+This is one historical coupon and a pipeline/acceptance validation, not a statistically sufficient model comparison or evidence of profitability. The marginal coverage estimate assumes independent fixture outcomes and must not be described as a joint 14-match probability.
+
+### Historical data quality snapshot
+
+The successful validation artifact contains 5,322 complete fixtures from 14 Football-Data CSV sources (La Liga and Segunda, seasons 2020/21 through the partial 2026/27 season), dated 2020-09-12 to 2026-11-16. No duplicate rows, missing team names, missing final scores, incomplete scores or invalid fixture dates were found.
+
+The canonical identity registry resolved all 10,644 team references to 56 unique teams, with zero unresolved or ambiguous references. Historical dataset SHA-256: 7251b84acd803047746c0c55c6bdabb60d9499208cfd6c781f72080295346f44.
+
+Odds coverage is not uniform: B365 1X2 odds are missing for 15 fixtures (0.28%), Pinnacle 1X2 for 734 (13.79%), William Hill 1X2 for 2,230 (41.90%), Interwetten 1X2 for 2,375 (44.63%) and Betfair 1X2 for 4,480 (84.18%). Market comparisons must use same-match samples and must not assume universal odds availability or proven historical publication timestamps.
+
+### Remaining work and next priority
+
+P6 ticket persistence, arithmetic, minimum/maximum bet bounds, current unit price, one-pair Pleno scope and realized-hit recomputation are validated. Still open within P6: dependence-aware joint coverage, multi-ticket diversification and payout/expected-value modelling.
+
+Next priority returns to P1/P2: document source provenance and historical variable availability, then audit every model feature and odds timestamp for leakage. The separate live KinielaGPT details diagnostic still receives HTTP 400 for jornada 23 / temporada 2027; this is an external endpoint diagnostic and did not block CI, data validation or the official coupon pilot.

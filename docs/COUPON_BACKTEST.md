@@ -47,7 +47,7 @@ Each model's probabilities are passed unchanged to the existing multiple-direct 
 
 The acceptance gate independently verifies that the number of direct columns is exactly 2^d × 3^t, that the selected signs form the complete Cartesian multiple, that total bets equal direct columns multiplied by the Pleno category-pair count, and that cost equals total bets multiplied by the configured price per bet. It recomputes realized coverage and hit counts from the saved columns rather than trusting summary fields.
 
-The independent marginal coverage estimate is reported separately from realized exact coverage. No expected payout or profitability is claimed: prize distributions, pari-mutuel effects, participation-level stakes and historical payout data are not modelled in this pilot.
+The independent marginal coverage estimate is reported separately from realized exact coverage. It multiplies per-fixture marginal masses and therefore assumes independence; it is not a joint 14-match probability. Match dependence, multi-ticket diversification and payout modelling remain outside this pilot. No expected payout or profitability is claimed: prize distributions, pari-mutuel effects, participation-level stakes and historical payout data are not modelled in this pilot.
 
 ## Pilot scope and limitations
 
