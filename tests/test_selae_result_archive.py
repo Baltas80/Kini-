@@ -10,6 +10,7 @@ from scripts.discover_selae_result_archive import (
     build_component_page_url,
     extract_pagination_template,
     extract_result_links,
+    probe_alternative_sources,
 )
 
 
@@ -100,6 +101,39 @@ def test_pagination_rejects_external_or_incomplete_component_links() -> None:
 
     with pytest.raises(ValueError, match="no validated pagination links"):
         extract_pagination_template(document)
+
+
+
+
+class _FakeResponse:
+    def __init__(self, url: str, status_code: int) -> None:
+        self.url = url
+        self.status_code = status_code
+        self.headers = {"Content-Type": "application/xml"}
+        self.content = b"<rss/>" if status_code == 200 else b"forbidden"
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback) -> None:
+        return None
+
+
+class _FakeSession:
+    def get(self, url: str, **kwargs):
+        status_code = 200 if ".formatoRSS" in url else 403
+        return _FakeResponse(url, status_code)
+
+
+def test_alternative_official_endpoints_are_probed_without_interpreting_payloads() -> None:
+    results = probe_alternative_sources(_FakeSession())
+
+    assert len(results) == 5
+    assert results[0]["name"] == "results_rss_es"
+    assert results[0]["accessible"] is True
+    assert results[0]["sha256"]
+    assert all(item["official_redirect"] for item in results)
+    assert all(item["accessible"] is False for item in results[1:])
 
 
 def test_component_page_builder_rejects_invalid_parameters_and_hosts() -> None:
