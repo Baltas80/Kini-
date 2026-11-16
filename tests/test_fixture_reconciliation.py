@@ -590,7 +590,7 @@ def test_draw_loader_rejects_unsafe_selae_source_urls(
     draw = make_draw()
     draw["source_url"] = source_url
     path = tmp_path / "draws.jsonl"
-    path.write_text(json.dumps(draw) + "\\n", encoding="utf-8")
+    path.write_text(json.dumps(draw) + "\n", encoding="utf-8")
 
     with pytest.raises(FixtureReconciliationError, match="official SELAE HTTPS URL"):
         load_draw_records(path)
@@ -602,7 +602,7 @@ def test_draw_loader_requires_utc_public_draw_evidence_timestamp(
     draw = make_draw()
     draw["fixtures"][1]["sign_evidence_checked_at_utc"] = "2026-11-15T08:14:47+01:00"
     path = tmp_path / "draws.jsonl"
-    path.write_text(json.dumps(draw) + "\\n", encoding="utf-8")
+    path.write_text(json.dumps(draw) + "\n", encoding="utf-8")
 
     with pytest.raises(
         FixtureReconciliationError,
@@ -615,7 +615,7 @@ def test_draw_loader_rejects_float_fixture_position(tmp_path: Path) -> None:
     draw = make_draw()
     draw["fixtures"][0]["position"] = 1.0
     path = tmp_path / "draws.jsonl"
-    path.write_text(json.dumps(draw) + "\\n", encoding="utf-8")
+    path.write_text(json.dumps(draw) + "\n", encoding="utf-8")
 
     with pytest.raises(FixtureReconciliationError, match="position must equal 1"):
         load_draw_records(path)
@@ -625,7 +625,7 @@ def test_draw_loader_rejects_float_fixture_count(tmp_path: Path) -> None:
     draw = make_draw()
     draw["fixture_count"] = 14.0
     path = tmp_path / "draws.jsonl"
-    path.write_text(json.dumps(draw) + "\\n", encoding="utf-8")
+    path.write_text(json.dumps(draw) + "\n", encoding="utf-8")
 
     with pytest.raises(FixtureReconciliationError, match="fixture_count must equal 14"):
         load_draw_records(path)
