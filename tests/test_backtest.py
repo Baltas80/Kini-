@@ -92,6 +92,20 @@ def test_walk_forward_refit_interval_counts_dates(monkeypatch):
     assert fitted_sizes == [12, 14]
 
 
+def test_football_data_snapshot_date_uses_documented_collection_days():
+    expected = {
+        "2025-01-06": None,
+        "2025-01-07": None,
+        "2025-01-08": "2025-01-07",
+        "2025-01-09": "2025-01-07",
+        "2025-01-10": None,
+        "2025-01-11": "2025-01-10",
+        "2025-01-12": "2025-01-10",
+    }
+    for fixture_date, snapshot_date in expected.items():
+        assert backtest._football_data_snapshot_date(fixture_date) == snapshot_date
+
+
 def test_market_baseline_uses_only_schedule_screened_rows():
     matches = [
         Match(
@@ -585,6 +599,125 @@ def test_compare_excludes_ambiguous_and_unknown_market_rows_from_strict_sample(
         "unknown": 1,
     }
     assert result["common_sample"]["dc"]["market"]["n"] == 1
+
+
+def test_compare_builds_a_conservative_common_information_time_market_sample(
+    monkeypatch,
+):
+    class FakeEngine:
+        def __init__(self, enable_ml=False):
+            self.dc = type("DC", (), {"decay": 0.995})()
+
+        def fit(self, history):
+            return self
+
+        def predict(self, match, mode="ensemble", history=None):
+            probabilities = {
+                "dc": {"1": 0.6, "X": 0.25, "2": 0.15},
+                "ml": {"1": 0.4, "X": 0.35, "2": 0.25},
+                "ensemble": {"1": 0.52, "X": 0.28, "2": 0.20},
+                "ensemble_dc_ml": {"1": 0.5, "X": 0.3, "2": 0.2},
+            }
+            return type("Prediction", (), {"probabilities": probabilities[mode]})()
+
+    monkeypatch.setattr(backtest, "KiniEngine", FakeEngine)
+    start = datetime(2025, 1, 1)
+    training = [Match(start, f"H{i}", f"A{i}", 1, 0, "1") for i in range(12)]
+    eligible = {
+        "market_temporal_status": "schedule_compatible",
+        "market_pre_match_eligible": True,
+    }
+    market = {"1": 0.45, "X": 0.30, "2": 0.25}
+    bet365 = {"1": 0.50, "X": 0.28, "2": 0.22}
+    matches = training + [
+        Match(datetime(2025, 1, 3), "Friday", "A", 1, 0, "1"),
+        Match(
+            datetime(2025, 1, 4),
+            "Saturday",
+            "A",
+            1,
+            0,
+            "1",
+            market=market,
+            detail={**eligible},
+        ),
+        Match(
+            datetime(2025, 1, 8),
+            "Wednesday",
+            "A",
+            0,
+            0,
+            "X",
+            market=market,
+            detail={
+                **eligible,
+                "market_bookmaker_probabilities": {"bet365": bet365},
+            },
+        ),
+        Match(
+            datetime(2025, 1, 9),
+            "Thursday",
+            "A",
+            0,
+            1,
+            "2",
+            market=market,
+            detail={
+                **eligible,
+                "market_bookmaker_probabilities": {"bet365": bet365},
+            },
+        ),
+    ]
+
+    result = backtest.compare_walk_forward(matches, min_train=12)
+    rows_by_home = {row["home"]: row for row in result["forecast_rows"]}
+    strict = result["strict_common_time_market"]
+    strict_bet365 = result["strict_common_time_bet365"]
+
+    assert rows_by_home["Saturday"]["market_snapshot_date"] == "2025-01-03"
+    assert rows_by_home["Saturday"]["strict_common_time_eligible"] is False
+    assert (
+        rows_by_home["Saturday"]["strict_common_time_exclusion_reason"]
+        == "training_cutoff_not_before_snapshot"
+    )
+    assert rows_by_home["Wednesday"]["market_snapshot_date"] == "2025-01-07"
+    assert rows_by_home["Wednesday"]["strict_common_time_eligible"] is True
+    assert rows_by_home["Wednesday"]["strict_common_time_exclusion_reason"] is None
+    assert rows_by_home["Thursday"]["market_snapshot_date"] == "2025-01-07"
+    assert rows_by_home["Thursday"]["strict_common_time_eligible"] is False
+    assert strict["n_schedule_eligible"] == 3
+    assert strict["n_common_time_eligible"] == 1
+    assert strict["n_excluded_from_common_time_sample"] == 2
+    assert strict["exclusion_reason_counts"] == {
+        "training_cutoff_not_before_snapshot": 2
+    }
+    assert strict["market"]["n"] == 1
+    for mode in (
+        "dc",
+        "ml",
+        "ensemble",
+        "ensemble_dc_ml",
+        "ensemble_dc_ml_adaptive",
+    ):
+        assert strict["common_sample"][mode]["n"] == 1
+        assert strict["common_sample"][mode]["model"]["n"] == 1
+        assert strict["common_sample"][mode]["market"]["n"] == 1
+
+    assert strict_bet365["n_schedule_eligible"] == 2
+    assert strict_bet365["n_common_time_eligible"] == 1
+    assert strict_bet365["metrics"]["n"] == 1
+    for mode in (
+        "dc",
+        "ml",
+        "ensemble",
+        "ensemble_dc_ml",
+        "ensemble_dc_ml_adaptive",
+    ):
+        sample = strict_bet365["common_sample"][mode]
+        assert sample["n"] == 1
+        assert sample["model"]["n"] == 1
+        assert sample["market_consensus"]["n"] == 1
+        assert sample["bet365"]["n"] == 1
 
 
 def test_compare_reports_unseen_team_cold_start_fallbacks_per_model(monkeypatch):

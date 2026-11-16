@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from itertools import pairwise
 from typing import Any
 
@@ -592,6 +592,27 @@ def _calendar_day(value: datetime | str) -> str:
     return datetime.fromtimestamp(_date_num(value)).date().isoformat()
 
 
+def _football_data_snapshot_date(match_date: datetime | str) -> str | None:
+    """Return a documented Football-Data snapshot date for eligible fixtures.
+
+    Wednesday/Thursday fixtures use the Tuesday snapshot; Saturday/Sunday
+    fixtures use the Friday snapshot. Monday and the collection weekdays
+    themselves fail closed because the published schedule does not establish
+    an unambiguous snapshot date for them.
+    """
+    try:
+        fixture_day = date.fromisoformat(_calendar_day(match_date))
+    except (TypeError, ValueError, OverflowError):
+        return None
+
+    weekday = fixture_day.weekday()
+    if weekday in {0, 1, 4}:
+        return None
+    snapshot_weekday = 1 if weekday in {2, 3} else 4
+    days_since_snapshot = (weekday - snapshot_weekday) % 7
+    return (fixture_day - timedelta(days=days_since_snapshot)).isoformat()
+
+
 def _temporal_classwise_calibration(
     dated_rows: list[tuple[str, dict[str, float], str]],
     calibration_bins: int = 10,
@@ -741,6 +762,12 @@ def compare_walk_forward(
     common_bet365_model_rows = {mode: [] for mode in all_modes}
     common_bet365_consensus_rows = {mode: [] for mode in all_modes}
     common_bet365_rows = {mode: [] for mode in all_modes}
+    strict_common_time_model_rows = {mode: [] for mode in all_modes}
+    strict_common_time_market_rows: list[tuple[dict[str, float], str]] = []
+    strict_common_time_exclusion_counts: dict[str, int] = {}
+    strict_common_time_bet365_model_rows = {mode: [] for mode in all_modes}
+    strict_common_time_bet365_consensus_rows = {mode: [] for mode in all_modes}
+    strict_common_time_bet365_rows: list[tuple[dict[str, float], str]] = []
     prediction_errors = {mode: {"count": 0, "first_error": None} for mode in all_modes}
     cold_start_fallback_counts = {mode: 0 for mode in all_modes}
     cold_start_fallback_examples = {mode: [] for mode in all_modes}
@@ -911,6 +938,51 @@ def compare_walk_forward(
                 mode: max(SIGNS, key=lambda sign: probabilities[sign])
                 for mode, probabilities in model_probabilities.items()
             }
+            market_snapshot_date = (
+                _football_data_snapshot_date(forecast_date)
+                if market_is_eligible
+                else None
+            )
+            if not market_is_eligible:
+                strict_common_time_exclusion_reason = "market_not_schedule_eligible"
+            elif market_snapshot_date is None:
+                strict_common_time_exclusion_reason = "snapshot_date_unavailable"
+            elif training_cutoff_date is None or model_fit_cutoff_date is None:
+                strict_common_time_exclusion_reason = "missing_training_cutoff"
+            elif (
+                training_cutoff_date >= market_snapshot_date
+                or model_fit_cutoff_date >= market_snapshot_date
+            ):
+                strict_common_time_exclusion_reason = (
+                    "training_cutoff_not_before_snapshot"
+                )
+            elif not set(all_modes).issubset(model_probabilities):
+                strict_common_time_exclusion_reason = "incomplete_model_predictions"
+            else:
+                strict_common_time_exclusion_reason = None
+            strict_common_time_eligible = strict_common_time_exclusion_reason is None
+            if market_is_eligible and not strict_common_time_eligible:
+                reason = strict_common_time_exclusion_reason or "unknown"
+                strict_common_time_exclusion_counts[reason] = (
+                    strict_common_time_exclusion_counts.get(reason, 0) + 1
+                )
+            if strict_common_time_eligible:
+                strict_common_time_market_rows.append((market_probabilities, actual))
+                for mode in all_modes:
+                    strict_common_time_model_rows[mode].append(
+                        (model_probabilities[mode], actual)
+                    )
+                if bet365_probabilities is not None:
+                    strict_common_time_bet365_rows.append(
+                        (bet365_probabilities, actual)
+                    )
+                    for mode in all_modes:
+                        strict_common_time_bet365_model_rows[mode].append(
+                            (model_probabilities[mode], actual)
+                        )
+                        strict_common_time_bet365_consensus_rows[mode].append(
+                            (market_probabilities, actual)
+                        )
             forecast_rows.append(
                 {
                     "forecast_index": len(forecast_rows) + 1,
@@ -937,6 +1009,11 @@ def compare_walk_forward(
                         or "unclassified"
                     ),
                     "market_eligible": market_is_eligible,
+                    "market_snapshot_date": market_snapshot_date,
+                    "strict_common_time_eligible": strict_common_time_eligible,
+                    "strict_common_time_exclusion_reason": (
+                        strict_common_time_exclusion_reason
+                    ),
                     "market_probabilities": market_probabilities,
                     "bet365_probabilities": bet365_probabilities,
                     "lae_eligible": lae_is_eligible,
@@ -1108,6 +1185,99 @@ def compare_walk_forward(
             "capture timestamps are not provided"
         ),
         "excluded_examples": market_excluded_examples,
+    }
+    strict_common_time_n = len(strict_common_time_market_rows)
+    result["strict_common_time_market"] = {
+        "n_schedule_eligible": len(market_rows),
+        "n_common_time_eligible": strict_common_time_n,
+        "n_excluded_from_common_time_sample": (
+            len(market_rows) - strict_common_time_n
+        ),
+        "exclusion_reason_counts": dict(
+            sorted(strict_common_time_exclusion_counts.items())
+        ),
+        "snapshot_schedule": {
+            "weekend_fixtures": "Friday snapshot for Saturday/Sunday fixtures",
+            "midweek_fixtures": "Tuesday snapshot for Wednesday/Thursday fixtures",
+            "unmapped_weekdays": ["Monday", "Tuesday", "Friday"],
+            "same_snapshot_day_results": "excluded",
+        },
+        "cutoff_rule": (
+            "training_cutoff_date < market_snapshot_date and "
+            "model_fit_cutoff_date < market_snapshot_date"
+        ),
+        "market": (
+            multiclass_metrics(strict_common_time_market_rows)
+            if strict_common_time_market_rows
+            else empty
+        ),
+        "common_sample": {
+            mode: {
+                "n": len(strict_common_time_model_rows[mode]),
+                "model": (
+                    multiclass_metrics(strict_common_time_model_rows[mode])
+                    if strict_common_time_model_rows[mode]
+                    else empty
+                ),
+                "market": (
+                    multiclass_metrics(strict_common_time_market_rows)
+                    if strict_common_time_market_rows
+                    else empty
+                ),
+            }
+            for mode in all_modes
+        },
+        "limitation": (
+            "Conservative date-level alignment to the published Tuesday/Friday "
+            "collection schedule. Exact per-fixture capture timestamps and "
+            "kickoff timezone are unavailable; this is not timestamp verification."
+        ),
+    }
+    strict_common_time_bet365_n = len(strict_common_time_bet365_rows)
+    result["strict_common_time_bet365"] = {
+        "n_schedule_eligible": len(bet365_rows),
+        "n_common_time_eligible": strict_common_time_bet365_n,
+        "n_excluded_from_common_time_sample": (
+            len(bet365_rows) - strict_common_time_bet365_n
+        ),
+        "source_columns": ["B365H", "B365D", "B365A"],
+        "probability_method": (
+            "inverse decimal odds normalized within Bet365 to remove overround"
+        ),
+        "metrics": (
+            multiclass_metrics(strict_common_time_bet365_rows)
+            if strict_common_time_bet365_rows
+            else empty
+        ),
+        "common_sample": {
+            mode: {
+                "n": len(strict_common_time_bet365_model_rows[mode]),
+                "model": (
+                    multiclass_metrics(strict_common_time_bet365_model_rows[mode])
+                    if strict_common_time_bet365_model_rows[mode]
+                    else empty
+                ),
+                "market_consensus": (
+                    multiclass_metrics(strict_common_time_bet365_consensus_rows[mode])
+                    if strict_common_time_bet365_consensus_rows[mode]
+                    else empty
+                ),
+                "bet365": (
+                    multiclass_metrics(strict_common_time_bet365_rows)
+                    if strict_common_time_bet365_rows
+                    else empty
+                ),
+            }
+            for mode in all_modes
+        },
+        "cutoff_rule": (
+            "training_cutoff_date < market_snapshot_date and "
+            "model_fit_cutoff_date < market_snapshot_date"
+        ),
+        "limitation": (
+            "Same conservative date-level cutoff as the consensus benchmark; "
+            "exact per-fixture Bet365 capture timestamps are unavailable."
+        ),
     }
     result["common_sample"] = {
         mode: {

@@ -402,6 +402,130 @@ jobs:
           )
           PY
 
+      - name: Enforce common-information-time market comparison
+        run: |
+          python - <<'PY'
+          import json
+          from datetime import date
+          from pathlib import Path
+
+          result = json.loads(Path("backtest-results.json").read_text())
+          strict = result.get("strict_common_time_market", {})
+          n_schedule = int(strict.get("n_schedule_eligible", 0))
+          n_common = int(strict.get("n_common_time_eligible", 0))
+          n_excluded = int(strict.get("n_excluded_from_common_time_sample", -1))
+          market = strict.get("market", {})
+          if n_schedule <= 0 or n_common <= 0 or n_common > n_schedule:
+              raise SystemExit(
+                  f"Common-information-time market sample is invalid: "
+                  f"eligible={n_common}, schedule_eligible={n_schedule}"
+              )
+          if n_excluded != n_schedule - n_common or int(market.get("n", 0)) != n_common:
+              raise SystemExit("Common-time market counts are inconsistent")
+          expected_rule = (
+              "training_cutoff_date < market_snapshot_date and "
+              "model_fit_cutoff_date < market_snapshot_date"
+          )
+          if strict.get("cutoff_rule") != expected_rule:
+              raise SystemExit("Common-time cutoff rule is missing or changed")
+          required = (
+              "dc", "ml", "ensemble", "ensemble_dc_ml",
+              "ensemble_dc_ml_adaptive",
+          )
+          common = strict.get("common_sample", {})
+          for name in required:
+              sample = common.get(name, {})
+              model_n = int(sample.get("model", {}).get("n", 0))
+              market_n = int(sample.get("market", {}).get("n", 0))
+              if (
+                  int(sample.get("n", 0)) != n_common
+                  or model_n != n_common
+                  or market_n != n_common
+              ):
+                  raise SystemExit(
+                      f"{name} does not share the common-information-time fixtures: "
+                      f"sample={sample.get('n')}, model={model_n}, market={market_n}, "
+                      f"expected={n_common}"
+                  )
+
+          records = [
+              json.loads(line)
+              for line in Path("prediction-ledger.jsonl")
+              .read_text(encoding="utf-8")
+              .splitlines()
+              if line.strip()
+          ]
+          forecasts = records[1:]
+          eligible_count = 0
+          for index, row in enumerate(forecasts, start=1):
+              if not isinstance(row.get("strict_common_time_eligible"), bool):
+                  raise SystemExit(f"Ledger row {index} has no strict common-time status")
+              if row.get("market_eligible"):
+                  snapshot_raw = row.get("market_snapshot_date")
+                  if not isinstance(snapshot_raw, str):
+                      if row["strict_common_time_eligible"]:
+                          raise SystemExit(f"Ledger row {index} lacks its snapshot date")
+                      continue
+                  snapshot = date.fromisoformat(snapshot_raw)
+                  training_cutoff = date.fromisoformat(row["training_cutoff_date"])
+                  model_fit_cutoff = date.fromisoformat(row["model_fit_cutoff_date"])
+                  should_be_eligible = (
+                      training_cutoff < snapshot and model_fit_cutoff < snapshot
+                  )
+                  if row["strict_common_time_eligible"] != should_be_eligible:
+                      raise SystemExit(
+                          f"Ledger row {index} strict eligibility conflicts with cutoffs"
+                      )
+                  if should_be_eligible:
+                      eligible_count += 1
+              elif row["strict_common_time_eligible"]:
+                  raise SystemExit(f"Ledger row {index} uses an ineligible market row")
+
+          if eligible_count != n_common:
+              raise SystemExit(
+                  f"Ledger strict eligible count {eligible_count} != result count {n_common}"
+              )
+
+          strict_bet365 = result.get("strict_common_time_bet365", {})
+          b365_schedule = int(strict_bet365.get("n_schedule_eligible", 0))
+          b365_common = int(strict_bet365.get("n_common_time_eligible", 0))
+          b365_metrics_n = int(strict_bet365.get("metrics", {}).get("n", 0))
+          b365_excluded = int(
+              strict_bet365.get("n_excluded_from_common_time_sample", -1)
+          )
+          if (
+              b365_schedule <= 0
+              or b365_common <= 0
+              or b365_common > b365_schedule
+              or b365_excluded != b365_schedule - b365_common
+              or b365_metrics_n != b365_common
+          ):
+              raise SystemExit("Strict common-time Bet365 sample is invalid")
+          if strict_bet365.get("source_columns") != ["B365H", "B365D", "B365A"]:
+              raise SystemExit("Strict common-time Bet365 source columns are not explicit")
+          for name in required:
+              sample = strict_bet365.get("common_sample", {}).get(name, {})
+              component_sizes = {
+                  component: int(sample.get(component, {}).get("n", 0))
+                  for component in ("model", "market_consensus", "bet365")
+              }
+              if int(sample.get("n", 0)) != b365_common or any(
+                  count != b365_common for count in component_sizes.values()
+              ):
+                  raise SystemExit(
+                      f"{name} does not share the strict common-time Bet365 fixtures: "
+                      f"sample={sample.get('n')}, components={component_sizes}, "
+                      f"expected={b365_common}"
+                  )
+
+          print(
+              "COMMON_INFORMATION_TIME_ACCEPTANCE_OK: "
+              f"consensus={n_common}/{n_schedule}; "
+              f"Bet365={b365_common}/{b365_schedule}; "
+              "all model streams share their exact pre-snapshot fixture samples"
+          )
+          PY
+
       - name: Enforce fixed-book Bet365 benchmark acceptance
         run: |
           python - <<'PY'

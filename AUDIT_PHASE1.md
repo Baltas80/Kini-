@@ -2769,3 +2769,19 @@ This limits automated refresh to once weekly by default and preserves a manual s
 
 
 The separate `historical-backtest` workflow was also using `build_history.py` without an offline guard and had no shared cache restore. It now restores the validated Football-Data cache and builds offline; its weekly schedule runs after the Monday data refresh. Only the scheduled/explicitly opted-in data-validation workflow can refresh and save the source cache. PR, push and historical-backtest runs cannot download Football-Data CSVs.
+
+
+## 2026-11-17 — Strict common-information-time market benchmark implemented
+
+The prior schedule-screened comparison used the same fixtures for model and market metrics, but the information cutoffs were not necessarily aligned: a Saturday forecast could use Friday results after the Friday odds snapshot, and a Wednesday forecast could use Tuesday results after the Tuesday snapshot.
+
+Implemented on `feat/selae-fixture-reconciliation`:
+
+- Derive the documented snapshot calendar date for Wednesday/Thursday fixtures (Tuesday) and Saturday/Sunday fixtures (Friday). Monday, Tuesday and Friday fixture dates fail closed in this stricter benchmark because no unambiguous prior snapshot date is assigned.
+- Persist `market_snapshot_date`, `strict_common_time_eligible` and an explicit exclusion reason in every forecast-ledger row.
+- Require both the latest available training-history date and the actual model-fit cutoff to be strictly earlier than the market snapshot date. Same-snapshot-day results are excluded.
+- Add a separate common-information-time comparison for all five model streams against the consensus market and, independently, Bet365. The larger schedule-screened comparison remains available as a sensitivity benchmark.
+- Add regression tests for weekday-to-snapshot mapping and for fixtures whose prior training history falls on or after the odds snapshot date.
+- Add a historical-backtest CI gate requiring non-empty, identical model/market samples and checking the persisted ledger eligibility decisions.
+
+This is deliberately a conservative **date-level** alignment. It does not create exact odds-capture timestamps, does not prove that a particular quote was observable at a precise instant, and does not resolve the Football-Data commercial-use restriction. Validation is pending on the updated PR head; no new model metrics are claimed yet.
