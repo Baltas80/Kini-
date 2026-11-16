@@ -34,7 +34,6 @@ def _load_results(path: Path, ledger_path: Path) -> tuple[dict[str, Any], str]:
     return results, expected_hash
 
 
-
 def _validate_dataset_snapshot(
     manifest: dict[str, Any],
     dataset_path: Path,
