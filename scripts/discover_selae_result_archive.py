@@ -368,7 +368,6 @@ def probe_alternative_sources(session: requests.Session) -> list[dict[str, objec
                 allow_redirects=True,
             )
             with response:
-                payload = response.content
                 final_url = response.url
                 official_redirect = _is_official_url(final_url)
                 results.append(
