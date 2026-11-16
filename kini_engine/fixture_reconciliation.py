@@ -108,7 +108,11 @@ def _validate_draw(draw: object, location: str) -> tuple[str, list[dict[str, Any
     if not isinstance(draw, dict):
         raise FixtureReconciliationError(f"{location} must be an object")
     schema_version = draw.get("schema_version")
-    if type(schema_version) is not int or schema_version not in {1, 2}:
+    if (
+        isinstance(schema_version, bool)
+        or not isinstance(schema_version, int)
+        or schema_version not in {1, 2}
+    ):
         raise FixtureReconciliationError(f"{location} has an unsupported schema_version")
     if draw.get("provider") != "SELAE":
         raise FixtureReconciliationError(f"{location}.provider must be SELAE")
@@ -128,7 +132,8 @@ def _validate_draw(draw: object, location: str) -> tuple[str, list[dict[str, Any
     fixtures = draw.get("fixtures")
     if not isinstance(fixtures, list) or len(fixtures) != 14:
         raise FixtureReconciliationError(f"{location}.fixtures must contain exactly 14 entries")
-    if type(draw.get("fixture_count")) is not int or draw.get("fixture_count") != 14:
+    fixture_count = draw.get("fixture_count")
+    if isinstance(fixture_count, bool) or not isinstance(fixture_count, int) or fixture_count != 14:
         raise FixtureReconciliationError(f"{location}.fixture_count must equal 14")
 
     normalized: list[dict[str, Any]] = []
@@ -137,7 +142,11 @@ def _validate_draw(draw: object, location: str) -> tuple[str, list[dict[str, Any
         if not isinstance(raw_fixture, dict):
             raise FixtureReconciliationError(f"{fixture_location} must be an object")
         position = raw_fixture.get("position")
-        if type(position) is not int or position != expected_position:
+        if (
+            isinstance(position, bool)
+            or not isinstance(position, int)
+            or position != expected_position
+        ):
             raise FixtureReconciliationError(
                 f"{fixture_location}.position must equal {expected_position}"
             )
