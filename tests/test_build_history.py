@@ -160,8 +160,8 @@ def test_fetch_csv_rejects_boolean_scores_before_caching(
     invalid_column: str,
 ) -> None:
     content = (
-        "Div,Date,HomeTeam,AwayTeam,FTHG,FTAG,FTR\\n"
-        f"SP1,02/01/2022,A,B,{home_goals},{away_goals},H\\n"
+        "Div,Date,HomeTeam,AwayTeam,FTHG,FTAG,FTR\n"
+        f"SP1,02/01/2022,A,B,{home_goals},{away_goals},H\n"
     ).encode("utf-8")
     cache = tmp_path / "boolean_scores.csv"
 
