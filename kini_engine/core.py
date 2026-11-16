@@ -1156,6 +1156,7 @@ class KiniEngine:
         self.optimizer = TicketOptimizer()
         self.history: list[Match] = []
         self.fitted = False
+        self.dc_fit_error: str | None = None
         self.temperature = 1.0
 
     def fit(self, history: list[Match]) -> KiniEngine:
