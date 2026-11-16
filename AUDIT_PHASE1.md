@@ -2576,3 +2576,24 @@ Correction implemented:
 - Added regression tests for exact dataset/profile bytes and tampered CSV rejection.
 
 The next full walk-forward is triggered by the diagnostic-script change. Its artifact must contain the matching dataset/profile and pass the new snapshot verification before its metrics are accepted. The previous run's 5,021 forecast rows were structurally valid (five probability vectors per fixture, valid sums, unique IDs and prior cutoffs), but their dataset snapshot remains unverified because the source bytes were not archived.
+
+
+### 2026-11-16 — fail-closed acceptance for coupon backtests
+
+A code review found that `scripts/backtest_coupons.py` only required Dixon-Coles to evaluate every coupon before writing a successful result. The batch evaluator can record a failed ML or ensemble candidate inside an otherwise successful coupon result; therefore a multi-coupon workflow could have exited successfully with incomplete candidate coverage.
+
+Correction implemented on `feat/selae-fixture-reconciliation`:
+- Added `validate_coupon_backtest_acceptance()` and invoked it before the result JSON is written.
+- Require exact coupon ID/order equality with the verified input archive.
+- Require all three candidates (DC, ML, fixed DC/ML) to evaluate every coupon with zero failures and 14 valid normalized 1/X/2 vectors per coupon.
+- Validate official 14-match and Pleno evidence, 15 ordered canonical fixture reconciliations, timezone-aware first kickoff, previous-local-calendar-day cutoff, minimum/fitted training counts, Pleno model/method/category/probability provenance, optimizer column budget, direct-system cap, ticket metrics and full-coupon coverage consistency.
+- Added regression tests for success, failure of each model, malformed probability vectors and inconsistent aggregate model counts.
+
+Commits:
+- `37fb291` — initial fail-closed acceptance gate.
+- `329e1f6` — validation cleanup and explicit numeric checks.
+- `9d39661` — regression tests.
+
+Status at this record: implementation committed; CI and real coupon pilot for this exact code head are pending. The previously validated Jornada 21 pilot does not validate this new acceptance code. Full-season import has not started and no multi-jornada performance conclusions are claimed.
+
+Next action: inspect the PR CI and coupon pilot triggered by these changes; fix any failure before expanding beyond the single verified Jornada 21 snapshot.
