@@ -1,14 +1,14 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+import unicodedata
+from datetime import UTC, datetime
 from math import isfinite
 from pathlib import Path
-import unicodedata
 
 import numpy as np
 import pandas as pd
 
-from .core import Match, SIGNS
+from .core import SIGNS, Match
 
 
 def _parse_match_date(value: datetime | str) -> datetime:
@@ -16,7 +16,7 @@ def _parse_match_date(value: datetime | str) -> datetime:
         return value
     raw = str(value).strip()
     try:
-        return datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        return datetime.fromisoformat(raw)
     except ValueError:
         pass
     for fmt in ("%d/%m/%Y", "%d/%m/%y", "%Y/%m/%d", "%m/%d/%Y"):
@@ -80,7 +80,7 @@ def _market_temporal_status(
 
 def _optional_goal(value: object, row_number: int, column: str) -> int | None:
     if isinstance(value, (bool, np.bool_)):
-        raise ValueError(
+        raise TypeError(
             f"CSV row {row_number}: {column} must be a non-negative integer"
         )
     if pd.isna(value):
@@ -299,7 +299,7 @@ def build_dataset_profile(
     retrieved_at: datetime | None = None,
 ) -> dict[str, object]:
     """Build a reproducible quality/coverage profile for a downloaded dataset."""
-    retrieved_at = retrieved_at or datetime.now(timezone.utc)
+    retrieved_at = retrieved_at or datetime.now(UTC)
     parsed_dates: list[datetime | None] = []
     for value in raw_frame.get("Date", pd.Series(dtype=object)).tolist():
         try:
@@ -358,10 +358,10 @@ def build_dataset_profile(
         counts = {f"{league}/{season}": int(count) for (league, season), count in grouped.items()}
 
     return {
-        "retrieved_at_utc": retrieved_at.astimezone(timezone.utc).isoformat(),
+        "retrieved_at_utc": retrieved_at.astimezone(UTC).isoformat(),
         "source_urls": sorted(set(source_urls)),
-        "rows_before_filter": int(len(raw_frame)),
-        "rows_after_filter": int(len(final_frame)),
+        "rows_before_filter": len(raw_frame),
+        "rows_after_filter": len(final_frame),
         "date_coverage": {
             "start": min(value.date().isoformat() for value in valid_dates) if valid_dates else None,
             "end": max(value.date().isoformat() for value in valid_dates) if valid_dates else None,
