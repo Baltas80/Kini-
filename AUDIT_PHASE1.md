@@ -2766,3 +2766,6 @@ The historical-data validation workflow previously ran `build_history.py --refre
 Implemented a fail-closed `--offline` mode in `scripts/build_history.py`: it accepts a valid stale cache but never creates an HTTP request; it fails if the cache is absent or invalid. The workflow now refreshes only on the weekly schedule or an explicitly opted-in manual dispatch. Push/PR validation uses offline cache only. Regression tests prove stale-cache reuse and no-network failure when no cache exists.
 
 This limits automated refresh to once weekly by default and preserves a manual second refresh only when explicitly requested. Commercial/AI-training permission remains unresolved and must be obtained before commercial deployment.
+
+
+The separate `historical-backtest` workflow was also using `build_history.py` without an offline guard and had no shared cache restore. It now restores the validated Football-Data cache and builds offline; its weekly schedule runs after the Monday data refresh. Only the scheduled/explicitly opted-in data-validation workflow can refresh and save the source cache. PR, push and historical-backtest runs cannot download Football-Data CSVs.
