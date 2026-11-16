@@ -67,8 +67,11 @@ jobs:
           kini_engine/backtest.py
           kini_engine/cli.py
           kini_engine/ledger.py
+          kini_engine/diagnostics.py
+          scripts/analyze_prediction_ledger.py
           tests/test_backtest.py
           tests/test_ledger.py
+          tests/test_prediction_diagnostics.py
       - name: Verify formatting for predictive core, Liga F and SELAE evidence code
         run: >-
           ruff format --check
@@ -91,6 +94,9 @@ jobs:
           kini_engine/backtest.py
           kini_engine/cli.py
           kini_engine/ledger.py
+          kini_engine/diagnostics.py
+          scripts/analyze_prediction_ledger.py
           tests/test_backtest.py
           tests/test_ledger.py
+          tests/test_prediction_diagnostics.py
       - run: pytest -q
