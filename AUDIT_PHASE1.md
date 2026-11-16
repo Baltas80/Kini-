@@ -2387,3 +2387,55 @@ Se añade a kini_engine/diagnostics.py un intervalo de incertidumbre pareado par
 La CLI acepta --bootstrap-samples (mínimo 100; predeterminado 10.000). Las métricas puntuales no cambian. La convención de signo es modelo menos mercado: delta Brier/Log Loss positivo favorece al mercado; delta accuracy negativo favorece al mercado.
 
 Este análisis no resuelve la limitación temporal de las cuotas: el benchmark sigue siendo schedule-screened y no dispone de timestamp de captura por fixture. Tampoco demuestra rentabilidad futura.
+
+
+### 2026-11-16 — intervalos pareados y evaluación real de cupones
+
+#### Incertidumbre de la comparación con mercado
+
+La implementación de bootstrap semanal se ha validado en CI. Se calculó de forma independiente sobre el ledger de run 43928779926, con 4.432 fixtures comunes mercado/modelos y 248 semanas ISO. Se usaron 10.000 réplicas por comparación. Las diferencias son modelo menos mercado; Brier y Log Loss positivos, o accuracy negativo, favorecen al mercado.
+
+| Modelo | Δ Brier (IC 95%) | Δ Log Loss (IC 95%) | Δ accuracy (IC 95%) |
+|---|---:|---:|---:|
+| Dixon-Coles | +0.01886 [0.01469, 0.02320] | +0.02804 [0.02176, 0.03463] | -0.02662 [-0.03745, -0.01631] |
+| ML | +0.04992 [0.04195, 0.05786] | +0.07470 [0.06268, 0.08676] | -0.06927 [-0.08426, -0.05437] |
+| Ensemble | +0.01606 [0.01232, 0.01983] | +0.02355 [0.01802, 0.02914] | -0.02911 [-0.03956, -0.01893] |
+| DC/ML fijo | +0.01859 [0.01455, 0.02279] | +0.02737 [0.02140, 0.03351] | -0.03317 [-0.04373, -0.02250] |
+| DC/ML adaptativo | +0.01880 [0.01471, 0.02298] | +0.02766 [0.02161, 0.03393] | -0.03227 [-0.04272, -0.02186] |
+
+Los cinco intervalos globales excluyen cero y apuntan en la misma dirección. El resultado respalda que el benchmark de mercado es superior en esta muestra común; no justifica retocar pesos para ocultar la diferencia. Son intervalos percentiles exploratorios por clúster semanal, sin ajuste por las cinco comparaciones ni por selección posterior.
+
+Por competición/temporada, los 14 deltas puntuales de Brier favorecen al mercado, pero solo 8/14 intervalos de Brier y 8/14 de Log Loss excluyen cero. No se debe describir como 14/14 segmentos estadísticamente concluyentes. Las dos temporadas 2026/27 son parciales. El mercado sigue siendo schedule-screened, no timestamp-verified.
+
+#### Descubrimiento de archivo de cupones
+
+Se identificó HistóricoQuiniela como fuente secundaria que publica partidos, fechas, marcadores, signos y Pleno al 15. Su página de la temporada 2020/21 registra 63 jornadas. El propio sitio declara que no está afiliado a SELAE y que su contenido es informativo. QuinielaFutbol.info también ofrece un PDF de combinaciones históricas y advierte que la oficialidad corresponde exclusivamente a LAE. Ninguna de estas fuentes se tratará como fuente oficial ni se incorporará directamente al entrenamiento.
+
+Piloto manual: la Jornada 21 de 2020/21, celebrada el 13-12-2020, muestra 15 partidos entre el 12 y el 14 de diciembre. Los 15 emparejamientos y marcadores se contrastaron con el histórico Football-Data del repositorio; coincidieron tras aplicar alias de equipo documentados. Esto prueba que existe una ruta potencial de reconciliación para un cupón, no que el archivo completo esté validado.
+
+Fuentes candidatas:
+- https://www.historicoquiniela.com/historico/2020-2021
+- https://www.historicoquiniela.com/historico/2020-2021/21
+- https://www.quinielafutbol.info/historico/resultados-la-quiniela-2020-2021.html
+- https://www.quinielafutbol.info/historico/resultados-la-quiniela-2020-2021.pdf
+
+#### Riesgo de leakage específico del optimizador
+
+El ledger actual es de pronósticos por partido, con corte individual por fecha del encuentro. Eso es válido para el backtest de cada partido, pero no basta para evaluar un boleto: los 14 signos se deben fijar antes del primer kickoff. En la Jornada 21 citada, los partidos van del 12 al 14 de diciembre; reutilizar el pronóstico individual del partido del día 14 puede incorporar resultados de partidos del mismo cupón disputados el 12 o 13. Sería leakage a nivel de cupón.
+
+Por tanto, queda prohibido evaluar dobles/triples de un cupón con el ledger actual sin una reconstrucción de pronósticos a un corte común. La próxima unidad P6 será un backtest de cupones walk-forward que:
+1. Determine el kickoff más temprano de cada cupón y fije un único cutoff anterior.
+2. Entrene DC/ML exclusivamente con resultados disponibles antes de ese cutoff.
+3. Genere los 14 pronósticos y el Pleno con la misma instantánea de modelo.
+4. Exija reconciliación fixture por fixture con fecha, orden, equipos y resultado.
+5. Registre fuente y nivel de verificación de cada jornada.
+6. Evalúe cobertura real de columnas, coste y Pleno por separado.
+7. Excluya jornadas con partidos sorteados, aplazados no resueltos o fixtures no reconciliados.
+
+No se declara todavía validado el optimizador con cupones históricos. El algoritmo de múltiples directos y sus pruebas sintéticas siguen validados; falta la evaluación temporal real a nivel de jornada.
+
+#### Validación de código
+
+Commit de implementación: 742d3e6. Correcciones de formato: 05aa489, eec3bd0 y abb3799. CI final [43938355598](https://github.com/Baltas80/Kini-/actions/runs/43938355598): actionlint correcto, Ruff lint/format correctos, 257 tests pasados y 21 warnings upstream de penaltyblog/NumPy 2.5.
+
+El backtest completo de la nueva versión está pendiente de terminar. No se declara validado el artefacto con intervalos hasta inspeccionar el resultado de la ejecución correspondiente al head actual.
