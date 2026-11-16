@@ -210,7 +210,8 @@ def _download_calendar(
             }
             if not _is_official_https_url(response.url):
                 raise SelaeSourceError(
-                    f"SELAE historical XLS redirected to a non-official HTTPS URL: {response.url}",
+                    "SELAE historical XLS redirected to a non-official HTTPS URL: "
+                    f"{response.url}",
                     {"probes": probes, "xls": response_metadata},
                 )
             if response.status_code != 200:
