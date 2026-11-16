@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pandas as pd
@@ -97,7 +97,7 @@ def test_dataset_profile_records_coverage_quality_and_sources():
         raw,
         final,
         ["https://example.test/SP1.csv"],
-        retrieved_at=datetime(2026, 11, 14, tzinfo=timezone.utc),
+        retrieved_at=datetime(2026, 11, 14, tzinfo=UTC),
     )
     assert profile["rows_before_filter"] == 3
     assert profile["rows_after_filter"] == 1
@@ -266,5 +266,7 @@ def test_load_rejects_boolean_goal_values(
         encoding="utf-8",
     )
 
-    with pytest.raises(ValueError, match=f"{invalid_column} must be a non-negative integer"):
+    with pytest.raises(
+        TypeError, match=f"{invalid_column} must be a non-negative integer"
+    ):
         load_matches_csv(path)
