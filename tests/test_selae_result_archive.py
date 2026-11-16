@@ -116,7 +116,11 @@ class _FakeResponse:
             "CF-Cache-Status": "DYNAMIC",
             "Retry-After": "30",
         }
-        self.content = b"<rss/>" if status_code == 200 else b"forbidden"
+        self.content = (
+            b"<rss/>"
+            if status_code == 200
+            else b"<html><script>blocked()</script><p>Access denied by gateway</p></html>"
+        )
 
     def __enter__(self):
         return self
@@ -193,9 +197,10 @@ def test_archive_failure_preserves_safe_transport_diagnostics() -> None:
     assert diagnostics["cf_ray"] == "test-ray-id"
     assert diagnostics["cf_cache_status"] == "DYNAMIC"
     assert diagnostics["retry_after"] == "30"
+    assert diagnostics["body_text_preview"] == "Access denied by gateway"
 
     rss_probe = report["alternative_source_probes"][0]
     assert rss_probe["http_status"] == 403
     assert rss_probe["cf_ray"] == "test-ray-id"
     assert rss_probe["sha256"]
-    assert "body" not in rss_probe
+    assert rss_probe["body_text_preview"] == "Access denied by gateway"
