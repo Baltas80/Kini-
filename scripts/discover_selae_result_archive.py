@@ -15,6 +15,8 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 INDEX_URL = "https://www.loteriasyapuestas.es/es/la-quiniela/resultados"
+ENGLISH_INDEX_URL = "https://www.loteriasyapuestas.es/en/la-quiniela/resultados"
+INDEX_URLS = (INDEX_URL, ENGLISH_INDEX_URL)
 OFFICIAL_HOSTS = {"www.loteriasyapuestas.es", "loteriasyapuestas.es"}
 RESULT_PATH_MARKER = "/la-quiniela-resultados-del-"
 COMPONENT_PATH = "/vgn-ext-templating/render/component"
@@ -249,11 +251,21 @@ def build_component_page_url(template_url: str, page_parameter: int) -> str:
     )
 
 
-def _fetch_html(session: requests.Session, url: str) -> tuple[str, dict[str, object]]:
+def _fetch_html(
+    session: requests.Session,
+    url: str,
+    referer: str | None = None,
+) -> tuple[str, dict[str, object]]:
     if not _is_official_url(url):
         raise ValueError(f"refusing to fetch non-official URL: {url}")
 
-    response = session.get(url, timeout=TIMEOUT, allow_redirects=True)
+    request_headers = {"Referer": referer} if referer else None
+    response = session.get(
+        url,
+        headers=request_headers,
+        timeout=TIMEOUT,
+        allow_redirects=True,
+    )
     with response:
         if response.status_code != 200:
             raise requests.HTTPError(
@@ -263,6 +275,11 @@ def _fetch_html(session: requests.Session, url: str) -> tuple[str, dict[str, obj
         if not _is_official_url(response.url):
             raise ValueError(f"SELAE redirected to a non-official URL: {response.url}")
 
+        content_type = response.headers.get("Content-Type", "").lower()
+        if "html" not in content_type:
+            raise ValueError(
+                f"SELAE returned non-HTML content type {content_type!r} for {url}"
+            )
         payload = response.content
         if not payload:
             raise ValueError(f"SELAE returned an empty HTML response for {url}")
@@ -289,8 +306,39 @@ def discover_archive(
     max_archive_page: int | None = None,
 ) -> dict[str, object]:
     """Discover the official archive index; do not fetch or infer draw outcomes."""
-    index_html, index_metadata = _fetch_html(session, INDEX_URL)
-    template_url, max_component_page = extract_pagination_template(index_html)
+    index_attempts: list[dict[str, str]] = []
+    selected_index_url: str | None = None
+    index_html: str | None = None
+    index_metadata: dict[str, object] | None = None
+    for candidate_url in INDEX_URLS:
+        referer = candidate_url.split("/la-quiniela/", maxsplit=1)[0] + "/"
+        try:
+            index_html, index_metadata = _fetch_html(
+                session,
+                candidate_url,
+                referer=referer,
+            )
+            selected_index_url = candidate_url
+            break
+        except (requests.RequestException, ValueError) as exc:
+            index_attempts.append(
+                {
+                    "url": candidate_url,
+                    "error_type": type(exc).__name__,
+                    "error": str(exc),
+                }
+            )
+
+    if selected_index_url is None or index_html is None or index_metadata is None:
+        failures = " | ".join(
+            f"{item['url']}: {item['error']}" for item in index_attempts
+        )
+        raise ValueError(f"all official SELAE index routes failed: {failures}")
+
+    template_url, max_component_page = extract_pagination_template(
+        index_html,
+        base_url=selected_index_url,
+    )
     available_pages = max_component_page + 1
     target_pages = available_pages if max_archive_page is None else max_archive_page
     if isinstance(target_pages, bool) or not isinstance(target_pages, int):
@@ -304,11 +352,15 @@ def discover_archive(
         if archive_page == 1:
             document = index_html
             metadata = index_metadata
-            page_url = INDEX_URL
+            page_url = selected_index_url
         else:
             page_parameter = archive_page - 1
             page_url = build_component_page_url(template_url, page_parameter)
-            document, metadata = _fetch_html(session, page_url)
+            document, metadata = _fetch_html(
+                session,
+                page_url,
+                referer=selected_index_url,
+            )
 
         page_links = extract_result_links(
             document,
@@ -357,7 +409,8 @@ def discover_archive(
         "schema_version": 1,
         "success": True,
         "source": "SELAE",
-        "index_url": INDEX_URL,
+        "index_url": selected_index_url,
+        "index_attempts": index_attempts,
         "retrieved_at_utc": datetime.now(UTC).isoformat(),
         "archive_pages_available": available_pages,
         "archive_pages_fetched": target_pages,
