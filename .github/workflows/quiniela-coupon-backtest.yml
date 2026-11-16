@@ -86,7 +86,7 @@ jobs:
           done <<< "$changed_files"
 
           echo "Changed files since last successful coupon pilot:"
-          printf '%s\\n' "$changed_files"
+          printf '%s\n' "$changed_files"
           echo "run_pilot=$run_pilot" >> "$GITHUB_OUTPUT"
           echo "Coupon pilot required: $run_pilot"
 
