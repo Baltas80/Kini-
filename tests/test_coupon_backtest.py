@@ -245,7 +245,6 @@ def test_coupon_batch_does_not_swallow_unexpected_programming_errors(
         coupons.evaluate_coupon_batch([{"coupon_id": "2020-2021:21"}], [])
 
 
-
 def _accepted_coupon_backtest_result() -> tuple[dict[str, object], list[str]]:
     coupon = _verified_coupon()
     coupon_id = str(coupon["coupon_id"])
