@@ -1601,3 +1601,20 @@ No PR was merged and master was not modified.
 - Do not mark cold-start reporting fully validated until the latest-head CI and the walk-forward with the new acceptance step both pass.
 
 Next action: close the latest CI and walk-forward validations, then inspect the measured cold-start frequency and its dated examples before changing the fallback policy.
+
+## Cold-start measurement and formatting validation follow-up — 2026-11-16
+
+### Accepted walk-forward evidence
+
+- Historical backtest [run 43786233563](https://github.com/Baltas80/Kini-/actions/runs/43786233563), code head `4644136d3a1cbc0e4877f416ad0313a015b5a036`: **5,011/5,011 predictions** in each of the five model streams, zero prediction errors; initial training sample 300; test period 2020-12-11 to 2026-11-09.
+- Cold-start fallbacks: Dixon-Coles **73/5,011 (1.4568%)**; main ensemble, fixed DC/ML and adaptive DC/ML each **73/5,011**; ML-only **0/5,011**. The first 20 retained examples run from 2021-08-13 through 2021-09-18. Because the report intentionally caps examples at 20, this does not prove all 73 are confined to that early-season window. Do not change the fallback policy from this aggregate alone.
+- Strict market intersection: 4,424 fixtures; 587 of 5,011 excluded as schedule-ambiguous. On the identical 4,424-fixture sample, the market scores 50.72% accuracy, Brier 0.597504 and Log Loss 0.999444. Dixon-Coles: 48.06%, 0.616357, 1.027499; ML: 43.78%, 0.647471, 1.074246; main ensemble: 47.81%, 0.613563, 1.023018; fixed DC/ML: 47.40%, 0.616095, 1.026842; adaptive DC/ML: 47.49%, 0.616305, 1.027133.
+- Interpretation: non-empty model backtests and fallback accounting are now demonstrated on this accepted run, but the market remains superior on the comparable sample. This is not evidence of profitability. Market eligibility is still a schedule screen; exact per-fixture odds capture timestamps remain unavailable.
+
+### CI correction
+
+- Expanded Ruff lint first exposed an extra blank line after the import block in `kini_engine/backtest.py`; corrected in `334529e597ce86c4ab27716c4f98f040259e6ae7`.
+- The subsequent formatting check identified pre-existing Ruff formatting drift in `kini_engine/backtest.py` and `tests/test_backtest.py`. Both files were formatted to the exact Ruff diff in commits `057eba07ef2a40f5c3b6db4d0b5b060125d30aed` and `04d6bb31f4a28535e65a48ff85c3c3ceef46ceb6`. These are formatting-only changes; no model calculation was intentionally changed.
+- Latest-head CI [run 43791310107](https://github.com/Baltas80/Kini-/actions/runs/43791310107) is running. Latest-head historical backtest [run 43791310144](https://github.com/Baltas80/Kini-/actions/runs/43791310144) is pending behind an earlier comparison [run 43790746411](https://github.com/Baltas80/Kini-/actions/runs/43790746411), which is still running. Historical-data validation [run 43791310181](https://github.com/Baltas80/Kini-/actions/runs/43791310181) is running. Do not mark this follow-up validated until the latest-head CI and backtest complete successfully.
+
+PR #9 remains open and in draft. No PR was merged and `master` was not modified.
