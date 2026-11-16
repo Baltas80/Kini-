@@ -2232,3 +2232,68 @@ The first CI run for the ledger implementation [43902333075](https://github.com/
 ### Forecast-ledger formatting follow-up
 
 The first corrected CI run [43902672952](https://github.com/Baltas80/Kini-/actions/runs/43902672952) passed Ruff lint but failed the repository's non-mutating Ruff format check on five newly touched files. The formatter's exact layout changes have been applied; pytest had not yet run in that attempt. CI is being rerun on the formatted commit.
+
+
+## 2026-11-16 — Per-fixture forecast ledger and comparative error diagnostics
+
+### Ledger execution and integrity
+
+- Historical backtest run [43906085406](https://github.com/Baltas80/Kini-/actions/runs/43906085406) completed successfully on code revision \`3d401dc6ff83165641e1e53e55bbc47901bdcdd5\`. All five model streams generated **5,021/5,021 forecasts** with zero recorded prediction errors; initial training sample 300; forecast period 2020-12-11 through 2026-11-15.
+- The workflow passed \`BACKTEST_ACCEPTANCE_OK\`, \`FORECAST_LEDGER_ACCEPTANCE_OK\`, \`COLD_START_DIAGNOSTICS_OK\`, schedule-screened market acceptance and fixed-book Bet365 common-sample acceptance.
+- Artifact [14247557275](https://github.com/Baltas80/Kini-/actions/runs/43906085406/artifacts/14247557275), ZIP size 1,529,552 bytes, digest \`sha256:e81ea31be719b5f7eefbe3f3f3f6dfb12857de6c2c8632d5a29ce6598943777e\`. It contains \`backtest-results.json\` and \`prediction-ledger.jsonl\`.
+- Ledger: 5,021 forecast rows plus one manifest; 7,211,592 bytes; SHA-256 \`5c8e5a943a06cd5a599e47a048d4105de57c05404a5190e5c7f206ba3688827f\`. Independent artifact inspection found 5,021 unique fixture IDs, zero duplicates, zero invalid 1/X/2 labels, zero invalid model probability vectors, zero sign/probability mismatches, and no training or model-fit cutoff on or after the forecast date.
+- Manifest dataset: 5,321 rows; dataset SHA-256 \`e4b195593118215684ffefc8e70ffe0c8d88b3e28318d9c796f7b3b71c496475\`; profile SHA-256 \`d7d7fbb5014ad32eb3af620f86aede28381c8e879c351af78a9bc3cfb2207a6b\`.
+- Market temporal screen: 4,432/5,020 rows with odds eligible; 588 schedule-ambiguous rows excluded. Bet365 benchmark: 4,425/5,013 eligible source rows. Historical LAE eligibility remains zero because no verified historical LAE capture timestamps are present.
+- Cold-start fallback: 73/5,021 DC-dependent forecasts (1.45%); ML-only forecasts 0; all DC-dependent ensemble streams report the same 73 cases. The 14 league-season totals reconcile to the aggregate counts.
+
+### Model comparison
+
+Full OOS samples are shown below. Market has fewer fixtures because its existing schedule-time eligibility gate is deliberately conservative.
+
+| Candidate | n | Accuracy | Brier | Log Loss | Mean P(X) | Actual X |
+|---|---:|---:|---:|---:|---:|---:|
+| Dixon–Coles | 5,021 | 48.18% | 0.616681 | 1.027801 | 27.33% | 27.84% |
+| ML | 5,021 | 44.15% | 0.645508 | 1.071342 | 28.82% | 27.84% |
+| Baseline ensemble | 5,021 | 47.94% | 0.613642 | 1.023023 | 27.68% | 27.84% |
+| Fixed DC/ML | 5,021 | 47.58% | 0.615877 | 1.026395 | 27.67% | 27.84% |
+| Adaptive DC/ML | 5,021 | 47.72% | 0.616087 | 1.026701 | 27.56% | 27.84% |
+| Schedule-screened market | 4,432 | 50.72% | 0.597534 | 0.999473 | 27.71% | 27.91% |
+
+On the identical 4,432 market-eligible fixtures, the market remains better than every model:
+
+| Candidate | Accuracy | Brier | Log Loss |
+|---|---:|---:|---:|
+| Dixon–Coles | 48.06% | 0.616397 | 1.027514 |
+| ML | 43.80% | 0.647451 | 1.074171 |
+| Baseline ensemble | 47.81% | 0.613594 | 1.023024 |
+| Fixed DC/ML | 47.41% | 0.616126 | 1.026844 |
+| Adaptive DC/ML | 47.50% | 0.616334 | 1.027133 |
+| Market | **50.72%** | **0.597534** | **0.999473** |
+
+No model is promoted as market-beating. These are historical schedule-screened comparisons, not proof that odds were captured or executable at the exact forecast time, and not evidence of future profitability.
+
+### Draw error analysis
+
+- Actual draws: 1,398/5,021 (27.84%).
+- Mean ensemble P(X): 27.68%, only 0.17 percentage points below observed prevalence. Dixon–Coles is 0.51 pp below; ML is 0.98 pp above. There is no evidence supporting a global upward adjustment to draw probabilities.
+- However, X is rarely the single most-probable sign. Top-sign X recall: Dixon–Coles 55/1,398 (3.93%); ML 192/1,398 (13.73%); baseline ensemble 33/1,398 (2.36%); fixed DC/ML 41/1,398 (2.93%); adaptive DC/ML 45/1,398 (3.22%). ML selects X more often but is substantially worse on overall Brier and Log Loss.
+- On the common market sample (n=4,432; 1,237 actual draws), X appeared in the model's two highest-probability signs for 867/1,237 draws under DC (70.09%), 862/1,237 under ML (69.69%), 861/1,237 under the baseline ensemble (69.60%), 855/1,237 under the fixed blend (69.12%), and 849/1,237 under the adaptive blend (68.63%). The market's top-two set covered 940/1,237 draws (75.99%).
+- Overall top-two empirical coverage on that common sample was 76.53% for the baseline ensemble and 78.27% for the market. This is a descriptive top-two candidate proxy, **not** a completed ticket-optimizer or payout backtest.
+- Interpretation: the low frequency of X as the top single sign does not imply that P(X) is globally too low. The more relevant weakness is match-level ranking: the model often places X third even when the aggregate draw probability is close to the observed rate. Do not add a blanket draw bias; investigate ranking and allocate doubles through the optimizer using the complete probability vectors.
+
+### Comparative diagnostics implementation
+
+- Added \`read_prediction_ledger()\` to verify JSONL structure, manifest, SHA-256, row count, unique fixture IDs, probability vectors, model signs, source eligibility and prior-date cutoffs.
+- Added \`kini_engine/diagnostics.py\` and \`scripts/analyze_prediction_ledger.py\`. The report includes per-model confusion matrices, classwise precision/recall/F1, probability bias, binary Brier/Log Loss, reliability bins, top-two candidate coverage, model disagreement, competition/season segments and market comparisons on the exact eligible fixture sample.
+- Updated \`.github/workflows/historical-backtest.yml\` to run the diagnostic after backtest acceptance and include \`prediction-diagnostics.json\` in the 90-day artifact. Updated CI lint/format coverage for the new module, script and tests.
+- CI [43917802099](https://github.com/Baltas80/Kini-/actions/runs/43917802099) passed workflow validation, Ruff lint, Ruff formatting and **254 tests passed**. There were 21 upstream NumPy 2.5 / penaltyblog deprecation warnings.
+- The full end-to-end run for the new diagnostics step is queued behind an earlier historical comparison. The ledger itself is already validated by run 43906085406; the generated diagnostics artifact is not yet independently verified.
+
+### Open limitations and next action
+
+1. Complete the point-in-time audit of every model feature and its source observation/publication timing. Strict prior-calendar-day filtering is implemented, but exact historical result-publication timestamps are unavailable.
+2. Keep odds as schedule-screened benchmark data until exact capture timestamps and timezone provenance are available.
+3. SELAE historical archive requests from GitHub Actions continue returning HTTP 403; no original raw archive bytes or source-byte hashes are claimed.
+4. Use the validated fixture ledger to finish the error-analysis review, then evaluate actual direct-ticket double/triple allocation on identical OOS fixtures. Keep ticket coverage distinct from model probability quality and economic return.
+
+No changes to \`master\`; PR #9 remains open, draft and unmerged.
