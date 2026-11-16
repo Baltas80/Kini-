@@ -140,3 +140,9 @@ def test_snapshot_directory_rejects_missing_journey_snapshot(tmp_path: Path) -> 
 def test_snapshot_directory_rejects_invalid_journey_number(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="positive integer"):
         load_official_snapshot_for_journey(tmp_path, "2020-2021", 0)
+
+def test_snapshot_loader_rejects_non_object_json(tmp_path: Path) -> None:
+    path = tmp_path / "official.json"
+    path.write_text("[]", encoding="utf-8")
+    with pytest.raises(ValueError, match="JSON object"):
+        load_official_coupon_snapshot(path)
