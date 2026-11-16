@@ -301,6 +301,67 @@ jobs:
           )
           PY
 
+      - name: Enforce fixed-book Bet365 benchmark acceptance
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          result = json.loads(Path("backtest-results.json").read_text())
+          benchmark = result.get("bookmaker_benchmarks", {}).get("bet365", {})
+          n_with_odds = int(benchmark.get("n_with_odds", 0))
+          n_eligible = int(benchmark.get("n_schedule_eligible", 0))
+          n_excluded = int(benchmark.get("n_excluded", -1))
+          metrics_n = int(benchmark.get("metrics", {}).get("n", 0))
+          status_counts = {
+              str(status): int(count)
+              for status, count in benchmark.get("status_counts", {}).items()
+          }
+
+          if n_with_odds <= 0 or n_eligible <= 0:
+              raise SystemExit("Fixed-book Bet365 benchmark is empty")
+          if n_eligible > n_with_odds or n_excluded != n_with_odds - n_eligible:
+              raise SystemExit("Bet365 eligible/excluded counts are inconsistent")
+          if metrics_n != n_eligible or sum(status_counts.values()) != n_with_odds:
+              raise SystemExit("Bet365 metrics or temporal status counts are inconsistent")
+          if sum(
+              count for status, count in status_counts.items()
+              if status != "schedule_compatible"
+          ) != n_excluded:
+              raise SystemExit("Bet365 excluded count disagrees with temporal statuses")
+
+          required = (
+              "dc", "ml", "ensemble", "ensemble_dc_ml",
+              "ensemble_dc_ml_adaptive",
+          )
+          common = benchmark.get("common_sample", {})
+          for name in required:
+              sample = common.get(name, {})
+              sample_n = int(sample.get("n", 0))
+              component_sizes = {
+                  component: int(sample.get(component, {}).get("n", 0))
+                  for component in ("model", "market_consensus", "bet365")
+              }
+              if sample_n != n_eligible or any(
+                  count != n_eligible for count in component_sizes.values()
+              ):
+                  raise SystemExit(
+                      f"{name} is not compared on the exact Bet365 common sample: "
+                      f"expected={n_eligible}, sample={sample_n}, "
+                      f"components={component_sizes}"
+                  )
+
+          if benchmark.get("source_columns") != ["B365H", "B365D", "B365A"]:
+              raise SystemExit("Bet365 source columns are not explicit")
+          if not benchmark.get("limitation"):
+              raise SystemExit("Bet365 capture-time limitation is undocumented")
+          print(
+              "BET365_BENCHMARK_ACCEPTANCE_OK: "
+              f"{n_eligible}/{n_with_odds} schedule-screened odds; "
+              "all five model streams and consensus share the exact sample"
+          )
+          PY
+
       - name: Enforce prequential calibration acceptance
         run: |
           python - <<'PY'

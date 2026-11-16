@@ -195,3 +195,55 @@ def test_market_with_missing_or_unparseable_kickoff_is_not_eligible(tmp_path: Pa
 
     assert all(match.detail["market_temporal_status"] == "unknown" for match in matches)
     assert all(match.detail["market_pre_match_eligible"] is False for match in matches)
+
+
+
+def test_loader_preserves_individual_no_vig_bookmaker_vectors(tmp_path: Path):
+    path = tmp_path / "bookmaker_vectors.csv"
+    path.write_text(
+        "Date,HomeTeam,AwayTeam,FTHG,FTAG,FTR,"
+        "B365H,B365D,B365A,WHH,WHD,WHA,PSH,PSD,PSA\n"
+        "2025-01-01,A,B,1,0,H,2.0,3.5,4.0,3.0,3.0,3.0,2.2,3.2,3.6\n",
+        encoding="utf-8",
+    )
+
+    match = load_matches_csv(path)[0]
+    bookmaker_vectors = match.detail["market_bookmaker_probabilities"]
+
+    assert set(bookmaker_vectors) == {"bet365", "william_hill", "pinnacle"}
+    raw_bet365 = [1 / 2.0, 1 / 3.5, 1 / 4.0]
+    expected_bet365 = [value / sum(raw_bet365) for value in raw_bet365]
+    assert list(bookmaker_vectors["bet365"].values()) == pytest.approx(expected_bet365)
+    assert sum(bookmaker_vectors["bet365"].values()) == pytest.approx(1.0)
+    assert list(bookmaker_vectors["william_hill"].values()) == pytest.approx(
+        [1 / 3, 1 / 3, 1 / 3]
+    )
+    assert match.market is not None
+    assert list(match.market.values()) == pytest.approx(
+        [
+            (
+                bookmaker_vectors["bet365"][sign]
+                + bookmaker_vectors["william_hill"][sign]
+                + bookmaker_vectors["pinnacle"][sign]
+            ) / 3
+            for sign in ("1", "X", "2")
+        ]
+    )
+
+
+def test_bookmaker_vectors_exclude_stale_pinnacle_and_invalid_triplets(tmp_path: Path):
+    path = tmp_path / "bookmaker_cutoff.csv"
+    path.write_text(
+        "Date,HomeTeam,AwayTeam,FTHG,FTAG,FTR,B365H,B365D,B365A,PSH,PSD,PSA\n"
+        "2025-07-22,A,B,1,0,H,2.0,3.5,4.0,2.2,3.2,3.6\n"
+        "2025-07-23,C,D,0,1,A,2.0,3.5,4.0,2.2,3.2,3.6\n"
+        "2025-07-24,E,F,1,1,D,0,3.5,4.0,2.2,3.2,3.6\n",
+        encoding="utf-8",
+    )
+
+    before, after, invalid_bet365 = load_matches_csv(path)
+    assert "pinnacle" in before.detail["market_bookmaker_probabilities"]
+    assert "pinnacle" not in after.detail["market_bookmaker_probabilities"]
+    assert "bet365" in after.detail["market_bookmaker_probabilities"]
+    assert "bet365" not in invalid_bet365.detail["market_bookmaker_probabilities"]
+    assert invalid_bet365.market is None

@@ -506,6 +506,33 @@ def baseline_probabilities(
     return out
 
 
+
+def _bookmaker_probability(
+    match: Match,
+    bookmaker: str,
+) -> dict[str, float] | None:
+    """Return a strict no-vig bookmaker vector retained by the historical loader."""
+    bookmaker_vectors = match.detail.get("market_bookmaker_probabilities")
+    if not isinstance(bookmaker_vectors, dict):
+        return None
+    raw = bookmaker_vectors.get(bookmaker)
+    if not isinstance(raw, dict):
+        return None
+    if any(isinstance(raw.get(sign), bool) for sign in SIGNS):
+        return None
+    try:
+        vector = np.asarray([raw[sign] for sign in SIGNS], dtype=float)
+    except (KeyError, TypeError, ValueError):
+        return None
+    if (
+        not np.isfinite(vector).all()
+        or np.any(vector < 0.0)
+        or np.any(vector > 1.0)
+        or not np.isclose(float(vector.sum()), 1.0, rtol=0.0, atol=1e-6)
+    ):
+        return None
+    return dict(zip(SIGNS, map(float, vector)))
+
 def _calendar_day(value: datetime | str) -> str:
     """Return the calendar date represented by the input, without timezone conversion."""
     if isinstance(value, datetime):
@@ -666,6 +693,12 @@ def compare_walk_forward(
     market_status_counts: dict[str, int] = {}
     market_excluded_examples: list[dict[str, str | None]] = []
     dated_market_rows: list[tuple[str, dict[str, float], str]] = []
+    bet365_rows: list[tuple[dict[str, float], str]] = []
+    bet365_unfiltered_rows: list[tuple[dict[str, float], str]] = []
+    bet365_status_counts: dict[str, int] = {}
+    common_bet365_model_rows = {mode: [] for mode in all_modes}
+    common_bet365_consensus_rows = {mode: [] for mode in all_modes}
+    common_bet365_rows = {mode: [] for mode in all_modes}
     prediction_errors = {mode: {"count": 0, "first_error": None} for mode in all_modes}
     cold_start_fallback_counts = {mode: 0 for mode in all_modes}
     cold_start_fallback_examples = {mode: [] for mode in all_modes}
@@ -897,6 +930,26 @@ def compare_walk_forward(
                                     actual,
                                 )
                             )
+            bet365_probabilities = _bookmaker_probability(match, "bet365")
+            if bet365_probabilities is not None:
+                bet365_unfiltered_rows.append((bet365_probabilities, actual))
+                temporal_status = str(
+                    match.detail.get("market_temporal_status", "unclassified")
+                )
+                bet365_status_counts[temporal_status] = (
+                    bet365_status_counts.get(temporal_status, 0) + 1
+                )
+                if match.has_temporally_eligible_market:
+                    bet365_rows.append((bet365_probabilities, actual))
+                    for mode, probabilities in predictions.items():
+                        common_bet365_model_rows[mode].append((probabilities, actual))
+                        common_bet365_consensus_rows[mode].append(
+                            (match.market, actual)
+                        )
+                        common_bet365_rows[mode].append(
+                            (bet365_probabilities, actual)
+                        )
+
             n_total += 1
             test_dates.append(forecast_date)
 
@@ -955,6 +1008,51 @@ def compare_walk_forward(
             ),
         }
         for mode in all_modes
+    }
+    result["bookmaker_benchmarks"] = {
+        "bet365": {
+            "source_columns": ["B365H", "B365D", "B365A"],
+            "probability_method": (
+                "inverse decimal odds normalized within Bet365 to remove overround"
+            ),
+            "n_with_odds": len(bet365_unfiltered_rows),
+            "n_schedule_eligible": len(bet365_rows),
+            "n_excluded": len(bet365_unfiltered_rows) - len(bet365_rows),
+            "status_counts": dict(sorted(bet365_status_counts.items())),
+            "metrics": (
+                multiclass_metrics(bet365_rows) if bet365_rows else empty
+            ),
+            "common_sample": {
+                mode: {
+                    "n": len(common_bet365_model_rows[mode]),
+                    "model": (
+                        multiclass_metrics(common_bet365_model_rows[mode])
+                        if common_bet365_model_rows[mode]
+                        else empty
+                    ),
+                    "market_consensus": (
+                        multiclass_metrics(common_bet365_consensus_rows[mode])
+                        if common_bet365_consensus_rows[mode]
+                        else empty
+                    ),
+                    "bet365": (
+                        multiclass_metrics(common_bet365_rows[mode])
+                        if common_bet365_rows[mode]
+                        else empty
+                    ),
+                }
+                for mode in all_modes
+            },
+            "eligibility_rule": (
+                "valid B365 triplet plus the same explicit schedule_compatible "
+                "and market_pre_match_eligible screen used by the consensus market"
+            ),
+            "limitation": (
+                "Football-Data does not expose exact per-fixture Bet365 odds-capture "
+                "timestamps; this is a schedule-screened historical benchmark, "
+                "not proof of executable pre-kickoff availability"
+            ),
+        }
     }
     weights = [float(row["dc_weight"]) for row in adaptive_weight_trace]
     result["adaptive_ensemble"] = {

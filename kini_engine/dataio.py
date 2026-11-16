@@ -89,46 +89,75 @@ def _optional_goal(value: object, row_number: int, column: str) -> int | None:
     return int(numeric)
 
 
-def _market_from_row(
+BOOKMAKER_ODDS_COLUMNS = {
+    "bet365": ("B365H", "B365D", "B365A"),
+    "william_hill": ("WHH", "WHD", "WHA"),
+    "vc": ("VCH", "VCD", "VCA"),
+    "pinnacle": ("PSH", "PSD", "PSA"),
+}
+
+
+def _bookmaker_probabilities_from_row(
     row: pd.Series,
     match_date: datetime | str | None = None,
-) -> dict[str, float] | None:
-    books = (
-        ("B365H", "B365D", "B365A"),
-        ("WHH", "WHD", "WHA"),
-        ("VCH", "VCD", "VCA"),
-        ("PSH", "PSD", "PSA"),
-    )
-    # Football-Data warns that Pinnacle's public odds feed has been stale
-    # since 2025-07-23. Do not blend PSH/PSD/PSA into later market features.
+) -> dict[str, dict[str, float]]:
+    """Return each bookmaker's no-vig 1/X/2 vector from pre-closing odds.
+
+    Football-Data warns that Pinnacle's public odds feed has been stale since
+    2025-07-23. Its values are excluded from that date onward.
+    """
+    books = dict(BOOKMAKER_ODDS_COLUMNS)
     if match_date is not None:
         try:
             odds_date = _parse_match_date(match_date).date()
         except (TypeError, ValueError):
             odds_date = None
         if odds_date is not None and odds_date >= datetime(2025, 7, 23).date():
-            books = tuple(book for book in books if book[0] != "PSH")
+            books.pop("pinnacle", None)
 
-    estimates: list[dict[str, float]] = []
-    for h_col, d_col, a_col in books:
-        if not all(col in row.index for col in (h_col, d_col, a_col)):
+    estimates: dict[str, dict[str, float]] = {}
+    for bookmaker, columns in books.items():
+        if not all(column in row.index for column in columns):
             continue
         try:
-            odds = [float(row[h_col]), float(row[d_col]), float(row[a_col])]
+            odds = [float(row[column]) for column in columns]
         except (TypeError, ValueError):
             continue
         if any(not isfinite(value) or value <= 1.0 for value in odds):
             continue
-        inv = [1.0 / value for value in odds]
-        total = sum(inv)
-        if total > 0:
-            estimates.append(dict(zip(SIGNS, (value / total for value in inv))))
-    if not estimates:
+
+        implied = [1.0 / value for value in odds]
+        overround = sum(implied)
+        if overround > 0.0:
+            estimates[bookmaker] = {
+                sign: float(probability / overround)
+                for sign, probability in zip(SIGNS, implied)
+            }
+    return estimates
+
+
+def _market_from_bookmaker_probabilities(
+    bookmaker_probabilities: dict[str, dict[str, float]],
+) -> dict[str, float] | None:
+    """Build the existing equal-weight consensus from available bookmaker vectors."""
+    if not bookmaker_probabilities:
         return None
     return {
-        sign: float(sum(item[sign] for item in estimates) / len(estimates))
+        sign: float(
+            sum(vector[sign] for vector in bookmaker_probabilities.values())
+            / len(bookmaker_probabilities)
+        )
         for sign in SIGNS
     }
+
+
+def _market_from_row(
+    row: pd.Series,
+    match_date: datetime | str | None = None,
+) -> dict[str, float] | None:
+    """Return the equal-weight no-vig bookmaker consensus."""
+    bookmaker_probabilities = _bookmaker_probabilities_from_row(row, match_date)
+    return _market_from_bookmaker_probabilities(bookmaker_probabilities)
 
 
 RESULT_MAP = {"H": "1", "D": "X", "A": "2", "1": "1", "X": "X", "2": "2"}
@@ -174,7 +203,11 @@ def load_matches_csv(path: str | Path) -> list[Match]:
         detail["kickoff_time"] = kickoff_time
         detail["kickoff_time_timezone"] = "unspecified" if kickoff_time else None
 
-        market = _market_from_row(row, row["Date"])
+        bookmaker_probabilities = _bookmaker_probabilities_from_row(
+            row, row["Date"]
+        )
+        market = _market_from_bookmaker_probabilities(bookmaker_probabilities)
+        detail["market_bookmaker_probabilities"] = bookmaker_probabilities
         temporal_status = _market_temporal_status(
             row["Date"], kickoff_time, market_available=market is not None
         )

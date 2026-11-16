@@ -710,3 +710,94 @@ def test_season_identity_uses_source_codes_and_keeps_missing_metadata_explicit()
 
     unknown = Match(datetime(2025, 1, 1), "A", "B")
     assert backtest._season_identity(unknown) == ("unknown", "unknown", "unknown")
+
+
+
+def test_compare_reports_bet365_on_its_exact_common_fixture_sample(monkeypatch):
+    class FakeEngine:
+        def __init__(self, enable_ml=False):
+            self.dc = type("DC", (), {"decay": 0.995})()
+
+        def fit(self, history):
+            return self
+
+        def predict(self, match, mode="ensemble", history=None):
+            return type(
+                "Prediction", (),
+                {"probabilities": {"1": 0.5, "X": 0.3, "2": 0.2}},
+            )()
+
+    monkeypatch.setattr(backtest, "KiniEngine", FakeEngine)
+    training_day = datetime(2025, 1, 1)
+    forecast_day = datetime(2025, 1, 2)
+    training = [
+        Match(training_day, f"H{i}", f"A{i}", 1, 0, "1")
+        for i in range(12)
+    ]
+    consensus = {"1": 0.45, "X": 0.30, "2": 0.25}
+    bet365_a = {"1": 0.50, "X": 0.28, "2": 0.22}
+    bet365_b = {"1": 0.35, "X": 0.33, "2": 0.32}
+    eligible = {
+        "market_temporal_status": "schedule_compatible",
+        "market_pre_match_eligible": True,
+    }
+    matches = training + [
+        Match(
+            forecast_day, "B365 One", "A", 1, 0, "1",
+            market=consensus,
+            detail={**eligible, "market_bookmaker_probabilities": {"bet365": bet365_a}},
+        ),
+        Match(
+            forecast_day, "No B365", "B", 0, 0, "X",
+            market=consensus,
+            detail=eligible,
+        ),
+        Match(
+            forecast_day, "B365 Ambiguous", "C", 0, 1, "2",
+            market=consensus,
+            detail={
+                "market_temporal_status": "ambiguous",
+                "market_pre_match_eligible": False,
+                "market_bookmaker_probabilities": {"bet365": bet365_b},
+            },
+        ),
+        Match(
+            forecast_day, "B365 Two", "D", 0, 0, "X",
+            market=consensus,
+            detail={**eligible, "market_bookmaker_probabilities": {"bet365": bet365_b}},
+        ),
+        Match(
+            forecast_day, "Malformed B365", "E", 2, 0, "1",
+            market=consensus,
+            detail={
+                **eligible,
+                "market_bookmaker_probabilities": {
+                    "bet365": {"1": 0.6, "X": 0.2, "2": 0.3}
+                },
+            },
+        ),
+    ]
+
+    result = backtest.compare_walk_forward(matches, min_train=12)
+    benchmark = result["bookmaker_benchmarks"]["bet365"]
+
+    assert benchmark["n_with_odds"] == 3
+    assert benchmark["n_schedule_eligible"] == 2
+    assert benchmark["n_excluded"] == 1
+    assert benchmark["status_counts"] == {
+        "ambiguous": 1,
+        "schedule_compatible": 2,
+    }
+    assert benchmark["metrics"]["n"] == 2
+    for mode in (
+        "dc",
+        "ml",
+        "ensemble",
+        "ensemble_dc_ml",
+        "ensemble_dc_ml_adaptive",
+    ):
+        sample = benchmark["common_sample"][mode]
+        assert sample["n"] == 2
+        assert sample["model"]["n"] == 2
+        assert sample["market_consensus"]["n"] == 2
+        assert sample["bet365"]["n"] == 2
