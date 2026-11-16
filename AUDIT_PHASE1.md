@@ -1589,3 +1589,15 @@ A regression test covers one unseen-team fixture and one known-team fixture, che
 - Historical-data validation [run 43779494168](https://github.com/Baltas80/Kini-/actions/runs/43779494168) passed. The cold-start reporting code and regression test in the next commit require fresh CI and walk-forward acceptance.
 
 No PR was merged and master was not modified.
+
+
+## Validation follow-up — 2026-11-16
+
+- Cold-start accounting implementation commit: `70aa42ea8069aa2cfe7bee03ff212177e9692800`.
+- CI [run 43785829956](https://github.com/Baltas80/Kini-/actions/runs/43785829956) passed on that code head: actionlint, Ruff/format checks already configured at the time, and **198 tests passed**. The new cold-start regression test is included in that total.
+- Historical-data validation [run 43786009207](https://github.com/Baltas80/Kini-/actions/runs/43786009207) passed: 5,311 completed fixtures, seven seasons across two leagues, zero duplicate/conflicting fixtures, zero missing team names or scores, and 56 canonical team identities resolving 10,622 team references.
+- Expanding Ruff coverage to the backtesting module exposed five existing style findings (import ordering, redundant integer cast, adjacent-pair iteration and test import style). They were corrected in `26bddef05ffd26155615f83e61871c59612768bf`; the change does not alter model calculations.
+- CI for the expanded Ruff scope is running on the latest head. The latest full walk-forward is also pending behind the already-running comparison; the updated workflow will reject missing/inconsistent cold-start counts, rates or examples and will require DC-dependent streams to agree.
+- Do not mark cold-start reporting fully validated until the latest-head CI and the walk-forward with the new acceptance step both pass.
+
+Next action: close the latest CI and walk-forward validations, then inspect the measured cold-start frequency and its dated examples before changing the fallback policy.
