@@ -11,6 +11,7 @@ from scripts.discover_selae_result_archive import (
     extract_pagination_template,
     extract_result_links,
     probe_alternative_sources,
+    _is_official_url,
 )
 
 
@@ -153,3 +154,11 @@ def test_component_page_builder_rejects_invalid_parameters_and_hosts() -> None:
         )
 
     assert INDEX_URL.startswith("https://www.loteriasyapuestas.es/")
+
+
+def test_official_url_requires_https_standard_port_and_no_userinfo() -> None:
+    assert _is_official_url(INDEX_URL)
+    assert not _is_official_url(INDEX_URL.replace("https://", "http://"))
+    assert not _is_official_url("https://www.loteriasyapuestas.es:8443/es/la-quiniela/resultados")
+    assert not _is_official_url("https://user@www.loteriasyapuestas.es/es/la-quiniela/resultados")
+    assert not _is_official_url("https://www.loteriasyapuestas.es.evil.example/es/la-quiniela/resultados")
