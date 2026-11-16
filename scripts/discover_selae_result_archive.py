@@ -334,12 +334,26 @@ def _fetch_html(
         metadata = {
             "requested_url": url,
             "final_url": response.url,
-            "http_status": response.status_code,
-            "content_type": response.headers.get("Content-Type"),
-            "downloaded_bytes": len(payload),
-            "sha256": hashlib.sha256(payload).hexdigest(),
+            **_response_diagnostics(response),
         }
     return document, metadata
+
+
+def _response_diagnostics(response: requests.Response) -> dict[str, object]:
+    """Retain transport metadata without storing untrusted response bodies."""
+    payload = response.content or b""
+    headers = response.headers
+    return {
+        "http_status": response.status_code,
+        "content_type": headers.get("Content-Type"),
+        "downloaded_bytes": len(payload),
+        "sha256": hashlib.sha256(payload).hexdigest() if payload else None,
+        "server": headers.get("Server"),
+        "cf_ray": headers.get("CF-Ray"),
+        "cf_cache_status": headers.get("CF-Cache-Status"),
+        "via": headers.get("Via"),
+        "retry_after": headers.get("Retry-After"),
+    }
 
 
 def probe_alternative_sources(session: requests.Session) -> list[dict[str, object]]:
@@ -362,12 +376,7 @@ def probe_alternative_sources(session: requests.Session) -> list[dict[str, objec
                         "name": name,
                         "url": url,
                         "final_url": final_url,
-                        "http_status": response.status_code,
-                        "content_type": response.headers.get("Content-Type"),
-                        "downloaded_bytes": len(payload),
-                        "sha256": hashlib.sha256(payload).hexdigest()
-                        if payload
-                        else None,
+                        **_response_diagnostics(response),
                         "official_redirect": official_redirect,
                         "accessible": response.status_code == 200 and official_redirect,
                     }
@@ -405,13 +414,15 @@ def discover_archive(
             selected_index_url = candidate_url
             break
         except (requests.RequestException, ValueError) as exc:
-            index_attempts.append(
-                {
-                    "url": candidate_url,
-                    "error_type": type(exc).__name__,
-                    "error": str(exc),
-                }
-            )
+            attempt: dict[str, object] = {
+                "url": candidate_url,
+                "error_type": type(exc).__name__,
+                "error": str(exc),
+            }
+            response = getattr(exc, "response", None)
+            if response is not None:
+                attempt["response_diagnostics"] = _response_diagnostics(response)
+            index_attempts.append(attempt)
 
     if selected_index_url is None or index_html is None or index_metadata is None:
         failures = " | ".join(
