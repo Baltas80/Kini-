@@ -230,6 +230,55 @@ def test_date_num_accepts_football_data_format():
     assert _date_num("01/02/2021") < _date_num("02/02/2021")
 
 
+def test_dixon_coles_decay_uses_source_calendar_dates_not_host_timezone(monkeypatch):
+    import penaltyblog.models
+
+    captured_dates = []
+
+    def capture_weights(dates, xi):
+        captured_dates.extend(dates)
+        return np.ones(len(dates), dtype=float)
+
+    class FakeDixonColesGoalModel:
+        def __init__(self, **kwargs):
+            self.teams = sorted(
+                set(kwargs["teams_home"]) | set(kwargs["teams_away"])
+            )
+            self.fitted = False
+
+        def fit(self, **kwargs):
+            self.fitted = True
+            self.loglikelihood = -1.0
+            self.aic = 2.0
+
+        def predict(self, home, away, **kwargs):
+            return SimpleNamespace(
+                grid=np.full((2, 2), 0.25, dtype=float),
+                home_draw_away=np.asarray([0.25, 0.50, 0.25], dtype=float),
+            )
+
+    monkeypatch.setattr(
+        penaltyblog.models, "DixonColesGoalModel", FakeDixonColesGoalModel
+    )
+    monkeypatch.setattr(penaltyblog.models, "dixon_coles_weights", capture_weights)
+
+    start = datetime.fromisoformat("2025-03-30T00:30:00+02:00")
+    history = [
+        Match(start + timedelta(days=index), f"H{index}", f"A{index}", 1, 0, "1")
+        for index in range(12)
+    ]
+
+    fitted = DixonColes().fit(history)
+
+    expected_dates = [
+        datetime.fromisoformat((start.date() + timedelta(days=index)).isoformat())
+        for index in range(12)
+    ]
+    assert fitted.fitted is True
+    assert captured_dates == expected_dates
+    assert all(value.tzinfo is None and value.hour == 0 for value in captured_dates)
+
+
 
 def test_h2h_counts_current_home_team_wins_regardless_of_historical_venue():
     current = Match(datetime(2025, 4, 1), "A", "B")

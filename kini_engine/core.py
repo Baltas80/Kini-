@@ -331,7 +331,12 @@ class DixonColes:
 
             self.teams = sorted({m.home for m in usable} | {m.away for m in usable})
             # penaltyblog expects datetime-like values because it computes timedelta.days.
-            dates = [datetime.fromtimestamp(_date_num(m.date)) for m in usable]
+            # Use the source calendar day, not the host-local timezone. Football-Data
+            # dates are date-only; aware datetime inputs must remain reproducible
+            # when the same history is fitted on runners in different timezones.
+            dates = [
+                datetime.fromisoformat(_calendar_date_key(m.date)) for m in usable
+            ]
             weights = dixon_coles_weights(dates, xi=-np.log(float(self.decay)))
 
             model = DixonColesGoalModel(

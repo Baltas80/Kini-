@@ -1905,3 +1905,28 @@ La ampliación del commit `468b344` permite pasar conjuntos explícitos de categ
 - Próximas prioridades: (1) auditoría feature-by-feature de observación, publicación, ventana y disponibilidad antes del kickoff; (2) conseguir un flujo reproducible de PDFs oficiales SELAE descargados localmente o acceso oficial estable y reconciliar jornadas completas; (3) ampliar la evaluación del optimizador con escenarios conjuntos y premios históricos cuando existan datos oficiales suficientes.
 
 PR #9 sigue en borrador y basado en `feat/canonical-team-identity-registry`. No se ha modificado `master` ni se ha fusionado ninguna PR.
+
+
+---
+## 2026-11-16 — Auditoría point-in-time de features (P2, revisión estática)
+
+Se revisaron `kini_engine/core.py`, `kini_engine/backtest.py`, `kini_engine/dataio.py` y sus pruebas sobre el head posterior a la validación P6.
+
+| Componente | Variables/inputs observados | Corte temporal aplicado | Estado |
+|---|---|---|---|
+| ML (12 features) | Puntos, goles a favor y en contra en los últimos 8 partidos: local y visitante en global; local solo como local; visitante solo como visitante | `_prior_completed_matches` exige fecha de origen estrictamente anterior; `_training_rows` calcula las features de toda una fecha antes de añadir resultados de esa fecha | Sin leakage de mismo día/futuro en el código revisado; disponibilidad exacta de publicación histórica no demostrada |
+| Contexto de forma | Últimos 5 partidos completados por equipo | Mismo filtro de fecha estrictamente anterior | Conservador por fecha; sin timestamp de publicación |
+| H2H | Hasta 10 enfrentamientos previos, mínimo 5 | Se construye desde el histórico ya filtrado | Sin uso de enfrentamientos del mismo día/futuros |
+| Dixon–Coles | Marcadores completados, equipos y fechas para fuerzas y decaimiento temporal | Backtest agrupa por día y añade el grupo al entrenamiento solo después de pronosticar todos sus partidos; el motor rechaza resultados de fecha igual o posterior | Sin leakage de calendario en walk-forward; la hora de publicación de resultados no está disponible |
+| Ensemble adaptativo/calibrador | Predicciones OOF anteriores y resultados asociados | Pesos/calibradores se fijan antes de la primera predicción del día; resultados se agregan tras completar el grupo diario | Prequential y aislado por día, validado por los gates del backtest |
+| Mercado | Cuotas pre-cierre B365/WH/VC/Pinnacle, sin margen por casa | Filtro conservador: viernes/martes excluidos; Pinnacle retirado desde 23-07-2025 por feed obsoleto | Solo compatibilidad de calendario; sin captura individual ni zona horaria acreditadas |
+| LAE | Vector 1/X/2 con fuente, identidad de fixture, evidencia de kickoff y timestamps | Captura con zona horaria, anterior al kickoff; evidencia de calendario reciente | Fail-closed. El adaptador MCP actual no conserva todos los metadatos, por lo que LAE no afecta a sus pronósticos hasta completar esa integración |
+| Clasificación, alineaciones, lesiones, clima | No entran en la matriz ML de 12 features | No aplicable | Excluidos por falta de procedencia/publicación point-in-time |
+
+### Corrección de reproducibilidad temporal
+
+La revisión encontró que Dixon–Coles convertía `Match.date` a timestamp y luego a `datetime.fromtimestamp`, lo que puede desplazar una fecha con zona horaria explícita al día anterior según la zona horaria del runner. Se sustituye por medianoche de la fecha de calendario de origen, coherente con el corte diario conservador. La regresión usa una fecha con offset `+02:00` y comprueba que las fechas enviadas a `dixon_coles_weights` son fechas de origen estables y sin zona horaria.
+
+### Límite P2 que permanece abierto
+
+La auditoría estática no puede certificar el instante de publicación de los resultados históricos ni el timestamp de captura de cuotas: Football-Data no los proporciona en el CSV utilizado. Por tanto, el estado correcto es **sin leakage de calendario en la implementación revisada**, no una demostración absoluta de disponibilidad real de cada dato en el instante de predicción. No se incorporan alineaciones, lesiones, clima ni tablas reconstruidas a posteriori.
