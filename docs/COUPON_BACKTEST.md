@@ -50,3 +50,12 @@ The independent marginal coverage estimate is reported separately from realized 
 The first CI pilot imports and evaluates Jornada 21 of 2020/2021 only. It validates ingestion, normalized official reconciliation, canonical identity, common cutoff, model execution and optimizer integration. The official snapshot is a manually reviewed normalized extract, not the original SELAE HTML; a future full-season archive needs an accessible official endpoint or individually reviewed official snapshots.
 
 One coupon is not a performance sample and must not be used to select a model or claim an improvement. After the pilot passes, the importer can retrieve all 63 jornadas for 2020/2021 and later seasons. Full-season expansion requires checking every official reconciliation and documenting missing, postponed or rescheduled fixtures before aggregate ticket metrics are interpreted.
+
+
+## Fail-closed acceptance for multi-coupon runs
+
+The batch runner must not report success when only Dixon-Coles completes. Before writing the result artifact it now checks every requested coupon, in archive order, and requires all three candidates (Dixon-Coles, ML and fixed DC/ML ensemble) to produce 14 valid normalized 1/X/2 vectors for every coupon.
+
+The acceptance gate also verifies official SELAE result and Pleno reconciliation, all 15 canonical fixture identities, the previous-local-calendar-day cutoff, minimum and fitted training counts, explicit Dixon-Coles Pleno provenance, optimizer column budget, the 31,104 direct-system cap, ticket metrics and consistency of the combined 14 + Pleno coverage flag. A partial model run or malformed vector exits non-zero and no successful result artifact is written.
+
+This is a software acceptance gate, not evidence that the models are accurate or that the ticket is profitable. Full-season expansion remains blocked until each coupon has its own official SELAE reconciliation evidence.
