@@ -9,6 +9,21 @@ from scipy.optimize import minimize
 from .core import SIGNS, KiniEngine, Match, _date_num
 
 
+DC_DEPENDENT_MODES = frozenset(
+    {"dc", "ensemble", "ensemble_dc_ml", "ensemble_dc_ml_adaptive"}
+)
+
+
+def _uses_unseen_team_fallback(engine: Any, match: Match) -> bool:
+    """Return whether the fixture uses the explicit Dixon-Coles cold-start path."""
+    dc = getattr(engine, "dc", None)
+    prediction_source = getattr(dc, "prediction_source", None)
+    return (
+        callable(prediction_source)
+        and prediction_source(match.home, match.away) == "unseen_team_fallback"
+    )
+
+
 def _classwise_calibration(
     probability_matrix: np.ndarray,
     target_indices: np.ndarray,
@@ -560,6 +575,8 @@ def compare_walk_forward(
     market_excluded_examples: list[dict[str, str | None]] = []
     dated_market_rows: list[tuple[str, dict[str, float], str]] = []
     prediction_errors = {mode: {"count": 0, "first_error": None} for mode in all_modes}
+    cold_start_fallback_counts = {mode: 0 for mode in all_modes}
+    cold_start_fallback_examples = {mode: [] for mode in all_modes}
     adaptive_history: list[tuple[dict[str, float], dict[str, float], str]] = []
     adaptive_weight_trace: list[dict[str, Any]] = []
 
@@ -626,6 +643,7 @@ def compare_walk_forward(
 
         for match in group:
             actual = match.outcome()
+            uses_cold_start = _uses_unseen_team_fallback(engine, match)
             predictions: dict[str, dict[str, float]] = {}
             for mode in modes:
                 try:
@@ -637,6 +655,14 @@ def compare_walk_forward(
                         diagnostic["first_error"] = str(exc)
                     continue
                 predictions[mode] = pred.probabilities
+                if mode in DC_DEPENDENT_MODES and uses_cold_start:
+                    cold_start_fallback_counts[mode] += 1
+                    if len(cold_start_fallback_examples[mode]) < 20:
+                        cold_start_fallback_examples[mode].append({
+                            "date": forecast_date,
+                            "home": match.home,
+                            "away": match.away,
+                        })
                 rows[mode].append((pred.probabilities, actual))
                 dated_rows[mode].append((forecast_date, pred.probabilities, actual))
 
@@ -652,6 +678,14 @@ def compare_walk_forward(
                 pending_adaptive_history.append(
                     (predictions["dc"], predictions["ml"], actual)
                 )
+                if uses_cold_start:
+                    cold_start_fallback_counts[adaptive_mode] += 1
+                    if len(cold_start_fallback_examples[adaptive_mode]) < 20:
+                        cold_start_fallback_examples[adaptive_mode].append({
+                            "date": forecast_date,
+                            "home": match.home,
+                            "away": match.away,
+                        })
             else:
                 diagnostic = prediction_errors[adaptive_mode]
                 diagnostic["count"] += 1
@@ -899,6 +933,25 @@ def compare_walk_forward(
                 "calibrated_market": multiclass_metrics(
                     calibration_common_market[mode]
                 ),
+            }
+            for mode in all_modes
+        },
+    }
+    result["cold_start_fallbacks"] = {
+        "source": "KiniEngine.dc.prediction_source",
+        "definition": (
+            "Successful DC-dependent forecasts that used the explicit "
+            "unseen-team fallback; ML-only forecasts are not DC-dependent."
+        ),
+        "models": {
+            mode: {
+                "n_predictions": len(rows[mode]),
+                "count": cold_start_fallback_counts[mode],
+                "rate": (
+                    cold_start_fallback_counts[mode] / len(rows[mode])
+                    if rows[mode] else None
+                ),
+                "examples": cold_start_fallback_examples[mode],
             }
             for mode in all_modes
         },

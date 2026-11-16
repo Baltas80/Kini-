@@ -1561,3 +1561,31 @@ Six new tests cover insufficient history, explicit fallback, engine readiness, c
 3. Continue official SELAE calendar acquisition. The historical workbook remains unavailable from the hosted runner; no joint Quiniela scenarios may be fabricated or inferred from independent fixtures.
 
 PR #9 remains open and in draft. No PR was merged and master was not modified.
+
+
+## Unseen-team cold-start reporting — 2026-11-16
+
+The walk-forward comparison now exposes a structured per-model cold-start diagnostic. Each of the five forecast streams records its successful prediction count, unseen-team fallback count, fallback rate and up to 20 dated fixture examples. Counts are sourced from the Dixon-Coles model's explicit prediction-source state rather than inferred by parsing display strings. ML-only forecasts are not counted as DC-dependent; the adaptive DC/ML stream is counted only when both component forecasts succeed.
+
+A regression test covers one unseen-team fixture and one known-team fixture, checks the count and rate for every DC-dependent stream, and verifies that the independent ML stream remains at zero. Existing test doubles without the optional prediction-source diagnostic remain compatible.
+
+### Latest accepted fit-state backtest before cold-start reporting
+
+- Walk-forward [run 43779494166](https://github.com/Baltas80/Kini-/actions/runs/43779494166), code head b5b3b5a8b9fab0605905faa2f891da33dd7e6ae7: **5,011/5,011 predictions** for all five model streams, zero prediction errors; initial training sample 300; test period 2020-12-11 to 2026-11-09.
+- The strict market sample contains 4,424/5,011 fixtures; 587 Friday/Tuesday rows are excluded as temporally ambiguous. This remains a schedule screen, not exact per-fixture capture-time verification.
+- On the identical 4,424-fixture market intersection:
+
+| Model | Accuracy | Brier | Log Loss |
+|---|---:|---:|---:|
+| Dixon-Coles | 48.06% | 0.616357 | 1.027499 |
+| ML | 43.78% | 0.647471 | 1.074246 |
+| Main ensemble | 47.81% | 0.613563 | 1.023018 |
+| Fixed DC/ML | 47.40% | 0.616095 | 1.026842 |
+| Adaptive DC/ML | 47.49% | 0.616305 | 1.027133 |
+| Market | **50.72%** | **0.597504** | **0.999444** |
+
+- Prequential calibration used 3,847 common model/market fixtures. For the main ensemble, Brier worsened from 0.611315 to 0.611522 and Log Loss from 1.019753 to 1.019966; it is not promoted. The market remains better.
+- CI [run 43779494093](https://github.com/Baltas80/Kini-/actions/runs/43779494093) passed actionlint, Ruff, formatting and **197 tests**. The 20 test warnings originate in penaltyblog's NumPy 2.5 shape-assignment deprecation.
+- Historical-data validation [run 43779494168](https://github.com/Baltas80/Kini-/actions/runs/43779494168) passed. The cold-start reporting code and regression test in the next commit require fresh CI and walk-forward acceptance.
+
+No PR was merged and master was not modified.

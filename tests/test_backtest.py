@@ -565,3 +565,63 @@ def test_compare_excludes_ambiguous_and_unknown_market_rows_from_strict_sample(m
         "unknown": 1,
     }
     assert result["common_sample"]["dc"]["market"]["n"] == 1
+
+
+def test_compare_reports_unseen_team_cold_start_fallbacks_per_model(monkeypatch):
+    class FakeDC:
+        decay = 0.995
+
+        @staticmethod
+        def prediction_source(home, away):
+            return (
+                "unseen_team_fallback"
+                if "New Club" in {home, away}
+                else "dixon_coles"
+            )
+
+    class FakeEngine:
+        def __init__(self, enable_ml=False):
+            self.dc = FakeDC()
+            self.history = []
+
+        def fit(self, history):
+            self.history = list(history)
+            return self
+
+        def predict(self, match, mode="ensemble", history=None):
+            return type("Prediction", (), {
+                "probabilities": {"1": 0.5, "X": 0.3, "2": 0.2}
+            })()
+
+    monkeypatch.setattr(backtest, "KiniEngine", FakeEngine)
+    training_day = datetime(2025, 1, 1)
+    forecast_day = datetime(2025, 1, 2)
+    training = [
+        Match(training_day, f"H{i}", f"A{i}", 1, 0, "1")
+        for i in range(12)
+    ]
+    fixtures = [
+        Match(forecast_day, "New Club", "A", 1, 0, "1"),
+        Match(forecast_day, "Known Club", "B", 0, 0, "X"),
+    ]
+
+    result = backtest.compare_walk_forward(
+        training + fixtures,
+        min_train=12,
+    )
+
+    summaries = result["cold_start_fallbacks"]["models"]
+    for mode in ("dc", "ensemble", "ensemble_dc_ml", "ensemble_dc_ml_adaptive"):
+        assert summaries[mode]["n_predictions"] == 2
+        assert summaries[mode]["count"] == 1
+        assert summaries[mode]["rate"] == 0.5
+        assert summaries[mode]["examples"] == [{
+            "date": "2025-01-02",
+            "home": "New Club",
+            "away": "A",
+        }]
+
+    assert summaries["ml"]["n_predictions"] == 2
+    assert summaries["ml"]["count"] == 0
+    assert summaries["ml"]["rate"] == 0.0
+    assert summaries["ml"]["examples"] == []
