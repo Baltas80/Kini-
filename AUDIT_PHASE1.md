@@ -1762,3 +1762,11 @@ Se contrastó el optimizador con las normas oficiales de SELAE, documento Normas
 El límite de 31.104 y la tabla de dobles/triples implementados en TicketOptimizer son coherentes para un único pronóstico del Pleno (multiplicador 1). El contrato actual declara explícitamente pleno15_multiplier=1 y KiniEngine selecciona una única categoría de Pleno para el cálculo de cobertura independiente. Por tanto, el optimizador no debe presentarse como compatible con boletos que marquen varias categorías del Pleno: en ese caso el multiplicador debe reducir el número de combinaciones de los 14 partidos para que el total siga siendo <= 31.104. La selección múltiple del Pleno queda pendiente de implementación y prueba; no se modifica silenciosamente el presupuesto actual.
 
 Fuente normativa oficial: https://www.loteriasyapuestas.es/f/loterias/documentos/normativa/Normativa%20de%20los%20juegos/Normas_de_la_Quiniela_y_Elige8_Octubre_2019.pdf
+
+
+---
+## 2026-11-16 — Diagnóstico de bloqueo de SELAE y vía local de importación
+
+La ejecución GitHub Actions 43807527115 confirma HTTP 403 desde el runner para los índices español e inglés, el RSS oficial, el endpoint de resultados por fecha, el PDF oficial de prensa y los dos endpoints XHR de paginación. El informe de diagnóstico se conserva en el artefacto 14198398686. No se ha intentado eludir el bloqueo mediante proxies ni se han usado espejos de terceros como fuente de verdad.
+
+Se añade scripts/import_selae_press_release.py como vía reproducible para importar PDFs oficiales descargados localmente. El parser exige fecha explícita en el documento, 14 signos 1/X/2 y las dos categorías del Pleno en 0/1/2/M; registra el SHA-256 del PDF y deja el escenario en estado scenario_imported_unreconciled hasta reconciliarlo. La dependencia pypdf queda en el extra opcional [selae]. Se añaden tests con vectores publicados en notas de prensa oficiales de 08-11-2026, 01-11-2026 y 17-12-2023; estos tests validan el parser, no constituyen por sí mismos un histórico completo.
