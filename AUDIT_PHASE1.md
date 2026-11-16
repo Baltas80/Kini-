@@ -2182,3 +2182,16 @@ A current read-only inspection of the official [SELAE Quiniela results index](ht
 This is a useful scope signal for the archive collector: the current index exposes 80 pages, so a two-page CI smoke run is not a complete archive inventory. The web/browser text extraction is content-level corroboration only. It does not expose the original response bytes, response headers or a source-byte SHA-256 and must not be converted into a raw-capture provenance record.
 
 The automated GitHub archive-discovery job remains scoped to code changes and its latest documentation-head run skipped network discovery. The next complete archive attempt should fetch all discovered pages from an allowed network environment, preserve each page's original bytes and metadata, and only then report deduplicated result URLs/date coverage. No historical draw outcomes or raw-byte hashes are inferred from this reconnaissance.
+
+
+### SELAE archive transport probe — artifact inspection
+
+The earlier archive-discovery failure artifact was downloaded and inspected rather than treated as a generic workflow failure.
+
+- Workflow: [43851162609](https://github.com/Baltas80/Kini-/actions/runs/43851162609), commit `948aa503ca82561640932cd0e7bbe41b825aa975`.
+- Artifact: [selae-result-archive-discovery](https://github.com/Baltas80/Kini-/actions/runs/43851162609/artifacts/14218270980), ID `14218270980`, 1,216 bytes.
+- ZIP SHA-256 independently recomputed from the downloaded artifact: `e7d9af5b28aeaae9c7e3d7d6638b637c231ca544b67657d6c88fb192f3a90e0d`.
+- The report confirms both Spanish and English result-index requests returned HTTP 403. All five transport probes also returned HTTP 403: results RSS (435 bytes), static result HTML (434), 8-Nov press-release PDF (528), Spanish page-2 component (434) and English page-2 component (434). Each response remained on the official host, but `accessible=false`.
+- The recorded SHA-256 values are hashes of those short HTTP-403 response bodies, **not** hashes of official result pages, PDFs or RSS data. They must not be reused as draw-source provenance.
+
+This narrows the blocker to the GitHub-runner HTTP client/network path rather than a missing pagination implementation. The current web-index observation demonstrates that an indexed/text-rendered view exists, but it does not expose the original bytes. The local container's direct downloads of the official result page and PDF also failed, so no original source bytes were captured in this execution. Keep the importer fail-closed; do not fabricate raw-source hashes or promote extracted text to a provenance artifact.
