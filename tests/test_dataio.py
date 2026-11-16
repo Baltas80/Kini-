@@ -261,8 +261,8 @@ def test_load_rejects_boolean_goal_values(
 ):
     path = tmp_path / "boolean_goals.csv"
     path.write_text(
-        "Date,HomeTeam,AwayTeam,FTHG,FTAG,FTR\\n"
-        f"2025-01-01,A,B,{home_goals},{away_goals},H\\n",
+        "Date,HomeTeam,AwayTeam,FTHG,FTAG,FTR\n"
+        f"2025-01-01,A,B,{home_goals},{away_goals},H\n",
         encoding="utf-8",
     )
 
