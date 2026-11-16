@@ -128,7 +128,7 @@ def extract_pdf_text(pdf_path: Path) -> str:
         if reader.is_encrypted:
             raise ValueError("press-release PDF is encrypted")
         text = "\n".join(page.extract_text() or "" for page in reader.pages)
-    except (OSError, ValueError) as exc:
+    except Exception as exc:
         raise ValueError(f"unable to extract text from press-release PDF: {exc}") from exc
 
     if not text.strip():
