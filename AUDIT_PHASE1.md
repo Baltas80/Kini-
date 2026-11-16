@@ -2297,3 +2297,56 @@ No model is promoted as market-beating. These are historical schedule-screened c
 4. Use the validated fixture ledger to finish the error-analysis review, then evaluate actual direct-ticket double/triple allocation on identical OOS fixtures. Keep ticket coverage distinct from model probability quality and economic return.
 
 No changes to `master`; PR #9 remains open, draft and unmerged.
+
+
+---
+
+## 2026-11-16 — Comparativa de mercado por competición y temporada
+
+### Diagnóstico de predicciones validado
+
+El backtest [43918579838](https://github.com/Baltas80/Kini-/actions/runs/43918579838), sobre el HEAD 217d5d7030176694e25d6a15badffa17f87a2c63, completó las cinco configuraciones con 5.021/5.021 predicciones y cero errores. El artefacto 14256405850 contiene backtest-results.json, prediction-ledger.jsonl y prediction-diagnostics.json; digest ZIP sha256:675efd805f45737c450f9af30cfa40a1bdca912a39835d0db30e115e1db5ae98. El ledger tiene 5.021 filas y SHA-256 532c198247e6d3cf1f2c4aacfe96d40a4969abc335777fd24badd3f3724a13d7.
+
+En la muestra completa OOS (5.021 partidos), Brier / Log Loss:
+- Dixon–Coles: 0.616681 / 1.027801.
+- ML: 0.645508 / 1.071342.
+- Ensemble principal: 0.613642 / 1.023023.
+- Ensemble DC/ML fijo: 0.615877 / 1.026395.
+- Ensemble DC/ML adaptativo: 0.616087 / 1.026701.
+
+En los mismos 4.432 partidos con mercado temporalmente elegible:
+- Mercado: accuracy 0.507220, Brier 0.597534, Log Loss 0.999473.
+- Mejor modelo, ensemble principal: accuracy 0.478114, Brier 0.613594, Log Loss 1.023024.
+- El mercado supera a todos los modelos en los tres indicadores. Las cuotas continúan siendo un benchmark schedule-screened, no un precio por partido con captura y zona horaria demostradas.
+
+Diagnóstico de empates:
+- Empates reales: 1.398/5.021 (27,84%).
+- P(X) media del ensemble: 27,68% (sesgo agregado −0,17 puntos porcentuales).
+- X fue el signo individual más probable del ensemble en 130/1.398 empates (recall 2,36%; precisión 25,38%).
+- En la muestra común con mercado (4.432 partidos; 1.237 empates), X apareció entre los dos signos principales en 861/1.237 empates del ensemble (69,60%) y en 940/1.237 del mercado (75,99%). Cobertura empírica total de los dos signos principales: 76,53% ensemble y 78,27% mercado.
+- No se justifica un sesgo global hacia X. El problema descriptivo es el ranking por partido y la cobertura potencial de dobles; no se ha demostrado todavía una mejora del optimizador ni de premios.
+
+### Comparación segmentada implementada
+
+Commits:
+- 8186eea2dd2a937b99c4abbab9179dc6b3cb3f46: incorpora comparación modelo/mercado por segmento.
+- a9fef2c9bf16988a13d12164611707b8a9c9141c: añade pruebas de muestra común y umbral mínimo.
+
+Cada segmento competición/temporada incluye ahora:
+- Métricas de los modelos en todos sus partidos OOS.
+- Comparación del mercado y todos los modelos en exactamente las mismas filas con market_eligible=true.
+- Diferencias de accuracy, Brier y Log Loss frente al mercado y desacuerdos de signo.
+- Estado explícito below_minimum si la muestra común del segmento no alcanza el umbral configurado (100 por defecto); en ese caso se conserva el recuento, pero no se publican métricas segmentadas inestables.
+
+CI [43928094921](https://github.com/Baltas80/Kini-/actions/runs/43928094921): actionlint en 7 workflows, Ruff lint/format correctos y 255 tests pasados. Persisten 21 advertencias upstream de penaltyblog/NumPy 2.5.
+
+El backtest del nuevo diagnóstico [43928097207](https://github.com/Baltas80/Kini-/actions/runs/43928097207) estaba en ejecución al actualizar este registro. No se atribuyen todavía resultados de segmentación al nuevo código; deben confirmarse en el artefacto generado por esa ejecución.
+
+### Próxima acción
+
+1. Inspeccionar el artefacto de 43928097207 y verificar que cada comparación segmentada usa el mismo n elegible para mercado y modelos.
+2. Identificar segmentos con diferencias descriptivas relevantes, sin seleccionar modelos por muestras pequeñas ni confundir diferencias con significancia estadística.
+3. Continuar la evaluación del optimizador con escenarios conjuntos reales de cupones históricos. Los bloques arbitrarios de 14 partidos no deben presentarse como cupones SELAE.
+4. Mantener abiertas las limitaciones de publicación exacta de resultados y captura de cuotas. No declarar P2 completamente demostrado.
+
+No se ha modificado master ni se ha fusionado ninguna PR. La PR #9 permanece abierta y en borrador.
