@@ -82,11 +82,29 @@ Si el acceso HTTP desde la máquina de trabajo está permitido, se puede ejecuta
 python scripts/import_selae_results.py --dates 2026-11-08 --refresh
 ```
 
-Si el HTML se ha guardado manualmente desde la página oficial, nombrar los archivos por fecha ISO (`2026-11-08.html`) y ejecutar:
+Si el HTML se ha guardado manualmente desde la página oficial, nombrar los archivos por fecha ISO (`2026-11-08.html`) y crear junto a cada uno un sidecar `2026-11-08.meta.json`. El sidecar es obligatorio: el importador ya no infiere una URL oficial ni una hora de captura a partir del nombre del fichero o de su fecha de modificación. Debe contener la URL exacta del escrutinio de esa fecha, la hora UTC en que se guardó, el SHA-256 de los bytes originales y la codificación usada.
+
+Ejemplo en PowerShell para una página guardada como UTF-8:
+
+```powershell
+$html = ".\data\selae-html\2026-11-08.html"
+$hash = (Get-FileHash -Algorithm SHA256 $html).Hash.ToLowerInvariant()
+$metadata = @{
+  source_url = "https://www.loteriasyapuestas.es/es/la-quiniela/escrutinios/la-quiniela-premios-y-ganadores-del-08-de-noviembre-de-2026"
+  source_retrieved_at_utc = [DateTimeOffset]::UtcNow.ToString("o")
+  raw_sha256 = $hash
+  encoding = "utf-8"
+}
+$metadata | ConvertTo-Json | Set-Content -Encoding utf8 ".\data\selae-html\2026-11-08.meta.json"
+```
+
+Después ejecutar:
 
 ```powershell
 python scripts/import_selae_results.py --dates 2026-11-08 --html-dir .\data\selae-html
 ```
+
+El hash acredita que el sidecar corresponde a los bytes guardados, no autentica por sí solo la descarga ni demuestra cuándo publicó SELAE el contenido. La URL y la hora son una declaración de procedencia del operador; deben registrarse al guardar la página y no reconstruirse retrospectivamente. El parser sigue verificando la fecha del sorteo, los 14 partidos, los signos, los marcadores y el manifiesto oficial de aplazamientos.
 
 El importador combina las nuevas fechas con el JSONL existente. Repetir la misma importación (mismo SHA-256) es idempotente. Si SELAE corrige una página ya importada y cambia su SHA-256, el proceso se detiene; solo se sustituye el registro después de revisar el cambio y pasar `--replace-existing`.
 
