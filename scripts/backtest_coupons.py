@@ -341,7 +341,7 @@ def main() -> None:
             budget=args.budget,
             min_history_matches=args.min_history,
         )
-    except ValueError as exc:
+    except (TypeError, ValueError) as exc:
         raise SystemExit(f"COUPON_BACKTEST_REJECTED: {exc}") from exc
     atomic_json(args.output, result)
     print(
