@@ -57,6 +57,8 @@ jobs:
           tests/test_ligaf_team_profiles.py
           kini_engine/core.py
           tests/test_core.py
+          kini_engine/dataio.py
+          tests/test_dataio.py
           kini_engine/sources.py
           kini_engine/mcp_server.py
           scripts/diagnose_kinielagpt_details.py
@@ -85,4 +87,6 @@ jobs:
           tests/test_kinielagpt_details_diagnostic.py
           kini_engine/backtest.py
           tests/test_backtest.py
+          kini_engine/dataio.py
+          tests/test_dataio.py
       - run: pytest -q
