@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable
 
+import numpy as np
 import pandas as pd
 import requests
 from requests.adapters import HTTPAdapter
@@ -100,6 +101,12 @@ def _parse_source_csv(
 
     for column in ("FTHG", "FTAG"):
         raw = df[column]
+        boolean_values = raw.map(lambda value: isinstance(value, (bool, np.bool_)))
+        if bool(boolean_values.any()):
+            sample = raw.loc[boolean_values].astype(str).head(3).tolist()
+            raise ValueError(
+                f"{source}: valores booleanos no permitidos en {column}: {sample}"
+            )
         numeric = pd.to_numeric(raw, errors="coerce")
         malformed = raw.notna() & numeric.isna()
         if bool(malformed.any()):

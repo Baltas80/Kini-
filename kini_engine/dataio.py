@@ -300,8 +300,11 @@ def build_dataset_profile(
 ) -> dict[str, object]:
     """Build a reproducible quality/coverage profile for a downloaded dataset."""
     retrieved_at = retrieved_at or datetime.now(UTC)
+    date_values = (
+        raw_frame["Date"].tolist() if "Date" in raw_frame else [None] * len(raw_frame)
+    )
     parsed_dates: list[datetime | None] = []
-    for value in raw_frame.get("Date", pd.Series(dtype=object)).tolist():
+    for value in date_values:
         try:
             parsed_dates.append(_parse_match_date(value) if pd.notna(value) else None)
         except (TypeError, ValueError):
@@ -316,8 +319,8 @@ def build_dataset_profile(
     }
 
     duplicate_keys: list[tuple[str, str, str, str]] = []
-    for idx, row in raw_frame.iterrows():
-        date_value = parsed_dates[idx] if idx < len(parsed_dates) else None
+    for position, (_, row) in enumerate(raw_frame.iterrows()):
+        date_value = parsed_dates[position]
         if date_value is None or pd.isna(row.get("HomeTeam")) or pd.isna(row.get("AwayTeam")):
             continue
         league = str(row.get("Div", row.get("League", ""))).strip().casefold()

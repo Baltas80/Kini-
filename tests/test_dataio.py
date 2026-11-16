@@ -270,3 +270,64 @@ def test_load_rejects_boolean_goal_values(
         TypeError, match=f"{invalid_column} must be a non-negative integer"
     ):
         load_matches_csv(path)
+
+
+
+def test_dataset_profile_uses_row_positions_for_non_range_index():
+    raw = pd.DataFrame(
+        [
+            {
+                "Date": "01/01/2025",
+                "HomeTeam": "A",
+                "AwayTeam": "B",
+                "Div": "SP1",
+                "FTHG": 1,
+                "FTAG": 0,
+                "FTR": "H",
+            },
+            {
+                "Date": "01/01/2025",
+                "HomeTeam": "A",
+                "AwayTeam": "B",
+                "Div": "SP1",
+                "FTHG": 1,
+                "FTAG": 0,
+                "FTR": "H",
+            },
+        ],
+        index=[10, 20],
+    )
+
+    profile = build_dataset_profile(
+        raw,
+        raw,
+        ["https://example.test/SP1.csv"],
+        retrieved_at=datetime(2026, 11, 16, tzinfo=UTC),
+    )
+
+    assert profile["duplicate_fixtures"] == 1
+
+
+def test_dataset_profile_handles_missing_date_column():
+    raw = pd.DataFrame(
+        [
+            {
+                "HomeTeam": "A",
+                "AwayTeam": "B",
+                "Div": "SP1",
+                "FTHG": 1,
+                "FTAG": 0,
+                "FTR": "H",
+            }
+        ]
+    )
+
+    profile = build_dataset_profile(
+        raw,
+        raw,
+        ["https://example.test/SP1.csv"],
+        retrieved_at=datetime(2026, 11, 16, tzinfo=UTC),
+    )
+
+    assert profile["date_coverage"]["invalid_or_missing"] == 1
+    assert profile["duplicate_fixtures"] == 0

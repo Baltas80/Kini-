@@ -143,3 +143,34 @@ def test_fetch_csv_rejects_wrong_league_redirect(tmp_path: Path) -> None:
             session=session,
             expected_division="SP2",
         )
+
+
+
+@pytest.mark.parametrize(
+    ("home_goals", "away_goals", "invalid_column"),
+    [
+        ("True", "False", "FTHG"),
+        ("1", "False", "FTAG"),
+    ],
+)
+def test_fetch_csv_rejects_boolean_scores_before_caching(
+    tmp_path: Path,
+    home_goals: str,
+    away_goals: str,
+    invalid_column: str,
+) -> None:
+    content = (
+        "Div,Date,HomeTeam,AwayTeam,FTHG,FTAG,FTR\\n"
+        f"SP1,02/01/2022,A,B,{home_goals},{away_goals},H\\n"
+    ).encode("utf-8")
+    cache = tmp_path / "boolean_scores.csv"
+
+    with pytest.raises(RuntimeError, match=f"booleanos.*{invalid_column}"):
+        fetch_csv(
+            "https://example.test/boolean_scores.csv",
+            cache,
+            session=FakeSession(content=content),
+            expected_division="SP1",
+        )
+
+    assert not cache.exists()
