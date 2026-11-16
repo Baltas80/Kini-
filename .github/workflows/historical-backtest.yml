@@ -172,6 +172,7 @@ jobs:
           if not report.get("source") or not isinstance(models, dict):
               raise SystemExit("Cold-start fallback diagnostics are missing")
           counts = {}
+          season_counts = {}
           for name in required:
               summary = models.get(name, {})
               n_predictions = int(summary.get("n_predictions", 0))
@@ -192,13 +193,58 @@ jobs:
                   raise SystemExit(f"{name} cold-start examples are incomplete")
               counts[name] = count
 
+              season_rows = summary.get("by_season")
+              if not isinstance(season_rows, list) or not season_rows:
+                  raise SystemExit(f"{name} has no per-season cold-start diagnostics")
+              season_counts[name] = {}
+              season_prediction_total = 0
+              season_fallback_total = 0
+              for season in season_rows:
+                  if not isinstance(season, dict):
+                      raise SystemExit(f"{name} has a malformed season diagnostic")
+                  league = str(season.get("league", "")).strip()
+                  season_code = str(season.get("season_code", "")).strip()
+                  season_label = str(season.get("season_label", "")).strip()
+                  key = (league, season_code)
+                  if not league or not season_code or not season_label:
+                      raise SystemExit(f"{name} has incomplete season identity: {season}")
+                  if key in season_counts[name]:
+                      raise SystemExit(f"{name} has duplicate season bucket: {key}")
+                  season_n = int(season.get("n_predictions", 0))
+                  season_count = int(season.get("count", -1))
+                  if season_n <= 0 or season_count < 0 or season_count > season_n:
+                      raise SystemExit(f"{name} has invalid season cold-start counts: {season}")
+                  try:
+                      season_rate = float(season.get("rate"))
+                  except (TypeError, ValueError):
+                      raise SystemExit(f"{name} has invalid season cold-start rate: {season}")
+                  if not math.isfinite(season_rate) or not math.isclose(
+                      season_rate, season_count / season_n, rel_tol=0.0, abs_tol=1e-12
+                  ):
+                      raise SystemExit(f"{name} season cold-start rate disagrees with its count")
+                  season_prediction_total += season_n
+                  season_fallback_total += season_count
+                  season_counts[name][key] = season_count
+
+              if season_prediction_total != n_predictions or season_fallback_total != count:
+                  raise SystemExit(
+                      f"{name} season totals disagree with aggregate counts: "
+                      f"predictions={season_prediction_total}/{n_predictions}, "
+                      f"fallbacks={season_fallback_total}/{count}"
+                  )
+
           if counts["ml"] != 0:
               raise SystemExit("ML-only forecasts must not report Dixon-Coles cold-start use")
           dc_dependent = ("ensemble", "ensemble_dc_ml", "ensemble_dc_ml_adaptive")
           if any(counts[name] != counts["dc"] for name in dc_dependent):
               raise SystemExit(f"DC-dependent streams disagree on fallback use: {counts}")
+          if any(season_counts[name] != season_counts["dc"] for name in dc_dependent):
+              raise SystemExit("DC-dependent streams disagree on per-season cold-start counts")
 
-          print(f"COLD_START_DIAGNOSTICS_OK: {counts}")
+          print(
+              f"COLD_START_DIAGNOSTICS_OK: {counts}; "
+              f"season groups={len(season_counts['dc'])}"
+          )
           PY
 
       - name: Enforce schedule-screened market sample acceptance

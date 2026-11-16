@@ -24,6 +24,51 @@ def _uses_unseen_team_fallback(engine: Any, match: Match) -> bool:
     )
 
 
+def _season_identity(match: Match) -> tuple[str, str, str]:
+    """Return source-backed league/season labels without inferring them from dates."""
+    detail = match.detail if isinstance(match.detail, dict) else {}
+
+    def source_value(value: Any) -> str | None:
+        if value is None:
+            return None
+        raw = str(value).strip()
+        if not raw or raw.casefold() in {"nan", "none", "null", "nat"}:
+            return None
+        return raw
+
+    league = source_value(detail.get("League")) or source_value(detail.get("Div")) or "unknown"
+    season_code = source_value(detail.get("Season")) or "unknown"
+    season_label = season_code
+    if len(season_code) == 4 and season_code.isdigit():
+        start_year = 2000 + int(season_code[:2])
+        end_year = 2000 + int(season_code[2:])
+        if end_year < start_year:
+            end_year += 100
+        season_label = f"{start_year}/{end_year % 100:02d}"
+    return league, season_code, season_label
+
+
+def _cold_start_season_summaries(
+    values: dict[tuple[str, str, str], dict[str, int]],
+) -> list[dict[str, Any]]:
+    """Serialize per-league/season forecast and cold-start counts."""
+    summaries: list[dict[str, Any]] = []
+    for (league, season_code, season_label), counts in sorted(values.items()):
+        n_predictions = counts["n_predictions"]
+        fallback_count = counts["count"]
+        summaries.append(
+            {
+                "league": league,
+                "season_code": season_code,
+                "season_label": season_label,
+                "n_predictions": n_predictions,
+                "count": fallback_count,
+                "rate": fallback_count / n_predictions if n_predictions else None,
+            }
+        )
+    return summaries
+
+
 def _classwise_calibration(
     probability_matrix: np.ndarray,
     target_indices: np.ndarray,
@@ -620,6 +665,19 @@ def compare_walk_forward(
     prediction_errors = {mode: {"count": 0, "first_error": None} for mode in all_modes}
     cold_start_fallback_counts = {mode: 0 for mode in all_modes}
     cold_start_fallback_examples = {mode: [] for mode in all_modes}
+    cold_start_fallback_by_season = {mode: {} for mode in all_modes}
+
+    def record_cold_start_season(
+        mode: str, match: Match, uses_cold_start: bool
+    ) -> None:
+        identity = _season_identity(match)
+        summary = cold_start_fallback_by_season[mode].setdefault(
+            identity, {"n_predictions": 0, "count": 0}
+        )
+        summary["n_predictions"] += 1
+        if mode in DC_DEPENDENT_MODES and uses_cold_start:
+            summary["count"] += 1
+
     adaptive_history: list[tuple[dict[str, float], dict[str, float], str]] = []
     adaptive_weight_trace: list[dict[str, Any]] = []
 
@@ -695,6 +753,7 @@ def compare_walk_forward(
                         diagnostic["first_error"] = str(exc)
                     continue
                 predictions[mode] = pred.probabilities
+                record_cold_start_season(mode, match, uses_cold_start)
                 if mode in DC_DEPENDENT_MODES and uses_cold_start:
                     cold_start_fallback_counts[mode] += 1
                     if len(cold_start_fallback_examples[mode]) < 20:
@@ -713,6 +772,7 @@ def compare_walk_forward(
                     predictions["dc"], predictions["ml"], dc_weight
                 )
                 predictions[adaptive_mode] = adaptive_probabilities
+                record_cold_start_season(adaptive_mode, match, uses_cold_start)
                 rows[adaptive_mode].append((adaptive_probabilities, actual))
                 dated_rows[adaptive_mode].append(
                     (forecast_date, adaptive_probabilities, actual)
@@ -984,6 +1044,9 @@ def compare_walk_forward(
                     else None
                 ),
                 "examples": cold_start_fallback_examples[mode],
+                "by_season": _cold_start_season_summaries(
+                    cold_start_fallback_by_season[mode]
+                ),
             }
             for mode in all_modes
         },

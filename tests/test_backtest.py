@@ -616,8 +616,42 @@ def test_compare_reports_unseen_team_cold_start_fallbacks_per_model(monkeypatch)
     forecast_day = datetime(2025, 1, 2)
     training = [Match(training_day, f"H{i}", f"A{i}", 1, 0, "1") for i in range(12)]
     fixtures = [
-        Match(forecast_day, "New Club", "A", 1, 0, "1"),
-        Match(forecast_day, "Known Club", "B", 0, 0, "X"),
+        Match(
+            forecast_day,
+            "New Club",
+            "A",
+            1,
+            0,
+            "1",
+            detail={"League": "la-liga", "Season": "2627"},
+        ),
+        Match(
+            forecast_day,
+            "Known Club",
+            "B",
+            0,
+            0,
+            "X",
+            detail={"League": "la-liga", "Season": "2627"},
+        ),
+        Match(
+            forecast_day,
+            "New Club",
+            "C",
+            1,
+            0,
+            "1",
+            detail={"League": "segunda", "Season": "2627"},
+        ),
+        Match(
+            forecast_day,
+            "Known Club",
+            "D",
+            0,
+            0,
+            "X",
+            detail={"League": "segunda", "Season": "2627"},
+        ),
     ]
 
     result = backtest.compare_walk_forward(
@@ -626,19 +660,53 @@ def test_compare_reports_unseen_team_cold_start_fallbacks_per_model(monkeypatch)
     )
 
     summaries = result["cold_start_fallbacks"]["models"]
-    for mode in ("dc", "ensemble", "ensemble_dc_ml", "ensemble_dc_ml_adaptive"):
-        assert summaries[mode]["n_predictions"] == 2
-        assert summaries[mode]["count"] == 1
-        assert summaries[mode]["rate"] == 0.5
-        assert summaries[mode]["examples"] == [
-            {
-                "date": "2025-01-02",
-                "home": "New Club",
-                "away": "A",
-            }
-        ]
+    expected_seasons = [
+        {
+            "league": "la-liga",
+            "season_code": "2627",
+            "season_label": "2026/27",
+            "n_predictions": 2,
+            "count": 1,
+            "rate": 0.5,
+        },
+        {
+            "league": "segunda",
+            "season_code": "2627",
+            "season_label": "2026/27",
+            "n_predictions": 2,
+            "count": 1,
+            "rate": 0.5,
+        },
+    ]
+    expected_examples = [
+        {"date": "2025-01-02", "home": "New Club", "away": "A"},
+        {"date": "2025-01-02", "home": "New Club", "away": "C"},
+    ]
 
-    assert summaries["ml"]["n_predictions"] == 2
+    for mode in ("dc", "ensemble", "ensemble_dc_ml", "ensemble_dc_ml_adaptive"):
+        assert summaries[mode]["n_predictions"] == 4
+        assert summaries[mode]["count"] == 2
+        assert summaries[mode]["rate"] == 0.5
+        assert summaries[mode]["examples"] == expected_examples
+        assert summaries[mode]["by_season"] == expected_seasons
+
+    assert summaries["ml"]["n_predictions"] == 4
     assert summaries["ml"]["count"] == 0
     assert summaries["ml"]["rate"] == 0.0
     assert summaries["ml"]["examples"] == []
+    assert summaries["ml"]["by_season"] == [
+        {**season, "count": 0, "rate": 0.0} for season in expected_seasons
+    ]
+
+
+def test_season_identity_uses_source_codes_and_keeps_missing_metadata_explicit():
+    match = Match(
+        datetime(2025, 1, 1),
+        "A",
+        "B",
+        detail={"League": "la-liga", "Season": "2021"},
+    )
+    assert backtest._season_identity(match) == ("la-liga", "2021", "2020/21")
+
+    unknown = Match(datetime(2025, 1, 1), "A", "B")
+    assert backtest._season_identity(unknown) == ("unknown", "unknown", "unknown")

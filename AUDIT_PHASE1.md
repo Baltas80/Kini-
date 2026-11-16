@@ -1618,3 +1618,29 @@ Next action: complete latest-head CI and walk-forward validation; then add a sea
 - Latest-head CI [run 43791310107](https://github.com/Baltas80/Kini-/actions/runs/43791310107) is running. Latest-head historical backtest [run 43791310144](https://github.com/Baltas80/Kini-/actions/runs/43791310144) is pending behind an earlier comparison [run 43790746411](https://github.com/Baltas80/Kini-/actions/runs/43790746411), which is still running. Historical-data validation [run 43791310181](https://github.com/Baltas80/Kini-/actions/runs/43791310181) is running. Do not mark this follow-up validated until the latest-head CI and backtest complete successfully.
 
 PR #9 remains open and in draft. No PR was merged and `master` was not modified.
+## Accepted current-head walk-forward — 2026-11-16
+
+The latest complete walk-forward on the current PR code is [run 43791408878](https://github.com/Baltas80/Kini-/actions/runs/43791408878), head f18f8e8cdb03a880345be0a5cad53d8a3c148a72. It completed all acceptance steps and uploaded artifact [14193691727](https://github.com/Baltas80/Kini-/actions/runs/43791408878/artifacts/14193691727), 170,041 bytes, ZIP SHA-256 3dabf167d550246861a8da44e2754ed208735cdce5374d9b193ec1c19469989b.
+
+- Test period: 2020-12-11–2026-11-09; initial training sample: 300; total out-of-sample fixtures: 5,011.
+- Dixon–Coles, ML, main ensemble, fixed DC/ML and adaptive DC/ML each produced 5,011/5,011 forecasts with zero prediction errors.
+- The schedule-screened market contains 4,424/5,011 fixtures; 587 Friday/Tuesday odds rows remain excluded as ambiguous. All comparisons below use the same 4,424 fixtures.
+
+| Candidate | Accuracy | Brier | Log Loss |
+|---|---:|---:|---:|
+| Dixon–Coles | 48.06% | 0.616357 | 1.027499 |
+| ML | 43.78% | 0.647471 | 1.074246 |
+| Main ensemble | 47.81% | 0.613563 | 1.023018 |
+| Fixed DC/ML | 47.40% | 0.616095 | 1.026842 |
+| Adaptive DC/ML | 47.49% | 0.616305 | 1.027133 |
+| Market | **50.72%** | **0.597504** | **0.999444** |
+
+The market remains superior on accuracy and both proper scoring rules. No model or ensemble is promoted as market-beating. The market is still schedule-screened rather than verified with per-fixture odds-capture timestamps.
+
+Prequential calibration used 3,847 common post-warm-up model/market fixtures, prior out-of-sample forecasts only, a 500-row minimum history, 1,500-row rolling window and refit every 30 dates. For the main ensemble, Brier/Log Loss moved from 0.611315 / 1.019753 raw to 0.611522 / 1.019966 calibrated; calibration is not promoted. The calibrated market scored 0.596714 / 0.998094 on that same sample.
+
+Cold-start diagnostics report 73/5,011 unseen-team fallbacks (1.4568%) for Dixon–Coles and every DC-dependent ensemble; ML-only reports 0/5,011. The report currently retains only the first 20 dated examples, so the aggregate alone is insufficient to change the fallback policy. The next implementation adds a source-backed league/season breakdown and acceptance checks that reconcile seasonal denominators and fallback totals to the aggregate counts.
+
+Historical-data validation [run 43791408933](https://github.com/Baltas80/Kini-/actions/runs/43791408933) succeeded. CI [run 43791408930](https://github.com/Baltas80/Kini-/actions/runs/43791408930) was cancelled before lint or pytest ran; its retry was requested. This cancellation is not counted as a test failure or a passing CI result.
+
+No PR was merged and master was not modified.
