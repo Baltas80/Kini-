@@ -9,6 +9,7 @@ import pytest
 from kini_engine.core import (
     LAE_SOURCE_ID,
     DixonColes,
+    DixonColesFitError,
     FeatureModel,
     KiniEngine,
     Match,
@@ -53,6 +54,116 @@ def test_fit_predict():
     assert p.sign in {"1", "X", "2"}
     dc = e.predict(Match(datetime(2025, 4, 1), "A", "D"), mode="dc")
     assert abs(sum(dc.probabilities.values()) - 1.0) < 1e-9
+
+
+def test_dixon_coles_fit_status_and_explicit_untrained_fallback():
+    model = DixonColes().fit(sample()[:11])
+
+    assert model.fitted is False
+    assert model.fit_status == "insufficient_history"
+    assert model.n_training_matches == 11
+    with pytest.raises(ValueError, match="Dixon-Coles model is not fitted"):
+        model.predict("A", "B")
+
+    fallback, _ = model.predict(
+        "A", "B", allow_untrained_fallback=True
+    )
+    assert abs(sum(fallback.values()) - 1.0) < 1e-9
+    assert model.fitted is False
+
+
+def test_engine_does_not_mark_insufficient_dixon_coles_as_fitted():
+    engine = KiniEngine().fit(sample()[:11])
+
+    assert engine.fitted is False
+    assert engine.model_diagnostics()["dixon_coles"]["status"] == "insufficient_history"
+    with pytest.raises(ValueError, match="Dixon-Coles model is not available"):
+        engine.predict(
+            Match(datetime(2025, 4, 1), "A", "B"),
+            mode="dc",
+        )
+
+
+def test_dixon_coles_unseen_team_fallback_is_reported():
+    engine = KiniEngine().fit(sample())
+    prediction = engine.predict(
+        Match(datetime(2025, 4, 1), "New Club", "A"),
+        mode="dc",
+    )
+
+    assert any("cold-start fallback" in reason for reason in prediction.reasons)
+
+
+def test_market_mode_is_independent_of_dixon_coles_fit():
+    engine = KiniEngine().fit(sample()[:11])
+    fixture = Match(
+        datetime(2025, 4, 1),
+        "A",
+        "D",
+        market={"1": 0.50, "X": 0.25, "2": 0.25},
+        detail={
+            "market_temporal_status": "schedule_compatible",
+            "market_pre_match_eligible": True,
+        },
+    )
+
+    prediction = engine.predict(fixture, mode="market")
+
+    assert prediction.probabilities == fixture.market
+    assert engine.fitted is False
+
+
+def test_dixon_coles_optimizer_failure_does_not_block_independent_ml(monkeypatch):
+    from penaltyblog.models import DixonColesGoalModel
+
+    def fail_fit(self, *args, **kwargs):
+        raise ValueError("forced optimizer failure")
+
+    monkeypatch.setattr(DixonColesGoalModel, "fit", fail_fit)
+    engine = KiniEngine(enable_ml=True).fit(sample())
+
+    assert engine.fitted is False
+    assert engine.dc.fit_status == "fit_failed"
+    assert "forced optimizer failure" in engine.dc.fit_error
+
+    monkeypatch.setattr(
+        engine.ml,
+        "fit_predict_proba",
+        lambda training, current, feature_history=None: np.asarray(
+            [0.40, 0.35, 0.25], dtype=float
+        ),
+    )
+    prediction = engine.predict(
+        Match(datetime(2025, 4, 1), "A", "D"),
+        mode="ml",
+    )
+    assert prediction.probabilities == {"1": 0.40, "X": 0.35, "2": 0.25}
+
+    with pytest.raises(ValueError, match="Dixon-Coles model is not available"):
+        engine.predict(
+            Match(datetime(2025, 4, 1), "A", "D"),
+            mode="dc",
+        )
+
+
+def test_dixon_coles_fit_rejects_unset_library_fitted_flag(monkeypatch):
+    from penaltyblog.models import DixonColesGoalModel
+
+    monkeypatch.setattr(
+        DixonColesGoalModel,
+        "fit",
+        lambda self, *args, **kwargs: None,
+    )
+    engine = KiniEngine().fit(sample())
+
+    assert engine.dc.fitted is False
+    assert engine.dc.fit_status == "fit_failed"
+    assert "model.fitted=True" in engine.dc.fit_error
+    with pytest.raises(ValueError, match="Dixon-Coles model is not available"):
+        engine.predict(
+            Match(datetime(2025, 4, 1), "A", "D"),
+            mode="dc",
+        )
 
 
 @pytest.mark.parametrize("forecast_index", [78, 79])
