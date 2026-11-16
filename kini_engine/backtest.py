@@ -506,7 +506,6 @@ def baseline_probabilities(
     return out
 
 
-
 def _bookmaker_probability(
     match: Match,
     bookmaker: str,
@@ -532,6 +531,7 @@ def _bookmaker_probability(
     ):
         return None
     return dict(zip(SIGNS, map(float, vector)))
+
 
 def _calendar_day(value: datetime | str) -> str:
     """Return the calendar date represented by the input, without timezone conversion."""
@@ -946,9 +946,7 @@ def compare_walk_forward(
                         common_bet365_consensus_rows[mode].append(
                             (match.market, actual)
                         )
-                        common_bet365_rows[mode].append(
-                            (bet365_probabilities, actual)
-                        )
+                        common_bet365_rows[mode].append((bet365_probabilities, actual))
 
             n_total += 1
             test_dates.append(forecast_date)
@@ -1019,9 +1017,7 @@ def compare_walk_forward(
             "n_schedule_eligible": len(bet365_rows),
             "n_excluded": len(bet365_unfiltered_rows) - len(bet365_rows),
             "status_counts": dict(sorted(bet365_status_counts.items())),
-            "metrics": (
-                multiclass_metrics(bet365_rows) if bet365_rows else empty
-            ),
+            "metrics": (multiclass_metrics(bet365_rows) if bet365_rows else empty),
             "common_sample": {
                 mode: {
                     "n": len(common_bet365_model_rows[mode]),

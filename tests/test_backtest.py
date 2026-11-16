@@ -712,7 +712,6 @@ def test_season_identity_uses_source_codes_and_keeps_missing_metadata_explicit()
     assert backtest._season_identity(unknown) == ("unknown", "unknown", "unknown")
 
 
-
 def test_compare_reports_bet365_on_its_exact_common_fixture_sample(monkeypatch):
     class FakeEngine:
         def __init__(self, enable_ml=False):
@@ -723,17 +722,15 @@ def test_compare_reports_bet365_on_its_exact_common_fixture_sample(monkeypatch):
 
         def predict(self, match, mode="ensemble", history=None):
             return type(
-                "Prediction", (),
+                "Prediction",
+                (),
                 {"probabilities": {"1": 0.5, "X": 0.3, "2": 0.2}},
             )()
 
     monkeypatch.setattr(backtest, "KiniEngine", FakeEngine)
     training_day = datetime(2025, 1, 1)
     forecast_day = datetime(2025, 1, 2)
-    training = [
-        Match(training_day, f"H{i}", f"A{i}", 1, 0, "1")
-        for i in range(12)
-    ]
+    training = [Match(training_day, f"H{i}", f"A{i}", 1, 0, "1") for i in range(12)]
     consensus = {"1": 0.45, "X": 0.30, "2": 0.25}
     bet365_a = {"1": 0.50, "X": 0.28, "2": 0.22}
     bet365_b = {"1": 0.35, "X": 0.33, "2": 0.32}
@@ -743,17 +740,32 @@ def test_compare_reports_bet365_on_its_exact_common_fixture_sample(monkeypatch):
     }
     matches = training + [
         Match(
-            forecast_day, "B365 One", "A", 1, 0, "1",
+            forecast_day,
+            "B365 One",
+            "A",
+            1,
+            0,
+            "1",
             market=consensus,
             detail={**eligible, "market_bookmaker_probabilities": {"bet365": bet365_a}},
         ),
         Match(
-            forecast_day, "No B365", "B", 0, 0, "X",
+            forecast_day,
+            "No B365",
+            "B",
+            0,
+            0,
+            "X",
             market=consensus,
             detail=eligible,
         ),
         Match(
-            forecast_day, "B365 Ambiguous", "C", 0, 1, "2",
+            forecast_day,
+            "B365 Ambiguous",
+            "C",
+            0,
+            1,
+            "2",
             market=consensus,
             detail={
                 "market_temporal_status": "ambiguous",
@@ -762,12 +774,22 @@ def test_compare_reports_bet365_on_its_exact_common_fixture_sample(monkeypatch):
             },
         ),
         Match(
-            forecast_day, "B365 Two", "D", 0, 0, "X",
+            forecast_day,
+            "B365 Two",
+            "D",
+            0,
+            0,
+            "X",
             market=consensus,
             detail={**eligible, "market_bookmaker_probabilities": {"bet365": bet365_b}},
         ),
         Match(
-            forecast_day, "Malformed B365", "E", 2, 0, "1",
+            forecast_day,
+            "Malformed B365",
+            "E",
+            2,
+            0,
+            "1",
             market=consensus,
             detail={
                 **eligible,

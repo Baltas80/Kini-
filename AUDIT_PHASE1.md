@@ -1666,3 +1666,60 @@ An independent calculation from the validated historical-data artifact [14194529
 The composition changes sharply over time: every schedule-eligible fixture in 2025/26 and 2026/27 has only Bet365 odds after the Pinnacle stale-feed cutoff and the disappearance of the other feeds. Bet365 is available on 4,417/4,424 schedule-compatible test fixtures; seven consensus-market fixtures lack a complete Bet365 triplet.
 
 On that 4,417-fixture intersection, the equal-weight bookmaker consensus scores accuracy 50.74%, Brier 0.597332 and Log Loss 0.999185; Bet365-only scores 50.80%, 0.597352 and 0.999324. The overall difference is small, but the source composition is not stationary across seasons. This is an offline data audit, not a replacement for the walk-forward artifact. Next P5 action: add a fixed-book Bet365 benchmark to the backtest report and compare models on that exact common sample, while retaining the current consensus benchmark. Do not promote or discard either market reference before the paired result is available.
+
+---
+## 2026-11-16 — P5: benchmark fijo Bet365
+
+**Estado:** implementado y validado estadísticamente; corrección de formato de CI en curso.
+
+### Implementación
+
+- dataio.py conserva por partido las probabilidades 1/X/2 sin margen de cada casa disponible, además del consenso de mercado existente.
+- Se mantiene el consenso actual: media equiponderada de las probabilidades sin margen de las casas válidas.
+- El backtest añade un benchmark Bet365 fijo a partir de B365H/B365D/B365A, invirtiendo las cuotas decimales y normalizando el vector para retirar el overround.
+- Se publica una comparación pareada en la que Dixon-Coles, ML, ensemble, ensemble DC/ML, ensemble adaptativo, consenso y Bet365 utilizan exactamente los mismos encuentros.
+- La aceptación del workflow comprueba que los recuentos de odds, exclusiones temporales y muestras comunes son coherentes para los cinco flujos de modelo.
+- Se documenta que Football-Data no proporciona la hora exacta de captura de cada cuota. El filtro de calendario no demuestra por sí solo que la cuota estuviera disponible y fuera ejecutable antes del inicio.
+
+### Evidencia de datos
+
+Workflow historical-data-validation #43803266946: **success**.
+
+- 5.311 partidos completos, desde 2020-09-12 hasta 2026-11-09.
+- 0 equipos faltantes, 0 resultados incompletos, 0 duplicados y 0 discrepancias entre marcador y signo.
+- 10.622 referencias de equipos resueltas contra 56 identidades canónicas; 0 referencias ambiguas o sin resolver.
+- 5.297 partidos con triplete Bet365 válido en el histórico completo.
+
+### Backtest walk-forward
+
+Workflow historical-backtest #43803266920: **success**. Commit evaluado: 86ab11d.
+
+- Test: 5.011 partidos para cada uno de los cinco flujos de modelo; 0 errores de predicción.
+- Consenso de mercado: 4.424 encuentros con calendario compatible; 587 excluidos por ambigüedad de horario.
+- Bet365: 5.004 tripletes válidos en el test; 4.417 elegibles tras aplicar el mismo filtro de calendario; 587 excluidos.
+- En la muestra común de 4.417 encuentros, cada modelo, el consenso y Bet365 tiene exactamente n=4.417.
+
+| Flujo | Brier | Log Loss |
+|---|---:|---:|
+| Dixon-Coles | 0.616231 | 1.027290 |
+| ML | 0.647375 | 1.074108 |
+| Ensemble DC/ML principal | 0.613436 | 1.022809 |
+| Ensemble DC/ML fijo | 0.615974 | 1.026639 |
+| Ensemble DC/ML adaptativo | 0.616182 | 1.026927 |
+| Consenso de mercado | 0.597332 | 0.999185 |
+| Bet365 fijo | 0.597352 | 0.999324 |
+
+Métricas Bet365 en su muestra elegible: accuracy 0.508037, Brier 0.597352, Log Loss 0.999324, RPS 0.199785 y ECE 0.023801. Un recálculo independiente desde el CSV histórico reproduce Brier, Log Loss, RPS y ECE con diferencias inferiores a la precisión de redondeo.
+
+### Interpretación
+
+- El consenso y Bet365 superan a los modelos en Brier y Log Loss sobre la misma muestra.
+- La diferencia entre consenso y Bet365 es muy pequeña; no se interpreta como una mejora estadísticamente demostrada ni como evidencia de rentabilidad.
+- El ensemble principal mejora modestamente a Dixon-Coles, pero no alcanza el benchmark de mercado.
+- ML aislado es el peor de los cinco flujos en esta evaluación. No debe recibir más peso por complejidad ni por porcentaje de aciertos.
+
+### CI y seguimiento
+
+- La ejecución de CI #43803266992 superó el lint, pero falló en ruff format --check por formato en backtest.py y tests/test_backtest.py; pytest no llegó a ejecutarse en esa ejecución.
+- Se corrige el formato y se vuelve a ejecutar CI sobre el nuevo commit.
+- La siguiente prioridad es cerrar CI y, después, auditar la optimización de boletos P6 sin alterar las probabilidades base.
