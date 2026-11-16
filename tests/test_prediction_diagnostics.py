@@ -253,7 +253,8 @@ def test_validate_dataset_snapshot_checks_exact_bytes_and_profile(tmp_path):
 def test_validate_dataset_snapshot_rejects_changed_dataset_bytes(tmp_path):
     validate, manifest, dataset_path, profile_path = _dataset_snapshot_files(tmp_path)
     dataset_path.write_text(
-        dataset_path.read_text(encoding="utf-8") + "05/01/2025,Home D,Away D,0,1,segunda,2425\n",
+        dataset_path.read_text(encoding="utf-8")
+        + "05/01/2025,Home D,Away D,0,1,segunda,2425\n",
         encoding="utf-8",
     )
 
