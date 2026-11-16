@@ -1091,7 +1091,12 @@ class TicketOptimizer:
             "coverage_assumption": "independent_matches",
             "coverage_method": "product_of_marginal_selected_sign_masses",
             "system_method": "multiple_direct",
-            "maximum_authorized_columns": self.MAX_AUTHORIZED_TOTAL_BETS,
+            "maximum_authorized_columns": (
+                self.MAX_AUTHORIZED_TOTAL_BETS // pleno15_multiplier
+            ),
+            "maximum_authorized_14_match_columns": (
+                self.MAX_AUTHORIZED_TOTAL_BETS // pleno15_multiplier
+            ),
             "maximum_authorized_total_bets": self.MAX_AUTHORIZED_TOTAL_BETS,
             "minimum_columns": self.minimum_columns,
             "minimum_total_bets": self.minimum_columns,

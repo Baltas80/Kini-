@@ -779,6 +779,8 @@ def test_optimizer_applies_pleno_multiplier_to_the_total_bet_cap():
     assert len(result["pleno15_combinations"]) == 16
     assert result["total_bets"] == 31_104
     assert result["column_count"] * result["pleno15_multiplier"] == 31_104
+    assert result["maximum_authorized_columns"] == 1_944
+    assert result["maximum_authorized_14_match_columns"] == 1_944
     assert result["cost_eur"] == 23_328.0
 
 
@@ -903,7 +905,7 @@ def test_quiniela_returns_16_pleno15_categories():
     assert sum(row["probability"] for row in result["pleno_al_15"]) == pytest.approx(1.0)
     assert result["pleno_al_15_best"] == result["pleno_al_15"][0]
     assert result["full_coupon_coverage_assumption"] == (
-        "independent_all_14_matches_and_pleno15"
+        "independent_all_14_matches_and_selected_pleno15_categories"
     )
     assert result["estimated_full_coupon_coverage_independent"] == pytest.approx(
         result["ticket"]["joint_coverage"]
