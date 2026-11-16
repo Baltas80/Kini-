@@ -10,8 +10,8 @@ import tempfile
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
-from kini_engine.core import SIGNS
 from kini_engine.coupon_identity import canonicalize_coupon
+from kini_engine.core import SIGNS
 from kini_engine.coupons import evaluate_coupon_batch, read_coupon_jsonl
 from kini_engine.dataio import load_matches_csv, validate_matches
 
