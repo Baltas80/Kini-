@@ -2147,3 +2147,29 @@ Final source/test head before this documentation update: \`abaea2a35d018b4685852
 The preceding CI attempt [43852613210](https://github.com/Baltas80/Kini-/actions/runs/43852613210) reached pytest and reported 238 passed / 6 failed. All six failures shared one test-fixture defect: the new JSONL regression tests wrote a literal backslash-n instead of a line-feed, so the loader correctly rejected the malformed JSONL before reaching the intended assertions. The test fixture was corrected in commit \`abaea2a\`; the final CI above confirms the corrected suite passes.
 
 P1 URL/provenance hardening in PR #9 is now **implemented and validated by CI**. Live SELAE source access, complete official archive inventory and original raw HTML/XLS capture remain separate open evidence items.
+
+
+## 2026-11-16 — Press-release source URL validation hardening
+
+A focused provenance-boundary review found that `scripts/import_selae_press_release.py::validate_official_source_url` accepted official-host URLs using non-standard ports and URLs containing user-info. This was inconsistent with the stricter SELAE URL validators used by archive discovery and fixture reconciliation.
+
+Implemented on PR #9:
+- Require HTTPS and an exact SELAE hostname.
+- Accept only the default HTTPS port or explicit port 443.
+- Reject URL user-info (username/password).
+- Convert malformed-port parsing errors into a clear validation error.
+- Continue requiring a PDF path.
+- Regression cases cover HTTP downgrade, port 8443, username-only and username/password user-info, deceptive subdomains, malformed ports, and the explicit standard port 443.
+
+Commits:
+- `5bcb30207864f32640a3d1bf2a298f1150d4aaa7` — strict source URL validation.
+- `8e9642267bcf734b72891c558bbc37a82c4603ef` — preserve the established error-message contract.
+- `7004aac8372b20087b16147eba2fd1e2c64ec64a` — URL-boundary regression tests.
+
+Validation on final source/test head `7004aac8372b20087b16147eba2fd1e2c64ec64a`:
+- PR CI [43855861933](https://github.com/Baltas80/Kini-/actions/runs/43855861933) passed workflow validation, Ruff lint, Ruff formatting and **244 pytest tests**. The 21 warnings are upstream NumPy 2.5 / penaltyblog deprecations.
+- Historical-data validation [43855861928](https://github.com/Baltas80/Kini-/actions/runs/43855861928) passed dataset construction, canonical-team validation, profile assertions and artifact upload. Artifact `kini-historical-data`, ID `14221182942`, size 714,126 bytes, digest `sha256:5a38fea0311d282b644b846297455cf04e9f0b649d1fc2b74977a35cefaca86d`.
+- Historical-backtest [43855861910](https://github.com/Baltas80/Kini-/actions/runs/43855861910) correctly skipped its model job because the changes are limited to SELAE import validation and tests; no fresh predictive benchmark is claimed.
+- Archive discovery [43855862019](https://github.com/Baltas80/Kini-/actions/runs/43855862019) passed its scope check but skipped the network discovery step because neither the discovery script nor its workflow changed. No new archive inventory is claimed.
+
+The change closes this specific unsafe-URL acceptance gap. It does not solve the separate GitHub-runner HTTP 403 issue for some SELAE endpoints and does not create original raw-byte provenance for pages whose original response bytes have not been captured. Extracted search/web text remains content-level corroboration only, not a substitute for source bytes or their SHA-256.
