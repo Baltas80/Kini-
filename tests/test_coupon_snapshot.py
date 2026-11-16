@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 
@@ -124,8 +125,6 @@ def test_snapshot_directory_loads_exact_season_journey_file(tmp_path: Path) -> N
         "2020-2021",
         21,
     )
-
-    import hashlib
 
     assert loaded == snapshot
     assert path == expected
