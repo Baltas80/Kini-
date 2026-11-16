@@ -1803,7 +1803,7 @@ La nota oficial de prensa del sorteo de 15-11-2026 publica el vector `2 - X - 1 
 ---
 ## 2026-11-16 — P6: Pleno al 15 multiplier in direct-multiple optimization
 
-**Implementation status: committed; CI/backtest validation pending.**
+**Implementation status: committed; CI and data-integrity validation passed; current-head walk-forward validation remains in progress.**
 
 - TicketOptimizer.optimize() now accepts explicit home and away Pleno category sets using the official categories 0, 1, 2 and M.
 - The Pleno multiplier is the Cartesian product of the selected category counts. The optimizer constrains column_count × pleno15_multiplier to the statutory 31,104 total-bet cap and calculates cost from total payable bets at the configured per-bet price.
@@ -1811,3 +1811,14 @@ La nota oficial de prensa del sorteo de 15-11-2026 publica el vector `2 - X - 1 
 - Regression tests cover the 16-combination Pleno multiplier, the 31,104 total-bet boundary, the two-bet minimum with one 14-match column, invalid/partial category sets and end-to-end coverage/cost accounting.
 - The independent-match coverage approximation is unchanged. This work does not add expected-prize modelling, joint dependence across the 14 matches, reduced/conditioned systems or Elige8.
 - Validation evidence will be appended only after CI and the current-head historical backtest gates complete.
+
+
+### Validation evidence — 2026-11-16
+
+- Implementation commit: 468b34417d9cace03675404121ec41cbe9aa1a6a (P6 optimizer and regression contract); previous feature commit: f512f9c4c47203f8b61835ac236a4958476b2dec.
+- CI run 43816060895: **success**. Ruff lint passed, formatting check passed, and pytest reported **226 passed** (21 third-party NumPy/penaltyblog deprecation warnings).
+- Historical-data validation run 43816060879: **success**. The generated dataset contains 5,311 completed fixtures from 2020-09-12 to 2026-11-09. Team identity registry resolved 10,622/10,622 references to 56 canonical IDs, with 0 unresolved and 0 ambiguous references. Dataset checks reported 0 duplicates removed, 0 missing team names, 0 missing/incomplete final scores and 0 score/result mismatches.
+- Previous successful walk-forward artifact 43807909291 (commit 5dbc9c95e088b26c06124275d23f0ab51ac325ca) remains the latest completed predictive benchmark: 5,011 out-of-sample forecasts for each of Dixon-Coles, ML, ensemble, DC+ML ensemble and adaptive ensemble; all five reported zero prediction errors. Test window: 2020-12-11 to 2026-11-09; initial training window: 300 matches.
+- On the 4,424-match schedule-screened common market sample, the market achieved Brier 0.59750 and log loss 0.99944. The best model-only result was the ensemble at Brier 0.61356 and log loss 1.02302; the market remained better. ML alone was weakest (Brier 0.64747, log loss 1.07425). Do not select an ensemble on accuracy alone.
+- The fixed Bet365 benchmark had 4,417 eligible rows (Brier 0.59735, log loss 0.99932). The market eligibility screen excluded 587 of 5,011 odds rows because kickoff timing was ambiguous. It is only a schedule-compatibility screen: exact per-fixture odds capture timestamps are unavailable, so strict point-in-time availability is not yet proven.
+- Current-head historical-backtest run 43815638254 was still running at the time of this update. Its results are not yet counted as passed. The pending run for the documentation/test-only follow-up will be allowed to skip after the f512f9c walk-forward completes successfully.
