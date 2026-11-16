@@ -143,3 +143,34 @@ def test_import_rejects_non_pdf_bytes_before_text_extraction(tmp_path: Path) -> 
             "2026-11-08",
             "https://www.loteriasyapuestas.es/f/loterias/documentos/nota.pdf",
         )
+
+
+def test_parse_official_2026_11_15_press_release_compact_pleno() -> None:
+    text = """
+    En la jornada de la Quiniela celebrada hoy domingo día 15 de noviembre de 2026.
+    Resultados:
+    2 - X - 1 - X - 2 - 1 - 1 - X - 1 - 1 - 1 - 2 - 2 - X - 2M -
+    """
+
+    outcome = parse_selae_press_release_text(text)
+
+    assert outcome.signs == (
+        "2",
+        "X",
+        "1",
+        "X",
+        "2",
+        "1",
+        "1",
+        "X",
+        "1",
+        "1",
+        "1",
+        "2",
+        "2",
+        "X",
+    )
+    assert outcome.pleno_home == "2"
+    assert outcome.pleno_away == "M"
+    assert outcome.pleno_code == "2M"
+    assert validate_draw_date_in_text(text, "2026-11-15") == "2026-11-15"
