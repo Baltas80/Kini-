@@ -52,20 +52,23 @@ def _classwise_calibration(
             mean_probability = float(predicted[mask].mean())
             observed_frequency = float(observed[mask].mean())
             ece += count / n * abs(mean_probability - observed_frequency)
-            bins.append({
-                "lower": float(lower),
-                "upper": float(upper),
-                "count": count,
-                "mean_probability": mean_probability,
-                "observed_frequency": observed_frequency,
-            })
+            bins.append(
+                {
+                    "lower": float(lower),
+                    "upper": float(upper),
+                    "count": count,
+                    "mean_probability": mean_probability,
+                    "observed_frequency": observed_frequency,
+                }
+            )
 
         if n:
             binary_brier = float(np.mean((predicted - observed) ** 2))
-            binary_logloss = float(-np.mean(
-                observed * np.log(clipped)
-                + (1.0 - observed) * np.log1p(-clipped)
-            ))
+            binary_logloss = float(
+                -np.mean(
+                    observed * np.log(clipped) + (1.0 - observed) * np.log1p(-clipped)
+                )
+            )
             prevalence: float | None = float(observed.mean())
             mean_probability: float | None = float(predicted.mean())
             ece_value: float | None = float(ece)
@@ -98,7 +101,11 @@ def multiclass_metrics(
     Class-wise diagnostics are computed only from the supplied out-of-sample
     forecasts. They describe reliability; they do not fit or apply a calibrator.
     """
-    if isinstance(calibration_bins, bool) or not isinstance(calibration_bins, int) or calibration_bins < 1:
+    if (
+        isinstance(calibration_bins, bool)
+        or not isinstance(calibration_bins, int)
+        or calibration_bins < 1
+    ):
         raise ValueError("calibration_bins must be a positive integer")
 
     if not rows:
@@ -125,9 +132,13 @@ def multiclass_metrics(
         try:
             vector = np.asarray([probabilities[sign] for sign in SIGNS], dtype=float)
         except (KeyError, TypeError, ValueError) as exc:
-            raise ValueError("forecast must contain finite 1/X/2 probabilities") from exc
+            raise ValueError(
+                "forecast must contain finite 1/X/2 probabilities"
+            ) from exc
         if not np.isfinite(vector).all() or np.any(vector < 0.0) or vector.sum() <= 0.0:
-            raise ValueError("forecast probabilities must be finite, non-negative and have positive sum")
+            raise ValueError(
+                "forecast probabilities must be finite, non-negative and have positive sum"
+            )
         probability_vectors.append(vector / vector.sum())
         target_indices.append(idx[outcome])
 
@@ -154,14 +165,19 @@ def multiclass_metrics(
     edges = np.linspace(0.0, 1.0, calibration_bins + 1)
     for lo, hi in pairwise(edges):
         mask = [
-            i for i, confidence in enumerate(confidences)
+            i
+            for i, confidence in enumerate(confidences)
             if (confidence >= lo and confidence < hi)
             or (hi == 1.0 and confidence == hi)
         ]
         if mask:
-            ece += len(mask) / n * abs(
-                float(np.mean([correct[i] for i in mask]))
-                - float(np.mean([confidences[i] for i in mask]))
+            ece += (
+                len(mask)
+                / n
+                * abs(
+                    float(np.mean([correct[i] for i in mask]))
+                    - float(np.mean([confidences[i] for i in mask]))
+                )
             )
 
     return {
@@ -175,6 +191,7 @@ def multiclass_metrics(
             probability_matrix, targets, calibration_bins
         ),
     }
+
 
 DEFAULT_DC_ML_WEIGHT = 0.58 / (0.58 + 0.17)
 
@@ -193,13 +210,11 @@ def _blend_dc_ml(
 ) -> dict[str, float]:
     if not np.isfinite(dc_weight) or not 0.0 <= dc_weight <= 1.0:
         raise ValueError("Dixon-Coles weight must be finite and in [0, 1]")
-    blended = (
-        dc_weight * _probability_vector(dc_probabilities)
-        + (1.0 - dc_weight) * _probability_vector(ml_probabilities)
-    )
+    blended = dc_weight * _probability_vector(dc_probabilities) + (
+        1.0 - dc_weight
+    ) * _probability_vector(ml_probabilities)
     blended /= blended.sum()
     return dict(zip(SIGNS, map(float, blended)))
-
 
 
 def _identity_multiclass_calibrator(
@@ -228,11 +243,21 @@ def fit_multiclass_calibrator(
     and zero-sum class biases. It is deliberately low-dimensional and shrunk
     toward the identity transform to limit overfitting.
     """
-    if isinstance(min_history, bool) or not isinstance(min_history, int) or min_history < 1:
+    if (
+        isinstance(min_history, bool)
+        or not isinstance(min_history, int)
+        or min_history < 1
+    ):
         raise ValueError("min_history must be a positive integer")
     if isinstance(window, bool) or not isinstance(window, int) or window < min_history:
-        raise ValueError("window must be an integer greater than or equal to min_history")
-    if isinstance(min_class_count, bool) or not isinstance(min_class_count, int) or min_class_count < 1:
+        raise ValueError(
+            "window must be an integer greater than or equal to min_history"
+        )
+    if (
+        isinstance(min_class_count, bool)
+        or not isinstance(min_class_count, int)
+        or min_class_count < 1
+    ):
         raise ValueError("min_class_count must be a positive integer")
     if not np.isfinite(regularization) or regularization < 0.0:
         raise ValueError("regularization must be finite and non-negative")
@@ -243,15 +268,17 @@ def fit_multiclass_calibrator(
 
     outcome_index = {sign: index for index, sign in enumerate(SIGNS)}
     try:
-        probability_matrix = np.vstack([
-            _probability_vector(probabilities) for probabilities, _ in recent
-        ])
+        probability_matrix = np.vstack(
+            [_probability_vector(probabilities) for probabilities, _ in recent]
+        )
         targets = np.asarray(
             [outcome_index[outcome] for _, outcome in recent],
             dtype=int,
         )
     except KeyError as exc:
-        raise ValueError(f"unknown outcome in calibration history: {exc.args[0]}") from exc
+        raise ValueError(
+            f"unknown outcome in calibration history: {exc.args[0]}"
+        ) from exc
 
     class_counts = np.bincount(targets, minlength=3)
     if np.any(class_counts < min_class_count):
@@ -274,12 +301,10 @@ def fit_multiclass_calibrator(
         exponentials = np.exp(logits)
         calibrated = exponentials / exponentials.sum(axis=1, keepdims=True)
 
-        loss = -float(np.log(np.clip(
-            calibrated[row_indices, targets], 1e-12, 1.0
-        )).mean())
-        penalty = 0.5 * regularization * (
-            log_scale ** 2 + float(np.sum(bias ** 2))
+        loss = -float(
+            np.log(np.clip(calibrated[row_indices, targets], 1e-12, 1.0)).mean()
         )
+        penalty = 0.5 * regularization * (log_scale**2 + float(np.sum(bias**2)))
 
         gradient_logits = calibrated.copy()
         gradient_logits[row_indices, targets] -= 1.0
@@ -290,11 +315,14 @@ def fit_multiclass_calibrator(
             + regularization * log_scale
         )
         gradient_bias = gradient_logits.sum(axis=0) + regularization * bias
-        gradient = np.asarray([
-            gradient_log_scale,
-            gradient_bias[0] - gradient_bias[2],
-            gradient_bias[1] - gradient_bias[2],
-        ], dtype=float)
+        gradient = np.asarray(
+            [
+                gradient_log_scale,
+                gradient_bias[0] - gradient_bias[2],
+                gradient_bias[1] - gradient_bias[2],
+            ],
+            dtype=float,
+        )
         return loss + penalty, gradient
 
     fitted = minimize(
@@ -351,6 +379,7 @@ def apply_multiclass_calibrator(
     calibrated /= calibrated.sum()
     return dict(zip(SIGNS, map(float, calibrated)))
 
+
 def select_dc_ml_weight(
     history: list[tuple[dict[str, float], dict[str, float], str]],
     default_weight: float = DEFAULT_DC_ML_WEIGHT,
@@ -366,10 +395,16 @@ def select_dc_ml_weight(
     """
     if not np.isfinite(default_weight) or not 0.0 <= default_weight <= 1.0:
         raise ValueError("default_weight must be finite and in [0, 1]")
-    if isinstance(min_history, bool) or not isinstance(min_history, int) or min_history < 1:
+    if (
+        isinstance(min_history, bool)
+        or not isinstance(min_history, int)
+        or min_history < 1
+    ):
         raise ValueError("min_history must be a positive integer")
     if isinstance(window, bool) or not isinstance(window, int) or window < min_history:
-        raise ValueError("window must be an integer greater than or equal to min_history")
+        raise ValueError(
+            "window must be an integer greater than or equal to min_history"
+        )
     if not np.isfinite(regularization) or regularization < 0.0:
         raise ValueError("regularization must be finite and non-negative")
     if len(history) < min_history:
@@ -382,17 +417,25 @@ def select_dc_ml_weight(
     try:
         targets = np.asarray([outcome_index[row[2]] for row in recent], dtype=int)
     except KeyError as exc:
-        raise ValueError(f"unknown outcome in adaptive ensemble history: {exc.args[0]}") from exc
+        raise ValueError(
+            f"unknown outcome in adaptive ensemble history: {exc.args[0]}"
+        ) from exc
 
-    candidates = sorted(set(np.linspace(0.0, 1.0, 41).tolist() + [float(default_weight)]))
+    candidates = sorted(
+        set(np.linspace(0.0, 1.0, 41).tolist() + [float(default_weight)])
+    )
     row_index = np.arange(len(recent))
     scored: list[tuple[float, float, float]] = []
     for weight in candidates:
         blended = weight * dc_matrix + (1.0 - weight) * ml_matrix
         losses = -np.log(np.clip(blended[row_index, targets], 1e-12, 1.0))
-        objective = float(losses.mean()) + regularization * (weight - default_weight) ** 2
+        objective = (
+            float(losses.mean()) + regularization * (weight - default_weight) ** 2
+        )
         scored.append((objective, abs(weight - default_weight), -weight))
-    return float(candidates[min(range(len(candidates)), key=lambda index: scored[index])])
+    return float(
+        candidates[min(range(len(candidates)), key=lambda index: scored[index])]
+    )
 
 
 def baseline_probabilities(
@@ -582,8 +625,7 @@ def compare_walk_forward(
 
     calibration_history = {mode: [] for mode in calibration_modes}
     calibrators = {
-        mode: _identity_multiclass_calibrator()
-        for mode in calibration_modes
+        mode: _identity_multiclass_calibrator() for mode in calibration_modes
     }
     calibration_fit_counts = {mode: 0 for mode in calibration_modes}
     calibration_raw_rows = {mode: [] for mode in calibration_modes}
@@ -637,9 +679,7 @@ def compare_walk_forward(
         pending_adaptive_history: list[
             tuple[dict[str, float], dict[str, float], str]
         ] = []
-        pending_calibration_history = {
-            mode: [] for mode in calibration_modes
-        }
+        pending_calibration_history = {mode: [] for mode in calibration_modes}
 
         for match in group:
             actual = match.outcome()
@@ -658,11 +698,13 @@ def compare_walk_forward(
                 if mode in DC_DEPENDENT_MODES and uses_cold_start:
                     cold_start_fallback_counts[mode] += 1
                     if len(cold_start_fallback_examples[mode]) < 20:
-                        cold_start_fallback_examples[mode].append({
-                            "date": forecast_date,
-                            "home": match.home,
-                            "away": match.away,
-                        })
+                        cold_start_fallback_examples[mode].append(
+                            {
+                                "date": forecast_date,
+                                "home": match.home,
+                                "away": match.away,
+                            }
+                        )
                 rows[mode].append((pred.probabilities, actual))
                 dated_rows[mode].append((forecast_date, pred.probabilities, actual))
 
@@ -681,11 +723,13 @@ def compare_walk_forward(
                 if uses_cold_start:
                     cold_start_fallback_counts[adaptive_mode] += 1
                     if len(cold_start_fallback_examples[adaptive_mode]) < 20:
-                        cold_start_fallback_examples[adaptive_mode].append({
-                            "date": forecast_date,
-                            "home": match.home,
-                            "away": match.away,
-                        })
+                        cold_start_fallback_examples[adaptive_mode].append(
+                            {
+                                "date": forecast_date,
+                                "home": match.home,
+                                "away": match.away,
+                            }
+                        )
             else:
                 diagnostic = prediction_errors[adaptive_mode]
                 diagnostic["count"] += 1
@@ -698,16 +742,12 @@ def compare_walk_forward(
             # date has been evaluated. Calibrated metrics use a common,
             # post-warm-up sample for raw-vs-calibrated comparisons.
             for mode, raw_probabilities in predictions.items():
-                pending_calibration_history[mode].append(
-                    (raw_probabilities, actual)
-                )
+                pending_calibration_history[mode].append((raw_probabilities, actual))
                 if calibrators[mode]["fitted"]:
                     calibrated = apply_multiclass_calibrator(
                         raw_probabilities, calibrators[mode]
                     )
-                    calibration_raw_rows[mode].append(
-                        (raw_probabilities, actual)
-                    )
+                    calibration_raw_rows[mode].append((raw_probabilities, actual))
                     calibration_rows[mode].append((calibrated, actual))
                     calibration_raw_dated_rows[mode].append(
                         (forecast_date, raw_probabilities, actual)
@@ -726,36 +766,30 @@ def compare_walk_forward(
                 )
                 market_is_eligible = match.has_temporally_eligible_market
                 if not market_is_eligible and len(market_excluded_examples) < 20:
-                    market_excluded_examples.append({
-                        "date": forecast_date,
-                        "home": match.home,
-                        "away": match.away,
-                        "kickoff_time": (
-                            str(match.detail.get("kickoff_time"))
-                            if match.detail.get("kickoff_time") is not None
-                            else None
-                        ),
-                        "status": temporal_status,
-                    })
+                    market_excluded_examples.append(
+                        {
+                            "date": forecast_date,
+                            "home": match.home,
+                            "away": match.away,
+                            "kickoff_time": (
+                                str(match.detail.get("kickoff_time"))
+                                if match.detail.get("kickoff_time") is not None
+                                else None
+                            ),
+                            "status": temporal_status,
+                        }
+                    )
 
                 if market_is_eligible:
                     market_rows.append((match.market, actual))
-                    dated_market_rows.append(
-                        (forecast_date, match.market, actual)
-                    )
-                    pending_calibration_history["market"].append(
-                        (match.market, actual)
-                    )
+                    dated_market_rows.append((forecast_date, match.market, actual))
+                    pending_calibration_history["market"].append((match.market, actual))
                     if calibrators["market"]["fitted"]:
                         calibrated_market = apply_multiclass_calibrator(
                             match.market, calibrators["market"]
                         )
-                        calibration_raw_rows["market"].append(
-                            (match.market, actual)
-                        )
-                        calibration_rows["market"].append(
-                            (calibrated_market, actual)
-                        )
+                        calibration_raw_rows["market"].append((match.market, actual))
+                        calibration_rows["market"].append((calibrated_market, actual))
                         calibration_raw_dated_rows["market"].append(
                             (forecast_date, match.market, actual)
                         )
@@ -773,38 +807,46 @@ def compare_walk_forward(
                             (forecast_date, match.market, actual)
                         )
 
-                        if calibrators[mode]["fitted"] and calibrators["market"]["fitted"]:
+                        if (
+                            calibrators[mode]["fitted"]
+                            and calibrators["market"]["fitted"]
+                        ):
                             calibration_common_raw_model[mode].append(
                                 (probabilities, actual)
                             )
-                            calibration_common_model[mode].append((
-                                apply_multiclass_calibrator(
-                                    probabilities, calibrators[mode]
-                                ),
-                                actual,
-                            ))
+                            calibration_common_model[mode].append(
+                                (
+                                    apply_multiclass_calibrator(
+                                        probabilities, calibrators[mode]
+                                    ),
+                                    actual,
+                                )
+                            )
                             calibration_common_raw_market[mode].append(
                                 (match.market, actual)
                             )
-                            calibration_common_market[mode].append((
-                                apply_multiclass_calibrator(
-                                    match.market, calibrators["market"]
-                                ),
-                                actual,
-                            ))
+                            calibration_common_market[mode].append(
+                                (
+                                    apply_multiclass_calibrator(
+                                        match.market, calibrators["market"]
+                                    ),
+                                    actual,
+                                )
+                            )
             n_total += 1
             test_dates.append(forecast_date)
 
         adaptive_history.extend(pending_adaptive_history)
         for mode in calibration_modes:
-            calibration_history[mode].extend(
-                pending_calibration_history[mode]
-            )
-        adaptive_weight_trace.append({
-            "date": forecast_date,
-            "dc_weight": dc_weight,
-            "prior_oof_predictions": len(adaptive_history) - len(pending_adaptive_history),
-        })
+            calibration_history[mode].extend(pending_calibration_history[mode])
+        adaptive_weight_trace.append(
+            {
+                "date": forecast_date,
+                "dc_weight": dc_weight,
+                "prior_oof_predictions": len(adaptive_history)
+                - len(pending_adaptive_history),
+            }
+        )
         train.extend(group)
         forecast_day += 1
 
@@ -821,8 +863,7 @@ def compare_walk_forward(
     }
     result["market"] = multiclass_metrics(market_rows) if market_rows else empty
     result["market_unfiltered_snapshot"] = (
-        multiclass_metrics(market_unfiltered_rows)
-        if market_unfiltered_rows else empty
+        multiclass_metrics(market_unfiltered_rows) if market_unfiltered_rows else empty
     )
     result["market_temporal_audit"] = {
         "n_with_odds": len(market_unfiltered_rows),
@@ -845,7 +886,8 @@ def compare_walk_forward(
             "model": multiclass_metrics(common_rows[mode]),
             "market": (
                 multiclass_metrics(common_market_rows[mode])
-                if common_market_rows[mode] else empty
+                if common_market_rows[mode]
+                else empty
             ),
         }
         for mode in all_modes
@@ -863,7 +905,9 @@ def compare_walk_forward(
             for row in adaptive_weight_trace
         ),
         "mean_dc_weight": float(np.mean(weights)) if weights else DEFAULT_DC_ML_WEIGHT,
-        "median_dc_weight": float(np.median(weights)) if weights else DEFAULT_DC_ML_WEIGHT,
+        "median_dc_weight": float(np.median(weights))
+        if weights
+        else DEFAULT_DC_ML_WEIGHT,
         "min_dc_weight": float(np.min(weights)) if weights else DEFAULT_DC_ML_WEIGHT,
         "max_dc_weight": float(np.max(weights)) if weights else DEFAULT_DC_ML_WEIGHT,
         "last_dc_weight": weights[-1] if weights else DEFAULT_DC_ML_WEIGHT,
@@ -879,9 +923,7 @@ def compare_walk_forward(
     result["temporal_common_sample_calibration"] = {
         mode: {
             "model": _temporal_classwise_calibration(dated_common_rows[mode]),
-            "market": _temporal_classwise_calibration(
-                dated_common_market_rows[mode]
-            ),
+            "market": _temporal_classwise_calibration(dated_common_market_rows[mode]),
         }
         for mode in all_modes
     }
@@ -889,9 +931,7 @@ def compare_walk_forward(
     def calibration_summary(mode: str) -> dict[str, Any]:
         return {
             "n": len(calibration_rows[mode]),
-            "raw_on_same_sample": multiclass_metrics(
-                calibration_raw_rows[mode]
-            ),
+            "raw_on_same_sample": multiclass_metrics(calibration_raw_rows[mode]),
             "calibrated": multiclass_metrics(calibration_rows[mode]),
             "raw_seasonal": _temporal_classwise_calibration(
                 calibration_raw_dated_rows[mode]
@@ -913,23 +953,14 @@ def compare_walk_forward(
         "refit_every_dates": calibration_refit_every,
         "min_class_count": calibration_min_class_count,
         "regularization": calibration_regularization,
-        "models": {
-            mode: calibration_summary(mode)
-            for mode in all_modes
-        },
+        "models": {mode: calibration_summary(mode) for mode in all_modes},
         "market": calibration_summary("market"),
         "common_market_sample": {
             mode: {
                 "n": len(calibration_common_model[mode]),
-                "raw_model": multiclass_metrics(
-                    calibration_common_raw_model[mode]
-                ),
-                "calibrated_model": multiclass_metrics(
-                    calibration_common_model[mode]
-                ),
-                "raw_market": multiclass_metrics(
-                    calibration_common_raw_market[mode]
-                ),
+                "raw_model": multiclass_metrics(calibration_common_raw_model[mode]),
+                "calibrated_model": multiclass_metrics(calibration_common_model[mode]),
+                "raw_market": multiclass_metrics(calibration_common_raw_market[mode]),
                 "calibrated_market": multiclass_metrics(
                     calibration_common_market[mode]
                 ),
@@ -949,7 +980,8 @@ def compare_walk_forward(
                 "count": cold_start_fallback_counts[mode],
                 "rate": (
                     cold_start_fallback_counts[mode] / len(rows[mode])
-                    if rows[mode] else None
+                    if rows[mode]
+                    else None
                 ),
                 "examples": cold_start_fallback_examples[mode],
             }
