@@ -1721,7 +1721,7 @@ Métricas Bet365 en su muestra elegible: accuracy 0.508037, Brier 0.597352, Log 
 ### CI y seguimiento
 
 - CI #43806744226: success sobre el commit 7b61be5; actionlint, Ruff lint, Ruff format y pytest completados. Resultado: 209 passed, 20 warnings de deprecación procedentes de penaltyblog/NumPy 2.5. Se añadió una prueba que verifica para cada número de dobles que el máximo de triples coincide exactamente con el límite oficial de 31.104 apuestas.
-- La validación de datos #43806306436 terminó success; reconstruyó y validó el histórico y el registro canónico de equipos.
+- La validación de datos #43806744234 terminó success: 5.311 fixtures completados, integrity_passed=true y artefacto 14198673097 con CSV, perfil y validación de identidades canónicas.
 - El backtest #43805280611 continúa ejecutando la comparación walk-forward; todavía no hay métricas finales nuevas que publicar. La nueva ejecución #43806744219 permanece pendiente de la anterior y no debe duplicar el backtest si el filtro de cambios la clasifica como solo tests/documentación.
 - La siguiente prioridad P6 es cerrar el contrato de Pleno al 15 y su multiplicador antes de usar la cobertura como cobertura de boleto completo.
 
