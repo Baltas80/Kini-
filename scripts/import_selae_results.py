@@ -104,6 +104,38 @@ def make_draw_url(draw_date: date) -> str:
     )
 
 
+def _is_official_selae_url(value: object) -> bool:
+    if not isinstance(value, str):
+        return False
+    try:
+        parsed = urlparse(value)
+        return (
+            parsed.scheme == "https"
+            and parsed.hostname == "www.loteriasyapuestas.es"
+            and parsed.port in {None, 443}
+            and parsed.username is None
+            and parsed.password is None
+        )
+    except ValueError:
+        return False
+
+
+def _validated_utc_timestamp(value: object) -> str | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        timestamp = datetime.fromisoformat(value.strip())
+    except ValueError:
+        return None
+    if (
+        timestamp.tzinfo is None
+        or timestamp.utcoffset() is None
+        or timestamp.utcoffset().total_seconds() != 0
+    ):
+        return None
+    return timestamp.astimezone(UTC).isoformat()
+
+
 def _clean(value: str) -> str:
     return " ".join(value.replace("\xa0", " ").split()).strip()
 
@@ -323,6 +355,12 @@ def parse_selae_draw(
         raise ValueError(f"Desglose de premios incompleto: se esperaban al menos 5 categorías, hay {len(prize_tiers)}")
 
     now = datetime.now(UTC).isoformat()
+    resolved_source_url = source_url or make_draw_url(draw_date)
+    if not _is_official_selae_url(resolved_source_url):
+        raise ValueError("La URL de origen debe ser HTTPS y pertenecer al dominio oficial SELAE")
+    retrieved_at = _validated_utc_timestamp(source_retrieved_at_utc or now)
+    if retrieved_at is None:
+        raise ValueError("source_retrieved_at_utc debe ser una fecha ISO-8601 con zona UTC")
     raw_bytes = raw_content if raw_content is not None else html.encode("utf-8")
     return {
         "schema_version": 2,
@@ -330,8 +368,8 @@ def parse_selae_draw(
         "record_type": "completed_quiniela_draw",
         "draw_date": draw_date.isoformat(),
         "draw_id": None,
-        "source_url": source_url or make_draw_url(draw_date),
-        "source_retrieved_at_utc": source_retrieved_at_utc or now,
+        "source_url": resolved_source_url,
+        "source_retrieved_at_utc": retrieved_at,
         "imported_at_utc": now,
         "raw_sha256": hashlib.sha256(raw_bytes).hexdigest(),
         "fixture_count": len(fixtures),
@@ -404,9 +442,8 @@ def load_fixture_overrides(
             raise ValueError(f"{location}.reported_score_raw debe conservar el marcador mostrado por SELAE")
 
         evidence_url = str(raw["evidence_url"]).strip()
-        parsed_url = urlparse(evidence_url)
-        if parsed_url.scheme != "https" or parsed_url.hostname != "www.loteriasyapuestas.es":
-            raise ValueError(f"{location}.evidence_url debe pertenecer al dominio oficial SELAE")
+        if not _is_official_selae_url(evidence_url):
+            raise ValueError(f"{location}.evidence_url debe ser HTTPS y pertenecer al dominio oficial SELAE")
 
         checked_raw = str(raw["evidence_checked_at_utc"]).strip()
         try:
@@ -552,21 +589,36 @@ def fetch_draw(
     if cache_path.is_file():
         try:
             cached_bytes = cache_path.read_bytes()
-            metadata = json.loads(metadata_path.read_text(encoding="utf-8")) if metadata_path.is_file() else {}
-            encoding = str(metadata.get("encoding") or "utf-8")
-            cached_html = cached_bytes.decode(encoding, errors="replace")
+            if not metadata_path.is_file():
+                raise ValueError("Falta el sidecar de procedencia de la caché SELAE")
+            metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+            if not isinstance(metadata, dict):
+                raise ValueError("El sidecar de caché SELAE no es un objeto JSON")
+            cache_source_url = metadata.get("source_url")
+            if not _is_official_selae_url(cache_source_url):
+                raise ValueError("La caché SELAE no tiene una URL oficial HTTPS")
+            cache_retrieved_at = _validated_utc_timestamp(metadata.get("source_retrieved_at_utc"))
+            if cache_retrieved_at is None:
+                raise ValueError("La caché SELAE no tiene una hora UTC de recuperación válida")
+            actual_sha256 = hashlib.sha256(cached_bytes).hexdigest()
+            if metadata.get("raw_sha256") != actual_sha256:
+                raise ValueError("El SHA-256 de la caché SELAE no coincide con sus bytes")
+            encoding_value = metadata.get("encoding")
+            if not isinstance(encoding_value, str) or not encoding_value.strip():
+                raise ValueError("La caché SELAE no declara una codificación válida")
+            cached_html = cached_bytes.decode(encoding_value, errors="strict")
             cached_draw = parse_selae_draw(
                 cached_html,
                 draw_date,
-                source_url=url,
-                source_retrieved_at_utc=metadata.get("source_retrieved_at_utc"),
+                source_url=cache_source_url,
+                source_retrieved_at_utc=cache_retrieved_at,
                 raw_content=cached_bytes,
                 fixture_overrides=fixture_overrides,
             )
             age_hours = max(0.0, time.time() - cache_path.stat().st_mtime) / 3600
             if not refresh and age_hours <= cache_ttl_hours:
                 return cached_draw
-        except (OSError, ValueError, json.JSONDecodeError, LookupError) as exc:
+        except (OSError, ValueError, TypeError, json.JSONDecodeError, LookupError, UnicodeError) as exc:
             log.warning("Caché SELAE inválida %s: %s", cache_path, exc)
             cached_draw = None
 
@@ -578,9 +630,9 @@ def fetch_draw(
         raw_content = response.content
         html = raw_content.decode(encoding, errors="replace")
         fetched_at = datetime.now(UTC).isoformat()
-        response_url = getattr(response, "url", None) or url
-        if urlparse(response_url).hostname != "www.loteriasyapuestas.es":
-            raise ValueError(f"Redirección a un dominio no oficial: {response_url}")
+        response_url = str(getattr(response, "url", None) or url)
+        if not _is_official_selae_url(response_url):
+            raise ValueError(f"Redirección a una URL no HTTPS del dominio oficial SELAE: {response_url}")
         parsed = parse_selae_draw(
             html,
             draw_date,
@@ -591,7 +643,7 @@ def fetch_draw(
         )
         _atomic_write(cache_path, raw_content)
         metadata = {
-            "source_url": url,
+            "source_url": response_url,
             "source_retrieved_at_utc": fetched_at,
             "raw_sha256": parsed["raw_sha256"],
             "encoding": encoding,
@@ -620,20 +672,31 @@ def load_local_draw(
         raise FileNotFoundError(f"No existe el HTML local esperado: {html_path}")
     raw_content = html_path.read_bytes()
     metadata_path = html_path.with_suffix(".meta.json")
-    metadata = json.loads(metadata_path.read_text(encoding="utf-8")) if metadata_path.is_file() else {}
-    encoding = str(metadata.get("encoding") or "utf-8-sig")
-    html = raw_content.decode(encoding, errors="replace")
-    retrieved_at = metadata.get("source_retrieved_at_utc")
-    if not retrieved_at:
-        retrieved_at = datetime.fromtimestamp(html_path.stat().st_mtime, UTC).isoformat()
-    source_url = str(metadata.get("source_url") or make_draw_url(draw_date))
-    if urlparse(source_url).hostname != "www.loteriasyapuestas.es":
-        raise ValueError(f"El HTML local no tiene procedencia SELAE válida: {source_url}")
+    if not metadata_path.is_file():
+        raise ValueError(
+            f"Falta el sidecar {metadata_path.name}; no se infieren URL ni hora de captura desde el nombre o mtime"
+        )
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    if not isinstance(metadata, dict):
+        raise ValueError("El sidecar del HTML local no es un objeto JSON")
+    source_url = metadata.get("source_url")
+    if not _is_official_selae_url(source_url) or source_url != make_draw_url(draw_date):
+        raise ValueError("El HTML local no declara la URL HTTPS exacta del escrutinio oficial SELAE")
+    retrieved_at = _validated_utc_timestamp(metadata.get("source_retrieved_at_utc"))
+    if retrieved_at is None:
+        raise ValueError("El HTML local no declara una hora de captura ISO-8601 en UTC")
+    expected_sha256 = hashlib.sha256(raw_content).hexdigest()
+    if metadata.get("raw_sha256") != expected_sha256:
+        raise ValueError("El SHA-256 del HTML local no coincide con el sidecar de procedencia")
+    encoding_value = metadata.get("encoding")
+    if not isinstance(encoding_value, str) or not encoding_value.strip():
+        raise ValueError("El sidecar del HTML local no declara una codificación válida")
+    html = raw_content.decode(encoding_value, errors="strict")
     return parse_selae_draw(
         html,
         draw_date,
         source_url=source_url,
-        source_retrieved_at_utc=str(retrieved_at),
+        source_retrieved_at_utc=retrieved_at,
         raw_content=raw_content,
         fixture_overrides=fixture_overrides,
     )
@@ -669,7 +732,9 @@ def _validate_draw_record(draw: dict[str, object]) -> bool:
         date.fromisoformat(str(draw["draw_date"]))
     except (KeyError, ValueError):
         return False
-    if urlparse(str(draw.get("source_url", ""))).hostname != "www.loteriasyapuestas.es":
+    if not _is_official_selae_url(draw.get("source_url")):
+        return False
+    if _validated_utc_timestamp(draw.get("source_retrieved_at_utc")) is None:
         return False
     if re.fullmatch(r"[0-9a-f]{64}", str(draw.get("raw_sha256", "")).lower()) is None:
         return False
@@ -725,8 +790,7 @@ def _validate_draw_record(draw: dict[str, object]) -> bool:
                 or not fixture.get("status_reason", "").strip()
             ):
                 return False
-            evidence_url = urlparse(str(fixture.get("sign_evidence_url", "")))
-            if evidence_url.scheme != "https" or evidence_url.hostname != "www.loteriasyapuestas.es":
+            if not _is_official_selae_url(fixture.get("sign_evidence_url")):
                 return False
             checked_raw = str(fixture.get("sign_evidence_checked_at_utc", ""))
             try:
