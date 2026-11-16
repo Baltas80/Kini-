@@ -2076,3 +2076,23 @@ P0 is closed for the current predictive code as recorded above. The next P1 unit
 2. Obtain the original official SELAE HTML/XLS bytes from an allowed environment and preserve exact capture metadata; do not substitute extracted web text.
 3. Complete the official draw-date inventory and fixture crosswalk only where competition, canonical teams and actual kickoff are independently evidenced.
 4. Keep all coupon targets and prize data out of pre-match features and model training until those joins are unambiguous.
+
+
+## 2026-11-16 — P1 reconciliation record validation hardening
+
+A further inspection of the public-draw and crosswalk validator found that public-draw evidence timestamps only had to be timezone-aware, not actually UTC. The draw loader also accepted unsafe official URLs with a non-standard port/user-info and accepted numeric floats where integer schema fields were required.
+
+Implemented on PR #9:
+- Central strict HTTPS URL validation: HTTPS only, non-empty host, standard port 443/default, no user-info.
+- SELAE source and public-draw evidence URLs must use the exact official host.
+- Crosswalk evidence URLs must pass the safe HTTPS check.
+- \`sign_evidence_checked_at_utc\` must have UTC offset zero.
+- \`schema_version\`, \`fixture_count\` and fixture \`position\` must be actual integers, not booleans/floats.
+- Regression tests cover HTTP downgrade, port 8443, user-info, non-UTC public-draw timestamps, float positions and float fixture counts.
+
+Commits:
+- \`12d7517082d0016d47c9f954d78a19a9c479c8cb\` — implementation.
+- \`280e59d674f0a95a2c0447953c1c9e8a2556d14c\` — regression tests.
+- \`be9b5d1dea93d84fec73d10cf78d0bbbf23bb150\` — Ruff formatting.
+
+Validation status: **implemented, not validated**. The most recent visible CI attempt remains [43850954338](https://github.com/Baltas80/Kini-/actions/runs/43850954338), which failed only on Ruff formatting in earlier calendar tests; those formatting corrections and this new patch are committed after that run. No final-head CI run or test artifact has been returned. Do not mark this unit tested or validated until a run on the final commit completes.
