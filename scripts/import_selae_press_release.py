@@ -121,8 +121,8 @@ def validate_official_source_url(source_url: str) -> str:
         or parsed.password is not None
     ):
         raise ValueError(
-            "source_url must use an official SELAE HTTPS host, standard port "
-            "and no user-info"
+            "source_url must use HTTPS on an official SELAE host, with the "
+            "standard port and no user-info"
         )
     if not parsed.path.lower().endswith(".pdf"):
         raise ValueError("source_url must point to an official PDF")
