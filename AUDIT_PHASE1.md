@@ -1780,3 +1780,9 @@ Se añade scripts/import_selae_press_release.py como vía reproducible para impo
 - Next: verify CI on the formatting-fix commit, collect the pending walk-forward result if still valid, then continue P6 by reconciling an official local press-release PDF against the exact 14 fixtures and Pleno al 15. SELAE HTTP 403 from GitHub runners remains an explicit source-access limitation; no proxy or third-party mirror is treated as official evidence.
 
 - Formato Ruff corregido en el commit `a43333995498977988c852d2bece4b0718160a46`. Se añadió una prueba adicional para fechas ISO imposibles y rechazo de archivos que no sean PDF antes de la extracción; la validación CI debe ejecutarse sobre el nuevo head, no sobre el commit previo al arreglo.
+
+
+---
+## 2026-11-16 — Vector oficial reciente para el parser SELAE
+
+La nota oficial de prensa del sorteo de 15-11-2026 publica el vector `2 - X - 1 - X - 2 - 1 - 1 - X - 1 - 1 - 1 - 2 - 2 - X - 2M` y confirma la fecha del sorteo. Fuente oficial: https://www.loteriasyapuestas.es/f/loterias/documentos/Quiniela/Notas%20de%20prensa/NOTA_DE_PRENSA_LA_QUINIELA_15_11_26.pdf. Se incorpora como regresión de parsing para el formato compacto de Pleno `2M`. La extracción textual del buscador permite verificar el contenido publicado, pero la descarga binaria del PDF desde el entorno de ejecución falló; por tanto, no se registra SHA-256 ni se afirma que el importador local haya generado un artefacto. El bloqueo HTTP 403 de GitHub Actions sigue abierto.
