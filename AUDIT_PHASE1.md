@@ -2597,3 +2597,28 @@ Commits:
 Status at this record: implementation committed; CI and real coupon pilot for this exact code head are pending. The previously validated Jornada 21 pilot does not validate this new acceptance code. Full-season import has not started and no multi-jornada performance conclusions are claimed.
 
 Next action: inspect the PR CI and coupon pilot triggered by these changes; fix any failure before expanding beyond the single verified Jornada 21 snapshot.
+
+
+### 2026-11-16 — coupon batch acceptance gate and CI lint remediation
+
+A review of the batch coupon runner found that its previous success condition only required Dixon-Coles to evaluate every coupon. Because `evaluate_coupon_batch()` records individual candidate failures inside coupon results, ML or the ensemble could fail while the command still wrote a successful artifact.
+
+Implemented a fail-closed acceptance validator in `scripts/backtest_coupons.py`:
+- Exact coupon ID/order match with the verified archive.
+- All three candidates (DC, ML, fixed DC/ML ensemble) must evaluate every coupon with zero aggregate failures.
+- Exactly 14 valid, finite, normalized 1/X/2 vectors per candidate and coupon.
+- Official main-results and Pleno verification plus all 15 ordered canonical fixture reconciliations.
+- Timezone-aware first kickoff and previous-local-calendar-day training cutoff.
+- Minimum history and fitted-model counts must agree.
+- Explicit Dixon-Coles Pleno model/method/category/probability provenance.
+- Optimizer budget, 31,104 direct-system cap, doubles/triples, cost/hit metrics and full-coupon coverage consistency.
+
+Regression tests cover a valid result, each candidate failing, malformed probabilities and inconsistent aggregate counts.
+
+Validation history:
+- The coupon pilot on head `a2422ece46df3d32d6061639b24555fef862a24f`, run [43958091957](https://github.com/Baltas80/Kini-/actions/runs/43958091957), passed the new acceptance logic. It reconciled 15/15 official results and 15/15 canonical fixtures, used 303 prior matches with cutoff 2020-12-11, and produced 14 predictions for DC, ML and ensemble. Artifact ID `14272024052`, SHA-256 `ff08ab2e2a8db82482e6ec85c10a01e39d53bf1adbae57c35a6b0a8011c0940b`. This pilot validates one-coupon execution only.
+- CI [43958234868](https://github.com/Baltas80/Kini-/actions/runs/43958234868) initially failed lint before formatting or pytest. Findings: import ordering, TRY004 exception classes in the new validator, and a pre-existing snapshot-test defect (missing `json` import plus redundant UTF-8 encoding of a literal). These were corrected; the snapshot fixture now uses byte literals and imports `json`.
+- Latest code commits: `37fb291` (acceptance gate), `329e1f6` (validator cleanup), `9d39661` (regression tests), `5413cbd` (format), `be362bc` (lint fixes), `5f65bc7` (snapshot-test fix), `2ca450b` (consistent type-error reporting).
+- The exact latest-head CI and coupon pilot are pending; the earlier successful pilot does not replace validation of the latest code head.
+
+Status: acceptance implementation committed; latest-head CI/pilot validation pending. No multi-jornada expansion has been accepted. Full-season import still requires official evidence for every coupon; no result is inferred from the secondary source's page-date label.
