@@ -2350,3 +2350,27 @@ El backtest del nuevo diagnóstico [43928097207](https://github.com/Baltas80/Kin
 4. Mantener abiertas las limitaciones de publicación exacta de resultados y captura de cuotas. No declarar P2 completamente demostrado.
 
 No se ha modificado master ni se ha fusionado ninguna PR. La PR #9 permanece abierta y en borrador.
+
+
+### Cálculo independiente por segmento sobre el ledger validado 43918579838
+
+Antes de disponer del nuevo artefacto segmentado, se calculó de forma independiente la comparación en las mismas filas con mercado elegible. Δ Brier se define como Brier(ensemble) − Brier(mercado); valores positivos favorecen al mercado.
+
+| Competición | Temporada | n común | Brier mercado | Brier ensemble | Δ Brier |
+|---|---:|---:|---:|---:|---:|
+| LaLiga | 2020/21 | 230 | 0.55716 | 0.59594 | +0.03878 |
+| LaLiga | 2021/22 | 336 | 0.58091 | 0.60189 | +0.02098 |
+| LaLiga | 2022/23 | 329 | 0.58032 | 0.59140 | +0.01108 |
+| LaLiga | 2023/24 | 332 | 0.56425 | 0.57164 | +0.00739 |
+| LaLiga | 2024/25 | 335 | 0.56716 | 0.58519 | +0.01803 |
+| LaLiga | 2025/26 | 331 | 0.56570 | 0.57115 | +0.00545 |
+| LaLiga | 2026/27 parcial | 104 | 0.51253 | 0.54295 | +0.03042 |
+| Segunda | 2020/21 | 240 | 0.62182 | 0.65074 | +0.02892 |
+| Segunda | 2021/22 | 405 | 0.62964 | 0.64265 | +0.01301 |
+| Segunda | 2022/23 | 413 | 0.62868 | 0.63903 | +0.01035 |
+| Segunda | 2023/24 | 414 | 0.62983 | 0.64454 | +0.01471 |
+| Segunda | 2024/25 | 412 | 0.61028 | 0.62097 | +0.01069 |
+| Segunda | 2025/26 | 413 | 0.62016 | 0.64204 | +0.02188 |
+| Segunda | 2026/27 parcial | 138 | 0.60822 | 0.62338 | +0.01516 |
+
+El mercado obtiene mejor Brier en los 14/14 segmentos. La diferencia más pequeña es LaLiga 2025/26 (+0.00545) y la mayor LaLiga 2020/21 (+0.03878). Es evidencia descriptiva, no prueba de significancia: no se han calculado intervalos de confianza ni corregido comparaciones múltiples. Las temporadas 2026/27 son parciales y sus muestras son menores. La elegibilidad temporal del mercado sigue siendo el filtro de calendario documentado, no una captura exacta por fixture.
