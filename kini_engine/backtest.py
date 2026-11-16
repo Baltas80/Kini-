@@ -9,7 +9,6 @@ from scipy.optimize import minimize
 
 from .core import SIGNS, KiniEngine, Match, _date_num
 
-
 DC_DEPENDENT_MODES = frozenset(
     {"dc", "ensemble", "ensemble_dc_ml", "ensemble_dc_ml_adaptive"}
 )
