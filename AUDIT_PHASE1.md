@@ -2439,3 +2439,43 @@ No se declara todavía validado el optimizador con cupones históricos. El algor
 Commit de implementación: 742d3e6. Correcciones de formato: 05aa489, eec3bd0 y abb3799. CI final [43938355598](https://github.com/Baltas80/Kini-/actions/runs/43938355598): actionlint correcto, Ruff lint/format correctos, 257 tests pasados y 21 warnings upstream de penaltyblog/NumPy 2.5.
 
 El backtest completo de la nueva versión está pendiente de terminar. No se declara validado el artefacto con intervalos hasta inspeccionar el resultado de la ejecución correspondiente al head actual.
+
+
+### 2026-11-16 — backtest finalizado y piloto de cupones implementado
+
+#### Validación del backtest individual
+
+El run [43938706602](https://github.com/Baltas80/Kini-/actions/runs/43938706602) terminó con éxito en el job backtest. Pasaron las puertas de aceptación de modelos no vacíos, registro por fixture, cold-start, mercado schedule-screened, benchmark Bet365 y calibración prequential; también se generó el diagnóstico de errores.
+
+El artefacto historical-backtest (ID 14263259457) se descargó y su SHA-256 local coincide con el digest publicado por GitHub: ed905f32fedae42dad20e19077ad0fb70ff5cb0d526bf8c8af1d164d31f9ff38.
+
+- 5.021 forecasts OOS individuales, 11-12-2020 a 15-11-2026.
+- 5.021 filas en prediction-ledger.jsonl, sin IDs duplicados.
+- SHA-256 del ledger: 329a86d53c809b791d5edc91fe76fbd4b61b0f3f4da57b68f2660a3a2022ccc0, coincidente con manifiesto y diagnóstico.
+- 4.432 fixtures comunes con el mercado.
+- 14 segmentos competición-temporada.
+- CI [43938706364](https://github.com/Baltas80/Kini-/actions/runs/43938706364): actionlint, Ruff lint/format y 257 tests pasados; 21 warnings upstream de penaltyblog/NumPy 2.5.
+- Histórico [43938706414](https://github.com/Baltas80/Kini-/actions/runs/43938706414): 5.311 partidos e integridad validada.
+
+Métricas puntuales en muestra completa: DC Brier 0.616681 / Log Loss 1.027801; ML 0.645508 / 1.071342; ensemble 0.613642 / 1.023023. En la muestra común de 4.432 partidos, mercado Brier 0.597534 / Log Loss 0.999473 y ensemble 0.613594 / 1.023023. El mercado sigue siendo mejor; no se ajustan pesos ni probabilidades para ocultar la diferencia.
+
+El bootstrap pareado por semanas se confirma en el nuevo artefacto: 248 semanas, 10.000 réplicas. Para ensemble menos mercado, Δ Brier +0.01606 [0.01242, 0.01973], Δ Log Loss +0.02355 [0.01821, 0.02903], Δ accuracy -0.02911 [-0.03930, -0.01893]. Son intervalos percentiles exploratorios, sin corrección por comparaciones múltiples.
+
+#### Backtest a nivel de cupón: implementación en curso
+
+Se añade kini_engine/coupons.py con parser de HTML de HistoricalQuiniela y SELAE, reconciliación exacta de los 14 partidos y Pleno al 15, archivo JSONL con hashes, validación de timestamps y evaluación con un corte común por cupón.
+
+El corte de entrenamiento es el día natural anterior al primer kickoff local, por lo que ningún resultado del mismo día de inicio del cupón entra en el modelo. Se generan DC, ML y ensemble DC/ML sobre una única instantánea; Pleno al 15 se estima con Dixon-Coles y queda identificado como tal. El optimizador directo existente recibe las probabilidades sin alteraciones y se evalúan cobertura real de columnas, aciertos, dobles, triples, coste y Pleno. No se usan cuotas históricas sin captura pre-kickoff verificable ni se estima rentabilidad.
+
+Se añaden:
+- scripts/import_historical_coupons.py: descarga secuencial, hashes y reconciliación con SELAE.
+- scripts/backtest_coupons.py: evaluación walk-forward por cupón.
+- tests/test_coupon_backtest.py: parser, orden oficial, inmutabilidad, cutoff común y evaluación del optimizador.
+- docs/COUPON_BACKTEST.md: protocolo y limitaciones.
+- .github/workflows/quiniela-coupon-backtest.yml: piloto de Jornada 21 de 2020/21.
+
+La implementación local ha superado 5 tests de regresión y compilación sintáctica. Ruff no está instalado en este entorno local; la CI de GitHub debe validar lint/formato y el nuevo workflow debe comprobar el HTML real de ambas fuentes. Hasta ese resultado, el importador y el backtest por cupón están implementados, no validados.
+
+El piloto de una jornada solo valida la ruta técnica; no es una muestra para seleccionar modelos ni inferir rentabilidad. Tras superarlo, ampliar a las 63 jornadas de 2020/21 y reconciliar cada una antes de agregar métricas.
+
+Siguiente acción: revisar CI y el workflow quiniela-coupon-backtest; corregir cualquier discrepancia real de parsing/identidad y no ampliar el histórico hasta que el piloto completo pase.
