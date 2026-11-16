@@ -1946,3 +1946,23 @@ La elegibilidad continúa siendo fail-closed: fuente, identidad, vector, URL HTT
 ### Corrección de la primera regresión CEST
 
 La primera ejecución de CI detectó que la validación del offset ya aceptaba +02:00, pero la validación previa de la fuente seguía exigiendo literalmente `CET` y la salida etiquetaba el fixture siempre como `CET`. Se corrigen ambos puntos: la fuente puede declarar `CET` o `CEST`, el offset debe coincidir y el valor devuelto conserva la zona declarada. La prueba de verano ahora verifica el flujo completo; la prueba negativa mantiene el rechazo de un offset +01:00 declarado como CEST.
+
+
+## 2026-11-16 — score-ingestion hardening and fresh data validation
+
+The CSV model loader had a validation gap: pandas can infer score columns containing `True`/`False` as boolean, and `float(True)`/ `float(False)` silently converts them to 1/0. `_optional_goal` now rejects Python and NumPy boolean values before numeric conversion. Regression cases cover both home-goal and away-goal columns. The CI lint scope now includes `kini_engine/dataio.py` and `tests/test_dataio.py`.
+
+Validation evidence on the current PR branch:
+- CI [run 43833711914](https://github.com/Baltas80/Kini-/actions/runs/43833711914): passed; Ruff passed and pytest reported **231 passed**, with 21 upstream NumPy/penaltyblog deprecation warnings.
+- Historical-data validation [run 43833711884](https://github.com/Baltas80/Kini-/actions/runs/43833711884): passed. Its artifact records 5,311 completed fixtures from 14 Football-Data CSV sources, covering 2020-09-12 through 2026-11-09; 0 missing team names, 0 missing/incomplete final scores, 0 duplicate fixtures, 0 invalid result labels and 0 score/result mismatches.
+- Canonical identity check in the same artifact: 56 unique team IDs, 10,622/10,622 team references resolved, 0 unresolved and 0 ambiguous.
+- The artifact's source cache entries were approximately 23 hours old at retrieval. The observed dataset therefore ends on 2026-11-09; this is the actual source snapshot, not a claim that later fixtures are absent from the provider.
+
+The historical backtest for the boolean-score hardening is queued as [run 43833712029](https://github.com/Baltas80/Kini-/actions/runs/43833712029). It has not yet completed, so no new predictive metrics are claimed for this commit. The last completed full walk-forward remains [run 43825259647](https://github.com/Baltas80/Kini-/actions/runs/43825259647), which accepted 5,011/5,011 predictions for DC, ML and all three ensemble variants with zero prediction errors.
+
+### Remaining P1 ingestion follow-ups
+
+- `scripts/build_history.py::_parse_source_csv` still relies on `pd.to_numeric`, which also accepts boolean values as numeric scores in some pandas dtypes. Apply the same explicit boolean rejection at the source-download/cache boundary and add a regression test.
+- `kini_engine.dataio.build_dataset_profile` indexes its parsed-date list with DataFrame index labels rather than row positions. Non-RangeIndex frames can undercount duplicate fixtures; fix the positional association and add a regression test.
+
+Next priority: close these two data-quality defects, then require the resulting historical-data validation and full backtest runs to pass before marking P1 complete.
