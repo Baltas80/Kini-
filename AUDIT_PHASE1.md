@@ -2037,3 +2037,42 @@ There are 5,011 fixtures with odds in the raw snapshot; 4,424 pass the schedule-
 The walk-forward ran on `eb72fa6`. Comparing that commit with current PR head `05109b3a9c089f5f602c5819a5da95e6a3b4f1f6` shows exactly two later commits and only two changed files: `tests/test_build_history.py` (fixture delimiter correction) and this audit record. No predictive code, features, model configuration or backtest implementation changed after the completed walk-forward. Current-head CI [43841433607](https://github.com/Baltas80/Kini-/actions/runs/43841433607) passed; current-head historical-data validation [43841433631](https://github.com/Baltas80/Kini-/actions/runs/43841433631) passed. Current-head backtest workflow [43841433598](https://github.com/Baltas80/Kini-/actions/runs/43841433598) correctly skipped its expensive job because the two post-backtest commits changed only a test fixture and this document.
 
 P0 is now **validated for the current predictive code**: every required model produced a non-empty, error-free walk-forward sample and the workflow acceptance gates passed. This closes the previous `n=0` blocker. It does not close P1 source provenance or P2 exact publication/capture-time proof. The PR remains a draft and unmerged; no direct change to `master`.
+
+
+## 2026-11-16 — P1 SELAE provenance and redirect hardening
+
+P0 is closed for the current predictive code as recorded above. The next P1 unit is source provenance for the SELAE coupon/calendar pipeline.
+
+### Implemented, awaiting final CI evidence
+
+**PR #7 — offline coupon importer**
+- Branch: \`feat/selae-official-coupon-ingestion\`.
+- Current head: \`fb0f01dbd152681a5b79abbd40a18082be0b96d9\`.
+- Offline HTML now requires a \`.meta.json\` sidecar with the exact date-specific official HTTPS URL, UTC capture timestamp, raw-byte SHA-256 and encoding.
+- Cache reuse now requires a valid sidecar and a SHA-256 match against the cached bytes; tampered/missing cache metadata causes a fresh fetch.
+- HTTPS downgrade, non-official hosts, missing/naive/non-UTC timestamps, hash mismatch and invalid encoding fail closed.
+- UTF-8 sidecars with or without BOM are supported. The Windows PowerShell example writes UTF-8 without BOM.
+- Regression coverage was added for missing sidecars, hash mismatch, HTTP downgrade, tampered cache, non-UTC timestamps and BOM handling.
+- The latest branch head has no successful workflow run exposed yet. Earlier CI runs predate this patch; do not mark this unit validated.
+
+**PR #9 — historical calendar and archive URL boundaries**
+- Branch: \`feat/selae-fixture-reconciliation\`.
+- Current head at this record: \`275b3004a376082150d19725183a3d5a5d5f8eb6\`.
+- The official historical XLS downloader rejects final redirects outside HTTPS on an exact SELAE host and standard port.
+- Archive index/detail URLs now reject HTTP downgrade, deceptive subdomains, user-info and non-standard ports.
+- Regression tests cover off-domain XLS redirects and unsafe archive URL variants.
+- CI run [43850954338](https://github.com/Baltas80/Kini-/actions/runs/43850954338) passed workflow validation and Ruff lint, then failed only in Ruff formatting of the newly added calendar tests. The exact formatting corrections are committed at \`81f1b51\` and \`275b3004\`. No successful final-head CI run has been returned yet; this work remains implemented, not validated.
+
+### Source access and remaining evidence
+
+- GitHub-hosted runners previously received HTTP 403 for the SELAE escrutinio page, RSS, static result HTML, results index and official press-release PDF. The importer continues to treat this as a source-access limitation, not as successful validation.
+- The official 2026-11-08 escrutinio page is currently retrievable through indexed web content, and its displayed 14 fixtures/signs and prize table are readable. That text view is not the original response bytes and cannot be used to fabricate the importer's raw HTML/SHA-256 provenance artifact.
+- The latest archive-discovery run [43851171841](https://github.com/Baltas80/Kini-/actions/runs/43851171841) has not produced a completed discovery artifact. Earlier run [43849772941](https://github.com/Baltas80/Kini-/actions/runs/43849772941) skipped the discovery step because its inputs had not changed. No complete official historical archive inventory is claimed.
+- The official historical workbook inspection workflow is manual-dispatch only; no workbook artifact was obtained in this cycle.
+
+### Next action
+
+1. Obtain successful deterministic CI for the final heads of PR #7 and PR #9; distinguish push-triggered runs from pull-request-triggered runs and do not infer success from queued/cancelled jobs.
+2. Obtain the original official SELAE HTML/XLS bytes from an allowed environment and preserve exact capture metadata; do not substitute extracted web text.
+3. Complete the official draw-date inventory and fixture crosswalk only where competition, canonical teams and actual kickoff are independently evidenced.
+4. Keep all coupon targets and prize data out of pre-match features and model training until those joins are unambiguous.
