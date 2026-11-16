@@ -2195,3 +2195,30 @@ The earlier archive-discovery failure artifact was downloaded and inspected rath
 - The recorded SHA-256 values are hashes of those short HTTP-403 response bodies, **not** hashes of official result pages, PDFs or RSS data. They must not be reused as draw-source provenance.
 
 This narrows the blocker to the GitHub-runner HTTP client/network path rather than a missing pagination implementation. The current web-index observation demonstrates that an indexed/text-rendered view exists, but it does not expose the original bytes. The local container's direct downloads of the official result page and PDF also failed, so no original source bytes were captured in this execution. Keep the importer fail-closed; do not fabricate raw-source hashes or promote extracted text to a provenance artifact.
+
+
+## 2026-11-16 — Current execution checkpoint and forecast-ledger implementation
+
+### Validation and P0 reconciliation
+
+- Current PR #9 head before this implementation: `e46ad863a057611e0264427f5703e478559f5755`.
+- CI [43900321979](https://github.com/Baltas80/Kini-/actions/runs/43900321979) passed workflow validation, Ruff lint, Ruff formatting and **245 tests**. The 21 warnings remain upstream NumPy 2.5 / penaltyblog deprecations.
+- The archive-discovery attempt [43900321930](https://github.com/Baltas80/Kini-/actions/runs/43900321930) reached both official SELAE result-index routes; both returned HTTP 403. Diagnostic artifact ID `14240363732` was uploaded. No official raw page bytes, archive inventory or source-byte hash are claimed.
+- A scheduled run on current `master`, [43869289099](https://github.com/Baltas80/Kini-/actions/runs/43869289099), completed with workflow conclusion `success` but is **not a valid model backtest**: `n_total=4752`, market `n=4752`, while Dixon–Coles, ML and ensemble each reported `n=0`. The old workflow on `master` lacks the non-empty-model acceptance gate. This result must not be treated as predictive validation or used for model selection.
+- The current PR branch contains the corrected predictive implementation and non-empty acceptance gates. Its latest full model run before this checkpoint was [43840991448](https://github.com/Baltas80/Kini-/actions/runs/43840991448), on `eb72fa61435dc7d19fa0313efa0271d43025d18b`: all five forecast streams generated 5,011/5,011 predictions with zero prediction errors and all model/market/calibration acceptance steps passed. A commit comparison from `eb72fa6` to `e46ad86` found no changes to `core.py`, `backtest.py`, `dataio.py`, `sources.py` or `build_history.py`; the benchmark remains applicable to the predictive code in the current branch.
+- Historical-data validation [43858724502](https://github.com/Baltas80/Kini-/actions/runs/43858724502) passed on the preceding source/test head. The subsequent `e46ad86` commit changed only archive-discovery formatting.
+
+### Forecast ledger — implementation in progress
+
+The walk-forward comparator previously retained individual rows internally for metrics but did not expose a durable per-fixture forecast record. The next implementation adds:
+- Stable SHA-256 fixture IDs based on source-scoped competition, season, date and team identity.
+- Per-fixture OOS probabilities for DC, ML and all ensemble candidates, actual result, forecast-as-of date, model-fit and training cutoffs, training sample sizes and cold-start fallback state.
+- Market, Bet365 and LAE vectors only when their existing temporal-eligibility gates pass.
+- A run manifest containing code revision, dataset and profile hashes, execution ID, Python version and full model/backtest configuration.
+- One JSONL file per run, created exclusively (existing files are never overwritten), with workflow artifact retention extended to 90 days.
+
+Validation of this implementation is pending. The first full walk-forward on the implementation head must pass the existing non-empty model gates and the new ledger integrity gate before the ledger is considered validated. The 90-day Actions artifact is an immutable per-run record, not yet an indefinite archive; long-term retention remains a separate storage decision.
+
+### Next action
+
+Complete CI and the full walk-forward for the forecast-ledger implementation, inspect the artifact and verify fixture uniqueness, probability validity, prior-date cutoffs and manifest hashes. Then begin the comparative error-analysis module using the archived fixture-level rows. No direct changes to `master` and no PR merges.

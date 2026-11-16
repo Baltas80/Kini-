@@ -823,3 +823,109 @@ def test_compare_reports_bet365_on_its_exact_common_fixture_sample(monkeypatch):
         assert sample["model"]["n"] == 2
         assert sample["market_consensus"]["n"] == 2
         assert sample["bet365"]["n"] == 2
+
+
+
+def test_compare_exports_fixture_level_forecast_rows(monkeypatch):
+    class FakeEngine:
+        def __init__(self, enable_ml=False):
+            self.dc = type("DC", (), {"decay": 0.995})()
+
+        def fit(self, history):
+            return self
+
+        def predict(self, match, mode="ensemble", history=None):
+            vectors = {
+                "dc": {"1": 0.6, "X": 0.25, "2": 0.15},
+                "ml": {"1": 0.4, "X": 0.35, "2": 0.25},
+                "ensemble": {"1": 0.52, "X": 0.28, "2": 0.20},
+                "ensemble_dc_ml": {"1": 0.5, "X": 0.3, "2": 0.2},
+            }
+            return type("Prediction", (), {"probabilities": vectors[mode]})()
+
+    monkeypatch.setattr(backtest, "KiniEngine", FakeEngine)
+    training_day = datetime(2025, 1, 1)
+    forecast_day = datetime(2025, 1, 2)
+    training = [
+        Match(
+            training_day,
+            f"Home {index}",
+            f"Away {index}",
+            1,
+            0,
+            "1",
+            detail={
+                "League": "la-liga",
+                "Season": "2526",
+                "Div": "SP1",
+                "SourceURL": "https://www.football-data.co.uk/mmz4281/2526/SP1.csv",
+            },
+        )
+        for index in range(12)
+    ]
+    eligible_market = {
+        "market_temporal_status": "schedule_compatible",
+        "market_pre_match_eligible": True,
+    }
+    market_vector = {"1": 0.45, "X": 0.3, "2": 0.25}
+    fixtures = [
+        Match(
+            forecast_day,
+            "Home A",
+            "Away A",
+            1,
+            0,
+            "1",
+            market=market_vector,
+            detail={
+                **eligible_market,
+                "League": "la-liga",
+                "Season": "2526",
+                "Div": "SP1",
+                "SourceURL": "https://www.football-data.co.uk/mmz4281/2526/SP1.csv",
+            },
+        ),
+        Match(
+            forecast_day,
+            "Home B",
+            "Away B",
+            0,
+            0,
+            "X",
+            detail={
+                "League": "la-liga",
+                "Season": "2526",
+                "Div": "SP1",
+                "SourceURL": "https://www.football-data.co.uk/mmz4281/2526/SP1.csv",
+            },
+        ),
+    ]
+
+    result = backtest.compare_walk_forward(training + fixtures, min_train=12)
+    rows = result["forecast_rows"]
+
+    assert result["n_total"] == 2
+    assert len(rows) == 2
+    assert len({row["fixture_id"] for row in rows}) == 2
+    assert [row["forecast_index"] for row in rows] == [1, 2]
+    for row, actual in zip(rows, ("1", "X")):
+        assert row["actual_result"] == actual
+        assert row["forecast_as_of_date"] == "2025-01-02"
+        assert row["training_cutoff_date"] == "2025-01-01"
+        assert row["model_fit_cutoff_date"] == "2025-01-01"
+        assert row["training_match_count"] == 12
+        assert row["model_fit_match_count"] == 12
+        assert set(row["model_probabilities"]) == {
+            "dc",
+            "ml",
+            "ensemble",
+            "ensemble_dc_ml",
+            "ensemble_dc_ml_adaptive",
+        }
+        for vector in row["model_probabilities"].values():
+            assert abs(sum(vector.values()) - 1.0) < 1e-9
+
+    assert rows[0]["market_eligible"] is True
+    assert rows[0]["market_probabilities"] == market_vector
+    assert rows[1]["market_eligible"] is False
+    assert rows[1]["market_probabilities"] is None

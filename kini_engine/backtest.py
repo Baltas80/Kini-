@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 from datetime import datetime
 from itertools import pairwise
 from typing import Any
@@ -50,6 +52,43 @@ def _season_identity(match: Match) -> tuple[str, str, str]:
             end_year += 100
         season_label = f"{start_year}/{end_year % 100:02d}"
     return league, season_code, season_label
+
+
+def _ledger_text(value: Any) -> str | None:
+    """Convert optional source metadata to a stable JSON-safe text value."""
+    if value is None:
+        return None
+    if isinstance(value, (float, np.floating)) and not np.isfinite(value):
+        return None
+    text = str(value).strip()
+    if not text or text.casefold() in {"nan", "none", "null", "nat", "<na>"}:
+        return None
+    return text
+
+
+def _fixture_ledger_identity(match: Match, forecast_date: str) -> tuple[str, str | None]:
+    """Return a deterministic source-scoped fixture ID and any provider fixture ID."""
+    detail = match.detail if isinstance(match.detail, dict) else {}
+    league, season_code, _ = _season_identity(match)
+    source_fixture_id = None
+    for key in ("MatchID", "FixtureID", "ID"):
+        source_fixture_id = _ledger_text(detail.get(key))
+        if source_fixture_id is not None:
+            break
+    identity = {
+        "source_url": _ledger_text(detail.get("SourceURL")),
+        "league": league,
+        "season_code": season_code,
+        "division": _ledger_text(detail.get("Div")),
+        "date": forecast_date,
+        "home": match.home,
+        "away": match.away,
+        "source_fixture_id": source_fixture_id,
+    }
+    payload = json.dumps(
+        identity, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest(), source_fixture_id
 
 
 def _cold_start_season_summaries(
@@ -683,6 +722,7 @@ def compare_walk_forward(
     calibration_modes = all_modes + ("market",)
 
     rows = {mode: [] for mode in all_modes}
+    forecast_rows: list[dict[str, Any]] = []
     dated_rows = {mode: [] for mode in all_modes}
     common_rows = {mode: [] for mode in all_modes}
     common_market_rows = {mode: [] for mode in all_modes}
@@ -737,6 +777,8 @@ def compare_walk_forward(
     n_total = 0
     test_dates: list[str] = []
     initial_train_size: int | None = None
+    model_fit_cutoff_date: str | None = None
+    model_fit_match_count = 0
 
     for group in groups:
         if len(train) < min_train:
@@ -744,11 +786,14 @@ def compare_walk_forward(
             continue
         if initial_train_size is None:
             initial_train_size = len(train)
+        forecast_date = _calendar_day(group[0].date)
+        training_cutoff_date = _calendar_day(train[-1].date) if train else None
         if forecast_day % refit_every == 0:
             engine.dc.decay = decay
             engine.fit(train)
+            model_fit_cutoff_date = training_cutoff_date
+            model_fit_match_count = len(train)
 
-        forecast_date = _calendar_day(group[0].date)
         if forecast_day % calibration_refit_every == 0:
             for mode in calibration_modes:
                 candidate = fit_multiclass_calibrator(
@@ -835,6 +880,73 @@ def compare_walk_forward(
                         "adaptive DC/ML ensemble requires valid predictions from both models"
                     )
 
+            market_is_eligible = match.has_temporally_eligible_market
+            lae_is_eligible = match.has_temporally_eligible_lae
+            market_probabilities = (
+                {sign: float(match.market[sign]) for sign in SIGNS}
+                if market_is_eligible
+                else None
+            )
+            lae_probabilities = (
+                {sign: float(match.lae[sign]) for sign in SIGNS}
+                if lae_is_eligible
+                else None
+            )
+            bet365_probabilities = (
+                _bookmaker_probability(match, "bet365")
+                if market_is_eligible
+                else None
+            )
+            detail = match.detail if isinstance(match.detail, dict) else {}
+            league, season_code, season_label = _season_identity(match)
+            fixture_id, source_fixture_id = _fixture_ledger_identity(
+                match, forecast_date
+            )
+            model_probabilities = {
+                mode: {sign: float(probabilities[sign]) for sign in SIGNS}
+                for mode, probabilities in predictions.items()
+            }
+            model_signs = {
+                mode: max(SIGNS, key=lambda sign: probabilities[sign])
+                for mode, probabilities in model_probabilities.items()
+            }
+            forecast_rows.append(
+                {
+                    "forecast_index": len(forecast_rows) + 1,
+                    "fixture_id": fixture_id,
+                    "source_fixture_id": source_fixture_id,
+                    "forecast_as_of_date": forecast_date,
+                    "fixture_date_raw": str(match.date),
+                    "competition": league,
+                    "season_code": season_code,
+                    "season_label": season_label,
+                    "division": _ledger_text(detail.get("Div")),
+                    "home": match.home,
+                    "away": match.away,
+                    "actual_result": actual,
+                    "model_probabilities": model_probabilities,
+                    "model_signs": model_signs,
+                    "cold_start_fallback": bool(uses_cold_start),
+                    "training_cutoff_date": training_cutoff_date,
+                    "training_match_count": len(train),
+                    "model_fit_cutoff_date": model_fit_cutoff_date,
+                    "model_fit_match_count": model_fit_match_count,
+                    "market_temporal_status": (
+                        _ledger_text(detail.get("market_temporal_status"))
+                        or "unclassified"
+                    ),
+                    "market_eligible": market_is_eligible,
+                    "market_probabilities": market_probabilities,
+                    "bet365_probabilities": bet365_probabilities,
+                    "lae_eligible": lae_is_eligible,
+                    "lae_probabilities": lae_probabilities,
+                    "lae_source": _ledger_text(detail.get("lae_source")),
+                    "lae_captured_at": _ledger_text(detail.get("lae_captured_at")),
+                    "kickoff_at": _ledger_text(detail.get("kickoff_at")),
+                    "source_url": _ledger_text(detail.get("SourceURL")),
+                }
+            )
+
             # Store raw forecasts for future calibration only after the whole
             # date has been evaluated. Calibrated metrics use a common,
             # post-warm-up sample for raw-vs-calibrated comparisons.
@@ -861,7 +973,6 @@ def compare_walk_forward(
                 market_status_counts[temporal_status] = (
                     market_status_counts.get(temporal_status, 0) + 1
                 )
-                market_is_eligible = match.has_temporally_eligible_market
                 if not market_is_eligible and len(market_excluded_examples) < 20:
                     market_excluded_examples.append(
                         {
@@ -930,7 +1041,6 @@ def compare_walk_forward(
                                     actual,
                                 )
                             )
-            bet365_probabilities = _bookmaker_probability(match, "bet365")
             if bet365_probabilities is not None:
                 bet365_unfiltered_rows.append((bet365_probabilities, actual))
                 temporal_status = str(
@@ -1154,4 +1264,19 @@ def compare_walk_forward(
     result["n_train_initial"] = initial_train_size or len(train)
     result["test_start_date"] = min(test_dates) if test_dates else None
     result["test_end_date"] = max(test_dates) if test_dates else None
+    result["forecast_ledger_schema_version"] = 1
+    result["forecast_rows"] = forecast_rows
+    result["run_config"] = {
+        "min_train_matches": min_train,
+        "refit_every_forecast_dates": refit_every,
+        "dixon_coles_decay": decay,
+        "adaptive_min_history": adaptive_min_history,
+        "adaptive_window": adaptive_window,
+        "adaptive_regularization": adaptive_regularization,
+        "calibration_min_history": calibration_min_history,
+        "calibration_window": calibration_window,
+        "calibration_refit_every_dates": calibration_refit_every,
+        "calibration_regularization": calibration_regularization,
+        "calibration_min_class_count": calibration_min_class_count,
+    }
     return result

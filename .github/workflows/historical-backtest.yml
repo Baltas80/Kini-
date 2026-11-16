@@ -130,8 +130,10 @@ jobs:
       - name: Diagnose first ML forecast
         run: python scripts/diagnose_ml.py data/historical_spain.csv --min-train 300
       - name: Run historical comparison
+        env:
+          KINI_CODE_REVISION: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
-          python -m kini_engine.cli compare data/historical_spain.csv --min-train 300 --refit-every 30 > backtest-results.json
+          python -m kini_engine.cli compare data/historical_spain.csv --min-train 300 --refit-every 30 --ledger-jsonl prediction-ledger.jsonl > backtest-results.json
           cat backtest-results.json
       - name: Enforce non-empty model backtests
         run: |
@@ -155,6 +157,93 @@ jobs:
                       f"{error_count} prediction errors; first_error={errors.get('first_error')}"
                   )
           print(f"BACKTEST_ACCEPTANCE_OK: {total} fixtures for {', '.join(required)}")
+          PY
+
+      - name: Enforce per-fixture forecast ledger acceptance
+        run: |
+          python - <<'PY'
+          import json
+          import math
+          from datetime import date
+          from pathlib import Path
+
+          result = json.loads(Path("backtest-results.json").read_text())
+          ledger_path = Path("prediction-ledger.jsonl")
+          if not ledger_path.is_file() or ledger_path.stat().st_size == 0:
+              raise SystemExit("Per-fixture prediction ledger is missing or empty")
+
+          records = [
+              json.loads(line)
+              for line in ledger_path.read_text(encoding="utf-8").splitlines()
+              if line.strip()
+          ]
+          total = int(result.get("n_total", 0))
+          if len(records) != total + 1:
+              raise SystemExit(
+                  f"Ledger has {len(records) - 1} forecasts; expected {total}"
+              )
+          manifest, forecasts = records[0], records[1:]
+          if manifest.get("record_type") != "run_manifest":
+              raise SystemExit("Ledger does not start with a run manifest")
+          if manifest.get("schema_version") != 1:
+              raise SystemExit("Unsupported forecast ledger schema")
+          if manifest.get("forecast_count") != total:
+              raise SystemExit("Ledger manifest forecast count is inconsistent")
+          dataset_hash = manifest.get("dataset_sha256", "")
+          if len(dataset_hash) != 64 or any(
+              character not in "0123456789abcdef" for character in dataset_hash
+          ):
+              raise SystemExit("Ledger dataset SHA-256 is invalid")
+
+          required = (
+              "dc", "ml", "ensemble", "ensemble_dc_ml",
+              "ensemble_dc_ml_adaptive",
+          )
+          fixture_ids = set()
+          for index, row in enumerate(forecasts, start=1):
+              if row.get("record_type") != "forecast":
+                  raise SystemExit(f"Ledger row {index} is not a forecast")
+              fixture_id = row.get("fixture_id")
+              if not isinstance(fixture_id, str) or len(fixture_id) != 64:
+                  raise SystemExit(f"Ledger row {index} has an invalid fixture ID")
+              if fixture_id in fixture_ids:
+                  raise SystemExit(f"Duplicate fixture ID: {fixture_id}")
+              fixture_ids.add(fixture_id)
+
+              if row.get("actual_result") not in ("1", "X", "2"):
+                  raise SystemExit(f"Ledger row {index} has an invalid actual result")
+              try:
+                  forecast_date = date.fromisoformat(row["forecast_as_of_date"])
+                  training_cutoff = date.fromisoformat(row["training_cutoff_date"])
+                  model_fit_cutoff = date.fromisoformat(row["model_fit_cutoff_date"])
+              except (KeyError, TypeError, ValueError) as exc:
+                  raise SystemExit(f"Ledger row {index} has invalid date metadata: {exc}")
+              if training_cutoff >= forecast_date or model_fit_cutoff >= forecast_date:
+                  raise SystemExit(f"Ledger row {index} contains a non-prior training cutoff")
+
+              probabilities = row.get("model_probabilities", {})
+              if not set(required).issubset(probabilities):
+                  raise SystemExit(f"Ledger row {index} is missing model forecasts")
+              for mode in required:
+                  vector = probabilities[mode]
+                  if set(vector) != {"1", "X", "2"}:
+                      raise SystemExit(f"Ledger row {index} has malformed {mode} probabilities")
+                  values = [float(vector[sign]) for sign in ("1", "X", "2")]
+                  if (
+                      any(not math.isfinite(value) or not 0.0 <= value <= 1.0 for value in values)
+                      or not math.isclose(sum(values), 1.0, rel_tol=0.0, abs_tol=1e-6)
+                  ):
+                      raise SystemExit(f"Ledger row {index} has invalid {mode} probabilities")
+
+              if row.get("market_eligible") != (row.get("market_probabilities") is not None):
+                  raise SystemExit(f"Ledger row {index} violates market eligibility")
+              if row.get("lae_eligible") != (row.get("lae_probabilities") is not None):
+                  raise SystemExit(f"Ledger row {index} violates LAE eligibility")
+
+          print(
+              f"FORECAST_LEDGER_ACCEPTANCE_OK: {len(forecasts)} unique fixtures; "
+              "five model probability vectors per fixture; prior-date cutoffs"
+          )
           PY
 
       - name: Enforce cold-start fallback diagnostics
@@ -434,5 +523,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: historical-backtest
-          path: backtest-results.json
-          retention-days: 30
+          path: |
+            backtest-results.json
+            prediction-ledger.jsonl
+          retention-days: 90
