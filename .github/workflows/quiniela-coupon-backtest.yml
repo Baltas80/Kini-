@@ -19,6 +19,7 @@ on:
   workflow_dispatch:
 
 permissions:
+  actions: read
   contents: read
 
 concurrency:
@@ -26,7 +27,72 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_pilot: ${{ steps.filter.outputs.run_pilot }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - id: filter
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha || '' }}
+          PR_BRANCH: ${{ github.head_ref || '' }}
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+            echo "run_pilot=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # GitHub path filters see the whole PR diff. Compare with the last
+          # successful coupon pilot so documentation-only commits do not rerun it.
+          last_success=""
+          runs_json="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/quiniela-coupon-backtest.yml/runs?branch=$PR_BRANCH&event=pull_request&status=completed&per_page=100" 2>/dev/null || printf '{"workflow_runs":[]}')"
+          while read -r run_id head_sha; do
+            [[ -n "$run_id" && -n "$head_sha" ]] || continue
+            jobs_json="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/jobs?per_page=100" 2>/dev/null || printf '{"jobs":[]}')"
+            if jq -e '[.jobs[]? | select(.name == "pilot" and .conclusion == "success")] | length > 0' <<<"$jobs_json" >/dev/null; then
+              last_success="$head_sha"
+              break
+            fi
+          done < <(
+            jq -r '.workflow_runs[]? | select(.conclusion == "success") | [.id, .head_sha] | @tsv' <<<"$runs_json"
+          )
+
+          if [[ -n "$last_success" ]] && git fetch --no-tags origin "$last_success"; then
+            if git merge-base --is-ancestor "$last_success" HEAD; then
+              changed_files="$(git diff --name-only "$last_success" HEAD)"
+            else
+              git fetch --no-tags --depth=1 origin "$PR_BASE_SHA"
+              changed_files="$(git diff --name-only "$PR_BASE_SHA" HEAD)"
+            fi
+          else
+            git fetch --no-tags --depth=1 origin "$PR_BASE_SHA"
+            changed_files="$(git diff --name-only "$PR_BASE_SHA" HEAD)"
+          fi
+
+          run_pilot=false
+          while IFS= read -r path; do
+            case "$path" in
+              kini_engine/coupons.py|kini_engine/coupon_identity.py|kini_engine/coupon_snapshot.py|kini_engine/data/historicoquiniela_team_aliases.json|kini_engine/data/selae_official_coupon_results/2020-2021-21.json|scripts/import_historical_coupons.py|scripts/backtest_coupons.py|tests/test_coupon_backtest.py|tests/test_coupon_identity.py|tests/test_coupon_snapshot.py|docs/COUPON_BACKTEST.md|.github/workflows/quiniela-coupon-backtest.yml|pyproject.toml|requirements*.txt)
+                run_pilot=true
+                ;;
+            esac
+          done <<< "$changed_files"
+
+          echo "Changed files since last successful coupon pilot:"
+          printf '%s\\n' "$changed_files"
+          echo "run_pilot=$run_pilot" >> "$GITHUB_OUTPUT"
+          echo "Coupon pilot required: $run_pilot"
+
   pilot:
+    needs: changes
+    if: needs.changes.outputs.run_pilot == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:
@@ -82,6 +148,8 @@ jobs:
           coupon = coupons[0]
           if coupon.get("status") == "failed":
               raise SystemExit(f"coupon evaluation failed: {coupon.get('error')}")
+          if "result_published_at" in archive[1] or not archive[1].get("source_date_label_at"):
+              raise SystemExit("coupon source date label is missing or misrepresented as a publication timestamp")
           if coupon.get("official_main_matches_verified") is not True:
               raise SystemExit("main fixtures were not reconciled with SELAE")
           if coupon.get("official_pleno_verified") is not True:
@@ -92,6 +160,13 @@ jobs:
               raise SystemExit("coupon training history is below the required minimum")
           if coupon.get("fixture_reconciliation_count") != 15:
               raise SystemExit("all 15 coupon fixtures were not reconciled to Football-Data")
+          pleno = coupon.get("pleno_prediction", {})
+          if pleno.get("model") != "dixon_coles":
+              raise SystemExit("Pleno prediction model provenance is missing or incorrect")
+          if pleno.get("selection_method") != "max_aggregated_category_pair_probability":
+              raise SystemExit("Pleno category-pair selection method is not explicit")
+          if not 0.0 <= float(pleno.get("probability_mass", -1.0)) <= 1.0:
+              raise SystemExit("Pleno category-pair probability mass is invalid")
           for mode in ("dc", "ml", "ensemble_dc_ml"):
               model = coupon.get("models", {}).get(mode, {})
               if model.get("status") != "success" or model.get("n_predictions") != 14:
