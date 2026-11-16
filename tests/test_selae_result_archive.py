@@ -5,6 +5,7 @@ from urllib.parse import parse_qs, urlsplit
 import pytest
 
 from scripts.discover_selae_result_archive import (
+    ENGLISH_INDEX_URL,
     INDEX_URL,
     build_component_page_url,
     extract_pagination_template,
@@ -25,6 +26,21 @@ def test_result_link_parses_spanish_date_from_official_slug() -> None:
     assert links[0]["draw_date"] == "2025-11-23"
     assert links[0]["date_source"] == "slug"
     assert links[0]["slug_date_available"] is True
+    assert links[0]["status"] == "dated_slug"
+
+
+def test_english_result_link_parses_same_official_spanish_date_slug() -> None:
+    document = """
+    <a href="/en/la-quiniela/resultados/la-quiniela-resultados-del-26-de-abril-de-2026">
+      27/04/2026 La Quiniela: results on 26 April 2026
+    </a>
+    """
+
+    links = extract_result_links(document, base_url=ENGLISH_INDEX_URL)
+
+    assert len(links) == 1
+    assert links[0]["draw_date"] == "2026-04-26"
+    assert links[0]["date_source"] == "slug"
     assert links[0]["status"] == "dated_slug"
 
 
