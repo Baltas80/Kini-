@@ -2173,3 +2173,12 @@ Validation on final source/test head `7004aac8372b20087b16147eba2fd1e2c64ec64a`:
 - Archive discovery [43855862019](https://github.com/Baltas80/Kini-/actions/runs/43855862019) passed its scope check but skipped the network discovery step because neither the discovery script nor its workflow changed. No new archive inventory is claimed.
 
 The change closes this specific unsafe-URL acceptance gap. It does not solve the separate GitHub-runner HTTP 403 issue for some SELAE endpoints and does not create original raw-byte provenance for pages whose original response bytes have not been captured. Extracted search/web text remains content-level corroboration only, not a substitute for source bytes or their SHA-256.
+
+
+## 2026-11-16 — Official SELAE archive index reconnaissance
+
+A current read-only inspection of the official [SELAE Quiniela results index](https://www.loteriasyapuestas.es/es/la-quiniela/resultados) on 2026-11-16 surfaced pagination links numbered 1–80. The first index page lists 20 result-detail links, from 2026-11-15 back to 2026-08-23. Following the official page-2 component link returned 20 more links, from 2026-08-16 back to 2026-04-22.
+
+This is a useful scope signal for the archive collector: the current index exposes 80 pages, so a two-page CI smoke run is not a complete archive inventory. The web/browser text extraction is content-level corroboration only. It does not expose the original response bytes, response headers or a source-byte SHA-256 and must not be converted into a raw-capture provenance record.
+
+The automated GitHub archive-discovery job remains scoped to code changes and its latest documentation-head run skipped network discovery. The next complete archive attempt should fetch all discovered pages from an allowed network environment, preserve each page's original bytes and metadata, and only then report deduplicated result URLs/date coverage. No historical draw outcomes or raw-byte hashes are inferred from this reconnaissance.
