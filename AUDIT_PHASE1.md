@@ -1516,3 +1516,48 @@ A second point-in-time boundary is now enforced at the public model boundary, no
 - Regression tests cover same-day and future Dixon–Coles contamination, direct ML training contamination, and safe same-day unplayed fixtures.
 
 Validation for this commit is pending. The existing walk-forward path already fits each forecast date from prior-date history, so this is a fail-closed guard for external/public callers rather than a change to the established training split. No changes to `master` and no PR merge.
+
+## Dixon-Coles fit-state hardening — 2026-11-16
+
+### Root cause correction
+
+The earlier suspicion that penaltyblog silently marks an unsuccessful optimizer fit as fitted was not accurate. The upstream BaseGoalsModel._fit implementation raises ValueError when scipy.optimize.minimize(...).success is false, and sets model.fitted = True only after that check. Source: https://github.com/martineastwood/penaltyblog/blob/master/penaltyblog/models/base_model.py
+
+The actual silent-readiness gap was in the Kini adapter:
+
+1. DixonColes.fit() returned normally when fewer than 12 completed matches were available, leaving the wrapped model unfitted.
+2. KiniEngine.fit() nevertheless set self.fitted = True.
+3. DixonColes.predict() silently returned the fixed 1.35/1.05-goal Poisson fallback when the model was unfitted.
+4. _predict_one() called Dixon-Coles even for ML-only, market-only and LAE-only modes, so a failed optional estimator could block independent sources.
+
+### Implemented correction
+
+- DixonColes now exposes fit_status, fit_error, completed training-match/team counts, log-likelihood and AIC.
+- A fit is accepted only if penaltyblog.model.fitted is true, likelihood/AIC are finite, and a probe forecast returns valid normalized score-grid and 1/X/2 probabilities.
+- Insufficient history remains an explicit insufficient_history state; it is never reported as a fitted model.
+- Optimizer/import/validation failures are wrapped as DixonColesFitError. KiniEngine.fit() records the failure and keeps independent ML, market and LAE modes available.
+- DC, ensemble and DC/ML ensemble modes fail closed if Dixon-Coles is not fitted. They cannot silently score an untrained fallback as a Dixon-Coles prediction.
+- Untrained fallback is available only through an explicit allow_untrained_fallback=True argument. The engine never enables it.
+- A fitted model may use the existing cold-start fallback for an unseen team only through an explicit engine argument; this is labelled in Prediction.reasons. Pleno al 15 output now includes pleno_al_15_model_source.
+- KiniEngine.model_diagnostics() exposes the model-specific fit state.
+
+### Regression coverage
+
+Six new tests cover insufficient history, explicit fallback, engine readiness, cold-start labelling, independent market/ML operation after DC failure, and a library fit that returns without setting its fitted flag. Existing DC-dependent unit tests now fit a real estimator before substituting a controlled prediction stub; the standalone Pleno aggregation test opts into fallback explicitly.
+
+### Validation
+
+- CI [43779317411](https://github.com/Baltas80/Kini-/actions/runs/43779317411) initially exposed eight old tests that depended on the implicit untrained fallback. Those tests were updated to reflect the fail-closed contract.
+- Latest CI [43779494093](https://github.com/Baltas80/Kini-/actions/runs/43779494093) is green: actionlint, Ruff and formatting passed; **197 tests passed**.
+- The 20 test warnings all originate from upstream penaltyblog/models/dixon_coles.py:257, where the package assigns a NumPy array shape in a way deprecated by NumPy 2.5. They are non-failing and are not suppressed in Kini.
+- Historical-data validation [43779494168](https://github.com/Baltas80/Kini-/actions/runs/43779494168) passed.
+- The full walk-forward for the fit-state change is still running in [43779275691](https://github.com/Baltas80/Kini-/actions/runs/43779275691); a latest-head run [43779494166](https://github.com/Baltas80/Kini-/actions/runs/43779494166) is pending. No new predictive metrics are claimed until a completed artifact passes all acceptance checks.
+- Live-details inspection was correctly skipped because the relevant source adapter did not change.
+
+### Remaining work
+
+1. Capture the full walk-forward artifact and confirm every required model has the complete sample with zero prediction errors.
+2. Add explicit per-model counts for unseen-team cold-start fallbacks to the backtest report. Those forecasts are now labelled in prediction reasons, but the aggregate benchmark does not yet expose their count.
+3. Continue official SELAE calendar acquisition. The historical workbook remains unavailable from the hosted runner; no joint Quiniela scenarios may be fabricated or inferred from independent fixtures.
+
+PR #9 remains open and in draft. No PR was merged and master was not modified.
