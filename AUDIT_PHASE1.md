@@ -1600,7 +1600,7 @@ No PR was merged and master was not modified.
 - CI for the expanded Ruff scope is running on the latest head. The latest full walk-forward is also pending behind the already-running comparison; the updated workflow will reject missing/inconsistent cold-start counts, rates or examples and will require DC-dependent streams to agree.
 - Do not mark cold-start reporting fully validated until the latest-head CI and the walk-forward with the new acceptance step both pass.
 
-Next action: close the latest CI and walk-forward validations, then inspect the measured cold-start frequency and its dated examples before changing the fallback policy.
+Next action: complete latest-head CI and walk-forward validation; then add a season-level cold-start breakdown before deciding whether the fallback policy needs adjustment.
 
 ## Cold-start measurement and formatting validation follow-up — 2026-11-16
 
