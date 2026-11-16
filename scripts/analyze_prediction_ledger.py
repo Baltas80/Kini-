@@ -35,7 +35,6 @@ def _load_results(path: Path, ledger_path: Path) -> tuple[dict[str, Any], str]:
 
 
 
-
 def _validate_dataset_snapshot(
     manifest: dict[str, Any],
     dataset_path: Path,
@@ -50,14 +49,20 @@ def _validate_dataset_snapshot(
 
     expected_dataset_hash = manifest.get("dataset_sha256")
     expected_profile_hash = manifest.get("dataset_profile_sha256")
-    if not isinstance(expected_dataset_hash, str) or hashlib.sha256(
-        dataset_payload
-    ).hexdigest() != expected_dataset_hash:
-        raise ValueError("dataset CSV SHA-256 does not match prediction-ledger manifest")
-    if not isinstance(expected_profile_hash, str) or hashlib.sha256(
-        profile_payload
-    ).hexdigest() != expected_profile_hash:
-        raise ValueError("dataset profile SHA-256 does not match prediction-ledger manifest")
+    if (
+        not isinstance(expected_dataset_hash, str)
+        or hashlib.sha256(dataset_payload).hexdigest() != expected_dataset_hash
+    ):
+        raise ValueError(
+            "dataset CSV SHA-256 does not match prediction-ledger manifest"
+        )
+    if (
+        not isinstance(expected_profile_hash, str)
+        or hashlib.sha256(profile_payload).hexdigest() != expected_profile_hash
+    ):
+        raise ValueError(
+            "dataset profile SHA-256 does not match prediction-ledger manifest"
+        )
 
     expected_size = manifest.get("dataset_size_bytes")
     if (
@@ -68,12 +73,20 @@ def _validate_dataset_snapshot(
         raise ValueError("dataset byte size does not match prediction-ledger manifest")
 
     expected_rows = manifest.get("dataset_rows")
-    if isinstance(expected_rows, bool) or not isinstance(expected_rows, int) or expected_rows <= 0:
+    if (
+        isinstance(expected_rows, bool)
+        or not isinstance(expected_rows, int)
+        or expected_rows <= 0
+    ):
         raise ValueError("prediction-ledger manifest has an invalid dataset row count")
     if Path(str(manifest.get("dataset_path", ""))).name != dataset_path.name:
-        raise ValueError("dataset CSV filename does not match prediction-ledger manifest")
+        raise ValueError(
+            "dataset CSV filename does not match prediction-ledger manifest"
+        )
     if Path(str(manifest.get("dataset_profile_path", ""))).name != profile_path.name:
-        raise ValueError("dataset profile filename does not match prediction-ledger manifest")
+        raise ValueError(
+            "dataset profile filename does not match prediction-ledger manifest"
+        )
 
     try:
         profile = json.loads(profile_payload)
@@ -96,7 +109,9 @@ def _validate_dataset_snapshot(
         "conflicting_duplicate_fixtures",
     ):
         if int(profile.get(field, -1)) != 0:
-            raise ValueError(f"dataset profile reports invalid {field}: {profile.get(field)!r}")
+            raise ValueError(
+                f"dataset profile reports invalid {field}: {profile.get(field)!r}"
+            )
     invalid_dates = int(
         profile.get("date_coverage", {}).get("invalid_or_missing_with_teams", -1)
     )
@@ -121,14 +136,22 @@ def _validate_dataset_snapshot(
             if missing:
                 raise ValueError(f"dataset CSV is missing columns: {sorted(missing)}")
             for row_number, row in enumerate(reader, start=2):
-                if any(not str(row.get(field, "")).strip() for field in required_columns):
-                    raise ValueError(f"dataset CSV row {row_number} has missing required values")
+                if any(
+                    not str(row.get(field, "")).strip() for field in required_columns
+                ):
+                    raise ValueError(
+                        f"dataset CSV row {row_number} has missing required values"
+                    )
                 try:
-                    match_date = datetime.strptime(row["Date"], "%d/%m/%Y").date().isoformat()
+                    match_date = (
+                        datetime.strptime(row["Date"], "%d/%m/%Y").date().isoformat()
+                    )
                     home_goals = int(row["FTHG"])
                     away_goals = int(row["FTAG"])
                 except (TypeError, ValueError) as exc:
-                    raise ValueError(f"dataset CSV row {row_number} has invalid date/score") from exc
+                    raise ValueError(
+                        f"dataset CSV row {row_number} has invalid date/score"
+                    ) from exc
                 if home_goals < 0 or away_goals < 0:
                     raise ValueError(f"dataset CSV row {row_number} has negative goals")
                 key = (
@@ -139,7 +162,9 @@ def _validate_dataset_snapshot(
                     row["AwayTeam"].strip().casefold(),
                 )
                 if key in seen_fixtures:
-                    raise ValueError(f"dataset CSV contains a duplicate fixture at row {row_number}")
+                    raise ValueError(
+                        f"dataset CSV contains a duplicate fixture at row {row_number}"
+                    )
                 seen_fixtures.add(key)
                 row_count += 1
     except csv.Error as exc:
