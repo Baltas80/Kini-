@@ -1723,3 +1723,25 @@ Métricas Bet365 en su muestra elegible: accuracy 0.508037, Brier 0.597352, Log 
 - La ejecución de CI #43803266992 superó el lint, pero falló en ruff format --check por formato en backtest.py y tests/test_backtest.py; pytest no llegó a ejecutarse en esa ejecución.
 - Se corrige el formato y se vuelve a ejecutar CI sobre el nuevo commit.
 - La siguiente prioridad es cerrar CI y, después, auditar la optimización de boletos P6 sin alterar las probabilidades base.
+
+
+---
+## 2026-11-16 — Descubrimiento del archivo oficial paginado de resultados (P6)
+
+La página oficial de resultados de La Quiniela (https://www.loteriasyapuestas.es/es/la-quiniela/resultados) expone paginación histórica. En la inspección web del 16-11-2026 se observaron 80 páginas. La página 2 (page=1 en el componente XHR) devolvió 20 enlaces, desde el resultado del 16-08-2026 hasta el del 22-04-2026. La página 80 (page=79) devolvió dos enlaces antiguos; uno muestra la fecha 15-04-2011, pero su URL conserva marcadores de plantilla (VAL_DIA, VAL_MES, VAL_ANYO) y la ficha no contiene el detalle de los partidos. Esa fecha se considera solo texto de enlace, no fecha de sorteo verificada.
+
+Una ficha oficial de resultados del 16-08-2026 expone por separado los 14 partidos, equipos locales, visitantes, marcadores y signos. En la quinta posición aparece marcador "-" y signo "X"; no se atribuye una causa (aplazamiento, sorteo u otra resolución) sin consultar la evidencia específica de esa jornada. Esto confirma que el importador histórico debe separar siempre el signo del cupón del resultado futbolístico y no convertir un marcador ausente en goles.
+
+La inspección de una ficha del 23-11-2025 confirma el mismo formato de 14 signos y Pleno al 15. No se han descargado ni validado todas las fichas históricas, no se ha inferido ningún ID de sorteo y todavía no existe un conjunto de escenarios históricos aceptado.
+
+### Implementación de descubrimiento
+
+- scripts/discover_selae_result_archive.py enumera las páginas oficiales y extrae únicamente enlaces, fechas explícitas en el slug y fechas visibles solo en el texto del enlace.
+- Cada fecha lleva procedencia (slug, label_only o unresolved); las fechas label_only no se presentan como fechas verificadas.
+- El informe conserva URL, página, hash SHA-256 de cada respuesta, rango de fechas derivado de slugs y recuentos de enlaces sin fecha.
+- El workflow manual selae-result-archive-discovery publica el informe y el JSONL de enlaces.
+- Este proceso no descarga las fichas de resultado, no interpreta signos ni premios, no crea IDs y no habilita entrenamiento ni backtesting de boletos.
+
+### Siguiente paso P6
+
+Ejecutar el descubrimiento desde un entorno con acceso a SELAE. Si la descarga es accesible, inspeccionar las fichas de resultado por lotes y definir un esquema versionado que distinga partidos disputados, aplazados y signos determinados por sorteo público. Después, reconciliar cada jornada con sus 14 fixtures y Pleno al 15 antes de calcular cobertura histórica. Si SELAE bloquea el entorno, conservar el error y el diagnóstico; no sustituir la fuente oficial por datos no verificados.
