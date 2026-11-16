@@ -87,6 +87,4 @@ jobs:
           tests/test_kinielagpt_details_diagnostic.py
           kini_engine/backtest.py
           tests/test_backtest.py
-          kini_engine/dataio.py
-          tests/test_dataio.py
       - run: pytest -q
