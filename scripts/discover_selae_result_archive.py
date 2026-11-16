@@ -123,8 +123,17 @@ class _AnchorParser(HTMLParser):
 
 
 def _is_official_url(value: str) -> bool:
-    parsed = urlsplit(value)
-    return parsed.scheme == "https" and parsed.hostname in OFFICIAL_HOSTS
+    try:
+        parsed = urlsplit(value)
+        return (
+            parsed.scheme == "https"
+            and parsed.hostname in OFFICIAL_HOSTS
+            and parsed.port in {None, 443}
+            and parsed.username is None
+            and parsed.password is None
+        )
+    except ValueError:
+        return False
 
 
 def _anchors(document: str) -> list[dict[str, str]]:
