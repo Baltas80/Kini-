@@ -2238,11 +2238,11 @@ The first corrected CI run [43902672952](https://github.com/Baltas80/Kini-/actio
 
 ### Ledger execution and integrity
 
-- Historical backtest run [43906085406](https://github.com/Baltas80/Kini-/actions/runs/43906085406) completed successfully on code revision \`3d401dc6ff83165641e1e53e55bbc47901bdcdd5\`. All five model streams generated **5,021/5,021 forecasts** with zero recorded prediction errors; initial training sample 300; forecast period 2020-12-11 through 2026-11-15.
-- The workflow passed \`BACKTEST_ACCEPTANCE_OK\`, \`FORECAST_LEDGER_ACCEPTANCE_OK\`, \`COLD_START_DIAGNOSTICS_OK\`, schedule-screened market acceptance and fixed-book Bet365 common-sample acceptance.
-- Artifact [14247557275](https://github.com/Baltas80/Kini-/actions/runs/43906085406/artifacts/14247557275), ZIP size 1,529,552 bytes, digest \`sha256:e81ea31be719b5f7eefbe3f3f3f6dfb12857de6c2c8632d5a29ce6598943777e\`. It contains \`backtest-results.json\` and \`prediction-ledger.jsonl\`.
-- Ledger: 5,021 forecast rows plus one manifest; 7,211,592 bytes; SHA-256 \`5c8e5a943a06cd5a599e47a048d4105de57c05404a5190e5c7f206ba3688827f\`. Independent artifact inspection found 5,021 unique fixture IDs, zero duplicates, zero invalid 1/X/2 labels, zero invalid model probability vectors, zero sign/probability mismatches, and no training or model-fit cutoff on or after the forecast date.
-- Manifest dataset: 5,321 rows; dataset SHA-256 \`e4b195593118215684ffefc8e70ffe0c8d88b3e28318d9c796f7b3b71c496475\`; profile SHA-256 \`d7d7fbb5014ad32eb3af620f86aede28381c8e879c351af78a9bc3cfb2207a6b\`.
+- Historical backtest run [43906085406](https://github.com/Baltas80/Kini-/actions/runs/43906085406) completed successfully on code revision `3d401dc6ff83165641e1e53e55bbc47901bdcdd5`. All five model streams generated **5,021/5,021 forecasts** with zero recorded prediction errors; initial training sample 300; forecast period 2020-12-11 through 2026-11-15.
+- The workflow passed `BACKTEST_ACCEPTANCE_OK`, `FORECAST_LEDGER_ACCEPTANCE_OK`, `COLD_START_DIAGNOSTICS_OK`, schedule-screened market acceptance and fixed-book Bet365 common-sample acceptance.
+- Artifact [14247557275](https://github.com/Baltas80/Kini-/actions/runs/43906085406/artifacts/14247557275), ZIP size 1,529,552 bytes, digest `sha256:e81ea31be719b5f7eefbe3f3f3f6dfb12857de6c2c8632d5a29ce6598943777e`. It contains `backtest-results.json` and `prediction-ledger.jsonl`.
+- Ledger: 5,021 forecast rows plus one manifest; 7,211,592 bytes; SHA-256 `5c8e5a943a06cd5a599e47a048d4105de57c05404a5190e5c7f206ba3688827f`. Independent artifact inspection found 5,021 unique fixture IDs, zero duplicates, zero invalid 1/X/2 labels, zero invalid model probability vectors, zero sign/probability mismatches, and no training or model-fit cutoff on or after the forecast date.
+- Manifest dataset: 5,321 rows; dataset SHA-256 `e4b195593118215684ffefc8e70ffe0c8d88b3e28318d9c796f7b3b71c496475`; profile SHA-256 `d7d7fbb5014ad32eb3af620f86aede28381c8e879c351af78a9bc3cfb2207a6b`.
 - Market temporal screen: 4,432/5,020 rows with odds eligible; 588 schedule-ambiguous rows excluded. Bet365 benchmark: 4,425/5,013 eligible source rows. Historical LAE eligibility remains zero because no verified historical LAE capture timestamps are present.
 - Cold-start fallback: 73/5,021 DC-dependent forecasts (1.45%); ML-only forecasts 0; all DC-dependent ensemble streams report the same 73 cases. The 14 league-season totals reconcile to the aggregate counts.
 
@@ -2283,9 +2283,9 @@ No model is promoted as market-beating. These are historical schedule-screened c
 
 ### Comparative diagnostics implementation
 
-- Added \`read_prediction_ledger()\` to verify JSONL structure, manifest, SHA-256, row count, unique fixture IDs, probability vectors, model signs, source eligibility and prior-date cutoffs.
-- Added \`kini_engine/diagnostics.py\` and \`scripts/analyze_prediction_ledger.py\`. The report includes per-model confusion matrices, classwise precision/recall/F1, probability bias, binary Brier/Log Loss, reliability bins, top-two candidate coverage, model disagreement, competition/season segments and market comparisons on the exact eligible fixture sample.
-- Updated \`.github/workflows/historical-backtest.yml\` to run the diagnostic after backtest acceptance and include \`prediction-diagnostics.json\` in the 90-day artifact. Updated CI lint/format coverage for the new module, script and tests.
+- Added `read_prediction_ledger()` to verify JSONL structure, manifest, SHA-256, row count, unique fixture IDs, probability vectors, model signs, source eligibility and prior-date cutoffs.
+- Added `kini_engine/diagnostics.py` and `scripts/analyze_prediction_ledger.py`. The report includes per-model confusion matrices, classwise precision/recall/F1, probability bias, binary Brier/Log Loss, reliability bins, top-two candidate coverage, model disagreement, competition/season segments and market comparisons on the exact eligible fixture sample.
+- Updated `.github/workflows/historical-backtest.yml` to run the diagnostic after backtest acceptance and include `prediction-diagnostics.json` in the 90-day artifact. Updated CI lint/format coverage for the new module, script and tests.
 - CI [43917802099](https://github.com/Baltas80/Kini-/actions/runs/43917802099) passed workflow validation, Ruff lint, Ruff formatting and **254 tests passed**. There were 21 upstream NumPy 2.5 / penaltyblog deprecation warnings.
 - The full end-to-end run for the new diagnostics step is queued behind an earlier historical comparison. The ledger itself is already validated by run 43906085406; the generated diagnostics artifact is not yet independently verified.
 
@@ -2296,4 +2296,4 @@ No model is promoted as market-beating. These are historical schedule-screened c
 3. SELAE historical archive requests from GitHub Actions continue returning HTTP 403; no original raw archive bytes or source-byte hashes are claimed.
 4. Use the validated fixture ledger to finish the error-analysis review, then evaluate actual direct-ticket double/triple allocation on identical OOS fixtures. Keep ticket coverage distinct from model probability quality and economic return.
 
-No changes to \`master\`; PR #9 remains open, draft and unmerged.
+No changes to `master`; PR #9 remains open, draft and unmerged.
