@@ -361,7 +361,13 @@ def _validate_coupon_plan(
         "schedule_evidence_url",
         "schedule_evidence_sha256",
         "ticket_cutoff_at_utc",
+        "cutoff_evidence_url",
+        "cutoff_evidence_sha256",
+        "cutoff_evidence_captured_at_utc",
         "first_kickoff_at",
+        "pleno15_home",
+        "pleno15_away",
+        "pleno15_kickoff_at",
         "positions",
     }
     if set(plan) != allowed_plan_fields:
@@ -392,6 +398,20 @@ def _validate_coupon_plan(
     created_at = _parse_utc_timestamp(
         plan.get("ticket_created_at_utc"), "ticket_created_at_utc"
     )
+    cutoff_url = _validate_official_selae_url(
+        plan.get("cutoff_evidence_url"), "cutoff_evidence_url"
+    )
+    cutoff_sha256 = _validate_sha256(
+        plan.get("cutoff_evidence_sha256"), "cutoff_evidence_sha256"
+    )
+    cutoff_evidence_captured_at = _parse_utc_timestamp(
+        plan.get("cutoff_evidence_captured_at_utc"),
+        "cutoff_evidence_captured_at_utc",
+    )
+    if cutoff_evidence_captured_at >= created_at:
+        raise TicketOutcomeError(
+            "ticket cutoff evidence must be captured strictly before ticket creation"
+        )
     if created_at >= cutoff:
         raise TicketOutcomeError("ticket creation must be earlier than ticket close")
     if schedule_captured_at >= created_at:
@@ -401,6 +421,13 @@ def _validate_coupon_plan(
     first_kickoff = _parse_timestamp(
         plan.get("first_kickoff_at"), "plan.first_kickoff_at"
     )
+    pleno_home = _required_text(plan.get("pleno15_home"), "pleno15_home")
+    pleno_away = _required_text(plan.get("pleno15_away"), "pleno15_away")
+    pleno_kickoff = _parse_timestamp(
+        plan.get("pleno15_kickoff_at"), "pleno15_kickoff_at"
+    )
+    if pleno_kickoff.astimezone(UTC) <= cutoff:
+        raise TicketOutcomeError("Pleno al 15 kickoff must be after ticket close")
     if cutoff >= first_kickoff.astimezone(UTC):
         raise TicketOutcomeError("ticket cutoff must be earlier than first kickoff")
 
@@ -408,7 +435,7 @@ def _validate_coupon_plan(
     if not isinstance(raw_positions, list) or len(raw_positions) != len(POSITIONS):
         raise TicketOutcomeError("pre-ticket coupon plan must cover positions 1..14")
     positions: dict[int, dict[str, Any]] = {}
-    scheduled_kickoffs: list[datetime] = []
+    scheduled_kickoffs: list[datetime] = [pleno_kickoff.astimezone(UTC)]
     public_draw_positions: set[int] = set()
     common_fields = {
         "position",
@@ -505,14 +532,21 @@ def _validate_coupon_plan(
         )
     if min(scheduled_kickoffs) != first_kickoff.astimezone(UTC):
         raise TicketOutcomeError(
-            "first_kickoff_at does not match the earliest scheduled fixture kickoff"
+            "first_kickoff_at does not match the earliest scheduled fixture kickoff "
+            "or Pleno al 15 kickoff"
         )
 
     return {
         "draw_date": expected_date,
         "ticket_cutoff_at_utc": cutoff,
         "ticket_created_at_utc": created_at,
+        "cutoff_evidence_url": cutoff_url,
+        "cutoff_evidence_sha256": cutoff_sha256,
+        "cutoff_evidence_captured_at_utc": cutoff_evidence_captured_at,
         "first_kickoff_at": first_kickoff,
+        "pleno15_home": pleno_home,
+        "pleno15_away": pleno_away,
+        "pleno15_kickoff_at": pleno_kickoff,
         "schedule_evidence_url": schedule_url,
         "schedule_evidence_sha256": schedule_sha256,
         "schedule_captured_at_utc": schedule_captured_at,
@@ -520,6 +554,11 @@ def _validate_coupon_plan(
         "scheduled_positions": set(POSITIONS) - public_draw_positions,
         "public_draw_positions": public_draw_positions,
     }
+
+
+def validate_coupon_plan(plan: dict[str, Any], draw_date: str) -> dict[str, Any]:
+    """Public, strict validator for the pre-ticket schedule-only coupon plan."""
+    return _validate_coupon_plan(plan, draw_date)
 
 
 def build_ticket_probability_vectors(
@@ -535,7 +574,7 @@ def build_ticket_probability_vectors(
     realized scores/signs are unavailable at ticket-construction time and must never
     determine which forecasts are produced.
     """
-    plan = _validate_coupon_plan(coupon_plan, draw_date)
+    plan = validate_coupon_plan(coupon_plan, draw_date)
     scheduled_positions = plan["scheduled_positions"]
     public_positions = plan["public_draw_positions"]
 
@@ -605,6 +644,16 @@ def build_ticket_probability_vectors(
         .isoformat()
         .replace("+00:00", "Z"),
         "first_kickoff_at": plan["first_kickoff_at"].isoformat(),
+        "pleno15_home": plan["pleno15_home"],
+        "pleno15_away": plan["pleno15_away"],
+        "pleno15_kickoff_at": plan["pleno15_kickoff_at"].isoformat(),
+        "cutoff_evidence": {
+            "source_url": plan["cutoff_evidence_url"],
+            "source_sha256": plan["cutoff_evidence_sha256"],
+            "captured_at_utc": plan["cutoff_evidence_captured_at_utc"]
+            .isoformat()
+            .replace("+00:00", "Z"),
+        },
         "schedule_evidence": {
             "source_url": plan["schedule_evidence_url"],
             "source_sha256": plan["schedule_evidence_sha256"],
