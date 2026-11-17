@@ -5,7 +5,7 @@ import json
 import re
 import sqlite3
 from contextlib import closing
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -46,6 +46,29 @@ def _sha256(value: object, field: str) -> str:
 
 def _utc_now() -> str:
     return datetime.now(UTC).isoformat().replace("+00:00", "Z")
+
+
+def _validate_recorded_at(value: object, validated: dict[str, Any]) -> str:
+    """Validate the host-clock append time against the ticket admission window."""
+    if not isinstance(value, str) or not value.strip():
+        raise TicketLedgerError("recorded_at_utc must be a non-empty ISO-8601 timestamp")
+    try:
+        parsed = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise TicketLedgerError("recorded_at_utc must be an ISO-8601 timestamp") from exc
+    if parsed.tzinfo is None or parsed.utcoffset() != timedelta(0):
+        raise TicketLedgerError("recorded_at_utc must be expressed in UTC")
+
+    recorded_at = parsed.astimezone(UTC)
+    if recorded_at < validated["ticket_created_at_utc"]:
+        raise TicketLedgerError(
+            "ticket ledger append must not precede ticket creation"
+        )
+    if recorded_at >= validated["ticket_cutoff_at_utc"]:
+        raise TicketLedgerError(
+            "ticket ledger append must occur before ticket cutoff"
+        )
+    return recorded_at.isoformat().replace("+00:00", "Z")
 
 
 class TicketLedger:
@@ -145,7 +168,6 @@ class TicketLedger:
                 )
 
         ticket_id = validated["ticket_id"]
-        recorded_at = _utc_now()
         with closing(self._connect()) as connection:
             connection.execute("BEGIN IMMEDIATE")
             existing = connection.execute(
@@ -161,15 +183,20 @@ class TicketLedger:
                     raise TicketLedgerConflict(
                         f"ticket_id {ticket_id!r} already exists with different content"
                     )
+                original_recorded_at = _validate_recorded_at(
+                    existing["recorded_at_utc"],
+                    validated,
+                )
                 connection.commit()
                 return {
                     "ticket_id": ticket_id,
                     "ticket_sha256": payload_sha256,
-                    "recorded_at_utc": existing["recorded_at_utc"],
+                    "recorded_at_utc": original_recorded_at,
                     "inserted": False,
                     "idempotent_replay": True,
                 }
 
+            recorded_at = _validate_recorded_at(_utc_now(), validated)
             connection.execute(
                 """
                 INSERT INTO tickets (
@@ -233,7 +260,8 @@ class TicketLedger:
             raise TicketLedgerError(
                 f"stored ticket {ticket_id!r} has an inconsistent identity"
             )
-        validate_ticket_record(ticket)
+        validated = validate_ticket_record(ticket)
+        _validate_recorded_at(row["recorded_at_utc"], validated)
         return {
             "ticket_record": ticket,
             "ticket_sha256": payload_sha256,
