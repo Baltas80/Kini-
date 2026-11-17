@@ -252,9 +252,7 @@ def _pleno15_report() -> dict[str, object]:
 def test_ticket_scoring_evaluates_official_pleno15_categories() -> None:
     report = _reconciliation()
     ticket = _ticket(report)
-    ticket["pleno15_combinations"] = [
-        {"home_goals": "2", "away_goals": "M"}
-    ]
+    ticket["pleno15_combinations"] = [{"home_goals": "2", "away_goals": "M"}]
 
     result = score_ticket_record(
         ticket,
@@ -279,6 +277,20 @@ def test_ticket_scoring_evaluates_official_pleno15_categories() -> None:
     )
 
 
+def test_ticket_scoring_reports_pleno15_miss_separately_from_14_coverage() -> None:
+    report = _reconciliation()
+    result = score_ticket_record(
+        _ticket(report),
+        report,
+        pleno15_report=_pleno15_report(),
+    )
+
+    assert result["covered_14"] is True
+    assert result["pleno15_evaluated"] is True
+    assert result["pleno15_hit"] is False
+    assert result["covered_full_coupon"] is False
+
+
 def test_ticket_scoring_marks_pleno15_unassessed_without_official_evidence() -> None:
     report = _reconciliation()
     result = score_ticket_record(_ticket(report), report)
@@ -297,6 +309,7 @@ def test_ticket_scoring_marks_pleno15_unassessed_without_official_evidence() -> 
         ("draw_date", "2026-11-09", "draw date mismatch"),
         ("home", "Different Team", "team identity"),
         ("home_category", "1", "categories conflict"),
+        ("home_category", ["2"], "categories must be 0, 1, 2 or M"),
         ("verified_at_utc", "2026-11-08T13:00:00Z", "must not precede"),
         ("evidence_type", "unverified_summary", "evidence_type"),
     ],
