@@ -132,9 +132,47 @@ def create_server(engine: KiniEngine | None = None):
 
     @mcp.tool()
     def predict_quiniela(
-        fixtures: list[dict[str, str]], budget: int = 8
+        fixtures: list[dict[str, Any]],
+        budget: int = 8,
+        coupon_plan: dict[str, Any] | None = None,
+        public_draw_snapshots: dict[str, dict[str, Any]] | None = None,
+        ticket_id: str | None = None,
     ) -> dict[str, Any]:
-        ms = [Match("", x["home"], x["away"]) for x in fixtures]
-        return model.quiniela(ms, budget)
+        ms = [
+            Match(
+                x.get("kickoff_at") or x.get("date") or "",
+                x["home"],
+                x["away"],
+            )
+            for x in fixtures
+        ]
+        normalized_snapshots = None
+        if public_draw_snapshots is not None:
+            normalized_snapshots = {}
+            for raw_position, snapshot in public_draw_snapshots.items():
+                if isinstance(raw_position, bool):
+                    raise ValueError("public-draw snapshot keys must be positions 1..14")
+                try:
+                    position = int(raw_position)
+                except (TypeError, ValueError) as exc:
+                    raise ValueError(
+                        "public-draw snapshot keys must be positions 1..14"
+                    ) from exc
+                if str(position) != str(raw_position) or not 1 <= position <= 14:
+                    raise ValueError(
+                        "public-draw snapshot keys must be canonical positions 1..14"
+                    )
+                if position in normalized_snapshots:
+                    raise ValueError(
+                        f"duplicate public-draw snapshot position {position}"
+                    )
+                normalized_snapshots[position] = snapshot
+        return model.quiniela(
+            ms,
+            budget,
+            coupon_plan=coupon_plan,
+            public_draw_snapshots=normalized_snapshots,
+            ticket_id=ticket_id,
+        )
 
     return mcp
