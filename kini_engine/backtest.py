@@ -291,11 +291,7 @@ def _probability_vector(probabilities: dict[str, float]) -> np.ndarray:
         raise ValueError("probabilities must be numeric and non-boolean")
 
     values = np.asarray(raw_values, dtype=float)
-    if (
-        not np.isfinite(values).all()
-        or np.any(values < 0.0)
-        or np.any(values > 1.0)
-    ):
+    if not np.isfinite(values).all() or np.any(values < 0.0) or np.any(values > 1.0):
         raise ValueError("each probability must be finite and in [0, 1]")
     if not np.isclose(values.sum(), 1.0, rtol=0.0, atol=1e-6):
         raise ValueError("1/X/2 probabilities must sum to one within 1e-6")
