@@ -197,7 +197,6 @@ def test_jornada_25_official_prize_distribution_passes_strict_validation() -> No
     }
 
 
-
 def test_jornada_29_official_prize_distribution_passes_strict_validation() -> None:
     snapshot = json.loads(
         (

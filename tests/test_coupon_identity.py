@@ -153,7 +153,9 @@ def test_jornada_25_ponferradina_alias_resolves_through_canonical_registry() -> 
     assert resolved.canonical_name == "Ponferradina"
 
 
-def test_jornada_29_girona_and_castellon_aliases_resolve_through_canonical_registry() -> None:
+def test_jornada_29_girona_and_castellon_aliases_resolve_through_canonical_registry() -> (
+    None
+):
     from kini_engine.coupon_identity import load_coupon_team_aliases
     from kini_engine.team_identity import TeamIdentityRegistry
 
