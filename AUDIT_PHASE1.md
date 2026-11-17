@@ -3163,3 +3163,16 @@ Code revision: [`b5b157d`](https://github.com/Baltas80/Kini-/commit/b5b157d6abda
 No changes were made to `master`, no PR was merged, and no new predictive metric or profitability claim is made.
 
 **Next action:** implement a fail-closed bridge from SELAE public-draw outcome records into coupon-level ticket evaluation. Keep the realized public-draw sign available for scoring, exclude the fixture from football training and match-probability calibration, and require a timestamped pre-close participant-forecast snapshot before using any public-draw probability in ticket construction. Expand the coupon archive only after each jornada has its own reviewed official SELAE evidence.
+
+## Public-draw ticket scoring bridge — 2026-11-17
+
+A separate ticket-level layer now consumes the official fixture-reconciliation report without changing football-model labels.
+
+- \`kini_engine/ticket_outcomes.py\` builds a complete ordered 1–14 outcome vector from the report's played and excluded records. Played signs are checked against their goals; public-draw signs are taken only from the official SELAE sign field. Public-draw placeholder scores remain metadata, goals remain null, and the training/ticket eligibility flags are enforced.
+- \`score_ticket_record\` scores persisted direct-ticket columns against the realized 14-sign vector, including public-draw positions. It reports exact coverage and per-column hits, but does not estimate prizes or profitability.
+- \`build_ticket_probability_vectors\` keeps football-model vectors restricted to played fixtures. A public-draw position requires a matching official SELAE participant-forecast snapshot captured strictly before the declared ticket cutoff. Post-close ball counts are rejected; no uniform probability fallback exists.
+- \`scripts/score_selae_ticket.py\` provides a no-overwrite CLI that hashes the ticket and reconciliation inputs and writes an auditable scoring artifact.
+- Tests cover complete position accounting, public-draw placeholder isolation, official evidence, ticket timestamp ordering, direct-column validation, pre-close snapshot timing and rejection of post-close ball counts.
+
+The CLI and data contract are documented in \`docs/COUPON_BACKTEST.md\`. This layer is not yet a multi-season performance backtest: no ticket ledger with independently timestamped pre-close snapshots has been imported. Local ticket timestamps are declared metadata and are not cryptographically authenticated. Payout and profitability remain out of scope.
+

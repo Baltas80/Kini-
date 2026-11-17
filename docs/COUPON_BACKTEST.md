@@ -97,3 +97,58 @@ This makes the generated ticket reproducible and the reported coverage auditable
 
 
 The current coupon backtest scope is one selected Pleno category pair (multiplier 1), matching the default prediction path. The acceptance gate also verifies SELAE's two-bet minimum, 31,104 maximum total-bet cap and current 0.75 EUR unit price. Explicit multi-category Pleno tickets remain supported by the lower-level optimizer but are rejected by this backtest until Pleno probability mass and realized category-set coverage are evaluated consistently.
+
+## Public-draw ticket scoring and pre-close probability contract
+
+Public-draw outcomes are now consumable by a separate ticket-level scoring layer. The implementation lives in \`kini_engine/ticket_outcomes.py\`; the CLI is \`scripts/score_selae_ticket.py\`.
+
+The scorer consumes:
+- A persisted direct-ticket record with its 14-sign columns, ticket creation time, official admission cutoff, first kickoff, and evidence URLs/digests for the cutoff and schedule.
+- A schema-version-1 fixture reconciliation report produced by \`scripts/reconcile_selae_fixtures.py\`.
+
+For the requested draw date, the reconciliation must account for all positions 1–14 exactly once. Every played fixture must have a score-consistent official sign and remain training-label eligible. Every public-draw fixture must have an official SELAE sign, \`score_status=not_played\`, \`sign_determination=public_draw\`, null football goals, \`training_label_eligible=false\` and \`ticket_outcome_eligible=true\`. Any unresolved fixture or unused crosswalk entry for that draw rejects scoring. The reported placeholder score is retained as provenance and is never converted into football goals or used to derive the sign.
+
+Example ticket record:
+
+\`\`\`json
+{
+  "schema_version": 1,
+  "ticket_id": "quiniela-2026-11-08-001",
+  "draw_date": "2026-11-08",
+  "ticket_created_at_utc": "2026-11-08T09:30:00Z",
+  "ticket_cutoff_at_utc": "2026-11-08T11:00:00Z",
+  "first_kickoff_at": "2026-11-08T14:00:00+01:00",
+  "cutoff_evidence_url": "https://www.loteriasyapuestas.es/example-cutoff",
+  "cutoff_evidence_sha256": "<64 lowercase hex characters>",
+  "schedule_evidence_url": "https://www.example.org/official-schedule",
+  "schedule_evidence_sha256": "<64 lowercase hex characters>",
+  "columns": [
+    ["1", "X", "2", "1", "X", "2", "1", "X", "2", "1", "X", "2", "1", "X"]
+  ]
+}
+\`\`\`
+
+Run:
+
+\`\`\`bash
+python -m scripts.score_selae_ticket \\
+  --ticket artifacts/ticket.json \\
+  --reconciliation data/selae_fixture_reconciliation.json \\
+  --output artifacts/ticket-score.json
+\`\`\`
+
+The output stores the realized 14-sign vector, outcome type per position, public-draw positions, hits per direct column, best-column hits, exact 14/14 coverage and the SHA-256 digests of both input files. It explicitly marks payout and profitability as not evaluated. It does not estimate prize tiers, pari-mutuel payout, expected value or return on stake.
+
+### Public-draw probability use during ticket construction
+
+Ticket scoring can use the realized official public-draw sign without any probability estimate. Ticket construction is stricter: \`build_ticket_probability_vectors\` accepts football-model probabilities only for played positions. Each public-draw position must have exactly one schema-version-1 SELAE participant-forecast snapshot with:
+- matching draw date and coupon position;
+- a stable source ID, official HTTPS source URL and source SHA-256;
+- a timezone-aware UTC capture timestamp strictly earlier than the ticket admission cutoff;
+- the exact same declared ticket cutoff;
+- a finite normalized 1/X/2 probability vector.
+
+Post-close ball counts are explicitly rejected as a substitute. There is no uniform 1/3 fallback. The returned 14 vectors are ordered for the existing direct-ticket optimizer and include per-position probability-source metadata.
+
+The ticket record's timestamp ordering is checked, but the timestamps and evidence documents are declarations supplied with the ticket artifact; the scorer does not cryptographically timestamp or independently authenticate a local ticket. A historical performance study must preserve the original ticket artifact and independently review the cutoff/schedule evidence. One scored ticket is an outcome audit, not a performance sample.
+
