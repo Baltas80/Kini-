@@ -206,12 +206,42 @@ def test_jornada_19_official_snapshot_matches_reviewed_selae_results() -> None:
         "away_category": "0",
     }
     assert snapshot["prize_distribution"]["categories"] == [
-        {"category": "pleno_al_15", "winner_count": 0, "unit_prize_eur": None, "status": "rollover"},
-        {"category": "14", "winner_count": 0, "unit_prize_eur": None, "status": "rollover"},
-        {"category": "13", "winner_count": 37, "unit_prize_eur": 7077.29, "status": "awarded"},
-        {"category": "12", "winner_count": 569, "unit_prize_eur": 460.21, "status": "awarded"},
-        {"category": "11", "winner_count": 5240, "unit_prize_eur": 49.97, "status": "awarded"},
-        {"category": "10", "winner_count": 31232, "unit_prize_eur": 10.06, "status": "awarded"},
+        {
+            "category": "pleno_al_15",
+            "winner_count": 0,
+            "unit_prize_eur": None,
+            "status": "rollover",
+        },
+        {
+            "category": "14",
+            "winner_count": 0,
+            "unit_prize_eur": None,
+            "status": "rollover",
+        },
+        {
+            "category": "13",
+            "winner_count": 37,
+            "unit_prize_eur": 7077.29,
+            "status": "awarded",
+        },
+        {
+            "category": "12",
+            "winner_count": 569,
+            "unit_prize_eur": 460.21,
+            "status": "awarded",
+        },
+        {
+            "category": "11",
+            "winner_count": 5240,
+            "unit_prize_eur": 49.97,
+            "status": "awarded",
+        },
+        {
+            "category": "10",
+            "winner_count": 31232,
+            "unit_prize_eur": 10.06,
+            "status": "awarded",
+        },
     ]
     assert digest == hashlib.sha256(path.read_bytes()).hexdigest()
 
