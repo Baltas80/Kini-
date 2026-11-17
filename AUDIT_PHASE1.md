@@ -3274,16 +3274,21 @@ Siguiente prioridad: construir un ledger append-only de boletos realmente genera
 
 ## Immutable ticket ledger — 2026-11-17
 
-**Implemented on `feat/immutable-ticket-ledger`; CI validation pending.**
+**Implemented and CI-validated on `feat/immutable-ticket-ledger`.** Latest code head at validation: `8d54907a374940b8aed89535966f2c21fa82f448`.
 
 - Added `kini_engine/ticket_ledger.py`, a local SQLite append-only ledger for generated direct-ticket records and derived score records.
 - `KiniEngine` accepts an optional ledger and persists the complete ticket record when a strict pre-ticket coupon plan is used. Persistence errors fail the generation call instead of returning an unpersisted success.
-- The MCP server configures `KINI_TICKET_LEDGER_PATH` (default `data/kini-tickets.sqlite3`) and exposes retrieval, listing and score-persistence tools.
+- The MCP server configures `KINI_TICKET_LEDGER_PATH` (default `data/kini-tickets.sqlite3`) and exposes ticket retrieval, listing, scoring and score-history tools.
 - Ticket IDs are unique and content-addressed. Identical replays are idempotent; reuse with different canonical JSON is rejected.
 - Ticket and score rows reject UPDATE/DELETE through SQLite triggers. Reads recompute SHA-256 and revalidate records.
-- Scoring is computed by the existing `score_ticket_record` function from a stored ticket and a caller-supplied reconciliation report with its exact source-byte SHA-256. Score rows are keyed by ticket ID plus reconciliation digest.
-- Added tests for persistence, idempotency, conflicting IDs, digest mismatch, append-only enforcement, SELAE scoring, listing and engine integration.
+- The MCP scoring tool hashes the exact supplied UTF-8 reconciliation JSON. Python callers can use `score_ticket_json`; lower-level scoring accepts a digest produced by a trusted byte reader.
+- Added tests for persistence, idempotency, conflicting IDs, digest mismatch, append-only enforcement, SELAE scoring, exact-byte hashing, malformed JSON, listing and engine integration.
+- The local database and WAL/SHM files are excluded from Git via `.gitignore`.
+
+**CI evidence:** [run 44054701680](https://github.com/Baltas80/Kini-/actions/runs/44054701680) passed Actionlint, Ruff lint, Ruff format and pytest: **357 passed**, 25 upstream `penaltyblog`/NumPy deprecation warnings, 2.48 seconds.
+
+The coupon-backtest workflow was correctly skipped by its change filter; it is not a new coupon-level backtest. The historical walk-forward run on the parent branch [44047529531](https://github.com/Baltas80/Kini-/actions/runs/44047529531) remains in progress at its historical-comparison step. No new model metrics are claimed from this ticket-ledger change.
 
 Limitations remain explicit: SHA-256 is not a signature or trusted timestamp; SQLite triggers do not protect against a database owner replacing the file; a persistent volume is required in deployment; multi-host replicas need shared transactional storage; prize/payout/profitability modelling is not included.
 
-Next validation: run Ruff, formatting and pytest on the new branch, then inspect the active historical walk-forward run independently. Do not merge PR #9 or change `master`.
+Next priority: obtain the result of the already-running historical comparison and verify non-empty model samples. Do not start a duplicate full backtest unless the code or dataset changes. PR #10 remains a draft stacked on PR #9; do not merge either PR or change `master`.
