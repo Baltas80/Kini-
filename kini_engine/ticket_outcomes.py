@@ -135,11 +135,11 @@ def validate_pleno15_report(
     expected_away: str,
     kickoff_at: datetime,
 ) -> dict[str, Any]:
-    """Validate an official SELAE Pleno al 15 result and its 0/1/2/M categories."""
+    """Validate official SELAE Pleno evidence in PDF-vector or scorecard form."""
     if not isinstance(report, dict):
         raise TicketOutcomeError("Pleno al 15 result report must be an object")
     _require_schema_v1(report, "SELAE Pleno al 15 result")
-    allowed_fields = {
+    base_fields = {
         "schema_version",
         "provider",
         "draw_date",
@@ -148,13 +148,21 @@ def validate_pleno15_report(
         "evidence_type",
         "verified_at_utc",
         "verification_method",
-        "home",
-        "away",
-        "home_goals",
-        "away_goals",
         "home_category",
         "away_category",
     }
+    evidence_type = _required_text(report.get("evidence_type"), "evidence_type")
+    if evidence_type == "official_press_release_pdf":
+        allowed_fields = base_fields
+    elif evidence_type in {"raw_official_response", "normalized_official_extract"}:
+        allowed_fields = base_fields | {
+            "home",
+            "away",
+            "home_goals",
+            "away_goals",
+        }
+    else:
+        raise TicketOutcomeError("Pleno al 15 evidence_type is unsupported")
     if set(report) != allowed_fields:
         missing = sorted(allowed_fields - set(report))
         unexpected = sorted(set(report) - allowed_fields)
@@ -174,15 +182,19 @@ def validate_pleno15_report(
     source_url = _validate_official_selae_url(
         report.get("source_url"), "Pleno al 15 source_url"
     )
+    if evidence_type == "official_press_release_pdf" and not urlsplit(
+        source_url
+    ).path.lower().endswith(".pdf"):
+        raise TicketOutcomeError(
+            "official_press_release_pdf evidence must point to an official PDF"
+        )
     source_sha256 = _validate_sha256(
         report.get("source_sha256"), "Pleno al 15 source_sha256"
     )
-    evidence_type = _required_text(report.get("evidence_type"), "evidence_type")
-    if evidence_type not in {"raw_official_response", "normalized_official_extract"}:
-        raise TicketOutcomeError("Pleno al 15 evidence_type is unsupported")
-    verified_at = _parse_utc_timestamp(report.get("verified_at_utc"), "verified_at_utc")
-    kickoff = kickoff_at.astimezone(UTC)
-    if verified_at < kickoff:
+    verified_at = _parse_utc_timestamp(
+        report.get("verified_at_utc"), "verified_at_utc"
+    )
+    if verified_at < kickoff_at.astimezone(UTC):
         raise TicketOutcomeError(
             "Pleno al 15 result verification must not precede its kickoff"
         )
@@ -190,42 +202,50 @@ def validate_pleno15_report(
         report.get("verification_method"), "verification_method"
     )
 
-    home = _required_text(report.get("home"), "Pleno al 15 home")
-    away = _required_text(report.get("away"), "Pleno al 15 away")
-    if normalize_team_name(home) != normalize_team_name(
-        expected_home
-    ) or normalize_team_name(away) != normalize_team_name(expected_away):
-        raise TicketOutcomeError(
-            "Pleno al 15 result team identity does not match the stored coupon plan"
-        )
-
-    home_goals = report.get("home_goals")
-    away_goals = report.get("away_goals")
+    home_category = report.get("home_category")
+    away_category = report.get("away_category")
     if (
-        isinstance(home_goals, bool)
-        or isinstance(away_goals, bool)
-        or not isinstance(home_goals, int)
-        or not isinstance(away_goals, int)
-        or home_goals < 0
-        or away_goals < 0
-    ):
-        raise TicketOutcomeError("Pleno al 15 goals must be non-negative integers")
-    home_category = _pleno15_category(home_goals)
-    away_category = _pleno15_category(away_goals)
-    if (
-        not isinstance(report.get("home_category"), str)
-        or report.get("home_category") not in PLENO15_CATEGORIES
-        or not isinstance(report.get("away_category"), str)
-        or report.get("away_category") not in PLENO15_CATEGORIES
+        not isinstance(home_category, str)
+        or home_category not in PLENO15_CATEGORIES
+        or not isinstance(away_category, str)
+        or away_category not in PLENO15_CATEGORIES
     ):
         raise TicketOutcomeError("Pleno al 15 categories must be 0, 1, 2 or M")
-    if (
-        report.get("home_category") != home_category
-        or report.get("away_category") != away_category
-    ):
-        raise TicketOutcomeError(
-            "Pleno al 15 categories conflict with the official goal counts"
-        )
+
+    if evidence_type == "official_press_release_pdf":
+        home = expected_home
+        away = expected_away
+        home_goals = None
+        away_goals = None
+        team_identity_source = "ticket_plan_draw_date_binding"
+    else:
+        home = _required_text(report.get("home"), "Pleno al 15 home")
+        away = _required_text(report.get("away"), "Pleno al 15 away")
+        if normalize_team_name(home) != normalize_team_name(
+            expected_home
+        ) or normalize_team_name(away) != normalize_team_name(expected_away):
+            raise TicketOutcomeError(
+                "Pleno al 15 result team identity does not match the stored coupon plan"
+            )
+        home_goals = report.get("home_goals")
+        away_goals = report.get("away_goals")
+        if (
+            isinstance(home_goals, bool)
+            or isinstance(away_goals, bool)
+            or not isinstance(home_goals, int)
+            or not isinstance(away_goals, int)
+            or home_goals < 0
+            or away_goals < 0
+        ):
+            raise TicketOutcomeError("Pleno al 15 goals must be non-negative integers")
+        if (
+            home_category != _pleno15_category(home_goals)
+            or away_category != _pleno15_category(away_goals)
+        ):
+            raise TicketOutcomeError(
+                "Pleno al 15 categories conflict with the official goal counts"
+            )
+        team_identity_source = "official_result_document"
 
     return {
         "draw_date": expected_date,
@@ -240,8 +260,8 @@ def validate_pleno15_report(
         "away_goals": away_goals,
         "home_category": home_category,
         "away_category": away_category,
+        "team_identity_source": team_identity_source,
     }
-
 
 def outcomes_from_reconciliation(
     report: dict[str, Any],
