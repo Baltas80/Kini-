@@ -1135,9 +1135,7 @@ def test_strict_common_time_excludes_lae_captured_on_snapshot_day(monkeypatch):
     )
     assert strict["n_schedule_eligible"] == 2
     assert strict["n_common_time_eligible"] == 1
-    assert strict["exclusion_reason_counts"] == {
-        "lae_capture_not_before_snapshot": 1
-    }
+    assert strict["exclusion_reason_counts"] == {"lae_capture_not_before_snapshot": 1}
     for mode in (
         "dc",
         "ml",

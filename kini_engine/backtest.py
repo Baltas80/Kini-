@@ -985,9 +985,7 @@ def compare_walk_forward(
             elif lae_is_eligible and not _lae_capture_precedes_market_snapshot(
                 match, market_snapshot_date
             ):
-                strict_common_time_exclusion_reason = (
-                    "lae_capture_not_before_snapshot"
-                )
+                strict_common_time_exclusion_reason = "lae_capture_not_before_snapshot"
             elif not set(all_modes).issubset(model_probabilities):
                 strict_common_time_exclusion_reason = "incomplete_model_predictions"
             else:
