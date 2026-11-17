@@ -13,7 +13,8 @@ The implementation uses a local SQLite database:
 - Default MCP path: `data/kini-tickets.sqlite3`.
 - Override: `KINI_TICKET_LEDGER_PATH`.
 - The database uses WAL journaling, a 30-second busy timeout and `synchronous=FULL`.
-- Ticket writes use `BEGIN IMMEDIATE` transactions.
+- Ticket writes use `BEGIN IMMEDIATE` transactions. The ledger-generated `recorded_at_utc` must be at or after the declared ticket creation time and strictly before the ticket cutoff; a new late append is rejected.
+- An identical idempotent replay checks the original stored append time rather than the current clock, so a valid record remains replayable after cutoff.
 - A ticket ID is unique. Replaying the same ID with identical canonical JSON is idempotent. Reusing an ID with different content raises `TicketLedgerConflict`.
 - Ticket and score rows have SQLite triggers that reject UPDATE and DELETE operations.
 
@@ -45,7 +46,7 @@ The local database path must be on persistent storage in a deployed environment.
 - SQLite triggers protect against ordinary application updates/deletes, not a database owner who can replace the file or drop its triggers.
 - The default implementation is a single-host local ledger. Multiple independent application replicas should use a shared transactional database with equivalent uniqueness and append-only controls.
 - Back up the database and its WAL consistently; do not copy only the main database file while a writer is active.
-- The ticket record preserves declared timestamps and evidence hashes. It does not independently prove when an external source was published or captured.
+- The ticket record preserves declared timestamps and evidence hashes. The append-window check uses the host clock; it is not a trusted timestamp, digital signature or independent proof of when an external source was published or captured.
 - No expected prize, payout or profitability claim is produced.
 
 ## Validation
