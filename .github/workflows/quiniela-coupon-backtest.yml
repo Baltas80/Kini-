@@ -193,11 +193,11 @@ jobs:
               f"{rows} completed fixtures from one immutable 14-file source snapshot"
           )
           PY
-      - name: Import Jornadas 19, 21, 22 and 25 from reviewed snapshot directory
+      - name: Import Jornadas 19, 21, 22, 25 and 29 from reviewed snapshot directory
         run: |
           python scripts/import_historical_coupons.py \
             --season 2020-2021 \
-            --journeys 19 21 22 25 \
+            --journeys 19 21 22 25 29 \
             --output coupon-archive.jsonl \
             --raw-dir coupon-raw \
             --official-snapshot-dir kini_engine/data/selae_official_coupon_results
@@ -229,16 +229,17 @@ jobs:
               21: ("2020-12-13", "2020-2021:21"),
               22: ("2020-12-20", "2020-2021:22"),
               25: ("2021-01-03", "2020-2021:25"),
+              29: ("2021-01-24", "2020-2021:29"),
           }
-          if len(archive) != 5:
+          if len(archive) != 6:
               raise SystemExit(f"expected manifest plus four coupons, received {len(archive)} records")
           manifest = archive[0]
           if (
               manifest.get("record_type") != "manifest"
-              or manifest.get("coupon_count") != 4
-              or manifest.get("journey_numbers") != [19, 21, 22, 25]
+              or manifest.get("coupon_count") != 5
+              or manifest.get("journey_numbers") != [19, 21, 22, 25, 29]
           ):
-              raise SystemExit("coupon archive manifest does not describe journeys 19, 21, 22 and 25")
+              raise SystemExit("coupon archive manifest does not describe journeys 19, 21, 22, 25 and 29")
           archive_coupons = {
               item.get("jornada"): item
               for item in archive[1:]
@@ -270,12 +271,12 @@ jobs:
                   raise SystemExit(f"{coupon_id}: Pleno al 15 was not verified against SELAE")
 
           coupons = result.get("coupons", [])
-          expected_ids = ["2020-2021:19", "2020-2021:21", "2020-2021:22", "2020-2021:25"]
+          expected_ids = ["2020-2021:19", "2020-2021:21", "2020-2021:22", "2020-2021:25", "2020-2021:29"]
           if [coupon.get("coupon_id") for coupon in coupons] != expected_ids:
               raise SystemExit(f"backtest coupon IDs/order differ: {[c.get('coupon_id') for c in coupons]}")
           if result.get("schema_version") != 3 or result.get("config", {}).get("min_history_matches") != 250:
               raise SystemExit("backtest result schema or minimum-history configuration mismatch")
-          if result.get("summary", {}).get("coupon_count") != 4:
+          if result.get("summary", {}).get("coupon_count") != 5:
               raise SystemExit("backtest summary does not contain two coupons")
 
           for coupon in coupons:
@@ -329,9 +330,9 @@ jobs:
 
           for mode in ("dc", "ml", "ensemble_dc_ml"):
               aggregate = result.get("summary", {}).get("models", {}).get(mode, {})
-              if aggregate.get("evaluated_coupons") != 4 or aggregate.get("failed_coupons") != 0:
+              if aggregate.get("evaluated_coupons") != 5 or aggregate.get("failed_coupons") != 0:
                   raise SystemExit(f"{mode}: aggregate did not evaluate both coupons: {aggregate}")
-          print("COUPON_ACCEPTANCE_OK: 4 official coupons, 60 SELAE results, 60 canonical fixture reconciliations, 12 x 14 forecasts, optimizer within SELAE limits")
+          print("COUPON_ACCEPTANCE_OK: 5 official coupons, 75 SELAE results, 75 canonical fixture reconciliations, 15 x 14 forecasts, optimizer within SELAE limits")
           PY
       - name: Upload coupon pilot evidence
         uses: actions/upload-artifact@v4
