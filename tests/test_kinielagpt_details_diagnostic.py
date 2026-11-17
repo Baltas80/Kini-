@@ -309,4 +309,3 @@ def test_collect_live_diagnostic_preserves_jornada_on_http_error(monkeypatch):
     assert report["temporada"] == 2027
     assert report["http_status"] == 400
     assert report["response_body_preview"] == '{"error":"invalid jornada"}'
-
