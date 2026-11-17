@@ -229,7 +229,12 @@ def test_ticket_ledger_scores_and_persists_pleno15_evidence_idempotently(tmp_pat
     assert first["score"]["covered_full_coupon"] is True
     assert first["score"]["pleno15_report_sha256"] == pleno15_digest
     assert first["score"]["score_evidence_sha256"] == first["score_evidence_sha256"]
-    assert len(ledger.list_ticket_scores(str(ticket["ticket_id"]))) == 1
+    listed = ledger.list_ticket_scores(str(ticket["ticket_id"]))
+    assert len(listed) == 1
+    assert listed[0]["reconciliation_sha256"] == hashlib.sha256(
+        reconciliation_json.encode("utf-8")
+    ).hexdigest()
+    assert listed[0]["score_evidence_sha256"] == first["score_evidence_sha256"]
 
 
 def test_ticket_ledger_requires_pleno15_digest_when_scoring_report(tmp_path):
