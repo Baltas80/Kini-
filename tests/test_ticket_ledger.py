@@ -129,20 +129,22 @@ def test_ticket_ledger_scores_and_persists_result_idempotently(tmp_path):
     ledger = TicketLedger(tmp_path / "tickets.sqlite3")
     ticket = _ticket()
     ledger.append_ticket(ticket)
-    reconciliation = _reconciliation()
+    reconciliation_json = json.dumps(
+        _reconciliation(),
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
     reconciliation_digest = hashlib.sha256(
-        b"reviewed reconciliation bytes"
+        reconciliation_json.encode("utf-8")
     ).hexdigest()
 
-    first = ledger.score_ticket(
+    first = ledger.score_ticket_json(
         str(ticket["ticket_id"]),
-        reconciliation,
-        reconciliation_sha256=reconciliation_digest,
+        reconciliation_json,
     )
-    second = ledger.score_ticket(
+    second = ledger.score_ticket_json(
         str(ticket["ticket_id"]),
-        reconciliation,
-        reconciliation_sha256=reconciliation_digest,
+        reconciliation_json,
     )
 
     assert first["inserted"] is True
