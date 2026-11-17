@@ -27,7 +27,7 @@ This pilot introduces a coupon-level evaluation with one immutable training snap
 4. Include only completed historical matches whose source calendar date is on or before that cutoff.
 5. Record the minimum and maximum source dates actually used for the fitted history. The acceptance validator independently requires the recorded range to be ordered, no later than the cutoff, and strictly before the first kickoff.
 6. Fit Dixon-Coles once and use the same history snapshot for all 15 fixtures and all model candidates in that coupon.
-6. Do not use historical market odds: this coupon archive does not contain verified pre-kickoff odds-capture timestamps.
+7. Do not use historical market odds: this coupon archive does not contain verified pre-kickoff odds-capture timestamps.
 
 The previous-calendar-day cutoff is deliberately conservative because the Football-Data historical dataset has date-only match timestamps and cannot establish the exact completion time of another match on the same day. The secondary source supplies kickoff times; the Football-Data cross-check validates each fixture's calendar date, team identity and score, but not the exact kickoff minute.
 

@@ -233,7 +233,9 @@ def validate_coupon_backtest_acceptance(
             training_min = date.fromisoformat(coupon["training_history_min_date"])
             training_max = date.fromisoformat(coupon["training_history_max_date"])
         except (KeyError, TypeError, ValueError) as exc:
-            raise ValueError(f"{coupon_id}: invalid training history date range") from exc
+            raise ValueError(
+                f"{coupon_id}: invalid training history date range"
+            ) from exc
         if (
             training_min > training_max
             or training_max > cutoff

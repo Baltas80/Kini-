@@ -191,9 +191,7 @@ def validate_pleno15_report(
     source_sha256 = _validate_sha256(
         report.get("source_sha256"), "Pleno al 15 source_sha256"
     )
-    verified_at = _parse_utc_timestamp(
-        report.get("verified_at_utc"), "verified_at_utc"
-    )
+    verified_at = _parse_utc_timestamp(report.get("verified_at_utc"), "verified_at_utc")
     if verified_at < kickoff_at.astimezone(UTC):
         raise TicketOutcomeError(
             "Pleno al 15 result verification must not precede its kickoff"
@@ -238,10 +236,9 @@ def validate_pleno15_report(
             or away_goals < 0
         ):
             raise TicketOutcomeError("Pleno al 15 goals must be non-negative integers")
-        if (
-            home_category != _pleno15_category(home_goals)
-            or away_category != _pleno15_category(away_goals)
-        ):
+        if home_category != _pleno15_category(
+            home_goals
+        ) or away_category != _pleno15_category(away_goals):
             raise TicketOutcomeError(
                 "Pleno al 15 categories conflict with the official goal counts"
             )
