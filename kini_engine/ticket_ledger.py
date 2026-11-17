@@ -300,9 +300,7 @@ class TicketLedger:
         reconciliation_sha256: str,
     ) -> dict[str, Any]:
         """Score a stored ticket and persist the result against exact source bytes."""
-        reconciliation_digest = _sha256(
-            reconciliation_sha256, "reconciliation_sha256"
-        )
+        reconciliation_digest = _sha256(reconciliation_sha256, "reconciliation_sha256")
         stored = self.get_ticket_record(ticket_id)
         if stored is None:
             raise TicketLedgerError(f"ticket {ticket_id!r} does not exist")
