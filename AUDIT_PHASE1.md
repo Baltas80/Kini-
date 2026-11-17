@@ -2938,3 +2938,60 @@ Se incorpora el motor snapshot-aligned y su integración en el comando compare.
 
 La implementación y las nuevas pruebas se incorporan en una sola revisión de la rama. La validación CI y el backtest completo deben finalizar antes de declarar el benchmark aceptado. La limitación de timestamps exactos de captura de cuotas permanece abierta: el benchmark es de alineación conservadora por fecha, no de verificación por hora.
 
+## 2026-11-17 — Primer benchmark snapshot-aligned completado
+
+La ejecución [44002098477](https://github.com/Baltas80/Kini-/actions/runs/44002098477) terminó correctamente y superó todas las puertas del workflow, incluida `SNAPSHOT_ALIGNED_MARKET_ACCEPTANCE_OK`. Se descargó e inspeccionó el artefacto `historical-backtest` ID `14293978046` (ZIP SHA-256 `38ee6d5c72b0bac90775764c1e6af1e98a735099f4eff95786d945fe30b0bb53`). El manifiesto identifica la revisión de código `3a22aa4a299d8cdd2e28ebf86c58efc101262394`, el dataset de 5.322 filas con SHA-256 `7251b84acd803047746c0c55c6bdabb60d9499208cfd6c781f72080295346f44`, y 3.991 forecasts snapshot-aligned.
+
+### Cobertura y ejecución
+
+- Mercado con filtro de calendario elegible: 4.713 fixtures.
+- Fixtures asignables a martes/viernes: 4.256; 457 quedaron sin fecha de snapshot asignable.
+- Fechas de snapshot observadas: 339; 20 no alcanzaron el mínimo de 300 resultados previos y se excluyeron (265 fixtures).
+- Snapshots ajustados: **319**, con exactamente un ajuste de KiniEngine por fecha.
+- Fixtures comunes: **3.991**, desde 2020-12-11 hasta 2026-11-13.
+- Errores de predicción: **0 en las cinco configuraciones**.
+- Los cinco modelos y el mercado comparten exactamente los mismos 3.991 fixture IDs y el mismo SHA-256 `6e16300f3c21c6fdcacc53e8b6cac9940cd87d662ee306b897a94c3abdd89a51`.
+
+Se inspeccionó el ledger completo de 3.991 filas (más su manifiesto): 319 fechas, IDs únicos, un único hash/conteo/cutoff de entrenamiento por snapshot, `training_cutoff_date < snapshot_date < fixture_date` en todas las filas, un ajuste por snapshot y cero vectores de probabilidad inválidos. Se recalcularon independientemente Accuracy, Brier y Log Loss desde el ledger; coinciden exactamente con el JSON de resultados. El SHA-256 del ZIP coincide con el digest informado por GitHub.
+
+### Métricas sobre la misma muestra
+
+| Configuración | n | Accuracy | Multiclass Brier | Log Loss | ECE |
+|---|---:|---:|---:|---:|---:|
+| Dixon–Coles | 3.991 | 48,2836% | 0,614828 | 1,028365 | 0,014124 |
+| ML | 3.991 | 44,2496% | 0,638916 | 1,060673 | 0,044755 |
+| Ensemble principal (incluye mercado) | 3.991 | 48,2836% | 0,610967 | 1,019536 | 0,016458 |
+| DC/ML fijo (solo modelos) | 3.991 | 47,9830% | 0,613521 | 1,023526 | 0,014837 |
+| DC/ML adaptativo (solo modelos) | 3.991 | 48,0080% | 0,613768 | 1,023933 | 0,014138 |
+| Mercado multi-casa pre-cierre | 3.991 | **51,0649%** | **0,594152** | **0,994611** | 0,026155 |
+
+El ensemble principal incorpora probabilidades del mercado y no debe interpretarse como un modelo independiente del mercado. Aun así, queda por detrás del propio mercado. El blend DC/ML fijo mejora ligeramente Log Loss frente a DC, pero su diferencia de Brier no es concluyente; el adaptativo no mejora de forma demostrable al blend fijo. ML sigue siendo el candidato más débil. No se promueve ningún modelo como superior al mercado.
+
+### Incertidumbre: bootstrap pareado por fecha de snapshot
+
+Se calculó un bootstrap pareado por clusters de fecha de snapshot (10.000 remuestreos; semillas deterministas derivadas de la base 20261117). La diferencia se define como métrica del modelo menos métrica del mercado; valores positivos en Brier/Log Loss significan peor rendimiento del modelo. Los intervalos del 95% no incluyen cero:
+
+| Modelo | Δ Brier vs mercado (IC 95%) | Δ Log Loss vs mercado (IC 95%) |
+|---|---:|---:|
+| Dixon–Coles | +0,020676 [0,016274; 0,024943] | +0,033755 [0,026457; 0,041534] |
+| ML | +0,044764 [0,037258; 0,052338] | +0,066063 [0,054695; 0,077808] |
+| Ensemble principal | +0,016815 [0,013118; 0,020606] | +0,024926 [0,019520; 0,030438] |
+| DC/ML fijo | +0,019369 [0,015293; 0,023558] | +0,028916 [0,022850; 0,035083] |
+| DC/ML adaptativo | +0,019616 [0,015514; 0,023674] | +0,029322 [0,023320; 0,035728] |
+
+La ventaja del mercado también se mantiene en los siete cortes por temporada (2020/21–2026/27): en cada temporada evaluada el mercado obtiene mejor Accuracy, Brier y Log Loss que cada candidato. Los diagnósticos de fiabilidad por clase 1/X/2 están incluidos en el JSON; el ECE global no sustituye la inspección de las curvas y bins por clase.
+
+### Interpretación y límites
+
+Este resultado resuelve la insuficiencia de la comparación anterior de 111 partidos: el benchmark snapshot-aligned supera el mínimo de 500 con 3.991 partidos y usa el mismo conjunto para todas las configuraciones y el mercado. Es una comparación mucho más defendible que el filtro heredado.
+
+No elimina dos limitaciones temporales:
+1. Football-Data no aporta timestamp de captura por fixture ni zona horaria documentada para el campo `Time`; la alineación es por fecha de snapshot y horario publicado, no verificación exacta de la hora de captura.
+2. Los resultados de partidos anteriores se filtran por fecha de calendario estrictamente anterior al snapshot, porque no se dispone de timestamp histórico de publicación de resultados. No se usan resultados del propio día del snapshot, pero tampoco puede probarse la hora de publicación de cada resultado de la víspera.
+
+La ejecución de benchmark anterior corresponde al código `3a22aa4`. La revisión final posterior `91aabe2` incluye ajustes en la serialización del hash de historial, validación del tipo booleano y el fixture UTC de una prueba; por eso se está ejecutando una repetición sobre la revisión actual: [run 44002903260](https://github.com/Baltas80/Kini-/actions/runs/44002903260). CI sobre `91aabe2` pasó. No se declarará validado el HEAD final hasta que esa repetición termine y supere la misma puerta de aceptación.
+
+PR #9 continúa abierto y en borrador, apilado sobre PR #8. No se ha fusionado ninguna PR ni se ha modificado `master`.
+
+**Siguiente acción:** finalizar y auditar el artefacto del run 44002903260. Si confirma los mismos invariantes, publicar el resultado definitivo del benchmark snapshot-aligned y cerrar P0; después continuar con la auditoría de identidad y las restricciones económicas/correlación del optimizador.
+
