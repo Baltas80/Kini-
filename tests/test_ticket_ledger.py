@@ -22,6 +22,34 @@ HASH_B = "b" * 64
 
 
 def _ticket() -> dict[str, object]:
+    positions = [
+        {
+            "position": position,
+            "fixture_status": "scheduled",
+            "home": f"Home {position}",
+            "away": f"Away {position}",
+            "kickoff_at": "2026-11-08T14:00:00+01:00",
+        }
+        for position in range(1, 15)
+    ]
+    plan = {
+        "schema_version": 1,
+        "provider": "SELAE",
+        "draw_date": DRAW_DATE,
+        "schedule_captured_at_utc": "2026-11-08T08:30:00Z",
+        "ticket_created_at_utc": "2026-11-08T09:30:00Z",
+        "schedule_evidence_url": SELAE_URL,
+        "schedule_evidence_sha256": HASH_B,
+        "ticket_cutoff_at_utc": "2026-11-08T11:00:00Z",
+        "cutoff_evidence_url": SELAE_URL,
+        "cutoff_evidence_sha256": HASH_A,
+        "cutoff_evidence_captured_at_utc": "2026-11-08T09:00:00Z",
+        "first_kickoff_at": "2026-11-08T14:00:00+01:00",
+        "pleno15_home": "Pleno Home",
+        "pleno15_away": "Pleno Away",
+        "pleno15_kickoff_at": "2026-11-08T15:00:00+01:00",
+        "positions": positions,
+    }
     return {
         "schema_version": 1,
         "ticket_id": "quiniela-2026-11-08-001",
@@ -31,11 +59,27 @@ def _ticket() -> dict[str, object]:
         "first_kickoff_at": "2026-11-08T14:00:00+01:00",
         "cutoff_evidence_url": SELAE_URL,
         "cutoff_evidence_sha256": HASH_A,
-        "schedule_evidence_url": "https://www.laliga.com/calendario",
+        "cutoff_evidence_captured_at_utc": "2026-11-08T09:00:00Z",
+        "schedule_evidence_url": SELAE_URL,
         "schedule_evidence_sha256": HASH_B,
+        "schedule_evidence_captured_at_utc": "2026-11-08T08:30:00Z",
+        "pleno15_home": "Pleno Home",
+        "pleno15_away": "Pleno Away",
+        "pleno15_kickoff_at": "2026-11-08T15:00:00+01:00",
+        "coupon_plan": plan,
+        "probability_vectors": [
+            {"1": 0.5, "X": 0.3, "2": 0.2} for _ in range(14)
+        ],
+        "probability_sources": [
+            {"position": position, "source": "football_model", "model_mode": "ensemble"}
+            for position in range(1, 15)
+        ],
+        "public_draw_positions": [],
         "columns": [["1"] * 14, ["X"] * 14],
+        "pleno15_combinations": [{"home_goals": "0", "away_goals": "0"}],
+        "budget": 2,
+        "cost_eur": 1.5,
     }
-
 
 def _reconciliation() -> dict[str, object]:
     return {
