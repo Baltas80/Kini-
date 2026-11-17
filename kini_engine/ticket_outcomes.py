@@ -285,12 +285,16 @@ def validate_preclose_public_draw_snapshot(
     *,
     draw_date: str,
     position: int,
+    ticket_created_at_utc: str,
     ticket_cutoff_at_utc: str,
 ) -> dict[str, Any]:
-    """Validate a timestamped participant-forecast snapshot captured before ticket close."""
+    """Validate a participant snapshot captured before ticket creation and close."""
     expected_date = _parse_draw_date(draw_date, "draw_date")
     expected_position = _position(position, "position")
+    created_at = _parse_utc_timestamp(ticket_created_at_utc, "ticket_created_at_utc")
     cutoff = _parse_utc_timestamp(ticket_cutoff_at_utc, "ticket_cutoff_at_utc")
+    if created_at >= cutoff:
+        raise TicketOutcomeError("ticket creation must be earlier than ticket close")
     if not isinstance(snapshot, dict):
         raise TicketOutcomeError("pre-close forecast snapshot must be an object")
     _require_schema_v1(snapshot, "pre-close forecast snapshot")
@@ -323,9 +327,9 @@ def validate_preclose_public_draw_snapshot(
     )
     if declared_cutoff != cutoff:
         raise TicketOutcomeError("pre-close snapshot ticket cutoff mismatch")
-    if captured_at >= cutoff:
+    if captured_at >= created_at:
         raise TicketOutcomeError(
-            "participant-forecast snapshot must be captured strictly before ticket close"
+            "participant-forecast snapshot must be captured strictly before ticket creation"
         )
     probabilities = _validate_probability_vector(
         snapshot.get("probabilities"), "snapshot.probabilities"
@@ -353,6 +357,7 @@ def _validate_coupon_plan(
         "provider",
         "draw_date",
         "schedule_captured_at_utc",
+        "ticket_created_at_utc",
         "schedule_evidence_url",
         "schedule_evidence_sha256",
         "ticket_cutoff_at_utc",
@@ -384,9 +389,14 @@ def _validate_coupon_plan(
     schedule_captured_at = _parse_utc_timestamp(
         plan.get("schedule_captured_at_utc"), "schedule_captured_at_utc"
     )
-    if schedule_captured_at >= cutoff:
+    created_at = _parse_utc_timestamp(
+        plan.get("ticket_created_at_utc"), "ticket_created_at_utc"
+    )
+    if created_at >= cutoff:
+        raise TicketOutcomeError("ticket creation must be earlier than ticket close")
+    if schedule_captured_at >= created_at:
         raise TicketOutcomeError(
-            "coupon schedule must be captured strictly before ticket close"
+            "coupon schedule must be captured strictly before ticket creation"
         )
     first_kickoff = _parse_timestamp(
         plan.get("first_kickoff_at"), "plan.first_kickoff_at"
@@ -462,10 +472,10 @@ def _validate_coupon_plan(
                 raw.get("status_captured_at_utc"),
                 f"position {position}.status_captured_at_utc",
             )
-            if status_captured_at >= cutoff:
+            if status_captured_at >= created_at:
                 raise TicketOutcomeError(
                     f"public-draw status at position {position} must be evidenced "
-                    "strictly before ticket close"
+                    "strictly before ticket creation"
                 )
             public_draw_positions.add(position)
 
@@ -501,6 +511,7 @@ def _validate_coupon_plan(
     return {
         "draw_date": expected_date,
         "ticket_cutoff_at_utc": cutoff,
+        "ticket_created_at_utc": created_at,
         "first_kickoff_at": first_kickoff,
         "schedule_evidence_url": schedule_url,
         "schedule_evidence_sha256": schedule_sha256,
@@ -559,6 +570,9 @@ def build_ticket_probability_vectors(
                 public_draw_snapshots[position],
                 draw_date=draw_date,
                 position=position,
+                ticket_created_at_utc=plan["ticket_created_at_utc"]
+                .isoformat()
+                .replace("+00:00", "Z"),
                 ticket_cutoff_at_utc=plan["ticket_cutoff_at_utc"]
                 .isoformat()
                 .replace("+00:00", "Z"),
@@ -584,6 +598,9 @@ def build_ticket_probability_vectors(
 
     return {
         "draw_date": plan["draw_date"],
+        "ticket_created_at_utc": plan["ticket_created_at_utc"]
+        .isoformat()
+        .replace("+00:00", "Z"),
         "ticket_cutoff_at_utc": plan["ticket_cutoff_at_utc"]
         .isoformat()
         .replace("+00:00", "Z"),
