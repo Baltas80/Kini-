@@ -2875,7 +2875,7 @@ La ejecución [43988937525](https://github.com/Baltas80/Kini-/actions/runs/43988
 - Forecast ledger: 5.022 predicciones, del 2020-12-11 al 2026-11-16.
 - Dixon–Coles, ML, ensemble, DC/ML fijo y DC/ML adaptativo: **5.022 predicciones cada uno**, con **cero errores registrados**.
 - Mercado con filtro de calendario: 4.433 partidos; se excluyeron 588 filas ambiguas.
-- La comparación de corte temporal estricta actual solo contiene **111 partidos**. Mercado: Brier 0,595927 y Log Loss 1,001731. Dixon–Coles: Brier 0,627083 y Log Loss 1,045139. Ensemble principal: Brier 0,623886 y Log Loss 1,047315. ML: Brier 0,670224 y Log Loss 1,105? No se utiliza esta cifra en decisiones hasta confirmar el detalle completo del artefacto; el recuento y la muestra sí están verificados.
+- La comparación de corte temporal estricta actual solo contiene **111 partidos**. Mercado: Brier 0,595927 y Log Loss 1,001731. Dixon–Coles: Brier 0,627083 y Log Loss 1,045139. Ensemble principal: Brier 0,623886 y Log Loss 1,047315. ML: Brier 0,670224 y Log Loss 1,106471.
 - Motivos de exclusión en el filtro actual: 3.880 por corte de entrenamiento/refit posterior o igual al snapshot y 442 por fecha de snapshot no asignable.
 
 La inspección confirma una deficiencia en la puerta de aceptación: el workflow exige actualmente que el conjunto estricto sea no vacío, pero no aplica el umbral mínimo de 500 partidos acordado en el propio registro. Por tanto, un workflow verde con n=111 **no valida** la comparación temporal de mercado.
