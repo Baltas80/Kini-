@@ -3600,3 +3600,15 @@ The real Jornada 19 snapshot test initially exposed that supporting-source valid
 4. Expand official coupon/prize evidence across seasons; do not use the two-coupon smoke test for model ranking or profitability claims.
 
 PR #10 remains draft and targets the existing feature branch. No merge and no changes to `master`.
+
+
+
+## Prize-evidence validation hardening — 2026-11-17
+
+- Commit `8bcae60533320f5da966d6ecba1e3155a8b82149` hardens the official prize snapshot contract: schema versions and fixture position numbers must be actual integers (booleans/floats are rejected); Elige8 revenue and unit prize must both be strictly positive.
+- The prize validator now emits `winner_count_diagnostics` with the official counts preserved independently by category, checks that rollover categories have zero winners and awarded categories have positive winners, and explicitly marks the Pleno-vs-14 relationship as `not_assessed`. It does not aggregate winner counts or compare SELAE winning tickets directly with model-generated direct bets.
+- Commit `4135954746dd6a8d4ab941dfc680323b15ddf8f8` adds regression tests for the diagnostic semantics, zero Elige8 amounts, boolean fixture positions and non-integer schema versions.
+- Commit `618c313f691c09c27d71ee7a439facf063083a34` documents the winner-count interpretation and preserves the distinction between the normalized snapshot hash and a raw PDF byte digest.
+- The official Jornada 19 PDF text is independently readable through the official SELAE PDF page: it reports 0 Pleno and 0 category-14 winners, 37/569/5,240/31,232 winners in categories 13/12/11/10, respectively, and revenue of €3,491,465.25. This is source-text evidence, not a byte-level archive.
+- Raw PDF bytes were not retrievable from the execution container (DNS resolution failed); therefore no raw-PDF SHA-256 is claimed or fabricated. The existing importer computes the exact PDF-byte digest when a local PDF is supplied. The normalized snapshot SHA-256 remains `f74e3e0afc7b4c0aa6f2f7582c80b378f3bc29e6671a34bddf04925896c607cf`, and must not be presented as the PDF digest.
+- Validation status at this log entry: CI and targeted tests pending on the updated PR head. No changes to `master`; PR #10 remains a draft.
