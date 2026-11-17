@@ -1481,11 +1481,13 @@ def compare_walk_forward(
         "calibration_min_class_count": calibration_min_class_count,
     }
     return result
+
+
 def _snapshot_training_history_sha256(training: list[Match]) -> str:
     """Hash the exact ordered, completed result history used by one snapshot fit."""
     rows = [
         {
-            "date": _calendar_day(match.date),
+            "date": str(match.date),
             "home": match.home,
             "away": match.away,
             "home_goals": int(match.home_goals),
@@ -1880,8 +1882,12 @@ def snapshot_aligned_market_backtest(
             "completed_result_date < market_snapshot_date; refit once per snapshot date"
         ),
         "model_refit_rule": (
-            "one fresh KiniEngine.fit call per snapshot date; all fixtures "
-            "assigned to that date share the fitted engine and training history"
+            "one fresh KiniEngine.fit call per snapshot date; ML is fitted once "
+            "on the first forecast; all fixtures share the same engine and history"
+        ),
+        "training_date_basis": (
+            "fixture calendar date; same-snapshot-day results are excluded "
+            "because exact result-publication timestamps are unavailable"
         ),
         "snapshot_schedule": {
             "weekend_fixtures": "Friday snapshot for Saturday/Sunday fixtures",

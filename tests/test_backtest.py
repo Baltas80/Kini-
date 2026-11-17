@@ -1146,6 +1146,8 @@ def test_strict_common_time_excludes_lae_captured_on_snapshot_day(monkeypatch):
         assert strict["common_sample"][mode]["n"] == 1
         assert strict["common_sample"][mode]["model"]["n"] == 1
         assert strict["common_sample"][mode]["market"]["n"] == 1
+
+
 def test_snapshot_aligned_backtest_refits_once_per_snapshot_and_excludes_snapshot_day(
     monkeypatch,
     tmp_path,
@@ -1357,7 +1359,9 @@ def test_snapshot_aligned_backtest_fails_closed_below_minimum_training_history(
             raise AssertionError("engine must not fit without minimum prior history")
 
     monkeypatch.setattr(backtest, "KiniEngine", UnexpectedEngine)
-    training = [Match(datetime(2025, 1, 1), f"H{i}", f"A{i}", 1, 0, "1") for i in range(11)]
+    training = [
+        Match(datetime(2025, 1, 1), f"H{i}", f"A{i}", 1, 0, "1") for i in range(11)
+    ]
     fixture = Match(
         datetime(2025, 1, 8),
         "Future",
