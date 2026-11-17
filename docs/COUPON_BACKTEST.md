@@ -199,6 +199,7 @@ Example (abbreviated to one public-draw position; the actual plan must contain a
   "provider": "SELAE",
   "draw_date": "2026-11-08",
   "schedule_captured_at_utc": "2026-11-08T09:00:00Z",
+  "ticket_created_at_utc": "2026-11-08T10:45:00Z",
   "schedule_evidence_url": "https://www.loteriasyapuestas.es/example-schedule",
   "schedule_evidence_sha256": "<64 lowercase hex characters>",
   "ticket_cutoff_at_utc": "2026-11-08T11:00:00Z",
