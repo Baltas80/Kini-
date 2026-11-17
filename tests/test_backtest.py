@@ -1402,4 +1402,3 @@ def test_snapshot_aligned_backtest_fails_closed_below_minimum_training_history(
 def test_metrics_reject_invalid_probability_vectors(probabilities):
     with pytest.raises(ValueError):
         multiclass_metrics([(probabilities, "1")])
-
