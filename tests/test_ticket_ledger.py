@@ -257,6 +257,7 @@ def test_ticket_ledger_score_json_rejects_invalid_or_non_object_payload(tmp_path
 
     assert ledger.list_ticket_scores(str(ticket["ticket_id"])) == []
 
+
 def test_ticket_ledger_rejects_append_at_or_after_cutoff(tmp_path, monkeypatch):
     monkeypatch.setattr(
         "kini_engine.ticket_ledger._utc_now",
