@@ -2995,3 +2995,107 @@ PR #9 continúa abierto y en borrador, apilado sobre PR #8. No se ha fusionado n
 
 **Siguiente acción:** finalizar y auditar el artefacto del run 44002903260. Si confirma los mismos invariantes, publicar el resultado definitivo del benchmark snapshot-aligned y cerrar P0; después continuar con la auditoría de identidad y las restricciones económicas/correlación del optimizador.
 
+## 2026-11-17 — Revalidación final del benchmark snapshot-aligned (código 91aabe2)
+
+Esta sección sustituye el estado pendiente de la repetición 44002903260.
+
+### Ejecución y artefacto
+
+- [Historical backtest run 44002903260](https://github.com/Baltas80/Kini-/actions/runs/44002903260): **success**. Los jobs `changes` y `backtest` terminaron correctamente. También pasaron las puertas de predicciones no vacías, ledger por fixture, benchmark de mercado por snapshot, comparación Bet365 y calibración prequential.
+- Artefacto `historical-backtest`: ID `14297100122`, 3.582.447 bytes, ZIP SHA-256 `621a7c1b19ed46fb789f60aca888997918812a38791cb31f97c619dfb3720694`.
+- El manifiesto del ledger identifica exactamente el código `91aabe2f45442a86a2dc3da5d5b33029c06bd91c`, Python 3.12.16, 5.322 filas de dataset, dataset SHA-256 `7251b84acd803047746c0c55c6bdabb60d9499208cfd6c781f72080295346f44` y perfil SHA-256 `6c8fb3466819cb26292ca62c5659f9a4e5623a114e135ed707b8693cfc159884`.
+- Ledger snapshot-aligned: 3.991 filas, SHA-256 `dca3bd1e17f6c77bee062e26c2e2c05254775f7ac57a80a2f8bd3cf8433bd0c0`. El hash de los fixture IDs ordenados es `41ef0afaafbdcece288ce77ca26e7f436997a6478797bf4be746fa1e934032f0`.
+
+### Verificación independiente del artefacto
+
+Se descargó el ZIP desde GitHub y se recalcularon los invariantes desde el JSONL, sin depender de los totales del resumen:
+
+- 3.991 forecasts y 3.991 fixture IDs únicos.
+- 319 fechas de snapshot y exactamente 319 ajustes del modelo.
+- Cada grupo de snapshot comparte un único `training_history_sha256`, recuento de entrenamiento y cutoff.
+- En las 3.991 filas se cumple `training_cutoff_date < market_snapshot_date < fixture_date`.
+- Cada fila registra un ajuste por snapshot; los cinco modelos y el mercado tienen vectores finitos, en [0,1] y con suma 1.
+- Cero errores en Dixon–Coles, ML y las tres configuraciones de ensemble.
+- El hash del ledger, el hash del dataset y el hash del perfil coinciden con los declarados por el manifiesto.
+- Se recalcularon Accuracy, multiclass Brier y Log Loss por fila. Los seis resultados (cinco modelos y mercado) coinciden con `backtest-results.json` con tolerancia absoluta inferior a 1e-12.
+- El perfil de datos declara `integrity_passed=true`, 5.322 filas completas y deduplicadas, cero nombres/marcadores ausentes, cero duplicados, cero conflictos, cero etiquetas inválidas y cero discrepancias marcador/resultado.
+
+El rango de historial de entrenamiento por snapshot es 300–5.311 partidos. La muestra cubre 2020-12-11 a 2026-11-13.
+
+### Métricas recalculadas sobre los mismos 3.991 partidos
+
+| Configuración | Accuracy | Multiclass Brier | Log Loss |
+|---|---:|---:|---:|
+| Dixon–Coles | 48,2836% | 0,614828 | 1,028365 |
+| ML | 44,2496% | 0,638916 | 1,060673 |
+| Ensemble principal (incluye mercado) | 48,2836% | 0,610967 | 1,019536 |
+| DC/ML fijo | 47,9830% | 0,613521 | 1,023526 |
+| DC/ML adaptativo | 48,0080% | 0,613768 | 1,023933 |
+| Mercado pre-cierre multi-casa | **51,0649%** | **0,594152** | **0,994611** |
+
+El ensemble principal utiliza mercado y no es un candidato independiente de este. El blend DC/ML fijo mejora ligeramente Log Loss frente a DC, pero no supera al mercado; el adaptativo no mejora al fijo. ML sigue siendo el candidato más débil. El mercado obtiene mejores Accuracy, Brier y Log Loss en cada uno de los siete cortes por temporada (2020/21–2026/27). No se promociona ningún modelo como superior al mercado.
+
+### Incertidumbre pareada
+
+Se repitió un bootstrap por clusters de snapshot con 10.000 réplicas y semilla `20261117`: se remuestrean 319 fechas con reemplazo y se agregan todos los fixtures de cada fecha seleccionada. La diferencia es modelo menos mercado; valores positivos significan peor puntuación del modelo.
+
+| Modelo | Δ Brier (IC 95%) | Δ Log Loss (IC 95%) |
+|---|---:|---:|
+| Dixon–Coles | +0,020676 [0,016510; 0,025046] | +0,033755 [0,026680; 0,041333] |
+| ML | +0,044764 [0,037360; 0,052180] | +0,066063 [0,054568; 0,077499] |
+| Ensemble principal | +0,016815 [0,013249; 0,020480] | +0,024926 [0,019518; 0,030484] |
+| DC/ML fijo | +0,019369 [0,015307; 0,023446] | +0,028916 [0,022822; 0,035162] |
+| DC/ML adaptativo | +0,019616 [0,015449; 0,023745] | +0,029322 [0,022995; 0,035607] |
+
+Todos los intervalos quedan por encima de cero. La desventaja frente al mercado no se explica por una única temporada o un único snapshot.
+
+### CI posterior y estado de P0
+
+El commit `e0a22f458513f81e75b8df738275ce5cd70344a2` contiene únicamente la actualización de `AUDIT_PHASE1.md` respecto a `91aabe2`; la comparación GitHub confirma un solo commit y un solo archivo documental modificado. Por ello no se necesita repetir el costoso backtest sobre el mismo código predictivo.
+
+- [CI run 44009539066](https://github.com/Baltas80/Kini-/actions/runs/44009539066): actionlint correcto en 7 workflows, Ruff lint/format correctos, **310 tests pasados**, 21 advertencias upstream de penaltyblog/NumPy 2.5.
+- [Historical-data-validation run 44009539092](https://github.com/Baltas80/Kini-/actions/runs/44009539092): job de validación completado correctamente.
+- [Historical-backtest run 44009539011](https://github.com/Baltas80/Kini-/actions/runs/44009539011): el job de backtest se omitió por el filtro de cambios documentales; no es un backtest fallido ni se presenta como validación predictiva nueva.
+
+**P0 queda validado para el benchmark snapshot-aligned en el código 91aabe2.** No equivale a cerrar todas las limitaciones de disponibilidad temporal ni a demostrar rentabilidad.
+
+## 2026-11-17 — Auditoría de disponibilidad temporal de las features y del mercado
+
+Se revisaron directamente `kini_engine/core.py`, `kini_engine/backtest.py`, `kini_engine/dataio.py` y sus pruebas de regresión.
+
+### Features ML: contrato observado
+
+El modelo supervisado utiliza exactamente 12 valores derivados de resultados históricos:
+
+| Bloque | Variables |
+|---|---|
+| Local, últimos 8 partidos en cualquier sede | puntos por partido, goles a favor por partido, goles en contra por partido |
+| Visitante, últimos 8 partidos en cualquier sede | puntos por partido, goles a favor por partido, goles en contra por partido |
+| Local, últimos 8 partidos como local | puntos por partido, goles a favor por partido, goles en contra por partido |
+| Visitante, últimos 8 partidos como visitante | puntos por partido, goles a favor por partido, goles en contra por partido |
+
+La construcción utiliza fecha, equipo local/visitante y goles finales. `_prior_completed_matches` excluye todo resultado del mismo día o posterior al fixture. `_training_rows` procesa las fechas en grupos: primero construye las filas de todos los partidos del día con el estado anterior a ese día y solo después incorpora sus resultados. `_assert_training_history_precedes_fixture` rechaza cualquier etiqueta de entrenamiento en la fecha del fixture o en el futuro.
+
+Se mantienen fuera de las 12 features las posiciones de clasificación sin timestamp, estadísticas del propio partido, alineaciones, lesiones, meteorología, xG no versionado y campos arbitrarios de contexto. La ausencia de historial utiliza los valores iniciales explícitos `(0.0, 1.35, 1.05)` por bloque de equipo/sede; son priors fijos de cold-start, no observaciones históricas.
+
+Las pruebas existentes cubren resultados del mismo día, resultados futuros, campos de clasificación no verificados, equivalencia entre el constructor incremental y el de referencia y la construcción de inferencia 2D. La auditoría de código no detecta una ruta de leakage por estas 12 features.
+
+### Mercado Football-Data: ventana documentada y tipo de cuota
+
+La documentación oficial de Football-Data distingue dos conjuntos desde 2019/20: el primero se recoge después de la apertura del mercado, en las ventanas publicadas; el segundo es el cierre y utiliza la letra `C` en los nombres de columna. El motor utiliza las columnas sin `C` (`B365H/D/A`, `WHH/D/A`, `VCH/D/A`, `PSH/D/A`): son cuotas pre-cierre, no closing odds. El feed Pinnacle se excluye desde 2025-07-23 por el aviso de antigüedad del proveedor.
+
+La página oficial de fixtures especifica las ventanas de recogida: viernes por la tarde, generalmente no más tarde de las 17:00 British Standard Time, para partidos del fin de semana; martes, no más tarde de las 13:00 British Standard Time, para partidos entre semana. La lógica del proyecto asigna el snapshot del viernes a sábado/domingo y el del martes a miércoles/jueves, y excluye fixtures cuya fecha coincide con martes o viernes. Esto aporta un límite de recogida documentado por jornada, pero **no** un timestamp de captura individual para cada fila histórica. No se convierten esas horas a UTC porque la página no proporciona una zona horaria IANA ni una marca temporal por fixture.
+
+Fuentes oficiales consultadas el 2026-11-17:
+- https://football-data.co.uk/downloadm.php — diferencia entre odds pre-cierre y closing con sufijo C.
+- https://football-data.co.uk/matches.php — ventanas de recogida del viernes y martes.
+
+### Limitaciones temporales que siguen abiertas
+
+1. Football-Data no incluye timestamp individual de captura para las cuotas de cada fixture. El benchmark usa la ventana oficial de recogida y el mapeo de calendario, no una prueba por timestamp.
+2. El histórico de resultados no contiene timestamp de publicación. El motor excluye resultados del mismo día del snapshot y utiliza solo fechas anteriores, pero no puede demostrar la hora exacta en que cada resultado anterior fue publicado.
+3. La elegibilidad de mercado y LAE sigue siendo fail-closed cuando falta evidencia temporal. No se deben rellenar timestamps ni inferir disponibilidad por conveniencia.
+
+**Estado P2:** auditoría del contrato de features y de la ventana de mercado implementada y probada a nivel de código/documentación; disponibilidad exacta por timestamp de los resultados y cuotas históricos sigue sin demostrarse. No se declara P2 completamente cerrado.
+
+**Siguiente acción prioritaria:** completar el inventario de fuentes y timestamps para cada campo histórico consumido por el entrenamiento; después, continuar la expansión verificable del archivo de escrutinios SELAE y la evaluación de cobertura conjunta/premios del boleto, sin usar un único cupón piloto como evidencia de rendimiento.
