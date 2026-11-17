@@ -556,7 +556,7 @@ def test_jornada_1_2021_2022_official_snapshot_matches_reviewed_selae_results() 
         "away_category": "0",
     }
     coupon = {
-        "coupon_id": "2021-2022:1",
+        "coupon_id": "2021-2022:01",
         "source_date": "2021-08-15",
         "fixtures": [dict(item) for item in snapshot["fixtures"]]
         + [
