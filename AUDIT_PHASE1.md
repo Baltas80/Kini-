@@ -2785,3 +2785,42 @@ Implemented on `feat/selae-fixture-reconciliation`:
 - Add a historical-backtest CI gate requiring non-empty, identical model/market samples and checking the persisted ledger eligibility decisions.
 
 This is deliberately a conservative **date-level** alignment. It does not create exact odds-capture timestamps, does not prove that a particular quote was observable at a precise instant, and does not resolve the Football-Data commercial-use restriction. Validation is pending on the updated PR head; no new model metrics are claimed yet.
+
+## 2026-11-17 — Live round resolution verified; CI regression corrected
+
+### Changes and regression diagnosis
+
+- CI run [43989398909](https://github.com/Baltas80/Kini-/actions/runs/43989398909) reached pytest and reported **305 passed, 1 failed**. The only failure was a test-double contract mismatch: `summarize_probability_payload()` calls `KinielaGPTSource._probability_map()`, while the monkeypatched `FakeSource` did not expose that parser.
+- Commit [7233232](https://github.com/Baltas80/Kini-/commit/7233232413ed22eba23b174999c9672774d6e51d) updates the fake to delegate to the real static parser. It does not alter production parsing or source behavior.
+- The next CI attempt [43989909946](https://github.com/Baltas80/Kini-/actions/runs/43989909946) reached Ruff formatting and identified one pre-existing formatting mismatch in the new live round-resolution diagnostic. Commit [d17c8c9](https://github.com/Baltas80/Kini-/commit/d17c8c901f62ae4b9ba0ade58827ce84522439cb) applies the formatter's exact single-line form.
+- CI [43990123507](https://github.com/Baltas80/Kini-/actions/runs/43990123507) passed on `d17c8c9`: actionlint, Ruff lint, Ruff formatting and **308 tests passed** (21 third-party warnings). The earlier test and formatting failures are therefore closed on that head.
+
+### Live LAE round-resolution evidence
+
+Read-only live diagnostic [43990123543](https://github.com/Baltas80/Kini-/actions/runs/43990123543), artifact [14287650911](https://github.com/Baltas80/Kini-/actions/runs/43990123543/artifacts/14287650911), exercised the resolver against the public LAE feed:
+
+- BASE feed reported jornada 23.
+- Jornada 23 was explicitly inactive and had zero valid probability vectors.
+- Jornada 22 was explicitly active, with 15 fixture rows and 14 valid normalized 1/X/2 vectors.
+- `KinielaGPTSource.last()` correctly resolved **jornada 22 / temporada 2027**, reason `active_lae_round`. This validates the new resolver against the live feed, not merely a fixture test.
+- The workflow ended with `blocked_missing_authorization`: `KINIELAGPT_AUTHORIZATION` was empty in Actions, so the separate details endpoint and its fixture-order crosswalk could not be queried. This is a real external credential dependency, not a prediction or parser failure. No token is fabricated and the public LAE probabilities remain subject to the existing kickoff/provenance eligibility gate.
+
+### Current data validation
+
+Historical-data validation [43990123230](https://github.com/Baltas80/Kini-/actions/runs/43990123230) passed on `d17c8c9`:
+
+- 5,322 completed fixtures from seven seasons and two leagues.
+- Zero duplicate fixtures, zero score/result mismatches, zero unresolved canonical team identities and zero ambiguous identities.
+- `integrity_passed=true`.
+- Artifact `kini-historical-data`, ID `14287970645`, ZIP SHA-256 `bec9a06d63a8504650918a5021a62c548e5bf958dd000df5f57f4912d102f890`.
+
+The coupon workflow [43990123283](https://github.com/Baltas80/Kini-/actions/runs/43990123283) succeeded but its pilot job was skipped by the change filter; it is not new coupon acceptance evidence.
+
+### Current head and next action
+
+A subsequent workflow-only commit [577633f](https://github.com/Baltas80/Kini-/commit/577633fa9c623f812ce80e00c366e9f6b9e6e6aa) tightens the live-diagnostic baseline filter: a completed attempt counts only when the inspect step actually ran and the evidence artifact uploaded. This prevents a skipped diagnostic job from being mistaken for a completed inspection.
+
+Current PR #9 head is `577633fa9c623f812ce80e00c366e9f6b9e6e6aa`; its CI [43990312616](https://github.com/Baltas80/Kini-/actions/runs/43990312616), historical backtest [43990312610](https://github.com/Baltas80/Kini-/actions/runs/43990312610), data validation [43990312584](https://github.com/Baltas80/Kini-/actions/runs/43990312584) and live diagnostic [43990312660](https://github.com/Baltas80/Kini-/actions/runs/43990312660) are pending or running. The backtest run on the immediately preceding head was cancelled when this newer commit arrived; no strict common-information-time metrics are claimed yet.
+
+Next priority: finish the current-head walk-forward run and inspect its artifact for non-empty, identical strict common-time model/market samples. Keep the benchmark labelled date-aligned rather than timestamp-verified. The missing provider-issued `KINIELAGPT_AUTHORIZATION` and Football-Data commercial-use permission remain explicit external blockers. PR #9 remains a draft stacked on PR #8; no merge or direct change to `master`.
+
