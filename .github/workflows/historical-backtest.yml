@@ -43,7 +43,7 @@ on:
 # or evidence-only commit arrived. GitHub keeps one pending run per group.
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   changes:
