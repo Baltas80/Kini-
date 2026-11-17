@@ -55,6 +55,27 @@ class KinielaGPTSource:
     QUINI = "https://www.quinielista.es/xml2/porcentajes.asp?jornada={}&temporada={}"
     DETAILS = "https://api.eduardolosilla.es/detallePartido"
     HOME = "https://www.eduardolosilla.es/"
+    DETAILS_USER_AGENT = (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"
+    )
+    DETAILS_HOME_HEADERS = {
+        "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "accept-language": "es-ES,es;q=0.9,en;q=0.8",
+        "user-agent": DETAILS_USER_AGENT,
+    }
+    DETAILS_REQUEST_HEADERS = {
+        "accept": "application/json, text/plain, */*",
+        "accept-language": "es-ES,es;q=0.9,en;q=0.8",
+        "cache-control": "no-cache",
+        "origin": "https://www.eduardolosilla.es",
+        "pragma": "no-cache",
+        "referer": "https://www.eduardolosilla.es/",
+        "sec-fetch-dest": "empty",
+        "sec-fetch-mode": "cors",
+        "sec-fetch-site": "same-site",
+        "user-agent": DETAILS_USER_AGENT,
+    }
     LAE_SOURCE = LAE_SOURCE_ID
     QUINIELISTA_SOURCE = "quinielista.es:porcentajes.asp"
     KICKOFF_CROSSWALK_PATH = (
@@ -427,7 +448,9 @@ class KinielaGPTSource:
         evidence of the provider's publication time or of a fixture's kickoff.
         """
         self.session.get(
-            self.HOME, headers=self.headers, timeout=self.timeout
+            self.HOME,
+            headers=self.DETAILS_HOME_HEADERS,
+            timeout=self.timeout,
         ).raise_for_status()
         response = self.session.get(
             self.DETAILS,
@@ -436,7 +459,7 @@ class KinielaGPTSource:
                 "temporada": temporada,
                 "uts": int(time.time() * 1000),
             },
-            headers=self.headers,
+            headers=self.DETAILS_REQUEST_HEADERS,
             timeout=self.timeout,
         )
         response.raise_for_status()

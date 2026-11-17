@@ -115,10 +115,12 @@ class FakeJsonResponse:
 class FakeDetailsSession:
     def __init__(self, payload: dict) -> None:
         self.payload = payload
+        self.home_call = None
         self.details_call = None
 
     def get(self, url: str, **kwargs):
         if url == KinielaGPTSource.HOME:
+            self.home_call = kwargs
             return FakeResponse(b"home")
         if url == KinielaGPTSource.DETAILS:
             self.details_call = kwargs
@@ -155,6 +157,16 @@ def test_details_payload_preserves_provider_schema_and_receipt_timestamp(monkeyp
     assert fake_session.details_call["params"]["jornada"] == 12
     assert fake_session.details_call["params"]["temporada"] == 2026
     assert "uts" in fake_session.details_call["params"]
+    assert fake_session.home_call["headers"] == KinielaGPTSource.DETAILS_HOME_HEADERS
+    assert fake_session.details_call["headers"] == (
+        KinielaGPTSource.DETAILS_REQUEST_HEADERS
+    )
+    assert fake_session.details_call["headers"]["origin"] == (
+        "https://www.eduardolosilla.es"
+    )
+    assert fake_session.details_call["headers"]["referer"] == (
+        "https://www.eduardolosilla.es/"
+    )
 
 
 def test_details_returns_provider_records_without_changing_the_schema():
