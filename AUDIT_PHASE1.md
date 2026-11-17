@@ -3244,3 +3244,30 @@ Se corrigió además la duplicación de ejecuciones push + pull_request en ramas
 6. Mantener separado el resultado oficial postpartido para puntuar el boleto.
 
 Próxima prioridad: integrar el plan en el flujo real de generación de boletos, extendiendo el esquema para validar también el kickoff del Pleno y probando que una posición de sorteo público nunca reciba una predicción futbolística. Después, construir un ledger histórico de boletos realmente emitidos; no se debe estimar rentabilidad a partir de columnas hipotéticas sin conservar fecha de creación, coste y evidencia de cierre.
+
+## Integración del plan pre-ticket en KiniEngine y MCP — 2026-11-17
+
+<badge>Implementada y validada por CI</badge>
+
+La integración que figuraba como pendiente queda implementada en el head de código `4e9056b90386024e3771f1c178d4f0d5b4507f1d`:
+
+- El plan schema v1 exige evidencia oficial del cierre (`cutoff_evidence_url`, SHA-256 y captura UTC anterior a la creación del boleto), identidad del Pleno al 15 y su kickoff con zona horaria.
+- `first_kickoff_at` se valida contra el mínimo de los kickoffs de las posiciones 1–14 que siguen programadas y el kickoff del Pleno al 15. Las posiciones resueltas por sorteo público no se tratan como partidos disputados.
+- `KiniEngine.quiniela` acepta `coupon_plan`, snapshots pre-cierre y `ticket_id`. Valida identidad local/visitante, orden y kickoff de cada posición; valida por separado identidad y kickoff del Pleno.
+- Una posición `public_draw_expected` no pasa por `_predict_one`. Su vector procede exclusivamente del snapshot SELAE pre-cierre. Los 14 vectores ordenados se entregan sin modificación al `TicketOptimizer`.
+- El resultado incorpora un `ticket_record` JSON serializable con el plan original, fuentes, hashes, timestamps, vectores, posiciones de sorteo público, columnas, presupuesto, coste y metadatos del Pleno. Incluye ID determinista si no se facilita uno y SHA-256 canónico del registro.
+- El MCP `predict_quiniela` expone el mismo contrato y convierte las claves JSON de snapshots (`"7"`) a posiciones enteras validadas.
+- La puntuación postpartido sigue separada en `score_ticket_record`; no se usan resultados reconciliados para generar probabilidades.
+
+### Evidencia de validación
+
+- CI `44047290781`: actionlint correcto, Ruff lint correcto, Ruff format correcto y **348 tests passed, 24 warnings, 2.78 s**.
+- Validación histórica `44047290822`: **5.322 partidos completados**, `integrity_passed=true`, cero duplicados, cero conflictos de duplicados, cero etiquetas inválidas y cero discrepancias entre marcador y signo. Artefacto `kini-historical-data` publicado.
+- Piloto de cupones `44047290918`: workflow correcto; el job `pilot` se omitió por el filtro de cambios, por lo que no constituye una nueva validación del backtest de cupones.
+- Backtest histórico `44047290975`: pendiente en cola. No se atribuyen métricas predictivas nuevas a esta integración, que afecta a la generación y trazabilidad de boletos, no a las probabilidades de los modelos.
+
+### Limitaciones y siguiente trabajo
+
+El motor devuelve el registro, pero no lo escribe automáticamente en disco ni puede garantizar que un cliente MCP lo conserve. El consumidor debe persistir el JSON y los artefactos originales sin alterarlos. Las fechas y hashes son evidencia declarada y validada estructuralmente; no hay sellado temporal independiente ni autenticación criptográfica de la captura local. Sigue sin existir una muestra histórica suficiente de snapshots de participantes para evaluar probabilidades de sorteo público. El scorer actual tampoco calcula premios ni rentabilidad.
+
+Siguiente prioridad: construir un ledger append-only de boletos realmente generados, con persistencia del registro completo, hash verificable, fecha de creación, coste, cutoff y evidencias; después conectar ese ledger a la puntuación postpartido. No estimar rentabilidad con boletos hipotéticos.
