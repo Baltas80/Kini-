@@ -1,0 +1,202 @@
+{
+  "schema_version": 1,
+  "source": "SELAE",
+  "draw_date": "2022-08-14",
+  "source_url": "https://www.loteriasyapuestas.es/es/la-quiniela/resultados/la-quiniela-resultados-del-14-de-agosto-de-2022",
+  "verified_at": "2026-11-17",
+  "verification_method": "Manual review of the official SELAE result page and official SELAE press-release PDF. The 14 ordered main fixtures, team labels, scores and signs, plus Betis–Elche Pleno al 15 (3-0), were cross-checked against HistoricalQuiniela Jornada 1 of 2022/2023 and the validated Football-Data 2022/2023 SP1/SP2 dataset. HistoricalQuiniela supplies Europe/Madrid kickoff times; Football-Data supplies exact competition/date/team/score reconciliation. The official PDF text was available, but its original bytes were not retrieved; no raw-PDF digest is claimed.",
+  "snapshot_type": "normalized_json_extract_not_raw_html",
+  "supporting_sources": [
+    {
+      "role": "official_selae_result_page",
+      "url": "https://www.loteriasyapuestas.es/es/la-quiniela/resultados/la-quiniela-resultados-del-14-de-agosto-de-2022"
+    },
+    {
+      "role": "official_selae_press_release_pdf",
+      "url": "https://www.selae.es/f/loterias/documentos/Quiniela/Notas%20de%20prensa/NOTA_DE_PRENSA_DE_LA_QUINIELA_DE_FECHA_14_8_22.pdf"
+    },
+    {
+      "role": "schedule_and_kickoff_crosscheck",
+      "url": "https://www.historicoquiniela.com/historico/2022-2023/1"
+    },
+    {
+      "role": "football_data_sp1_crosscheck",
+      "url": "https://www.football-data.co.uk/mmz4281/2223/SP1.csv"
+    },
+    {
+      "role": "football_data_sp2_crosscheck",
+      "url": "https://www.football-data.co.uk/mmz4281/2223/SP2.csv"
+    }
+  ],
+  "fixtures": [
+    {
+      "number": 1,
+      "home": "Celta",
+      "away": "Espanyol",
+      "home_goals": 2,
+      "away_goals": 2,
+      "result": "X"
+    },
+    {
+      "number": 2,
+      "home": "Valladolid",
+      "away": "Villarreal",
+      "home_goals": 0,
+      "away_goals": 3,
+      "result": "2"
+    },
+    {
+      "number": 3,
+      "home": "Barcelona",
+      "away": "Rayo Vallecano",
+      "home_goals": 0,
+      "away_goals": 0,
+      "result": "X"
+    },
+    {
+      "number": 4,
+      "home": "Cádiz",
+      "away": "Real Sociedad",
+      "home_goals": 0,
+      "away_goals": 1,
+      "result": "2"
+    },
+    {
+      "number": 5,
+      "home": "Valencia",
+      "away": "Girona",
+      "home_goals": 1,
+      "away_goals": 0,
+      "result": "1"
+    },
+    {
+      "number": 6,
+      "home": "Almería",
+      "away": "Real Madrid",
+      "home_goals": 1,
+      "away_goals": 2,
+      "result": "2"
+    },
+    {
+      "number": 7,
+      "home": "Athletic Club",
+      "away": "Mallorca",
+      "home_goals": 0,
+      "away_goals": 0,
+      "result": "X"
+    },
+    {
+      "number": 8,
+      "home": "Getafe",
+      "away": "At. Madrid",
+      "home_goals": 0,
+      "away_goals": 3,
+      "result": "2"
+    },
+    {
+      "number": 9,
+      "home": "Eibar",
+      "away": "Tenerife",
+      "home_goals": 2,
+      "away_goals": 1,
+      "result": "1"
+    },
+    {
+      "number": 10,
+      "home": "Mirandés",
+      "away": "Sporting",
+      "home_goals": 1,
+      "away_goals": 1,
+      "result": "X"
+    },
+    {
+      "number": 11,
+      "home": "Leganés",
+      "away": "Alavés",
+      "home_goals": 1,
+      "away_goals": 2,
+      "result": "2"
+    },
+    {
+      "number": 12,
+      "home": "Las Palmas",
+      "away": "Zaragoza",
+      "home_goals": 0,
+      "away_goals": 0,
+      "result": "X"
+    },
+    {
+      "number": 13,
+      "home": "Racing",
+      "away": "Villarreal B",
+      "home_goals": 0,
+      "away_goals": 2,
+      "result": "2"
+    },
+    {
+      "number": 14,
+      "home": "Ibiza",
+      "away": "Granada",
+      "home_goals": 0,
+      "away_goals": 2,
+      "result": "2"
+    }
+  ],
+  "pleno": {
+    "number": 15,
+    "home": "Betis",
+    "away": "Elche",
+    "home_goals": 3,
+    "away_goals": 0,
+    "home_category": "M",
+    "away_category": "0"
+  },
+  "prize_distribution": {
+    "source_type": "official_selae_press_release_pdf_transcribed_to_normalized_extract",
+    "source_url": "https://www.selae.es/f/loterias/documentos/Quiniela/Notas%20de%20prensa/NOTA_DE_PRENSA_DE_LA_QUINIELA_DE_FECHA_14_8_22.pdf",
+    "revenue_eur": 2633274,
+    "categories": [
+      {
+        "category": "pleno_al_15",
+        "winner_count": 0,
+        "unit_prize_eur": null,
+        "status": "rollover"
+      },
+      {
+        "category": "14",
+        "winner_count": 0,
+        "unit_prize_eur": null,
+        "status": "rollover"
+      },
+      {
+        "category": "13",
+        "winner_count": 90,
+        "unit_prize_eur": 2194.4,
+        "status": "awarded"
+      },
+      {
+        "category": "12",
+        "winner_count": 1591,
+        "unit_prize_eur": 124.13,
+        "status": "awarded"
+      },
+      {
+        "category": "11",
+        "winner_count": 14042,
+        "unit_prize_eur": 14.06,
+        "status": "awarded"
+      },
+      {
+        "category": "10",
+        "winner_count": 71640,
+        "unit_prize_eur": 3.31,
+        "status": "awarded"
+      }
+    ],
+    "elige8": {
+      "revenue_eur": 68687.5,
+      "winner_count": 25,
+      "unit_prize_eur": 1511.13
+    }
+  }
+}
