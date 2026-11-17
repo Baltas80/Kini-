@@ -357,6 +357,33 @@ class TicketLedger:
             "idempotent_replay": False,
         }
 
+    def score_ticket_json(
+        self,
+        ticket_id: str,
+        reconciliation_json: str | bytes,
+    ) -> dict[str, Any]:
+        """Hash exact reconciliation JSON bytes before scoring a stored ticket."""
+        if isinstance(reconciliation_json, str):
+            raw = reconciliation_json.encode("utf-8")
+        elif isinstance(reconciliation_json, bytes):
+            raw = reconciliation_json
+        else:
+            raise TypeError("reconciliation_json must be UTF-8 text or bytes")
+        try:
+            report = json.loads(raw.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise TicketLedgerError(
+                "reconciliation JSON must contain a valid UTF-8 JSON document"
+            ) from exc
+        if not isinstance(report, dict):
+            raise TicketLedgerError("reconciliation JSON root must be an object")
+        digest = hashlib.sha256(raw).hexdigest()
+        return self.score_ticket(
+            ticket_id,
+            report,
+            reconciliation_sha256=digest,
+        )
+
     def list_ticket_scores(self, ticket_id: str) -> list[dict[str, Any]]:
         if not isinstance(ticket_id, str) or not ticket_id.strip():
             raise ValueError("ticket_id must be a non-empty string")
