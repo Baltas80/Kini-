@@ -1,5 +1,17 @@
 # Phase 1 audit — data integrity, temporal validation and model comparison
 
+## Current status override — 2026-11-17
+
+- **Working branch:** feat/immutable-ticket-ledger (PR #10 stacked on PR #9); master remains untouched.
+- **Latest accepted historical model validation:** [run 44073721157](https://github.com/Baltas80/Kini-/actions/runs/44073721157), code revision d7a577dc6fe47761d199d402e36a4fe5f7bdb251. It used the validated 5,322-row dataset (SHA-256 7251b84acd803047746c0c55c6bdabb60d9499208cfd6c781f72080295346f44), produced 5,022/5,022 model forecasts with zero errors, and evaluated 3,991 snapshot-aligned fixtures over 319 refits.
+- **Predictive conclusion:** the market remains better than every tested model configuration. No market/model blend is selected; no claim of profitability is made.
+- **Latest accepted data validation:** [run 44081951044](https://github.com/Baltas80/Kini-/actions/runs/44081951044): 5,322 fixtures, 14 sources, 56 canonical teams, 10,644/10,644 references resolved, zero duplicate/conflicting fixtures or result inconsistencies.
+- **Latest successful CI before the timestamp-guard change:** [run 44081951208](https://github.com/Baltas80/Kini-/actions/runs/44081951208), 364 tests passed. The new append-window guard is implemented but its latest CI run [44082824006](https://github.com/Baltas80/Kini-/actions/runs/44082824006) is still in progress; do not mark that change validated until it passes.
+- **Backtest workflow efficiency:** commit a94c3fc1be011f2af102845c2067110163b789de changed concurrency to cancel-in-progress=false and excluded ticket_ledger.py from model-backtest triggers. [Run 44082824018](https://github.com/Baltas80/Kini-/actions/runs/44082824018) confirmed that ledger/docs/tests-only changes set run_backtest=false.
+- **Ticket ledger:** append time is now checked against ticket creation and cutoff; four regression tests and an engine integration-clock fixture were added. The host clock is not a trusted timestamp.
+- **Still open:** Pleno al 15 scoring in the persistent ledger, coupon-level backtesting, official payout/expected-return evaluation, and exact per-fixture market capture timestamps.
+- **No PR has been merged and master has not been modified.**
+
 Date: 2026-11-15  
 Repository: Baltas80/Kini-  
 Working branch: `feat/selae-fixture-reconciliation`  
@@ -3293,6 +3305,90 @@ Limitations remain explicit: SHA-256 is not a signature or trusted timestamp; SQ
 
 Next priority: obtain the result of the already-running historical comparison and verify non-empty model samples. Do not start a duplicate full backtest unless the code or dataset changes. PR #10 remains a draft stacked on PR #9; do not merge either PR or change `master`.
 
+
+
+
+## Execution update — 2026-11-17: reproducible backtest, market audit and ledger admission window
+
+### Current-head historical backtest
+
+The corrected artifact-based workflow completed [run 44073721157](https://github.com/Baltas80/Kini-/actions/runs/44073721157) successfully on code revision d7a577dc6fe47761d199d402e36a4fe5f7bdb251.
+
+- Historical dataset: 5,322 completed fixtures, 2020-09-12 through 2026-11-16.
+- Dataset SHA-256: 7251b84acd803047746c0c55c6bdabb60d9499208cfd6c781f72080295346f44.
+- All model streams generated 5,022/5,022 forecasts with zero prediction errors.
+- Snapshot-aligned market sample: 3,991 identical fixtures across 319 snapshot dates; model refit count 319.
+- The current-head metrics match run 44047529531 to numerical precision (maximum displayed metric difference 1e-12). The ledger integration did not change model predictions.
+- All non-empty model, per-fixture ledger, cold-start fallback, schedule-screened market, common-information-time, snapshot-aligned market, fixed-book Bet365 and prequential-calibration acceptance gates passed.
+
+| Model | Brier | Log Loss | Accuracy |
+|---|---:|---:|---:|
+| Market | **0.594152** | **0.994611** | **0.510649** |
+| Market-assisted ensemble | 0.610967 | 1.019536 | 0.482836 |
+| Dixon-Coles | 0.614828 | 1.028365 | 0.482836 |
+| Fixed DC/ML ensemble | 0.613521 | 1.023526 | 0.479830 |
+| Adaptive DC/ML ensemble | 0.613768 | 1.023933 | 0.480080 |
+| ML | 0.638916 | 1.060673 | 0.442496 |
+
+For the strongest standalone model stream (market-assisted ensemble), a paired bootstrap over 319 snapshot-date clusters (20,000 resamples; seed 20261117) produced model-minus-market differences of +0.016815 Brier (95% interval [+0.013174, +0.020514]), +0.024926 Log Loss ([+0.019518, +0.030421]) and -2.78 percentage points accuracy ([-3.79, -1.74] pp). These intervals are conditional on the generated forecast stream, not prospective guarantees, and do not adjust for model selection or multiple comparisons.
+
+### Prequential market/model pooling experiment
+
+The snapshot-aligned ledger was re-analysed using an expanding prequential selector: 500 prior forecasts minimum, 1,500-row rolling window, refit every 30 snapshot dates, and a 0.00–1.00 model-weight grid in 0.01 increments. Each snapshot's weight used only earlier snapshot dates.
+
+- Dixon-Coles, fixed ensemble, combined ensemble and adaptive ensemble selected model weight 0.00 under both Brier and Log Loss objectives.
+- ML selected 0.00 under Brier. Under Log Loss it selected at most 0.01 (mean 0.001); the resulting Brier/Log Loss were 0.594171/0.994642, marginally worse than market-only 0.594152/0.994611.
+- A conditional 20,000-draw paired bootstrap over snapshot-date clusters for that ML blend gave positive loss differences: Brier [+0.0000052, +0.0000457] and Log Loss [+0.0000106, +0.0000733]. The weights were not re-estimated inside bootstrap samples.
+- Market top-two coverage was 78.45% overall and 76.18% on actual draws, versus Dixon-Coles 76.50%/70.82%, fixed ensemble 76.70%/70.00% and ML 75.19%/71.18%.
+- In all 13 league-season cells with at least 100 fixtures, every model had worse Brier and Log Loss than the market.
+
+Decision: do not ship a market/model blend or select the current ensemble as production default. The exploratory pooling procedure does not show incremental value. The historical market benchmark remains schedule-aligned, not proof of exact executable prices.
+
+### Market source provenance
+
+Football-Data's [official data notes](https://football-data.co.uk/data.php) distinguish, since 2019/20, an initial post-market-opening odds set from a separate closing-odds set whose column headings include C. The parser uses un-suffixed pre-closing columns such as B365H/D/A, not B365CH/CD/CA. Football-Data describes weekend collection on Friday afternoons and midweek collection on Tuesday afternoons; the current evaluator maps those days and excludes fixtures played on the collection weekday.
+
+The CSV does not expose exact per-fixture capture timestamps or kickoff timezones. This supports a schedule-compatible pre-closing snapshot, but does not prove exact executable availability for every fixture. Pinnacle is excluded from market inputs for match dates on/after 2025-07-23 following the provider's stale-feed warning.
+
+### Ticket ledger admission-window hardening
+
+The persistent ledger previously validated declared ticket creation/cutoff timestamps but did not compare them with the actual ledger insertion time. That allowed a ticket to be appended after cutoff while claiming an earlier creation time.
+
+Implemented on feat/immutable-ticket-ledger:
+
+- The ledger's host-clock recorded_at_utc must be UTC, at or after ticket_created_at_utc, and strictly before ticket_cutoff_at_utc.
+- A late or pre-creation append is rejected before insertion.
+- Reads reject legacy records whose stored append timestamp falls outside the declared window.
+- Idempotent replay checks the original stored timestamp, so an already valid record remains replayable after cutoff.
+- Four regression tests cover cutoff rejection, pre-creation rejection, idempotent replay after cutoff and rejection of a legacy late record.
+- The engine integration test freezes the ledger clock within the declared admission window.
+
+The timestamp is generated by the host clock. It is an admission control, not a trusted timestamp, digital signature or independent external attestation.
+
+The first CI attempt failed Ruff FURB162 because the parser unnecessarily replaced Z with +00:00. This was corrected using Python 3.11+'s native ISO parser; the engine integration test was also updated to use a deterministic pre-cutoff clock. Latest CI run 44082824006 is the acceptance gate for these changes.
+
+### Workflow efficiency
+
+Commit a94c3fc1be011f2af102845c2067110163b789de sets historical-backtest concurrency to cancel-in-progress=false and excludes kini_engine/ticket_ledger.py from model-backtest triggers. This prevents a ledger/docs-only update from cancelling a long-running model backtest or forcing an unnecessary full walk-forward run.
+
+The changes job in [run 44082824018](https://github.com/Baltas80/Kini-/actions/runs/44082824018) compared changes since the last successful backtest head and listed only:
+- .github/workflows/historical-backtest.yml
+- docs/TICKET_LEDGER.md
+- kini_engine/ticket_ledger.py
+- tests/test_core.py
+- tests/test_ticket_ledger.py
+
+It correctly emitted run_backtest=false; the workflow completed with the backtest job skipped. This skip is not counted as a predictive validation.
+
+### Remaining priorities
+
+1. Complete CI for the timestamp admission guard and inspect the exact pytest count.
+2. Implement official-evidence-backed Pleno al 15 scoring in the ticket ledger; current scoring covers the 14 main signs only.
+3. Run the coupon-level pilot explicitly and validate actual ticket coverage, prizes and cost against official SELAE outcomes.
+4. Keep expected-payout/profitability modelling separate from sign accuracy and do not claim profitability without complete payout data.
+5. Preserve the market timing limitation until exact capture timestamps are available.
+
+PR #10 remains a draft stacked on PR #9. Do not merge either PR or modify master.
 
 ## Fresh-source enforcement for historical backtests — 2026-11-17
 
