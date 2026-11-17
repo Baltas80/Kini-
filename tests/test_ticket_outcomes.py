@@ -529,9 +529,7 @@ def test_probability_builder_rejects_schedule_captured_after_ticket_creation() -
         for position in range(1, 15)
         if position != 7
     }
-    with pytest.raises(
-        TicketOutcomeError, match="schedule.*before ticket creation"
-    ):
+    with pytest.raises(TicketOutcomeError, match="schedule.*before ticket creation"):
         build_ticket_probability_vectors(
             draw_date=DRAW_DATE,
             coupon_plan=plan,
