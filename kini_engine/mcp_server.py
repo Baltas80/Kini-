@@ -200,6 +200,11 @@ def create_server(engine: KiniEngine | None = None):
         return ledger.list_ticket_records(draw_date=draw_date, limit=limit)
 
     @mcp.tool()
+    def list_ticket_scores(ticket_id: str) -> list[dict[str, Any]]:
+        """List immutable SELAE scoring results for one stored ticket."""
+        return ledger.list_ticket_scores(ticket_id)
+
+    @mcp.tool()
     def score_persisted_ticket(
         ticket_id: str,
         reconciliation_json: str,
