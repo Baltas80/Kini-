@@ -328,4 +328,3 @@ def test_prize_validation_rejects_selae_lookalike_hosts() -> None:
             snapshot,
             expected_draw_date="2022-08-14",
         )
-
