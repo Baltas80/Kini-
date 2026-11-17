@@ -335,9 +335,7 @@ def test_collect_live_diagnostic_continues_when_details_authorization_is_missing
             return 23, 2027, []
 
         def details_payload(self, jornada, temporada):
-            raise KinielaGPTAuthorizationRequired(
-                "configure KINIELAGPT_AUTHORIZATION"
-            )
+            raise KinielaGPTAuthorizationRequired("configure KINIELAGPT_AUTHORIZATION")
 
         def _xml_snapshot(self, url):
             return {"quinielista": {"porcentajes": {"partido": []}}}, (

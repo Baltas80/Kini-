@@ -451,9 +451,7 @@ def test_mcp_quiniela_keeps_public_probabilities_when_details_auth_is_missing(
             return [{"id": 1, "local": "Home", "visitante": "Away"}]
 
         def details(self, jornada, temporada):
-            raise KinielaGPTAuthorizationRequired(
-                "configure KINIELAGPT_AUTHORIZATION"
-            )
+            raise KinielaGPTAuthorizationRequired("configure KINIELAGPT_AUTHORIZATION")
 
     monkeypatch.setattr(mcp_server, "FastMCP", FakeFastMCP)
     monkeypatch.setattr(mcp_server, "KinielaGPTSource", FakeSource)
