@@ -284,10 +284,10 @@ def test_ticket_scoring_marks_pleno15_unassessed_without_official_evidence() -> 
     result = score_ticket_record(_ticket(report), report)
 
     assert result["covered_14"] is True
-    assert result["pleno15_evaluated"] is False
-    assert result["pleno15_actual"] is None
-    assert result["pleno15_hit"] is None
-    assert result["covered_full_coupon"] is None
+    assert "pleno15_evaluated" not in result
+    assert "pleno15_actual" not in result
+    assert "pleno15_hit" not in result
+    assert "covered_full_coupon" not in result
 
 
 @pytest.mark.parametrize(
