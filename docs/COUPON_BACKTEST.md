@@ -234,3 +234,33 @@ The pre-ticket plan also records `ticket_created_at_utc`. The schedule capture, 
 `schedule_captured_at_utc < ticket_created_at_utc < ticket_cutoff_at_utc < first_kickoff_at`
 
 Each public-draw status and participant snapshot must also satisfy `captured_at_utc < ticket_created_at_utc`. This prevents a ticket artifact created at 09:30 from being justified with information captured at 10:30 even if the official admission cutoff is 11:00. The timestamp ordering remains declared metadata until an independently trusted timestamping mechanism is integrated.
+
+## Integrated pre-ticket generation path — 2026-11-17
+
+The schema-v1 plan now also requires:
+
+- `cutoff_evidence_url`, `cutoff_evidence_sha256` and `cutoff_evidence_captured_at_utc`, with official SELAE HTTPS provenance and capture strictly before ticket creation;
+- `pleno15_home`, `pleno15_away` and timezone-aware `pleno15_kickoff_at`;
+- `first_kickoff_at` equal to the earliest kickoff among scheduled positions 1–14 and the Pleno al 15 fixture. A position marked `public_draw_expected` is excluded from football prediction and from the played-fixture first-kickoff candidates.
+
+The public API is now connected to the builder:
+
+```python
+result = engine.quiniela(
+    fixtures,  # 14 main fixtures plus Pleno al 15, each with an aware kickoff
+    budget=8,
+    coupon_plan=plan,
+    public_draw_snapshots={7: participant_snapshot},
+)
+ticket_record = result["ticket_record"]
+```
+
+Each of the 14 main fixtures must match the plan's home/away labels (NFKC, case and whitespace normalization only), coupon position and timezone-aware kickoff. The Pleno al 15 teams and kickoff are checked separately. Unknown aliases are not fuzzy-matched.
+
+For every `public_draw_expected` position, `KiniEngine.quiniela` skips `_predict_one` entirely. Its 1/X/2 vector must come from the matching pre-ticket SELAE participant snapshot. The other main positions use the football model. The resulting 14 vectors, in coupon order, are passed unchanged to `TicketOptimizer`. The Pleno al 15 match remains a separate football-model distribution.
+
+The returned `ticket_record` is a JSON-serializable schema-v1 direct-ticket record accepted by `score_ticket_record`. It carries the original coupon plan, schedule and cutoff evidence URLs/hashes/capture times, per-position probability vectors and source metadata, public-draw positions, Pleno identity/kickoff, all direct columns, budget and cost. `ticket_record_sha256` hashes the canonical serialized record. When no `ticket_id` is supplied, a deterministic ID is derived from the generation payload. The engine returns this record; it does not write to disk or claim that a remote MCP client has durably stored it. The caller must persist the returned JSON unchanged alongside the original source artifacts.
+
+The MCP `predict_quiniela` tool exposes the same arguments. Because JSON object keys are strings, public-draw snapshot positions are supplied as keys such as `"7"`; the tool validates and converts them to integer positions before calling the engine.
+
+The timestamps and hashes remain declared metadata: structural validation does not independently authenticate the local capture time or source bytes. The change closes the code-path integration gap, not the absence of a historical, independently timestamped participant-forecast ledger.
