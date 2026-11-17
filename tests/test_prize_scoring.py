@@ -7,8 +7,8 @@ from pathlib import Path
 import pytest
 
 from kini_engine.prize_scoring import (
-    PrizeScoringError,
     _validate_prize_distribution,
+    PrizeScoringError,
 )
 
 
