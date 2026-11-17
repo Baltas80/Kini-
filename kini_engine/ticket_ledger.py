@@ -360,7 +360,8 @@ class TicketLedger:
             pleno15_report=pleno15_report,
             pleno15_report_sha256=pleno15_digest,
         )
-        score["score_evidence_sha256"] = score_evidence_digest
+        if pleno15_report is not None:
+            score["score_evidence_sha256"] = score_evidence_digest
         score_json = _canonical_json(score)
         score_sha256 = hashlib.sha256(score_json.encode("utf-8")).hexdigest()
         recorded_at = _utc_now()
