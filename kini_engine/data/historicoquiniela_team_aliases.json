@@ -89,6 +89,38 @@
       "Valencia": "Valencia",
       "Valladolid": "Valladolid",
       "Villarreal": "Villarreal"
+    },
+    "2022-2023": {
+      "Celta": "Celta",
+      "Espanyol": "Espanol",
+      "Valladolid": "Valladolid",
+      "Villarreal": "Villarreal",
+      "Barcelona": "Barcelona",
+      "Rayo Vallecano": "Vallecano",
+      "Cádiz": "Cadiz",
+      "Real Sociedad": "Sociedad",
+      "Valencia": "Valencia",
+      "Girona": "Girona",
+      "Almería": "Almeria",
+      "Real Madrid": "Real Madrid",
+      "Athletic Club": "Ath Bilbao",
+      "Mallorca": "Mallorca",
+      "Getafe": "Getafe",
+      "At. Madrid": "Ath Madrid",
+      "Eibar": "Eibar",
+      "Tenerife": "Tenerife",
+      "Mirandés": "Mirandes",
+      "Sporting": "Sp Gijon",
+      "Leganés": "Leganes",
+      "Alavés": "Alaves",
+      "Las Palmas": "Las Palmas",
+      "Zaragoza": "Zaragoza",
+      "Racing": "Santander",
+      "Villarreal B": "Villarreal B",
+      "Ibiza": "Ibiza",
+      "Granada": "Granada",
+      "Betis": "Betis",
+      "Elche": "Elche"
     }
   }
 }
