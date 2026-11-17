@@ -113,6 +113,45 @@ def _preclose_snapshot() -> dict[str, object]:
     }
 
 
+def _coupon_plan() -> dict[str, object]:
+    positions = []
+    for position in range(1, 15):
+        if position == 7:
+            positions.append(
+                {
+                    "position": position,
+                    "fixture_status": "public_draw_expected",
+                    "home": "Postponed Home (M)",
+                    "away": "Postponed Away (M)",
+                    "kickoff_at": "2026-11-08T12:00:00+01:00",
+                    "status_evidence_url": SELAE_URL,
+                    "status_evidence_sha256": HASH_C,
+                    "status_captured_at_utc": "2026-11-08T10:15:00Z",
+                }
+            )
+        else:
+            positions.append(
+                {
+                    "position": position,
+                    "fixture_status": "scheduled",
+                    "home": f"Home {position} (M)",
+                    "away": f"Away {position} (M)",
+                    "kickoff_at": "2026-11-08T14:00:00+01:00",
+                }
+            )
+    return {
+        "schema_version": 1,
+        "provider": "SELAE",
+        "draw_date": DRAW_DATE,
+        "schedule_captured_at_utc": "2026-11-08T09:00:00Z",
+        "schedule_evidence_url": SELAE_URL,
+        "schedule_evidence_sha256": HASH_A,
+        "ticket_cutoff_at_utc": "2026-11-08T11:00:00Z",
+        "first_kickoff_at": "2026-11-08T14:00:00+01:00",
+        "positions": positions,
+    }
+
+
 def test_reconciliation_builds_complete_outcome_vector_and_preserves_public_draw() -> (
     None
 ):
@@ -235,10 +274,8 @@ def test_ticket_requires_cutoff_and_schedule_provenance() -> None:
         score_ticket_record(ticket, report)
 
 
-def test_build_probability_vectors_uses_preclose_snapshot_for_public_draw_only() -> (
-    None
-):
-    report = _reconciliation()
+def test_build_probability_vectors_uses_preclose_plan_not_realized_outcomes() -> None:
+    plan = _coupon_plan()
     model_probabilities = {
         position: {"1": 0.5, "X": 0.3, "2": 0.2}
         for position in range(1, 15)
@@ -246,11 +283,9 @@ def test_build_probability_vectors_uses_preclose_snapshot_for_public_draw_only()
     }
     result = build_ticket_probability_vectors(
         draw_date=DRAW_DATE,
-        reconciliation_report=report,
+        coupon_plan=plan,
         model_probabilities_by_position=model_probabilities,
         public_draw_snapshots={7: _preclose_snapshot()},
-        ticket_cutoff_at_utc="2026-11-08T11:00:00Z",
-        first_kickoff_at="2026-11-08T14:00:00+01:00",
     )
 
     assert len(result["probabilities"]) == 14
@@ -258,10 +293,45 @@ def test_build_probability_vectors_uses_preclose_snapshot_for_public_draw_only()
     assert result["probability_sources"][6]["source"] == "preclose_participant_forecast"
     assert result["probability_sources"][6]["captured_at_utc"] == "2026-11-08T10:30:00Z"
     assert result["public_draw_positions"] == [7]
+    assert result["schedule_evidence"]["source_sha256"] == HASH_A
+    assert "actual_main_results" not in result
+
+
+def test_probability_builder_does_not_accept_post_match_reconciliation_report() -> None:
+    report = _reconciliation()
+    model_probabilities = {
+        position: {"1": 0.5, "X": 0.3, "2": 0.2}
+        for position in range(1, 15)
+        if position != 7
+    }
+    with pytest.raises(TicketOutcomeError, match="coupon plan fields mismatch"):
+        build_ticket_probability_vectors(
+            draw_date=DRAW_DATE,
+            coupon_plan=report,
+            model_probabilities_by_position=model_probabilities,
+            public_draw_snapshots={7: _preclose_snapshot()},
+        )
+
+
+def test_probability_builder_rejects_outcome_fields_in_pre_ticket_plan() -> None:
+    plan = _coupon_plan()
+    plan["positions"][0]["home_goals"] = 2
+    model_probabilities = {
+        position: {"1": 0.5, "X": 0.3, "2": 0.2}
+        for position in range(1, 15)
+        if position != 7
+    }
+    with pytest.raises(TicketOutcomeError, match="unsupported or missing fields"):
+        build_ticket_probability_vectors(
+            draw_date=DRAW_DATE,
+            coupon_plan=plan,
+            model_probabilities_by_position=model_probabilities,
+            public_draw_snapshots={7: _preclose_snapshot()},
+        )
 
 
 def test_probability_builder_requires_snapshot_for_every_public_draw_position() -> None:
-    report = _reconciliation()
+    plan = _coupon_plan()
     model_probabilities = {
         position: {"1": 0.5, "X": 0.3, "2": 0.2}
         for position in range(1, 15)
@@ -270,29 +340,138 @@ def test_probability_builder_requires_snapshot_for_every_public_draw_position() 
     with pytest.raises(TicketOutcomeError, match="snapshots must cover"):
         build_ticket_probability_vectors(
             draw_date=DRAW_DATE,
-            reconciliation_report=report,
+            coupon_plan=plan,
             model_probabilities_by_position=model_probabilities,
             public_draw_snapshots={},
-            ticket_cutoff_at_utc="2026-11-08T11:00:00Z",
-            first_kickoff_at="2026-11-08T14:00:00+01:00",
         )
 
 
-def test_probability_builder_rejects_model_probability_for_public_draw_position() -> (
-    None
-):
-    report = _reconciliation()
+def test_probability_builder_rejects_model_probability_for_public_draw_position() -> None:
+    plan = _coupon_plan()
     model_probabilities = {
         position: {"1": 0.5, "X": 0.3, "2": 0.2} for position in range(1, 15)
     }
-    with pytest.raises(TicketOutcomeError, match="played positions only"):
+    with pytest.raises(TicketOutcomeError, match="scheduled positions only"):
         build_ticket_probability_vectors(
             draw_date=DRAW_DATE,
-            reconciliation_report=report,
+            coupon_plan=plan,
             model_probabilities_by_position=model_probabilities,
             public_draw_snapshots={7: _preclose_snapshot()},
-            ticket_cutoff_at_utc="2026-11-08T11:00:00Z",
-            first_kickoff_at="2026-11-08T14:00:00+01:00",
+        )
+
+
+def test_probability_builder_rejects_schedule_captured_at_or_after_cutoff() -> None:
+    plan = _coupon_plan()
+    plan["schedule_captured_at_utc"] = "2026-11-08T11:00:00Z"
+    model_probabilities = {
+        position: {"1": 0.5, "X": 0.3, "2": 0.2}
+        for position in range(1, 15)
+        if position != 7
+    }
+    with pytest.raises(TicketOutcomeError, match="schedule must be captured strictly before"):
+        build_ticket_probability_vectors(
+            draw_date=DRAW_DATE,
+            coupon_plan=plan,
+            model_probabilities_by_position=model_probabilities,
+            public_draw_snapshots={7: _preclose_snapshot()},
+        )
+
+
+def test_probability_builder_rejects_public_draw_status_evidence_after_cutoff() -> None:
+    plan = _coupon_plan()
+    plan["positions"][6]["status_captured_at_utc"] = "2026-11-08T11:00:00Z"
+    model_probabilities = {
+        position: {"1": 0.5, "X": 0.3, "2": 0.2}
+        for position in range(1, 15)
+        if position != 7
+    }
+    with pytest.raises(TicketOutcomeError, match="status.*strictly before ticket close"):
+        build_ticket_probability_vectors(
+            draw_date=DRAW_DATE,
+            coupon_plan=plan,
+            model_probabilities_by_position=model_probabilities,
+            public_draw_snapshots={7: _preclose_snapshot()},
+        )
+
+
+def test_probability_builder_rejects_missing_or_duplicate_schedule_positions() -> None:
+    plan = _coupon_plan()
+    plan["positions"].pop()
+    model_probabilities = {
+        position: {"1": 0.5, "X": 0.3, "2": 0.2}
+        for position in range(1, 15)
+        if position != 7
+    }
+    with pytest.raises(TicketOutcomeError, match="cover positions 1..14"):
+        build_ticket_probability_vectors(
+            draw_date=DRAW_DATE,
+            coupon_plan=plan,
+            model_probabilities_by_position=model_probabilities,
+            public_draw_snapshots={7: _preclose_snapshot()},
+        )
+
+    plan = _coupon_plan()
+    plan["positions"][1]["position"] = 1
+    with pytest.raises(TicketOutcomeError, match="duplicate position"):
+        build_ticket_probability_vectors(
+            draw_date=DRAW_DATE,
+            coupon_plan=plan,
+            model_probabilities_by_position=model_probabilities,
+            public_draw_snapshots={7: _preclose_snapshot()},
+        )
+
+
+def test_probability_builder_rejects_scheduled_kickoff_at_or_before_cutoff() -> None:
+    plan = _coupon_plan()
+    plan["positions"][0]["kickoff_at"] = "2026-11-08T10:30:00Z"
+    model_probabilities = {
+        position: {"1": 0.5, "X": 0.3, "2": 0.2}
+        for position in range(1, 15)
+        if position != 7
+    }
+    with pytest.raises(TicketOutcomeError, match="kickoff must be after ticket close"):
+        build_ticket_probability_vectors(
+            draw_date=DRAW_DATE,
+            coupon_plan=plan,
+            model_probabilities_by_position=model_probabilities,
+            public_draw_snapshots={7: _preclose_snapshot()},
+        )
+
+
+def test_probability_builder_rejects_first_kickoff_not_matching_schedule() -> None:
+    plan = _coupon_plan()
+    plan["first_kickoff_at"] = "2026-11-08T15:00:00+01:00"
+    model_probabilities = {
+        position: {"1": 0.5, "X": 0.3, "2": 0.2}
+        for position in range(1, 15)
+        if position != 7
+    }
+    with pytest.raises(TicketOutcomeError, match="earliest scheduled fixture kickoff"):
+        build_ticket_probability_vectors(
+            draw_date=DRAW_DATE,
+            coupon_plan=plan,
+            model_probabilities_by_position=model_probabilities,
+            public_draw_snapshots={7: _preclose_snapshot()},
+        )
+
+
+def test_probability_builder_rejects_cutoff_after_first_kickoff() -> None:
+    plan = _coupon_plan()
+    plan["first_kickoff_at"] = "2026-11-08T10:00:00Z"
+    for item in plan["positions"]:
+        if item["fixture_status"] == "scheduled":
+            item["kickoff_at"] = "2026-11-08T10:00:00Z"
+    model_probabilities = {
+        position: {"1": 0.5, "X": 0.3, "2": 0.2}
+        for position in range(1, 15)
+        if position != 7
+    }
+    with pytest.raises(TicketOutcomeError, match="earlier than first kickoff"):
+        build_ticket_probability_vectors(
+            draw_date=DRAW_DATE,
+            coupon_plan=plan,
+            model_probabilities_by_position=model_probabilities,
+            public_draw_snapshots={7: _preclose_snapshot()},
         )
 
 
