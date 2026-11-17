@@ -1,6 +1,5 @@
 import scripts.diagnose_kinielagpt_details as diagnostic_module
 from kini_engine.sources import KinielaGPTAuthorizationRequired
-
 from scripts.diagnose_kinielagpt_details import (
     _http_error_evidence,
     reconcile_fixture_order,

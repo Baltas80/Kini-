@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-import kini_engine.mcp_server as mcp_server
+from kini_engine import mcp_server
 import kini_engine.sources as source_module
 from kini_engine.core import SIGNS
 from kini_engine.sources import (
