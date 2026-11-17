@@ -1424,7 +1424,14 @@ def test_quiniela_pre_ticket_plan_validates_pleno15_kickoff_against_fixture():
             public_draw_snapshots=snapshots,
         )
 
-def test_quiniela_persists_pre_ticket_record_to_immutable_ledger(tmp_path):
+def test_quiniela_persists_pre_ticket_record_to_immutable_ledger(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        "kini_engine.ticket_ledger._utc_now",
+        lambda: "2026-11-08T10:59:59Z",
+    )
     plan, fixtures, snapshots = _planned_coupon_with_public_draw()
     ledger = TicketLedger(tmp_path / "tickets.sqlite3")
     engine = KiniEngine(enable_ml=False, ticket_ledger=ledger).fit(sample())
