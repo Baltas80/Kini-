@@ -208,8 +208,13 @@ def create_server(engine: KiniEngine | None = None):
     def score_persisted_ticket(
         ticket_id: str,
         reconciliation_json: str,
+        pleno15_json: str | None = None,
     ) -> dict[str, Any]:
-        """Score a stored ticket and hash the exact supplied SELAE JSON bytes."""
-        return ledger.score_ticket_json(ticket_id, reconciliation_json)
+        """Score 14 signs and optional official Pleno al 15 result evidence."""
+        return ledger.score_ticket_json(
+            ticket_id,
+            reconciliation_json,
+            pleno15_json=pleno15_json,
+        )
 
     return mcp
