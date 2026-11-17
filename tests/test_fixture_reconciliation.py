@@ -241,6 +241,24 @@ def test_reconciles_verified_fixture_and_excludes_non_played_public_draws():
     assert report["excluded_not_played_count"] == 13
     assert report["unresolved_count"] == 0
     assert len(report["historical_dataset_sha256"]) == 64
+
+    # A public-draw sign remains a coupon outcome, but never a football label.
+    excluded = report["excluded_fixtures"][0]
+    assert excluded["position"] == 2
+    assert excluded["sign"] == "1"
+    assert excluded["score_status"] == "not_played"
+    assert excluded["sign_determination"] == "public_draw"
+    assert excluded["reported_score_raw"] == "0-0"
+    assert excluded["home_goals"] is None
+    assert excluded["away_goals"] is None
+    assert excluded["sign_evidence_url"] == "https://www.loteriasyapuestas.es/aviso.pdf"
+    assert excluded["sign_evidence_checked_at_utc"] == CHECKED_AT
+    assert excluded["status_reason"].startswith("Synthetic non-played fixture")
+    assert excluded["source_url"] == SELAE_URL
+    assert excluded["raw_sha256"] == "a" * 64
+    assert excluded["training_label_eligible"] is False
+    assert excluded["ticket_outcome_eligible"] is True
+
     resolved = report["resolved_fixtures"][0]
     assert resolved["home_team_id"] == "team:es:malaga"
     assert resolved["away_team_id"] == "team:es:santander"
