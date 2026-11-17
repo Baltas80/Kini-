@@ -1211,15 +1211,17 @@ def score_ticket_record(
             for pair in validated["pleno15_combinations"]
         }
         pleno15_hit = actual_pleno_pair in selected_pleno_pairs
+        pleno15_actual = {
+            "home_category": actual_pleno_pair[0],
+            "away_category": actual_pleno_pair[1],
+        }
+        if validated_pleno15["home_goals"] is not None:
+            pleno15_actual["home_goals"] = validated_pleno15["home_goals"]
+            pleno15_actual["away_goals"] = validated_pleno15["away_goals"]
         result.update(
             {
                 "pleno15_evaluated": True,
-                "pleno15_actual": {
-                    "home_goals": validated_pleno15["home_goals"],
-                    "away_goals": validated_pleno15["away_goals"],
-                    "home_category": actual_pleno_pair[0],
-                    "away_category": actual_pleno_pair[1],
-                },
+                "pleno15_actual": pleno15_actual,
                 "pleno15_hit": pleno15_hit,
                 "covered_full_coupon": (actual in set(columns)) and pleno15_hit,
                 "pleno15_outcome_provenance": validated_pleno15,
