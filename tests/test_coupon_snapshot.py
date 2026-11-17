@@ -579,3 +579,107 @@ def test_jornada_1_2021_2022_official_snapshot_matches_reviewed_selae_results() 
     assert verified["official_main_matches_verified"] is True
     assert verified["official_pleno_verified"] is True
     assert digest == hashlib.sha256(path.read_bytes()).hexdigest()
+ 
+def test_jornada_1_2022_2023_official_snapshot_matches_reviewed_selae_results() -> None:
+    path = (
+        Path(__file__).resolve().parents[1]
+        / "kini_engine"
+        / "data"
+        / "selae_official_coupon_results"
+        / "2022-2023-1.json"
+    )
+    snapshot, digest = load_official_coupon_snapshot(path)
+
+    expected = [
+        ("Celta", "Espanyol", 2, 2, "X"),
+        ("Valladolid", "Villarreal", 0, 3, "2"),
+        ("Barcelona", "Rayo Vallecano", 0, 0, "X"),
+        ("Cádiz", "Real Sociedad", 0, 1, "2"),
+        ("Valencia", "Girona", 1, 0, "1"),
+        ("Almería", "Real Madrid", 1, 2, "2"),
+        ("Athletic Club", "Mallorca", 0, 0, "X"),
+        ("Getafe", "At. Madrid", 0, 3, "2"),
+        ("Eibar", "Tenerife", 2, 1, "1"),
+        ("Mirandés", "Sporting", 1, 1, "X"),
+        ("Leganés", "Alavés", 1, 2, "2"),
+        ("Las Palmas", "Zaragoza", 0, 0, "X"),
+        ("Racing", "Villarreal B", 0, 2, "2"),
+        ("Ibiza", "Granada", 0, 2, "2"),
+    ]
+    actual = [
+        (
+            item["home"],
+            item["away"],
+            item["home_goals"],
+            item["away_goals"],
+            item["result"],
+        )
+        for item in snapshot["fixtures"]
+    ]
+    assert snapshot["draw_date"] == "2022-08-14"
+    assert snapshot["source_url"] == (
+        "https://www.loteriasyapuestas.es/es/la-quiniela/resultados/"
+        "la-quiniela-resultados-del-14-de-agosto-de-2022"
+    )
+    sources = {item["role"]: item["url"] for item in snapshot["supporting_sources"]}
+    assert sources["official_selae_press_release_pdf"].endswith(
+        "NOTA_DE_PRENSA_DE_LA_QUINIELA_DE_FECHA_14_8_22.pdf"
+    )
+    assert sources["schedule_and_kickoff_crosscheck"] == (
+        "https://www.historicoquiniela.com/historico/2022-2023/1"
+    )
+    assert sources["football_data_sp1_crosscheck"] == (
+        "https://www.football-data.co.uk/mmz4281/2223/SP1.csv"
+    )
+    assert sources["football_data_sp2_crosscheck"] == (
+        "https://www.football-data.co.uk/mmz4281/2223/SP2.csv"
+    )
+    assert actual == expected
+    assert snapshot["pleno"] == {
+        "number": 15,
+        "home": "Betis",
+        "away": "Elche",
+        "home_goals": 3,
+        "away_goals": 0,
+        "home_category": "M",
+        "away_category": "0",
+    }
+    prize = snapshot["prize_distribution"]
+    assert prize["revenue_eur"] == 2_633_274.00
+    assert prize["categories"] == [
+        {"category": "pleno_al_15", "winner_count": 0, "unit_prize_eur": None, "status": "rollover"},
+        {"category": "14", "winner_count": 0, "unit_prize_eur": None, "status": "rollover"},
+        {"category": "13", "winner_count": 90, "unit_prize_eur": 2194.40, "status": "awarded"},
+        {"category": "12", "winner_count": 1591, "unit_prize_eur": 124.13, "status": "awarded"},
+        {"category": "11", "winner_count": 14042, "unit_prize_eur": 14.06, "status": "awarded"},
+        {"category": "10", "winner_count": 71640, "unit_prize_eur": 3.31, "status": "awarded"},
+    ]
+    assert prize["elige8"] == {
+        "revenue_eur": 68_687.50,
+        "winner_count": 25,
+        "unit_prize_eur": 1511.13,
+    }
+
+    coupon = {
+        "coupon_id": "2022-2023:01",
+        "source_date": "2022-08-14",
+        "fixtures": [dict(item) for item in snapshot["fixtures"]]
+        + [
+            {
+                "number": 15,
+                "home": snapshot["pleno"]["home"],
+                "away": snapshot["pleno"]["away"],
+                "home_goals": snapshot["pleno"]["home_goals"],
+                "away_goals": snapshot["pleno"]["away_goals"],
+                "pleno_home_category": snapshot["pleno"]["home_category"],
+                "pleno_away_category": snapshot["pleno"]["away_category"],
+            }
+        ],
+    }
+    verified = verify_coupon_against_selae_snapshot(
+        coupon, snapshot, snapshot_sha256=digest
+    )
+    assert verified["official_main_matches_verified"] is True
+    assert verified["official_pleno_verified"] is True
+    assert digest == hashlib.sha256(path.read_bytes()).hexdigest()
+
