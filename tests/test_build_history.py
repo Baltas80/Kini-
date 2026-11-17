@@ -80,7 +80,9 @@ def test_fetch_csv_require_fresh_rejects_stale_cache_fallback(
     os.utime(cache, (old, old))
     session = FakeSession(error=requests.Timeout("provider timed out"))
 
-    with pytest.raises(RuntimeError, match="require_fresh impide usar la caché anterior"):
+    with pytest.raises(
+        RuntimeError, match="require_fresh impide usar la caché anterior"
+    ):
         fetch_csv(
             "https://example.test/source.csv",
             cache,
@@ -94,7 +96,9 @@ def test_fetch_csv_require_fresh_rejects_stale_cache_fallback(
 
 
 def test_fetch_csv_require_fresh_cannot_be_offline(tmp_path: Path) -> None:
-    with pytest.raises(ValueError, match="offline mode cannot be combined with require_fresh"):
+    with pytest.raises(
+        ValueError, match="offline mode cannot be combined with require_fresh"
+    ):
         fetch_csv(
             "https://example.test/source.csv",
             tmp_path / "missing.csv",
