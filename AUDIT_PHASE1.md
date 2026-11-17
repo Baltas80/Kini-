@@ -3187,3 +3187,18 @@ Implementation commit: [ac609de](https://github.com/Baltas80/Kini-/commit/ac609d
 - No new model metric, ticket payout, expected-value or profitability claim is made.
 
 Follow-up workflow changes add the ticket-outcome module, CLI and tests to the explicit Ruff lint/format commands; exclude the evidence-only ticket scorer from historical model backtests; and prevent coupon documentation-only changes from rerunning the single-coupon pilot.
+
+
+## Pre-ticket probability builder leakage correction — 2026-11-17
+
+A point-in-time review of the new public-draw ticket bridge found a critical contract error: `build_ticket_probability_vectors` was deriving the scheduled/public-draw position set by calling `outcomes_from_reconciliation`. That reconciliation report is post-match and requires realized scores for played fixtures. Although the function did not directly copy those scores into probability vectors, it made the pre-ticket forecast path depend on future outcomes and could not represent a genuine ticket-construction workflow.
+
+The builder now consumes a separate, strict schema-version-1 **schedule-only coupon plan**. It does not accept the post-match reconciliation report. The plan contains the 14 ordered positions, schedule capture time and evidence hash, ticket cutoff, first kickoff and fixture status. A `public_draw_expected` position additionally requires official SELAE suspension/public-draw evidence captured strictly before cutoff. Scheduled fixture kickoffs must be after cutoff; the declared first kickoff must equal the earliest scheduled fixture kickoff. Unknown fields and outcome-bearing fields (scores, signs, result labels or reconciliation collections) are rejected.
+
+Football-model probability vectors are accepted only for scheduled positions. Public-draw-expected positions require a separate official SELAE participant-forecast snapshot with a timezone-aware capture strictly before cutoff. Post-close ball counts remain rejected. The post-match reconciliation report is still used only by `score_ticket_record` to score persisted columns against realized official outcomes.
+
+Implementation:
+- `1cd266e`: replace the outcome-dependent builder with strict schedule-plan validation.
+- `b53e89d`: regression tests proving the builder works without realized results, rejects post-match reconciliation input and rejects future/unknown schedule data.
+
+The previous builder contract was not safe for pre-kickoff use. This correction is a P2 leakage fix and a prerequisite for claiming that the public-draw ticket construction path is temporally valid. CI for the corrected code is being run on the current PR head; no new predictive metrics, public-draw forecast sample, prize estimate or profitability claim is made. The local schedule and snapshot timestamps remain declared metadata and are not independently authenticated.
