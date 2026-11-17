@@ -18,6 +18,7 @@ from kini_engine.core import (
     score_grid,
     surprise_signal,
 )
+from kini_engine.ticket_outcomes import TicketOutcomeError
 
 
 def sample():
@@ -1264,3 +1265,160 @@ def test_joint_scenario_coverage_rejects_non_string_outcomes():
             [["1"] * 13 + [2]],
         )
 
+
+
+
+def _planned_coupon_with_public_draw():
+    draw_date = "2026-11-08"
+    selae_url = (
+        "https://www.loteriasyapuestas.es/es/la-quiniela/escrutinios/"
+        "la-quiniela-premios-y-ganadores-del-08-de-noviembre-de-2026"
+    )
+    schedule_hash = "a" * 64
+    cutoff_hash = "b" * 64
+    status_hash = "c" * 64
+    positions = []
+    fixtures = []
+    for position in range(1, 15):
+        home = f"Home{position}"
+        away = f"Away{position}"
+        kickoff = (
+            "2026-11-08T12:00:00+01:00"
+            if position == 7
+            else "2026-11-08T14:00:00+01:00"
+        )
+        if position == 7:
+            positions.append(
+                {
+                    "position": position,
+                    "fixture_status": "public_draw_expected",
+                    "home": home,
+                    "away": away,
+                    "kickoff_at": kickoff,
+                    "status_evidence_url": selae_url,
+                    "status_evidence_sha256": status_hash,
+                    "status_captured_at_utc": "2026-11-08T10:15:00Z",
+                }
+            )
+        else:
+            positions.append(
+                {
+                    "position": position,
+                    "fixture_status": "scheduled",
+                    "home": home,
+                    "away": away,
+                    "kickoff_at": kickoff,
+                }
+            )
+        fixtures.append(Match(kickoff, home, away))
+
+    pleno_kickoff = "2026-11-08T15:00:00+01:00"
+    fixtures.append(Match(pleno_kickoff, "PlenoHome", "PlenoAway"))
+    plan = {
+        "schema_version": 1,
+        "provider": "SELAE",
+        "draw_date": draw_date,
+        "schedule_captured_at_utc": "2026-11-08T09:00:00Z",
+        "ticket_created_at_utc": "2026-11-08T10:45:00Z",
+        "schedule_evidence_url": selae_url,
+        "schedule_evidence_sha256": schedule_hash,
+        "ticket_cutoff_at_utc": "2026-11-08T11:00:00Z",
+        "cutoff_evidence_url": selae_url,
+        "cutoff_evidence_sha256": cutoff_hash,
+        "cutoff_evidence_captured_at_utc": "2026-11-08T09:15:00Z",
+        "first_kickoff_at": "2026-11-08T14:00:00+01:00",
+        "pleno15_home": "PlenoHome",
+        "pleno15_away": "PlenoAway",
+        "pleno15_kickoff_at": pleno_kickoff,
+        "positions": positions,
+    }
+    snapshot = {
+        "schema_version": 1,
+        "provider": "SELAE",
+        "source_id": "participant-forecast-capture-001",
+        "draw_date": draw_date,
+        "position": 7,
+        "captured_at_utc": "2026-11-08T10:30:00Z",
+        "ticket_cutoff_at_utc": "2026-11-08T11:00:00Z",
+        "source_url": selae_url,
+        "source_sha256": cutoff_hash,
+        "probabilities": {"1": 0.12, "X": 0.16, "2": 0.72},
+    }
+    return plan, fixtures, {7: snapshot}
+
+
+def test_quiniela_integrates_pre_ticket_plan_without_predicting_public_draw_fixture():
+    plan, fixtures, snapshots = _planned_coupon_with_public_draw()
+    engine = KiniEngine(enable_ml=False).fit(sample())
+    observed_predictions = []
+    original_predict_one = engine._predict_one
+
+    def record_prediction(match, history, mode="ensemble", model_history=None):
+        observed_predictions.append(match.home)
+        return original_predict_one(
+            match,
+            history,
+            mode=mode,
+            model_history=model_history,
+        )
+
+    engine._predict_one = record_prediction
+    result = engine.quiniela(
+        fixtures,
+        budget=2,
+        coupon_plan=plan,
+        public_draw_snapshots=snapshots,
+    )
+
+    assert "Home7" not in observed_predictions
+    assert "PlenoHome" in observed_predictions
+    assert len(observed_predictions) == 14
+    assert len(result["predictions"]) == 15
+    assert result["predictions"][6] is None
+    assert result["ticket_record"]["columns"] == result["ticket"]["columns"]
+    assert result["ticket_record"]["coupon_plan"] == plan
+    assert result["ticket_record"]["probability_vectors"][6] == snapshots[7]["probabilities"]
+    assert result["ticket_record"]["probability_sources"][6]["source"] == (
+        "preclose_participant_forecast"
+    )
+    assert result["ticket_record"]["probability_sources"][0]["model_mode"] == "ensemble"
+    assert result["ticket_record"]["pleno15_kickoff_at"] == (
+        "2026-11-08T15:00:00+01:00"
+    )
+    assert result["ticket_record"]["first_kickoff_at"] == (
+        "2026-11-08T14:00:00+01:00"
+    )
+    assert result["ticket_id"] == result["ticket_record"]["ticket_id"]
+    assert len(result["ticket_record_sha256"]) == 64
+
+
+def test_quiniela_pre_ticket_plan_rejects_fixture_identity_or_order_mismatch():
+    plan, fixtures, snapshots = _planned_coupon_with_public_draw()
+    fixtures[0] = Match(fixtures[0].date, "WrongHome", fixtures[0].away)
+
+    engine = KiniEngine(enable_ml=False).fit(sample())
+    with pytest.raises(TicketOutcomeError, match="identity or coupon order"):
+        engine.quiniela(
+            fixtures,
+            budget=2,
+            coupon_plan=plan,
+            public_draw_snapshots=snapshots,
+        )
+
+
+def test_quiniela_pre_ticket_plan_validates_pleno15_kickoff_against_fixture():
+    plan, fixtures, snapshots = _planned_coupon_with_public_draw()
+    fixtures[14] = Match(
+        "2026-11-08T16:00:00+01:00",
+        "PlenoHome",
+        "PlenoAway",
+    )
+
+    engine = KiniEngine(enable_ml=False).fit(sample())
+    with pytest.raises(TicketOutcomeError, match="Pleno al 15 kickoff does not match"):
+        engine.quiniela(
+            fixtures,
+            budget=2,
+            coupon_plan=plan,
+            public_draw_snapshots=snapshots,
+        )
