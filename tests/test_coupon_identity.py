@@ -116,6 +116,7 @@ def test_jornada_19_aliases_resolve_through_canonical_team_registry() -> None:
         "Valladolid": "Valladolid",
         "Osasuna": "Osasuna",
         "Lugo": "Lugo",
+        "Málaga": "Malaga",
         "Rayo Vallecano": "Vallecano",
         "Sabadell": "Sabadell",
         "R. Oviedo": "Oviedo",
@@ -174,7 +175,7 @@ def test_jornada_29_girona_and_castellon_aliases_resolve_through_canonical_regis
         assert resolved.team_id == team_id
 
 
-def test_jornada_1_2021_2022_aliases_resolve_through_canonical_team_registry() -> None:
+def test_2021_2022_coupon_aliases_resolve_through_canonical_team_registry() -> None:
     from kini_engine.coupon_identity import load_coupon_team_aliases
     from kini_engine.team_identity import TeamIdentityRegistry
 
@@ -183,6 +184,8 @@ def test_jornada_1_2021_2022_aliases_resolve_through_canonical_team_registry() -
     expected = {
         "Alavés": "Alaves",
         "Alcorcón": "Alcorcon",
+        "Almería": "Almeria",
+        "Amorebieta": "Amorebieta",
         "At. Madrid": "Ath Madrid",
         "Athletic Club": "Ath Bilbao",
         "Barcelona": "Barcelona",
@@ -190,15 +193,20 @@ def test_jornada_1_2021_2022_aliases_resolve_through_canonical_team_registry() -
         "Burgos": "Burgos",
         "Cádiz": "Cadiz",
         "Celta": "Celta",
+        "Eibar": "Eibar",
         "Elche": "Elche",
         "Espanyol": "Espanol",
         "Fuenlabrada": "Fuenlabrada",
+        "Girona": "Girona",
         "Granada": "Granada",
+        "Huesca": "Huesca",
+        "Ibiza": "Ibiza",
         "Las Palmas": "Las Palmas",
         "Leganés": "Leganes",
         "Levante": "Levante",
         "Lugo": "Lugo",
         "Mallorca": "Mallorca",
+        "Mirandés": "Mirandes",
         "Osasuna": "Osasuna",
         "Ponferradina": "Ponferradina",
         "R. Oviedo": "Oviedo",
