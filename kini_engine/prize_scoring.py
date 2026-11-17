@@ -417,10 +417,13 @@ def evaluate_official_prize_snapshot(
                 tier_counts["pleno_al_15"] += 1
 
     total_bets = len(columns) * len(pleno15_combinations)
+    main_tier_bets = sum(
+        tier_counts[name] for name in ("14", "13", "12", "11", "10")
+    )
     if (
-        isinstance(total_bets, bool)
-        or total_bets < 1
-        or sum(tier_counts.values()) > total_bets + tier_counts["pleno_al_15"]
+        total_bets < 1
+        or main_tier_bets > total_bets
+        or tier_counts["pleno_al_15"] > tier_counts["14"]
     ):
         raise PrizeScoringError("prize tier counts exceed the expanded direct-bet count")
 

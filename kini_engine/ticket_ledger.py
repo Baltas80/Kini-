@@ -328,8 +328,10 @@ class TicketLedger:
         reconciliation_sha256: str,
         pleno15_report: dict[str, Any] | None = None,
         pleno15_sha256: str | None = None,
+        official_result_snapshot: dict[str, Any] | None = None,
+        official_result_snapshot_sha256: str | None = None,
     ) -> dict[str, Any]:
-        """Score a stored ticket against exact fixture and optional Pleno evidence."""
+        """Score a stored ticket against fixture, Pleno and optional prize evidence."""
         reconciliation_digest = _sha256(reconciliation_sha256, "reconciliation_sha256")
         if official_result_snapshot is None:
             if official_result_snapshot_sha256 is not None:
@@ -351,7 +353,7 @@ class TicketLedger:
                     )
                 pleno15_digest = _sha256(pleno15_sha256, "pleno15_sha256")
                 score_evidence_digest = hashlib.sha256(
-                    b"KINI-TICKET-SCORE-EVIDENCE-V1\\x00"
+                    b"KINI-TICKET-SCORE-EVIDENCE-V1\x00"
                     + bytes.fromhex(reconciliation_digest)
                     + bytes.fromhex(pleno15_digest)
                 ).hexdigest()
@@ -369,7 +371,7 @@ class TicketLedger:
                 official_result_snapshot_sha256, "official_result_snapshot_sha256"
             )
             score_evidence_digest = hashlib.sha256(
-                b"KINI-TICKET-SCORE-EVIDENCE-V2\\x00"
+                b"KINI-TICKET-SCORE-EVIDENCE-V2\x00"
                 + bytes.fromhex(reconciliation_digest)
                 + bytes.fromhex(pleno15_digest)
                 + bytes.fromhex(snapshot_digest)
