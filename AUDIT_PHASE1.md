@@ -3119,3 +3119,21 @@ Validation on the corrected code head:
 - Coupon backtest [44023470025](https://github.com/Baltas80/Kini-/actions/runs/44023470025) skipped by its path filter because coupon-model code/data did not change. Historical walk-forward [44023470115](https://github.com/Baltas80/Kini-/actions/runs/44023470115) skipped because no predictive code changed. Archive discovery [44023470044](https://github.com/Baltas80/Kini-/actions/runs/44023470044) skipped the live fetch because the discovery script did not change; it produced no new SELAE archive evidence.
 
 Scope remains deliberately narrow: public-draw signs and provenance are now preserved in `excluded_fixtures`, but the current coupon-level backtest does not yet consume those records. No model forecast or historical ticket-performance claim is added. A future ticket evaluator must handle the public-draw event separately from football predictions and keep it out of match-level accuracy/calibration metrics.
+
+## Public-draw probability semantics — 2026-11-17
+
+Official SELAE evidence resolves an important modeling question: a postponed fixture settled by public draw must **not** be assigned a uniform 1/X/2 distribution. The actas for the public draw state that the number of red/blue/yellow balls is supplied from the central system's participant forecasts, after betting admission closes.
+
+Verified official examples:
+- Levante–Villarreal, 15-12-2025: 12/16/72 balls for 1/X/2 — https://www.loteriasyapuestas.es/f/loterias/web_corporativa/Comunicacion/Avisos_de_interes/ACTA%20PORCENTAJE%20BOLAS%20Y%20PRON%C3%93STICOS%20JORNADA%2028%C2%AA%20DE%20LA%20QUINIELA.pdf
+- Villarreal–Espanyol, 04-03-2025: 83/11/6 — https://www.loteriasyapuestas.es/f/loterias/web_corporativa/Comunicacion/Avisos_de_interes/QUINIELA%20JDA%2046%20PORCENTAJES%20BOLAS%20SUSPENSI%C3%93N.pdf
+- Dundee United–Aberdeen, 12-02-2026: 39/35/26 — https://www.loteriasyapuestas.es/f/loterias/web_corporativa/Comunicacion/Avisos_de_interes/QUINIELA%20JDA%2041%20PORCENTAJES%20BOLAS%20SUSPENSI%C3%93N.pdf
+- The official acta template states that SELAE publishes participant forecast percentages when betting admission closes: https://www.loteriasyapuestas.es/f/loterias/documentos/Quiniela/Estad%C3%ADsticas%20de%20pron%C3%B3sticos/Temporada%202018_2019/Pronos_1x2_016_18-19_S.pdf
+
+Technical decision:
+- Preserve the realized public-draw sign for coupon outcome scoring.
+- If an official acta is available, preserve its ball counts separately as post-close public-draw metadata; do not treat them as a football forecast.
+- Do not use those final counts to construct a ticket that must be submitted before betting closes. They are not available at that decision time. A pre-close estimate would need its own timestamped participant-forecast snapshot.
+- Keep the public-draw outcome, its ex-post ball distribution and played-match P(1/X/2) probabilities as separate data types.
+
+The new ticket_outcome_eligible flag only preserves the realized coupon sign; it does not imply that the current optimizer consumes the record or that a probability vector has been estimated. No public-draw probability or ticket-performance metric has been added.
