@@ -7,6 +7,7 @@ import pytest
 
 from scripts.import_selae_press_release import (
     import_press_release,
+    main,
     parse_selae_press_release_text,
     validate_draw_date_in_text,
     validate_official_source_url,
@@ -179,6 +180,29 @@ def test_import_emits_hashable_pleno15_report_for_ticket_scoring(
     assert report["away_category"] == "2"
     assert report["source_sha256"] == hashlib.sha256(pdf_bytes).hexdigest()
     assert report["verified_at_utc"] == "2026-11-08T16:00:00Z"
+
+
+def test_import_cli_rejects_same_combined_and_pleno_output_path(
+    tmp_path: Path,
+) -> None:
+    output = tmp_path / "result.json"
+    result = main(
+        [
+            "--pdf",
+            str(tmp_path / "not-read.pdf"),
+            "--draw-date",
+            "2026-11-08",
+            "--source-url",
+            "https://www.loteriasyapuestas.es/f/loterias/documentos/nota.pdf",
+            "--output",
+            str(output),
+            "--pleno15-output",
+            str(output),
+        ]
+    )
+
+    assert result == 2
+    assert not output.exists()
 
 
 def test_import_rejects_non_pdf_bytes_before_text_extraction(tmp_path: Path) -> None:
