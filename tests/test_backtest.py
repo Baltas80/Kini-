@@ -1217,7 +1217,7 @@ def test_snapshot_aligned_backtest_refits_once_per_snapshot_and_excludes_snapsho
                     "kickoff_evidence_url": "https://example.com/official-schedule",
                     "lae_captured_at": captured.isoformat(),
                     "kickoff_evidence_checked_at_utc": checked.isoformat(),
-                    "kickoff_at": fixture_date.isoformat() + "T20:00:00+00:00",
+                    "kickoff_at": fixture_date.date().isoformat() + "T20:00:00+00:00",
                 }
             )
         return Match(
