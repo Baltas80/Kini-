@@ -343,4 +343,3 @@ def test_ticket_ledger_rejects_legacy_late_record_on_read(tmp_path):
 
     with pytest.raises(TicketLedgerError, match="before ticket cutoff"):
         ledger.get_ticket_record(str(ticket["ticket_id"]))
-
