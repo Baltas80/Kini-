@@ -721,10 +721,17 @@ def _validate_ticket_record(ticket: dict[str, Any]) -> dict[str, Any]:
         )
 
     plan = _validate_coupon_plan(ticket.get("coupon_plan"), draw_date)
-    if created_at != plan["ticket_created_at_utc"] or cutoff != plan["ticket_cutoff_at_utc"]:
-        raise TicketOutcomeError("ticket timestamps do not match the validated coupon plan")
+    if (
+        created_at != plan["ticket_created_at_utc"]
+        or cutoff != plan["ticket_cutoff_at_utc"]
+    ):
+        raise TicketOutcomeError(
+            "ticket timestamps do not match the validated coupon plan"
+        )
     if first_kickoff.astimezone(UTC) != plan["first_kickoff_at"].astimezone(UTC):
-        raise TicketOutcomeError("first_kickoff_at does not match the validated coupon plan")
+        raise TicketOutcomeError(
+            "first_kickoff_at does not match the validated coupon plan"
+        )
 
     evidence_fields = (
         (
@@ -766,19 +773,26 @@ def _validate_ticket_record(ticket: dict[str, Any]) -> dict[str, Any]:
 
     pleno_home = _required_text(ticket.get("pleno15_home"), "pleno15_home")
     pleno_away = _required_text(ticket.get("pleno15_away"), "pleno15_away")
-    pleno_kickoff = _parse_timestamp(ticket.get("pleno15_kickoff_at"), "pleno15_kickoff_at")
+    pleno_kickoff = _parse_timestamp(
+        ticket.get("pleno15_kickoff_at"), "pleno15_kickoff_at"
+    )
     if (
         pleno_home != plan["pleno15_home"]
         or pleno_away != plan["pleno15_away"]
         or pleno_kickoff.astimezone(UTC) != plan["pleno15_kickoff_at"].astimezone(UTC)
     ):
-        raise TicketOutcomeError("Pleno al 15 identity/kickoff does not match coupon plan")
+        raise TicketOutcomeError(
+            "Pleno al 15 identity/kickoff does not match coupon plan"
+        )
 
     raw_public_positions = ticket.get("public_draw_positions")
     expected_public_positions = sorted(plan["public_draw_positions"])
     if (
         not isinstance(raw_public_positions, list)
-        or any(isinstance(value, bool) or not isinstance(value, int) for value in raw_public_positions)
+        or any(
+            isinstance(value, bool) or not isinstance(value, int)
+            for value in raw_public_positions
+        )
         or raw_public_positions != expected_public_positions
     ):
         raise TicketOutcomeError(
@@ -798,7 +812,12 @@ def _validate_ticket_record(ticket: dict[str, Any]) -> dict[str, Any]:
         raise TicketOutcomeError("ticket must contain 14 probability-source records")
     probability_sources: list[dict[str, Any]] = []
     for position, source in enumerate(raw_sources, start=1):
-        if not isinstance(source, dict) or source.get("position") != position:
+        if (
+            not isinstance(source, dict)
+            or isinstance(source.get("position"), bool)
+            or not isinstance(source.get("position"), int)
+            or source.get("position") != position
+        ):
             raise TicketOutcomeError(
                 f"probability_sources[{position}] must identify coupon position {position}"
             )
@@ -811,11 +830,16 @@ def _validate_ticket_record(ticket: dict[str, Any]) -> dict[str, Any]:
                 "source_url",
                 "source_sha256",
             }
-            if set(source) != expected_source_fields or source.get("source") != "preclose_participant_forecast":
+            if (
+                set(source) != expected_source_fields
+                or source.get("source") != "preclose_participant_forecast"
+            ):
                 raise TicketOutcomeError(
                     f"position {position} must retain complete pre-close public-draw provenance"
                 )
-            source_id = _required_text(source.get("source_id"), f"position {position}.source_id")
+            source_id = _required_text(
+                source.get("source_id"), f"position {position}.source_id"
+            )
             source_url = _validate_official_selae_url(
                 source.get("source_url"), f"position {position}.source_url"
             )
@@ -844,7 +868,9 @@ def _validate_ticket_record(ticket: dict[str, Any]) -> dict[str, Any]:
             if (
                 set(source) != expected_source_fields
                 or source.get("source") != "football_model"
-                or source.get("model_mode") not in {"ensemble", "ensemble_dc_ml", "dc", "ml"}
+                or not isinstance(source.get("model_mode"), str)
+                or source.get("model_mode")
+                not in {"ensemble", "ensemble_dc_ml", "dc", "ml"}
             ):
                 raise TicketOutcomeError(
                     f"position {position} must identify a supported football-model forecast"
@@ -862,7 +888,9 @@ def _validate_ticket_record(ticket: dict[str, Any]) -> dict[str, Any]:
         if (
             not isinstance(raw_column, list)
             or len(raw_column) != 14
-            or any(not isinstance(sign, str) or sign not in SIGNS for sign in raw_column)
+            or any(
+                not isinstance(sign, str) or sign not in SIGNS for sign in raw_column
+            )
         ):
             raise TicketOutcomeError(
                 f"ticket column {index} must contain 14 valid signs"
@@ -876,17 +904,23 @@ def _validate_ticket_record(ticket: dict[str, Any]) -> dict[str, Any]:
     categories = {"0", "1", "2", "M"}
     raw_pleno = ticket.get("pleno15_combinations")
     if not isinstance(raw_pleno, list) or not 1 <= len(raw_pleno) <= 16:
-        raise TicketOutcomeError("pleno15_combinations must contain 1 to 16 category pairs")
+        raise TicketOutcomeError(
+            "pleno15_combinations must contain 1 to 16 category pairs"
+        )
     pleno_combinations: list[dict[str, str]] = []
     seen_pairs: set[tuple[str, str]] = set()
     for index, pair in enumerate(raw_pleno, start=1):
         if (
             not isinstance(pair, dict)
             or set(pair) != {"home_goals", "away_goals"}
+            or not isinstance(pair.get("home_goals"), str)
             or pair.get("home_goals") not in categories
+            or not isinstance(pair.get("away_goals"), str)
             or pair.get("away_goals") not in categories
         ):
-            raise TicketOutcomeError(f"Pleno al 15 combination {index} has invalid categories")
+            raise TicketOutcomeError(
+                f"Pleno al 15 combination {index} has invalid categories"
+            )
         normalized_pair = (pair["home_goals"], pair["away_goals"])
         if normalized_pair in seen_pairs:
             raise TicketOutcomeError(f"duplicate Pleno al 15 combination {index}")
@@ -896,7 +930,11 @@ def _validate_ticket_record(ticket: dict[str, Any]) -> dict[str, Any]:
         )
 
     budget = ticket.get("budget")
-    if isinstance(budget, bool) or not isinstance(budget, int) or not 1 <= budget <= 31_104:
+    if (
+        isinstance(budget, bool)
+        or not isinstance(budget, int)
+        or not 1 <= budget <= 31_104
+    ):
         raise TicketOutcomeError("ticket budget must be an integer from 1 to 31,104")
     if len(columns) > budget:
         raise TicketOutcomeError("ticket column count exceeds its declared budget")
@@ -911,7 +949,9 @@ def _validate_ticket_record(ticket: dict[str, Any]) -> dict[str, Any]:
         or not isfinite(float(cost))
         or abs(float(cost) - round(total_bets * 0.75, 2)) > 0.005
     ):
-        raise TicketOutcomeError("ticket cost does not match total bets at EUR 0.75 per bet")
+        raise TicketOutcomeError(
+            "ticket cost does not match total bets at EUR 0.75 per bet"
+        )
 
     return {
         "ticket_id": ticket_id,
