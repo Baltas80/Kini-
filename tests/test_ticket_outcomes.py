@@ -305,7 +305,6 @@ def test_preclose_snapshot_rejects_capture_at_or_after_close() -> None:
             draw_date=DRAW_DATE,
             position=7,
             ticket_cutoff_at_utc="2026-11-08T11:00:00Z",
-        first_kickoff_at="2026-11-08T14:00:00+01:00",
         )
 
 
@@ -318,7 +317,6 @@ def test_preclose_snapshot_rejects_post_close_ball_counts() -> None:
             draw_date=DRAW_DATE,
             position=7,
             ticket_cutoff_at_utc="2026-11-08T11:00:00Z",
-        first_kickoff_at="2026-11-08T14:00:00+01:00",
         )
 
 
@@ -331,7 +329,6 @@ def test_preclose_snapshot_rejects_probability_vector_with_wrong_sum() -> None:
             draw_date=DRAW_DATE,
             position=7,
             ticket_cutoff_at_utc="2026-11-08T11:00:00Z",
-        first_kickoff_at="2026-11-08T14:00:00+01:00",
         )
 
 def test_probability_builder_rejects_cutoff_after_first_kickoff() -> None:

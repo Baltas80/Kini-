@@ -407,9 +407,7 @@ def build_ticket_probability_vectors(
 
     return {
         "draw_date": _parse_draw_date(draw_date, "draw_date"),
-        "ticket_cutoff_at_utc": cutoff
-        .isoformat()
-        .replace("+00:00", "Z"),
+        "ticket_cutoff_at_utc": cutoff.isoformat().replace("+00:00", "Z"),
         "first_kickoff_at": first_kickoff.isoformat(),
         "probabilities": probabilities,
         "probability_sources": sources,
