@@ -264,3 +264,7 @@ The returned `ticket_record` is a JSON-serializable schema-v1 direct-ticket reco
 The MCP `predict_quiniela` tool exposes the same arguments. Because JSON object keys are strings, public-draw snapshot positions are supplied as keys such as `"7"`; the tool validates and converts them to integer positions before calling the engine.
 
 The timestamps and hashes remain declared metadata: structural validation does not independently authenticate the local capture time or source bytes. The change closes the code-path integration gap, not the absence of a historical, independently timestamped participant-forecast ledger.
+
+## Operational immutable ticket history
+
+Generated pre-ticket records can be persisted in the SQLite ledger described in [TICKET_LEDGER.md](TICKET_LEDGER.md). The ledger stores the exact generated columns and probability/source provenance, rejects conflicting reuse of ticket IDs, and can append reproducible 14-match scoring results against hashed SELAE reconciliation reports. It does not calculate prizes or profitability, and the configured database must reside on persistent storage in deployment.
