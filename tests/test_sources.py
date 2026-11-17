@@ -463,3 +463,102 @@ def test_mcp_quiniela_keeps_public_probabilities_when_details_auth_is_missing(
     assert result["details"] == []
     assert result["details_status"] == "blocked_missing_authorization"
     assert "KINIELAGPT_AUTHORIZATION" in result["details_error"]
+
+
+def test_last_resolves_previous_active_lae_round_when_base_candidate_is_inactive(
+    monkeypatch,
+):
+    source = KinielaGPTSource()
+
+    def payload(jornada, activo, probabilities):
+        return {
+            "quinielista": {
+                "porcentajes": {
+                    "jornada": str(jornada),
+                    "temporada": "2027",
+                    "activo": activo,
+                    "partido": [
+                        {
+                            "num": "1",
+                            "local": f"Home {jornada}",
+                            "visitante": f"Away {jornada}",
+                            "porc_1": str(probabilities[0]),
+                            "porc_X": str(probabilities[1]),
+                            "porc_2": str(probabilities[2]),
+                        }
+                    ],
+                }
+            }
+        }
+
+    responses = {
+        source.BASE: payload(23, "no", (0, 0, 0)),
+        source.LAE.format(23, 2027): payload(23, "no", (0, 0, 0)),
+        source.LAE.format(22, 2027): payload(22, "si", (51, 25, 24)),
+    }
+    monkeypatch.setattr(source, "_xml", lambda url: responses[url])
+
+    jornada, temporada, matches = source.last()
+
+    assert (jornada, temporada) == (22, 2027)
+    assert matches == [{"id": 1, "home": "Home 22", "away": "Away 22"}]
+    assert source.last_round_resolution["base_jornada"] == 23
+    assert source.last_round_resolution["resolved_jornada"] == 22
+    assert source.last_round_resolution["reason"] == "active_lae_round"
+    assert source.last_round_resolution["candidates"][0]["active"] is False
+    assert source.last_round_resolution["candidates"][1]["active"] is True
+
+
+def test_last_keeps_active_base_round_even_before_lae_percentages_are_published(
+    monkeypatch,
+):
+    source = KinielaGPTSource()
+
+    base = {
+        "quinielista": {
+            "porcentajes": {
+                "jornada": "23",
+                "temporada": "2027",
+                "partido": [
+                    {
+                        "num": "1",
+                        "local": "Home 23",
+                        "visitante": "Away 23",
+                        "porc_1": "0",
+                        "porc_X": "0",
+                        "porc_2": "0",
+                    }
+                ],
+            }
+        }
+    }
+    active_without_prices = {
+        "quinielista": {
+            "porcentajes": {
+                "jornada": "23",
+                "temporada": "2027",
+                "activo": "si",
+                "partido": [
+                    {
+                        "num": "1",
+                        "local": "Home 23",
+                        "visitante": "Away 23",
+                        "porc_1": "0",
+                        "porc_X": "0",
+                        "porc_2": "0",
+                    }
+                ],
+            }
+        }
+    }
+    monkeypatch.setattr(
+        source,
+        "_xml",
+        lambda url: base if url == source.BASE else active_without_prices,
+    )
+
+    jornada, temporada, matches = source.last()
+
+    assert (jornada, temporada) == (23, 2027)
+    assert matches == [{"id": 1, "home": "Home 23", "away": "Away 23"}]
+    assert source.last_round_resolution["reason"] == "active_lae_round"

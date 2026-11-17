@@ -22,7 +22,12 @@ def create_server(engine: KiniEngine | None = None):
     @mcp.tool()
     def get_last_quiniela() -> dict[str, Any]:
         jornada, temporada, matches = source.last()
-        return {"jornada": jornada, "temporada": temporada, "matches": matches}
+        return {
+            "jornada": jornada,
+            "temporada": temporada,
+            "matches": matches,
+            "round_resolution": source.last_round_resolution,
+        }
 
     @mcp.tool()
     def get_quiniela(jornada: int, temporada: int) -> dict[str, Any]:

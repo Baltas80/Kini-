@@ -567,6 +567,9 @@ def collect_live_diagnostic() -> dict[str, Any]:
     jornada, temporada, percentage_matches = source.last()
     report["jornada"] = jornada
     report["temporada"] = temporada
+    report["last_round_resolution"] = getattr(
+        source, "last_round_resolution", None
+    )
     details_blocked = False
     try:
         payload, captured_at = source.details_payload(jornada, temporada)

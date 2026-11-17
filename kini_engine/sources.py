@@ -113,6 +113,7 @@ class KinielaGPTSource:
             "User-Agent": "Kini/0.2 (+https://github.com/Baltas80/Kini-)",
             "Accept-Language": "es-ES,es;q=0.9",
         }
+        self.last_round_resolution: dict[str, Any] | None = None
 
     def _xml_snapshot(self, url: str) -> tuple[dict[str, Any], str]:
         """Fetch XML and timestamp when its complete response became available locally."""
@@ -207,15 +208,89 @@ class KinielaGPTSource:
             for sign in SIGNS
         }
 
-    def last(self) -> tuple[int, int, list[dict[str, Any]]]:
-        data = self._xml(self.BASE)["quinielista"]["porcentajes"]
-        jornada = int(data["jornada"])
-        temporada = int(data["temporada"])
-        matches = [
-            {"id": int(p["num"]), "home": p["local"], "away": p["visitante"]}
-            for p in data["partido"]
+    @staticmethod
+    def _active_flag(value: Any) -> bool | None:
+        if isinstance(value, bool):
+            return value
+        normalized = str(value).strip().casefold() if value is not None else ""
+        if normalized in {"si", "sí", "yes", "true", "1"}:
+            return True
+        if normalized in {"no", "false", "0"}:
+            return False
+        return None
+
+    @staticmethod
+    def _matches_from_probability_rows(
+        rows: dict[int, dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        return [
+            {
+                "id": match_id,
+                "home": row.get("local", ""),
+                "away": row.get("visitante", ""),
+            }
+            for match_id, row in sorted(rows.items())
         ]
-        return jornada, temporada, matches
+
+    def last(self) -> tuple[int, int, list[dict[str, Any]]]:
+        base_payload = self._xml(self.BASE)
+        data = base_payload["quinielista"]["porcentajes"]
+        base_jornada = int(data["jornada"])
+        temporada = int(data["temporada"])
+        base_rows = self._probability_map(base_payload)
+        base_matches = self._matches_from_probability_rows(base_rows)
+
+        candidates: list[dict[str, Any]] = []
+        selected_jornada: int | None = None
+        selected_matches = base_matches
+        resolution_reason = "base_feed_no_active_lae_round_found"
+
+        # The BASE feed can advance to a future jornada before its LAE market opens.
+        # Prefer the most recent round explicitly marked active by the LAE feed.
+        for candidate in range(base_jornada, max(base_jornada - 3, 0), -1):
+            lae_payload = self._xml(self.LAE.format(candidate, temporada))
+            percentages = lae_payload.get("quinielista", {}).get("porcentajes", {})
+            active_raw = percentages.get("activo") if isinstance(percentages, dict) else None
+            active = self._active_flag(active_raw)
+            lae_rows = self._probability_map(lae_payload)
+            valid_vector_count = sum(
+                row.get("probabilities") is not None for row in lae_rows.values()
+            )
+            matches = self._matches_from_probability_rows(lae_rows)
+            candidates.append(
+                {
+                    "jornada": candidate,
+                    "active_raw": str(active_raw) if active_raw is not None else None,
+                    "active": active,
+                    "valid_lae_vector_count": valid_vector_count,
+                    "match_count": len(matches),
+                }
+            )
+
+            if active is True or (active is None and valid_vector_count > 0):
+                selected_jornada = candidate
+                selected_matches = matches or (
+                    base_matches if candidate == base_jornada else []
+                )
+                resolution_reason = (
+                    "active_lae_round"
+                    if active is True
+                    else "nonzero_lae_vectors_without_active_flag"
+                )
+                break
+
+        if selected_jornada is None:
+            selected_jornada = base_jornada
+            selected_matches = base_matches
+
+        self.last_round_resolution = {
+            "base_jornada": base_jornada,
+            "resolved_jornada": selected_jornada,
+            "temporada": temporada,
+            "reason": resolution_reason,
+            "candidates": candidates,
+        }
+        return selected_jornada, temporada, selected_matches
 
     @classmethod
     def _load_kickoff_crosswalk(
