@@ -5,12 +5,11 @@ import json
 import re
 import sqlite3
 from contextlib import closing
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
 from .ticket_outcomes import (
-    TicketOutcomeError,
     score_ticket_record,
     validate_ticket_record,
 )
@@ -150,7 +149,10 @@ class TicketLedger:
         with closing(self._connect()) as connection:
             connection.execute("BEGIN IMMEDIATE")
             existing = connection.execute(
-                "SELECT payload_sha256, recorded_at_utc FROM tickets WHERE ticket_id = ?",
+                """
+                SELECT payload_sha256, recorded_at_utc
+                FROM tickets WHERE ticket_id = ?
+                """,
                 (ticket_id,),
             ).fetchone()
             if existing is not None:
@@ -244,13 +246,17 @@ class TicketLedger:
         draw_date: str | None = None,
         limit: int = 100,
     ) -> list[dict[str, Any]]:
-        if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 1000:
+        if (
+            isinstance(limit, bool)
+            or not isinstance(limit, int)
+            or not 1 <= limit <= 1000
+        ):
             raise ValueError("limit must be an integer from 1 to 1000")
         if draw_date is not None:
             if not isinstance(draw_date, str):
                 raise TypeError("draw_date must be an ISO date string")
             try:
-                normalized_date = datetime.strptime(draw_date, "%Y-%m-%d").date().isoformat()
+                normalized_date = date.fromisoformat(draw_date).isoformat()
             except ValueError as exc:
                 raise ValueError("draw_date must be an ISO date") from exc
             if normalized_date != draw_date:
@@ -280,7 +286,9 @@ class TicketLedger:
         for row in rows:
             record = self.get_ticket_record(row["ticket_id"])
             if record is None:
-                raise TicketLedgerError("ticket disappeared while listing ledger records")
+                raise TicketLedgerError(
+                    "ticket disappeared while listing ledger records"
+                )
             records.append(record)
         return records
 
@@ -403,12 +411,15 @@ class TicketLedger:
             digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()
             if digest != row["score_sha256"]:
                 raise TicketLedgerError(
-                    f"stored score for ticket {ticket_id!r} failed its SHA-256 integrity check"
+                    f"stored score for ticket {ticket_id!r} failed its "
+                    "SHA-256 integrity check"
                 )
             try:
                 score = json.loads(payload)
             except json.JSONDecodeError as exc:
-                raise TicketLedgerError("stored ticket score is not valid JSON") from exc
+                raise TicketLedgerError(
+                    "stored ticket score is not valid JSON"
+                ) from exc
             results.append(
                 {
                     "score": score,
