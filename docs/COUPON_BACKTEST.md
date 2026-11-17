@@ -223,3 +223,12 @@ The strict validator rejects unknown fields, including any actual score, result 
 The post-match path remains separate: `score_ticket_record` consumes the fully reconciled official outcomes, including the realized public-draw sign, to score already persisted ticket columns. This separation prevents realized results from determining which forecasts are generated.
 
 The schedule/status timestamps and hashes are still declared evidence metadata; the code verifies structure, hashes and ordering but does not independently timestamp or authenticate local captures. No historical pre-close public-draw forecast sample is currently available, so this change closes a code-path leakage risk but does not create new historical public-draw probabilities or performance metrics.
+
+
+### Ticket-creation time is the point-in-time boundary
+
+The pre-ticket plan also records `ticket_created_at_utc`. The schedule capture, public-draw status evidence and participant-forecast snapshots must all be strictly earlier than this creation instant, not merely earlier than the admission cutoff. The required order is:
+
+`schedule_captured_at_utc < ticket_created_at_utc < ticket_cutoff_at_utc < first_kickoff_at`
+
+Each public-draw status and participant snapshot must also satisfy `captured_at_utc < ticket_created_at_utc`. This prevents a ticket artifact created at 09:30 from being justified with information captured at 10:30 even if the official admission cutoff is 11:00. The timestamp ordering remains declared metadata until an independently trusted timestamping mechanism is integrated.
