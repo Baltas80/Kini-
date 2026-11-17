@@ -193,14 +193,86 @@ jobs:
               f"{rows} completed fixtures from one immutable 14-file source snapshot"
           )
           PY
-      - name: Import Jornadas 19, 21, 22, 25 and 29 from reviewed snapshot directory
+      - name: Import reviewed coupons from 2020-2021 and 2021-2022
         run: |
           python scripts/import_historical_coupons.py \
             --season 2020-2021 \
             --journeys 19 21 22 25 29 \
-            --output coupon-archive.jsonl \
+            --output coupon-archive-2020-2021.jsonl \
             --raw-dir coupon-raw \
             --official-snapshot-dir kini_engine/data/selae_official_coupon_results
+          python scripts/import_historical_coupons.py \
+            --season 2021-2022 \
+            --journeys 1 \
+            --output coupon-archive-2021-2022.jsonl \
+            --raw-dir coupon-raw \
+            --official-snapshot-dir kini_engine/data/selae_official_coupon_results
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          source_paths = (
+              Path("coupon-archive-2020-2021.jsonl"),
+              Path("coupon-archive-2021-2022.jsonl"),
+          )
+          source_manifests = []
+          coupons = []
+          for source_path in source_paths:
+              records = [
+                  json.loads(line)
+                  for line in source_path.read_text(encoding="utf-8").splitlines()
+                  if line.strip()
+              ]
+              if not records or records[0].get("record_type") != "manifest":
+                  raise SystemExit(f"{source_path}: missing archive manifest")
+              manifest = records[0]
+              if manifest.get("schema_version") != 1 or manifest.get("coupon_count") != len(records) - 1:
+                  raise SystemExit(f"{source_path}: source manifest count/schema mismatch")
+              source_manifests.append(manifest)
+              for record in records[1:]:
+                  if record.get("record_type") != "coupon":
+                      raise SystemExit(f"{source_path}: non-coupon record after manifest")
+                  coupons.append({key: value for key, value in record.items() if key != "record_type"})
+
+          expected_ids = [
+              "2020-2021:19", "2020-2021:21", "2020-2021:22",
+              "2020-2021:25", "2020-2021:29", "2021-2022:1",
+          ]
+          actual_ids = [coupon.get("coupon_id") for coupon in coupons]
+          if actual_ids != expected_ids:
+              raise SystemExit(f"combined coupon archive IDs/order mismatch: {actual_ids}")
+
+          journey_numbers = [
+              {"season": "2020-2021", "number": number}
+              for number in (19, 21, 22, 25, 29)
+          ] + [{"season": "2021-2022", "number": 1}]
+          manifest = {
+              "record_type": "manifest",
+              "schema_version": 1,
+              "source": "historicoquiniela.com",
+              "seasons": ["2020-2021", "2021-2022"],
+              "journey_numbers": journey_numbers,
+              "journey_ids": expected_ids,
+              "coupon_count": len(coupons),
+              "timezone": "Europe/Madrid",
+              "official_verification": (
+                  "14 main fixtures and Pleno al 15 independently reconciled "
+                  "against reviewed official SELAE snapshots"
+              ),
+              "source_manifests": source_manifests,
+          }
+          output = [manifest] + [
+              {"record_type": "coupon", **coupon} for coupon in coupons
+          ]
+          Path("coupon-archive.jsonl").write_text(
+              "\\n".join(
+                  json.dumps(record, ensure_ascii=False, sort_keys=True)
+                  for record in output
+              ) + "\\n",
+              encoding="utf-8",
+          )
+          print(f"COMBINED_COUPON_ARCHIVE_OK: {len(coupons)} coupons across two seasons")
+          PY
       - name: Run common-cutoff coupon backtest
         env:
           KINI_CODE_REVISION: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -225,37 +297,52 @@ jobs:
               if line.strip()
           ]
           expected = {
-              19: ("2020-12-06", "2020-2021:19"),
-              21: ("2020-12-13", "2020-2021:21"),
-              22: ("2020-12-20", "2020-2021:22"),
-              25: ("2021-01-03", "2020-2021:25"),
-              29: ("2021-01-24", "2020-2021:29"),
+              "2020-2021:19": ("2020-2021", 19, "2020-12-06"),
+              "2020-2021:21": ("2020-2021", 21, "2020-12-13"),
+              "2020-2021:22": ("2020-2021", 22, "2020-12-20"),
+              "2020-2021:25": ("2020-2021", 25, "2021-01-03"),
+              "2020-2021:29": ("2020-2021", 29, "2021-01-24"),
+              "2021-2022:1": ("2021-2022", 1, "2021-08-15"),
           }
-          if len(archive) != 6:
-              raise SystemExit(f"expected manifest plus five coupons, received {len(archive)} records")
+          expected_ids = list(expected)
+          if len(archive) != len(expected) + 1:
+              raise SystemExit(
+                  f"expected manifest plus {len(expected)} coupons, received {len(archive)} records"
+              )
           manifest = archive[0]
+          expected_journey_numbers = [
+              {"season": season, "number": journey}
+              for season, journey, _ in expected.values()
+          ]
           if (
               manifest.get("record_type") != "manifest"
-              or manifest.get("coupon_count") != 5
-              or manifest.get("journey_numbers") != [19, 21, 22, 25, 29]
+              or manifest.get("coupon_count") != len(expected)
+              or manifest.get("seasons") != ["2020-2021", "2021-2022"]
+              or manifest.get("journey_numbers") != expected_journey_numbers
+              or manifest.get("journey_ids") != expected_ids
           ):
-              raise SystemExit("coupon archive manifest does not describe journeys 19, 21, 22, 25 and 29")
+              raise SystemExit("coupon archive manifest does not describe the six verified journeys")
           archive_coupons = {
-              item.get("jornada"): item
+              item.get("coupon_id"): item
               for item in archive[1:]
               if item.get("record_type") == "coupon"
           }
-          if set(archive_coupons) != set(expected):
-              raise SystemExit(f"coupon archive journeys differ: {sorted(archive_coupons)}")
+          if list(archive_coupons) != expected_ids:
+              raise SystemExit(f"coupon archive IDs/order differ: {list(archive_coupons)}")
 
-          for journey, (draw_date, coupon_id) in expected.items():
+          for coupon_id, (season, journey, draw_date) in expected.items():
               snapshot_path = Path(
-                  f"kini_engine/data/selae_official_coupon_results/2020-2021-{journey}.json"
+                  f"kini_engine/data/selae_official_coupon_results/{season}-{journey}.json"
               )
               snapshot = json.loads(snapshot_path.read_text(encoding="utf-8"))
               snapshot_sha = hashlib.sha256(snapshot_path.read_bytes()).hexdigest()
-              archived = archive_coupons[journey]
-              if archived.get("coupon_id") != coupon_id or archived.get("source_date") != draw_date:
+              archived = archive_coupons[coupon_id]
+              if (
+                  archived.get("coupon_id") != coupon_id
+                  or archived.get("season") != season
+                  or archived.get("jornada") != journey
+                  or archived.get("source_date") != draw_date
+              ):
                   raise SystemExit(f"{coupon_id}: archive identity/date mismatch")
               if archived.get("official_result_sha256") != snapshot_sha:
                   raise SystemExit(f"{coupon_id}: archive does not hash the exact normalized SELAE snapshot bytes")
@@ -271,13 +358,13 @@ jobs:
                   raise SystemExit(f"{coupon_id}: Pleno al 15 was not verified against SELAE")
 
           coupons = result.get("coupons", [])
-          expected_ids = ["2020-2021:19", "2020-2021:21", "2020-2021:22", "2020-2021:25", "2020-2021:29"]
+          expected_ids = list(expected)
           if [coupon.get("coupon_id") for coupon in coupons] != expected_ids:
               raise SystemExit(f"backtest coupon IDs/order differ: {[c.get('coupon_id') for c in coupons]}")
           if result.get("schema_version") != 3 or result.get("config", {}).get("min_history_matches") != 250:
               raise SystemExit("backtest result schema or minimum-history configuration mismatch")
-          if result.get("summary", {}).get("coupon_count") != 5:
-              raise SystemExit("backtest summary does not contain five coupons")
+          if result.get("summary", {}).get("coupon_count") != 6:
+              raise SystemExit("backtest summary does not contain six coupons")
 
           for coupon in coupons:
               coupon_id = coupon["coupon_id"]
@@ -330,9 +417,9 @@ jobs:
 
           for mode in ("dc", "ml", "ensemble_dc_ml"):
               aggregate = result.get("summary", {}).get("models", {}).get(mode, {})
-              if aggregate.get("evaluated_coupons") != 5 or aggregate.get("failed_coupons") != 0:
-                  raise SystemExit(f"{mode}: aggregate did not evaluate all five coupons: {aggregate}")
-          print("COUPON_ACCEPTANCE_OK: 5 official coupons, 75 SELAE results, 75 canonical fixture reconciliations, 15 x 14 forecasts, optimizer within SELAE limits")
+              if aggregate.get("evaluated_coupons") != 6 or aggregate.get("failed_coupons") != 0:
+                  raise SystemExit(f"{mode}: aggregate did not evaluate all six coupons: {aggregate}")
+          print("COUPON_ACCEPTANCE_OK: 6 official coupons across two seasons, 90 SELAE results, 90 canonical fixture reconciliations, 18 x 14 forecasts, optimizer within SELAE limits")
           PY
       - name: Upload coupon pilot evidence
         uses: actions/upload-artifact@v4

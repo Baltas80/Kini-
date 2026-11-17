@@ -228,3 +228,35 @@ def test_jornada_29_official_prize_distribution_passes_strict_validation() -> No
         "winner_count": 66,
         "unit_prize_eur": 693.93,
     }
+
+
+def test_jornada_1_2021_2022_official_prize_distribution_passes_strict_validation() -> None:
+    snapshot = json.loads(
+        (
+            Path(__file__).parents[1]
+            / "kini_engine"
+            / "data"
+            / "selae_official_coupon_results"
+            / "2021-2022-1.json"
+        ).read_text(encoding="utf-8")
+    )
+    validated = _validate_prize_distribution(
+        snapshot,
+        expected_draw_date="2021-08-15",
+    )
+
+    assert validated["revenue_eur"] == Decimal("2417637.75")
+    assert validated["categories"]["pleno_al_15"]["winner_count"] == 1
+    assert validated["categories"]["pleno_al_15"]["unit_prize_eur"] == Decimal("479523.55")
+    assert validated["categories"]["14"]["winner_count"] == 16
+    assert validated["categories"]["14"]["unit_prize_eur"] == Decimal("24176.38")
+    assert validated["categories"]["13"]["winner_count"] == 384
+    assert validated["categories"]["12"]["winner_count"] == 4507
+    assert validated["categories"]["11"]["winner_count"] == 26651
+    assert validated["categories"]["10"]["winner_count"] == 103695
+    assert Decimal("479523.55") + Decimal("24176.38") == Decimal("503699.93")
+    assert snapshot["prize_distribution"]["elige8"] == {
+        "revenue_eur": 66307.50,
+        "winner_count": 413,
+        "unit_prize_eur": 88.30,
+    }

@@ -172,3 +172,53 @@ def test_jornada_29_girona_and_castellon_aliases_resolve_through_canonical_regis
         assert resolved is not None
         assert resolved.canonical_name == target_name
         assert resolved.team_id == team_id
+
+
+def test_jornada_1_2021_2022_aliases_resolve_through_canonical_team_registry() -> None:
+    from kini_engine.coupon_identity import load_coupon_team_aliases
+    from kini_engine.team_identity import TeamIdentityRegistry
+
+    aliases = load_coupon_team_aliases()["seasons"]["2021-2022"]
+    registry = TeamIdentityRegistry.from_default()
+    expected = {
+        "Alavés": "Alaves",
+        "Alcorcón": "Alcorcon",
+        "At. Madrid": "Ath Madrid",
+        "Athletic Club": "Ath Bilbao",
+        "Barcelona": "Barcelona",
+        "Betis": "Betis",
+        "Burgos": "Burgos",
+        "Cádiz": "Cadiz",
+        "Celta": "Celta",
+        "Elche": "Elche",
+        "Espanyol": "Espanol",
+        "Fuenlabrada": "Fuenlabrada",
+        "Granada": "Granada",
+        "Las Palmas": "Las Palmas",
+        "Leganés": "Leganes",
+        "Levante": "Levante",
+        "Lugo": "Lugo",
+        "Mallorca": "Mallorca",
+        "Osasuna": "Osasuna",
+        "Ponferradina": "Ponferradina",
+        "R. Oviedo": "Oviedo",
+        "R. Sociedad B": "Sociedad B",
+        "Rayo Vallecano": "Vallecano",
+        "Real Madrid": "Real Madrid",
+        "Real Sociedad": "Sociedad",
+        "Sevilla": "Sevilla",
+        "Sporting": "Sp Gijon",
+        "Tenerife": "Tenerife",
+        "Valladolid": "Valladolid",
+        "Villarreal": "Villarreal",
+    }
+
+    assert aliases == expected
+    for source_name, target_name in expected.items():
+        identity = registry.resolve(target_name, source="football-data")
+        assert identity is not None, source_name
+        assert identity.canonical_name == target_name
+
+    assert registry.resolve("Sociedad B", source="football-data").team_id == "team:es:sociedad-b"
+    assert registry.resolve("Burgos", source="football-data").team_id == "team:es:burgos"
+    assert registry.resolve("Tenerife", source="football-data").team_id == "team:es:tenerife"
