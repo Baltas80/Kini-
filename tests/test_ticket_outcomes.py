@@ -402,11 +402,6 @@ def test_ticket_scoring_marks_pleno15_unassessed_without_official_evidence() -> 
         ("home_category", ["2"], "categories must be 0, 1, 2 or M"),
         ("verified_at_utc", "2026-11-08T13:00:00Z", "must not precede"),
         ("evidence_type", "unverified_summary", "evidence_type"),
-        (
-            "source_url",
-            "https://www.loteriasyapuestas.es/es/la-quiniela",
-            "official PDF",
-        ),
     ],
 )
 def test_ticket_scoring_rejects_invalid_pleno15_evidence(
@@ -416,6 +411,15 @@ def test_ticket_scoring_rejects_invalid_pleno15_evidence(
     pleno = _pleno15_report()
     pleno[field] = value
     with pytest.raises(TicketOutcomeError, match=message):
+        score_ticket_record(_ticket(report), report, pleno15_report=pleno)
+
+
+def test_ticket_scoring_rejects_press_release_report_without_pdf_url() -> None:
+    report = _reconciliation()
+    pleno = _pleno15_press_release_report()
+    pleno["source_url"] = "https://www.loteriasyapuestas.es/es/la-quiniela"
+
+    with pytest.raises(TicketOutcomeError, match="official PDF"):
         score_ticket_record(_ticket(report), report, pleno15_report=pleno)
 
 
