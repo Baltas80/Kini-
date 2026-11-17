@@ -60,3 +60,10 @@ The automated tests cover:
 - SELAE reconciliation scoring and score replay.
 - Draw-date filtering and bounded listing.
 - Engine-to-ledger integration for a pre-ticket coupon plan.
+
+
+## Strict ticket-record contract
+
+The ticket validator requires the complete engine-generated schema, not just timestamps and 14 columns. It revalidates the embedded coupon plan, matches the ticket's duplicated cutoff/schedule/Pleno metadata to that plan, validates all 14 normalized probability vectors and their position-specific source provenance, checks public-draw positions against the plan, and validates the selected Pleno category pairs.
+
+It also checks that the declared column budget is not exceeded, that the expanded direct-bet count (14-match columns multiplied by Pleno category pairs) respects SELAE's 2–31,104 range, and that the recorded cost matches the current EUR 0.75 per direct bet. The record remains a pre-ticket forecast record; realized outcomes are not allowed into this schema.
