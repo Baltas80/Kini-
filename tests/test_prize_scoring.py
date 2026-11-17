@@ -300,6 +300,7 @@ def test_jornada_1_2022_2023_official_prize_distribution_passes_strict_validatio
         "unit_prize_eur": 1511.13,
     }
 
+
 def test_prize_validation_rejects_selae_lookalike_hosts() -> None:
     snapshot = json.loads(
         (
