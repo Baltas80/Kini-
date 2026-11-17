@@ -331,6 +331,7 @@ def test_preclose_snapshot_rejects_probability_vector_with_wrong_sum() -> None:
             ticket_cutoff_at_utc="2026-11-08T11:00:00Z",
         )
 
+
 def test_probability_builder_rejects_cutoff_after_first_kickoff() -> None:
     report = _reconciliation()
     model_probabilities = {
