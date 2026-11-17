@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import os
 from typing import Any
 
 from .core import KiniEngine, Match
 from .sources import KinielaGPTAuthorizationRequired, KinielaGPTSource
+from .ticket_ledger import TicketLedger
 
 try:
     from mcp.server.fastmcp import FastMCP
@@ -16,7 +18,13 @@ def create_server(engine: KiniEngine | None = None):
         raise RuntimeError("Install kini-engine[mcp] to use the MCP server")
 
     mcp = FastMCP("Kini")
-    model = engine or KiniEngine()
+    ledger_path = os.getenv("KINI_TICKET_LEDGER_PATH", "data/kini-tickets.sqlite3")
+    ledger = getattr(engine, "ticket_ledger", None) if engine is not None else None
+    if ledger is None:
+        ledger = TicketLedger(ledger_path)
+    model = engine or KiniEngine(ticket_ledger=ledger)
+    if model.ticket_ledger is None:
+        model.ticket_ledger = ledger
     source = KinielaGPTSource()
 
     @mcp.tool()
@@ -175,6 +183,33 @@ def create_server(engine: KiniEngine | None = None):
             coupon_plan=coupon_plan,
             public_draw_snapshots=normalized_snapshots,
             ticket_id=ticket_id,
+        )
+
+    @mcp.tool()
+    def get_ticket_record(ticket_id: str) -> dict[str, Any]:
+        """Retrieve one immutable ticket record and verify its stored digest."""
+        record = ledger.get_ticket_record(ticket_id)
+        return {"found": record is not None, **(record or {})}
+
+    @mcp.tool()
+    def list_ticket_records(
+        draw_date: str | None = None,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        """List immutable ticket records, optionally filtered by draw date."""
+        return ledger.list_ticket_records(draw_date=draw_date, limit=limit)
+
+    @mcp.tool()
+    def score_persisted_ticket(
+        ticket_id: str,
+        reconciliation_report: dict[str, Any],
+        reconciliation_sha256: str,
+    ) -> dict[str, Any]:
+        """Score and persist a stored ticket against a hashed SELAE reconciliation."""
+        return ledger.score_ticket(
+            ticket_id,
+            reconciliation_report,
+            reconciliation_sha256=reconciliation_sha256,
         )
 
     return mcp
