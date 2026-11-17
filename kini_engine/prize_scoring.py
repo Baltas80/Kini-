@@ -29,9 +29,7 @@ def _nonnegative_int(value: object, field: str) -> int:
     return value
 
 
-def _money(
-    value: object, field: str, *, allow_none: bool = False
-) -> Decimal | None:
+def _money(value: object, field: str, *, allow_none: bool = False) -> Decimal | None:
     if value is None and allow_none:
         return None
     if isinstance(value, bool) or not isinstance(value, (int, float, str)):
@@ -78,9 +76,7 @@ def _same_team(left: object, right: object, field: str) -> None:
     left_name = _required_text(left, f"{field} source")
     right_name = _required_text(right, f"{field} ticket")
     if normalize_team_name(left_name) != normalize_team_name(right_name):
-        raise PrizeScoringError(
-            f"{field} does not match the stored coupon plan"
-        )
+        raise PrizeScoringError(f"{field} does not match the stored coupon plan")
 
 
 def _validate_prize_distribution(
@@ -99,9 +95,7 @@ def _validate_prize_distribution(
         draw_date = date.fromisoformat(
             _required_text(snapshot.get("draw_date"), "draw_date")
         ).isoformat()
-        date.fromisoformat(
-            _required_text(snapshot.get("verified_at"), "verified_at")
-        )
+        date.fromisoformat(_required_text(snapshot.get("verified_at"), "verified_at"))
     except ValueError as exc:
         raise PrizeScoringError(
             "snapshot draw_date and verified_at must be ISO dates"
@@ -119,9 +113,7 @@ def _validate_prize_distribution(
     if not isinstance(sources, list) or any(
         not isinstance(item, dict) for item in sources
     ):
-        raise PrizeScoringError(
-            "supporting_sources must be a list of source objects"
-        )
+        raise PrizeScoringError("supporting_sources must be a list of source objects")
     source_urls: dict[str, str] = {}
     for item in sources:
         role = _required_text(item.get("role"), "supporting source role")
@@ -152,9 +144,7 @@ def _validate_prize_distribution(
                 f"official fixture {position} has an invalid schema"
             )
         if fixture.get("number") != position:
-            raise PrizeScoringError(
-                "official fixtures must be ordered from 1 to 14"
-            )
+            raise PrizeScoringError("official fixtures must be ordered from 1 to 14")
         _required_text(fixture.get("home"), f"fixture {position} home")
         _required_text(fixture.get("away"), f"fixture {position} away")
         home_goals = _nonnegative_int(
@@ -163,13 +153,7 @@ def _validate_prize_distribution(
         away_goals = _nonnegative_int(
             fixture.get("away_goals"), f"fixture {position} away_goals"
         )
-        expected_sign = (
-            "1"
-            if home_goals > away_goals
-            else "2"
-            if away_goals > home_goals
-            else "X"
-        )
+        expected_sign = "1" if home_goals > away_goals else "2" if away_goals > home_goals else "X"
         if fixture.get("result") != expected_sign:
             raise PrizeScoringError(
                 f"official fixture {position} result conflicts with its score"
@@ -190,28 +174,19 @@ def _validate_prize_distribution(
         raise PrizeScoringError("official Pleno al 15 fixture number must be 15")
     _required_text(pleno.get("home"), "Pleno home")
     _required_text(pleno.get("away"), "Pleno away")
-    pleno_home_goals = _nonnegative_int(
-        pleno.get("home_goals"), "Pleno home_goals"
-    )
-    pleno_away_goals = _nonnegative_int(
-        pleno.get("away_goals"), "Pleno away_goals"
-    )
-    if (
-        pleno.get("home_category") != _category(pleno_home_goals)
-        or pleno.get("away_category") != _category(pleno_away_goals)
-    ):
-        raise PrizeScoringError(
-            "Pleno categories conflict with official goal counts"
-        )
+    pleno_home_goals = _nonnegative_int(pleno.get("home_goals"), "Pleno home_goals")
+    pleno_away_goals = _nonnegative_int(pleno.get("away_goals"), "Pleno away_goals")
+    if pleno.get("home_category") != _category(pleno_home_goals) or pleno.get(
+        "away_category"
+    ) != _category(pleno_away_goals):
+        raise PrizeScoringError("Pleno categories conflict with official goal counts")
 
     distribution = snapshot.get("prize_distribution")
     if not isinstance(distribution, dict):
         raise PrizeScoringError("official prize_distribution is missing")
     allowed_distribution_fields = {
         frozenset({"source_type", "source_url", "revenue_eur", "categories"}),
-        frozenset(
-            {"source_type", "source_url", "revenue_eur", "categories", "elige8"}
-        ),
+        frozenset({"source_type", "source_url", "revenue_eur", "categories", "elige8"}),
     }
     if frozenset(distribution) not in allowed_distribution_fields:
         raise PrizeScoringError("official prize_distribution has an invalid schema")
@@ -229,9 +204,7 @@ def _validate_prize_distribution(
         raise PrizeScoringError(
             "prize PDF URL is not bound to supporting-source evidence"
         )
-    revenue = _money(
-        distribution.get("revenue_eur"), "prize_distribution.revenue_eur"
-    )
+    revenue = _money(distribution.get("revenue_eur"), "prize_distribution.revenue_eur")
     if revenue is None or revenue <= 0:
         raise PrizeScoringError("prize-distribution revenue must be positive")
 
@@ -254,9 +227,7 @@ def _validate_prize_distribution(
         name = _required_text(item.get("category"), "prize category")
         if name not in PRIZE_CATEGORIES or name in categories:
             raise PrizeScoringError(f"unknown or duplicate prize category {name!r}")
-        winners = _nonnegative_int(
-            item.get("winner_count"), f"{name}.winner_count"
-        )
+        winners = _nonnegative_int(item.get("winner_count"), f"{name}.winner_count")
         status = item.get("status")
         unit_prize = _money(
             item.get("unit_prize_eur"),
@@ -291,20 +262,12 @@ def _validate_prize_distribution(
             "unit_prize_eur",
         }:
             raise PrizeScoringError("Elige8 prize evidence has an invalid schema")
-        elige8_revenue = _money(
-            elige8.get("revenue_eur"), "elige8.revenue_eur"
-        )
+        elige8_revenue = _money(elige8.get("revenue_eur"), "elige8.revenue_eur")
         elige8_winners = _nonnegative_int(
             elige8.get("winner_count"), "elige8.winner_count"
         )
-        elige8_prize = _money(
-            elige8.get("unit_prize_eur"), "elige8.unit_prize_eur"
-        )
-        if (
-            elige8_revenue is None
-            or elige8_prize is None
-            or elige8_winners < 1
-        ):
+        elige8_prize = _money(elige8.get("unit_prize_eur"), "elige8.unit_prize_eur")
+        if elige8_revenue is None or elige8_prize is None or elige8_winners < 1:
             raise PrizeScoringError(
                 "Elige8 prize evidence must contain positive revenue, winners and unit prize"
             )
@@ -344,9 +307,7 @@ def evaluate_official_prize_snapshot(
         or len(snapshot_sha256) != 64
         or any(character not in "0123456789abcdef" for character in snapshot_sha256)
     ):
-        raise PrizeScoringError(
-            "snapshot_sha256 must be a lowercase SHA-256 digest"
-        )
+        raise PrizeScoringError("snapshot_sha256 must be a lowercase SHA-256 digest")
     if len(expected_main_results) != 14 or len(expected_fixtures) != 14:
         raise PrizeScoringError(
             "ticket must provide 14 expected main fixtures and results"
@@ -368,10 +329,11 @@ def evaluate_official_prize_snapshot(
             raise PrizeScoringError(
                 f"official fixture {position} result conflicts with reconciliation"
             )
-        if not isinstance(plan_fixture, dict) or plan_fixture.get("position") != position:
-            raise PrizeScoringError(
-                f"ticket coupon plan fixture {position} is invalid"
-            )
+        if (
+            not isinstance(plan_fixture, dict)
+            or plan_fixture.get("position") != position
+        ):
+            raise PrizeScoringError(f"ticket coupon plan fixture {position} is invalid")
         _same_team(
             fixture["home"], plan_fixture.get("home"), f"fixture {position} home"
         )
@@ -404,28 +366,31 @@ def evaluate_official_prize_snapshot(
         if len(column) != 14:
             raise PrizeScoringError("each direct column must contain 14 signs")
         hits = sum(
-            sign == expected_main_results[index]
-            for index, sign in enumerate(column)
+            sign == expected_main_results[index] for index, sign in enumerate(column)
         )
         for pair in pleno15_combinations:
             if hits >= 10:
                 tier_counts[str(hits)] += 1
-            if hits == 14 and (
-                pair.get("home_goals"),
-                pair.get("away_goals"),
-            ) == actual_pair:
+            if (
+                hits == 14
+                and (
+                    pair.get("home_goals"),
+                    pair.get("away_goals"),
+                )
+                == actual_pair
+            ):
                 tier_counts["pleno_al_15"] += 1
 
     total_bets = len(columns) * len(pleno15_combinations)
-    main_tier_bets = sum(
-        tier_counts[name] for name in ("14", "13", "12", "11", "10")
-    )
+    main_tier_bets = sum(tier_counts[name] for name in ("14", "13", "12", "11", "10"))
     if (
         total_bets < 1
         or main_tier_bets > total_bets
         or tier_counts["pleno_al_15"] > tier_counts["14"]
     ):
-        raise PrizeScoringError("prize tier counts exceed the expanded direct-bet count")
+        raise PrizeScoringError(
+            "prize tier counts exceed the expanded direct-bet count"
+        )
 
     tier_details: dict[str, dict[str, Any]] = {}
     reference_total = Decimal("0.00")

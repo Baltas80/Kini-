@@ -497,15 +497,9 @@ def test_ticket_ledger_scores_official_prize_snapshot_idempotently(tmp_path):
     pleno15_json = json.dumps(
         _pleno15_report(), ensure_ascii=False, separators=(",", ":")
     )
-    snapshot = _official_prize_snapshot_for_ledger_test(
-        ticket, _pleno15_report()
-    )
-    snapshot_json = json.dumps(
-        snapshot, ensure_ascii=False, separators=(",", ":")
-    )
-    expected_snapshot_digest = hashlib.sha256(
-        snapshot_json.encode("utf-8")
-    ).hexdigest()
+    snapshot = _official_prize_snapshot_for_ledger_test(ticket, _pleno15_report())
+    snapshot_json = json.dumps(snapshot, ensure_ascii=False, separators=(",", ":"))
+    expected_snapshot_digest = hashlib.sha256(snapshot_json.encode("utf-8")).hexdigest()
 
     first = ledger.score_ticket_json(
         str(ticket["ticket_id"]),

@@ -1026,9 +1026,7 @@ def test_official_prize_scoring_expands_columns_by_pleno_pairs() -> None:
         {"home_goals": "0", "away_goals": "0"},
     ]
     ticket["cost_eur"] = 3.0
-    snapshot = _official_prize_snapshot_for_test(
-        ticket, reconciliation, pleno_report
-    )
+    snapshot = _official_prize_snapshot_for_test(ticket, reconciliation, pleno_report)
     snapshot_raw = json.dumps(
         snapshot, ensure_ascii=False, separators=(",", ":")
     ).encode()
@@ -1063,20 +1061,14 @@ def test_official_prize_scoring_does_not_price_a_rollover_tier() -> None:
     reconciliation = _reconciliation()
     ticket = _ticket(reconciliation)
     pleno_report = _pleno15_report()
-    ticket["pleno15_combinations"] = [
-        {"home_goals": "2", "away_goals": "M"}
-    ]
-    snapshot = _official_prize_snapshot_for_test(
-        ticket, reconciliation, pleno_report
-    )
+    ticket["pleno15_combinations"] = [{"home_goals": "2", "away_goals": "M"}]
+    snapshot = _official_prize_snapshot_for_test(ticket, reconciliation, pleno_report)
     pleno_tier = next(
         item
         for item in snapshot["prize_distribution"]["categories"]
         if item["category"] == "pleno_al_15"
     )
-    pleno_tier.update(
-        {"winner_count": 0, "unit_prize_eur": None, "status": "rollover"}
-    )
+    pleno_tier.update({"winner_count": 0, "unit_prize_eur": None, "status": "rollover"})
     snapshot_raw = json.dumps(
         snapshot, ensure_ascii=False, separators=(",", ":")
     ).encode()
@@ -1100,9 +1092,7 @@ def test_official_prize_scoring_rejects_snapshot_result_conflict() -> None:
     reconciliation = _reconciliation()
     ticket = _ticket(reconciliation)
     pleno_report = _pleno15_report()
-    snapshot = _official_prize_snapshot_for_test(
-        ticket, reconciliation, pleno_report
-    )
+    snapshot = _official_prize_snapshot_for_test(ticket, reconciliation, pleno_report)
     snapshot["fixtures"][0]["result"] = "X"
     snapshot_raw = json.dumps(
         snapshot, ensure_ascii=False, separators=(",", ":")
