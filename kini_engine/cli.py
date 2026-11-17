@@ -141,9 +141,7 @@ def main() -> None:
                         row["forecast_as_of_date"] for row in snapshot_rows
                     ),
                     "forecast_count": len(snapshot_rows),
-                    "model_modes": sorted(
-                        snapshot_rows[0]["model_probabilities"]
-                    ),
+                    "model_modes": sorted(snapshot_rows[0]["model_probabilities"]),
                     "run_config": snapshot_result.get("run_config", {}),
                 }
                 snapshot_ledger_rows = write_prediction_ledger(

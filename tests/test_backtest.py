@@ -1188,10 +1188,7 @@ def test_snapshot_aligned_backtest_refits_once_per_snapshot_and_excludes_snapsho
     monkeypatch.setattr(backtest, "KiniEngine", FakeEngine)
 
     start = datetime(2025, 1, 1)
-    training = [
-        Match(start, f"Train{i}", f"Opponent{i}", 1, 0, "1")
-        for i in range(12)
-    ]
+    training = [Match(start, f"Train{i}", f"Opponent{i}", 1, 0, "1") for i in range(12)]
     same_first_snapshot_day = Match(
         datetime(2025, 1, 7), "TuesdayResult", "OpponentT", 1, 0, "1"
     )
@@ -1294,8 +1291,9 @@ def test_snapshot_aligned_backtest_refits_once_per_snapshot_and_excludes_snapsho
     assert rows["WednesdayEarlyLAE"]["lae_eligible"] is True
     assert rows["ThursdaySameDayLAE"]["lae_eligible"] is False
     assert rows["ThursdaySameDayLAE"]["lae_probabilities"] is None
-    assert rows["WednesdayEarlyLAE"]["training_history_sha256"] == (
-        rows["ThursdaySameDayLAE"]["training_history_sha256"]
+    assert (
+        rows["WednesdayEarlyLAE"]["training_history_sha256"]
+        == (rows["ThursdaySameDayLAE"]["training_history_sha256"])
     )
     assert rows["WednesdayEarlyLAE"]["training_match_count"] == 12
     assert rows["ThursdaySameDayLAE"]["training_match_count"] == 12
@@ -1359,10 +1357,7 @@ def test_snapshot_aligned_backtest_fails_closed_below_minimum_training_history(
             raise AssertionError("engine must not fit without minimum prior history")
 
     monkeypatch.setattr(backtest, "KiniEngine", UnexpectedEngine)
-    training = [
-        Match(datetime(2025, 1, 1), f"H{i}", f"A{i}", 1, 0, "1")
-        for i in range(11)
-    ]
+    training = [Match(datetime(2025, 1, 1), f"H{i}", f"A{i}", 1, 0, "1") for i in range(11)]
     fixture = Match(
         datetime(2025, 1, 8),
         "Future",
@@ -1387,7 +1382,4 @@ def test_snapshot_aligned_backtest_fails_closed_below_minimum_training_history(
     assert result["n_common_time_eligible"] == 0
     assert result["n_skipped_insufficient_history_fixtures"] == 1
     assert result["forecast_rows"] == []
-    assert all(
-        item["count"] == 0
-        for item in result["prediction_errors"].values()
-    )
+    assert all(item["count"] == 0 for item in result["prediction_errors"].values())

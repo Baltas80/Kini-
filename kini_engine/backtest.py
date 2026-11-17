@@ -1585,12 +1585,8 @@ def snapshot_aligned_market_backtest(
     market_rows: list[tuple[dict[str, float], str]] = []
     forecast_rows: list[dict[str, Any]] = []
     fixture_ids: list[str] = []
-    prediction_errors = {
-        mode: {"count": 0, "first_error": None} for mode in all_modes
-    }
-    adaptive_history: list[
-        tuple[str, dict[str, float], dict[str, float], str]
-    ] = []
+    prediction_errors = {mode: {"count": 0, "first_error": None} for mode in all_modes}
+    adaptive_history: list[tuple[str, dict[str, float], dict[str, float], str]] = []
     snapshot_summaries: list[dict[str, Any]] = []
     model_fit_count = 0
     n_skipped_insufficient_history_fixtures = 0
@@ -1601,9 +1597,7 @@ def snapshot_aligned_market_backtest(
         diagnostic = prediction_errors[mode]
         diagnostic["count"] += count
         if diagnostic["first_error"] is None:
-            diagnostic["first_error"] = (
-                f"{type(exc).__name__}: {exc}"
-            )[:1000]
+            diagnostic["first_error"] = f"{type(exc).__name__}: {exc}"[:1000]
 
     for snapshot_date, group in sorted(snapshot_groups.items()):
         ordered_group = sorted(
@@ -1647,14 +1641,11 @@ def snapshot_aligned_market_backtest(
         training_hash = _snapshot_training_history_sha256(training)
 
         prior_adaptive_records = [
-            record
-            for record in adaptive_history
-            if record[0] < snapshot_date
+            record for record in adaptive_history if record[0] < snapshot_date
         ]
         prior_adaptive_records.sort(key=lambda record: record[0])
         prior_adaptive = [
-            (record[1], record[2], record[3])
-            for record in prior_adaptive_records
+            (record[1], record[2], record[3]) for record in prior_adaptive_records
         ]
         dc_weight = select_dc_ml_weight(
             prior_adaptive,
@@ -1677,9 +1668,7 @@ def snapshot_aligned_market_backtest(
                 record_error(mode, exc, count=len(ordered_group))
 
         snapshot_common_count = 0
-        pending_adaptive: list[
-            tuple[str, dict[str, float], dict[str, float], str]
-        ] = []
+        pending_adaptive: list[tuple[str, dict[str, float], dict[str, float], str]] = []
 
         if fit_error is None:
             for match in ordered_group:
@@ -1759,13 +1748,11 @@ def snapshot_aligned_market_backtest(
                 )
                 fixture_id, source_fixture_id = _fixture_ledger_identity(
                     match,
-                    snapshot_date,
+                    _calendar_day(match.date),
                 )
                 league, season_code, season_label = _season_identity(match)
                 detail = match.detail if isinstance(match.detail, dict) else {}
-                model_probabilities = {
-                    mode: predictions[mode] for mode in all_modes
-                }
+                model_probabilities = {mode: predictions[mode] for mode in all_modes}
                 model_signs = {
                     mode: max(
                         SIGNS,
@@ -1775,10 +1762,7 @@ def snapshot_aligned_market_backtest(
                 }
                 bet365_probabilities = _bookmaker_probability(match, "bet365")
                 lae_probabilities = (
-                    {
-                        sign: float(match.lae[sign])
-                        for sign in SIGNS
-                    }
+                    {sign: float(match.lae[sign]) for sign in SIGNS}
                     if snapshot_lae_eligible
                     else None
                 )
@@ -1893,8 +1877,7 @@ def snapshot_aligned_market_backtest(
         "n_common_time_eligible": n_common,
         "fixture_ids_sha256": fixture_ids_sha256,
         "training_rule": (
-            "completed_result_date < market_snapshot_date; "
-            "refit once per snapshot date"
+            "completed_result_date < market_snapshot_date; refit once per snapshot date"
         ),
         "model_refit_rule": (
             "one fresh KiniEngine.fit call per snapshot date; all fixtures "
