@@ -524,6 +524,28 @@ def summarize_kickoff_attachment(rows: Any, lae_source: str) -> dict[str, Any]:
     }
 
 
+def _http_error_evidence(exc: Exception) -> dict[str, Any]:
+    """Keep bounded HTTP response evidence when an upstream diagnostic fails."""
+    response = getattr(exc, "response", None)
+    if response is None:
+        return {}
+
+    evidence: dict[str, Any] = {}
+    status_code = getattr(response, "status_code", None)
+    if isinstance(status_code, int):
+        evidence["http_status"] = status_code
+
+    headers = getattr(response, "headers", {})
+    content_type = headers.get("content-type") if isinstance(headers, Mapping) else None
+    if isinstance(content_type, str) and content_type:
+        evidence["response_content_type"] = content_type[:120]
+
+    body = getattr(response, "text", None)
+    if isinstance(body, str) and body.strip():
+        evidence["response_body_preview"] = " ".join(body.split())[:400]
+    return evidence
+
+
 def collect_live_diagnostic() -> dict[str, Any]:
     report: dict[str, Any] = {
         "diagnostic": "kinielagpt_detalle_partido_schema",
@@ -584,6 +606,7 @@ def main() -> int:
             "status": "error",
             "error_type": type(exc).__name__,
             "error": str(exc)[:300],
+            **_http_error_evidence(exc),
         }
         exit_code = 1
 

@@ -1,4 +1,5 @@
 from scripts.diagnose_kinielagpt_details import (
+    _http_error_evidence,
     reconcile_fixture_order,
     summarize_kickoff_attachment,
     summarize_payload,
@@ -257,3 +258,25 @@ def test_probability_payload_summary_exposes_parser_schema_mismatch():
     assert summary["parsed_match_count"] == 1
     assert summary["valid_probability_vector_count"] == 0
     assert summary["probability_field_samples"]["porcentaje_1"] == ["52.5"]
+
+
+def test_http_error_evidence_is_bounded_and_does_not_expose_response_headers():
+    class FakeResponse:
+        status_code = 400
+        headers = {
+            "content-type": "application/json",
+            "set-cookie": "sensitive-cookie-value",
+        }
+        text = '{"error":"invalid request"} ' + ("x" * 1000)
+
+    class FakeHTTPError(Exception):
+        response = FakeResponse()
+
+    evidence = _http_error_evidence(FakeHTTPError("upstream rejected request"))
+
+    assert evidence["http_status"] == 400
+    assert evidence["response_content_type"] == "application/json"
+    assert len(evidence["response_body_preview"]) == 400
+    assert "sensitive-cookie-value" not in str(evidence)
+    assert "set-cookie" not in evidence
+
