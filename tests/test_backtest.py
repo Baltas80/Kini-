@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 
 import numpy as np
+import pytest
 
 from kini_engine import backtest
 from kini_engine.backtest import multiclass_metrics
@@ -1387,3 +1388,17 @@ def test_snapshot_aligned_backtest_fails_closed_below_minimum_training_history(
     assert result["n_skipped_insufficient_history_fixtures"] == 1
     assert result["forecast_rows"] == []
     assert all(item["count"] == 0 for item in result["prediction_errors"].values())
+
+@pytest.mark.parametrize(
+    "probabilities",
+    [
+        {"1": 0.6, "X": 0.3, "2": 0.2},
+        {"1": 1.01, "X": 0.0, "2": -0.01},
+        {"1": 0.5, "X": 0.5, "2": 0.0, "P": 0.0},
+        {"1": True, "X": 0.0, "2": 0.0},
+    ],
+)
+def test_metrics_reject_invalid_probability_vectors(probabilities):
+    with pytest.raises(ValueError):
+        multiclass_metrics([(probabilities, "1")])
+
