@@ -136,6 +136,7 @@ jobs:
           path: .cache/football-data
           key: football-data-${{ runner.os }}-${{ github.ref_name }}-${{ github.run_id }}
           restore-keys: |
+            football-data-${{ runner.os }}-${{ github.event.pull_request.base.ref || github.ref_name }}-
             football-data-${{ runner.os }}-master-
       - run: python scripts/build_history.py --offline
       - name: Enforce weekly Football-Data cache snapshot
