@@ -265,7 +265,10 @@ def test_jornada_1_2021_2022_official_prize_distribution_passes_strict_validatio
         "unit_prize_eur": 88.30,
     }
 
-def test_jornada_1_2022_2023_official_prize_distribution_passes_strict_validation() -> None:
+
+def test_jornada_1_2022_2023_official_prize_distribution_passes_strict_validation() -> (
+    None
+):
     snapshot = json.loads(
         (
             Path(__file__).parents[1]
