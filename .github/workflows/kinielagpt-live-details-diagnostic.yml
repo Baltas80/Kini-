@@ -51,7 +51,31 @@ jobs:
           while read -r run_id head_sha; do
             [[ -n "$run_id" && -n "$head_sha" ]] || continue
             jobs_json="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/jobs?per_page=100" 2>/dev/null || printf '{"jobs":[]}')"
-            if jq -e '[.jobs[]? | select(.name == "inspect") | .steps[]? | select(.name == "Upload bounded schema and crosswalk evidence" and .conclusion == "success")] | length > 0' <<<"$jobs_json" >/dev/null; then
+            if jq -e '
+              (
+                [
+                  .jobs[]?
+                  | select(.name == "inspect")
+                  | .steps[]?
+                  | select(
+                      .name == "Inspect current jornada details and fixture crosswalk (read-only GET)"
+                      and (.conclusion == "success" or .conclusion == "failure")
+                    )
+                ] | length > 0
+              )
+              and
+              (
+                [
+                  .jobs[]?
+                  | select(.name == "inspect")
+                  | .steps[]?
+                  | select(
+                      .name == "Upload bounded schema and crosswalk evidence"
+                      and .conclusion == "success"
+                    )
+                ] | length > 0
+              )
+            ' <<<"$jobs_json" >/dev/null; then
               last_attempt="$head_sha"
               break
             fi
