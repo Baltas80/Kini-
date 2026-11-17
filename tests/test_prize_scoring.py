@@ -157,3 +157,41 @@ def test_jornada_22_official_prize_distribution_passes_strict_validation() -> No
         "unit_prize_eur": 2029.20,
     }
     assert Decimal("1677247.92") + Decimal("211912.56") == Decimal("1889160.48")
+
+
+def test_jornada_25_official_prize_distribution_passes_strict_validation() -> None:
+    snapshot = json.loads(
+        (
+            Path(__file__).parents[1]
+            / "kini_engine"
+            / "data"
+            / "selae_official_coupon_results"
+            / "2020-2021-25.json"
+        ).read_text(encoding="utf-8")
+    )
+    validated = _validate_prize_distribution(
+        snapshot,
+        expected_draw_date="2021-01-03",
+    )
+
+    assert validated["revenue_eur"] == Decimal("2669930.25")
+    assert validated["categories"]["pleno_al_15"]["winner_count"] == 1
+    assert validated["categories"]["pleno_al_15"]["unit_prize_eur"] == Decimal(
+        "200244.77"
+    )
+    assert validated["categories"]["14"]["winner_count"] == 14
+    assert validated["categories"]["14"]["unit_prize_eur"] == Decimal("30513.49")
+    assert validated["categories"]["13"]["winner_count"] == 275
+    assert validated["categories"]["13"]["unit_prize_eur"] == Decimal("728.16")
+    assert validated["categories"]["12"]["winner_count"] == 3660
+    assert validated["categories"]["12"]["unit_prize_eur"] == Decimal("54.71")
+    assert validated["categories"]["11"]["winner_count"] == 30768
+    assert validated["categories"]["11"]["unit_prize_eur"] == Decimal("6.51")
+    assert validated["categories"]["10"]["winner_count"] == 143371
+    assert validated["categories"]["10"]["unit_prize_eur"] == Decimal("1.68")
+    assert Decimal("200244.77") + Decimal("30513.49") == Decimal("230758.26")
+    assert snapshot["prize_distribution"]["elige8"] == {
+        "revenue_eur": 73222.50,
+        "winner_count": 286,
+        "unit_prize_eur": 140.81,
+    }

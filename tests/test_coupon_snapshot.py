@@ -386,3 +386,106 @@ def test_jornada_22_official_snapshot_matches_reviewed_selae_results() -> None:
     )
     assert verified["official_main_matches_verified"] is True
     assert verified["official_pleno_verified"] is True
+
+
+def test_jornada_25_official_snapshot_matches_reviewed_selae_results() -> None:
+    path = (
+        Path(__file__).resolve().parents[1]
+        / "kini_engine"
+        / "data"
+        / "selae_official_coupon_results"
+        / "2020-2021-25.json"
+    )
+    snapshot, digest = load_official_coupon_snapshot(path)
+
+    expected = [
+        ("Villarreal", "Levante", 2, 1, "1"),
+        ("Betis", "Sevilla", 1, 1, "X"),
+        ("Getafe", "Valladolid", 0, 1, "2"),
+        ("Real Madrid", "Celta", 2, 0, "1"),
+        ("Athletic Club", "Elche", 1, 0, "1"),
+        ("Alavés", "At. Madrid", 1, 2, "2"),
+        ("Eibar", "Granada", 2, 0, "1"),
+        ("Real Sociedad", "Osasuna", 1, 1, "X"),
+        ("Huesca", "Barcelona", 0, 1, "2"),
+        ("Fuenlabrada", "Leganés", 0, 0, "X"),
+        ("Rayo Vallecano", "Alcorcón", 2, 1, "1"),
+        ("Las Palmas", "Espanyol", 1, 0, "1"),
+        ("Almería", "Ponferradina", 3, 1, "1"),
+        ("R. Oviedo", "Mallorca", 2, 2, "X"),
+    ]
+    actual = [
+        (
+            item["home"],
+            item["away"],
+            item["home_goals"],
+            item["away_goals"],
+            item["result"],
+        )
+        for item in snapshot["fixtures"]
+    ]
+    assert snapshot["draw_date"] == "2021-01-03"
+    assert snapshot["source_url"] == (
+        "https://www.loteriasyapuestas.es/es/la-quiniela/resultados/"
+        "la-quiniela-resultados-del-03-de-enero-de-2021"
+    )
+    sources = {
+        item["role"]: item["url"] for item in snapshot["supporting_sources"]
+    }
+    assert sources["official_selae_result_page"] == snapshot["source_url"]
+    assert sources["official_selae_press_release_pdf"] == (
+        "https://www.loteriasyapuestas.es/f/loterias/documentos/Quiniela/Notas%20de%20prensa/"
+        "NOTA_DE_PRENSA_DE_LA_QUINIELA_DE_FECHA_3_1_21.pdf"
+    )
+    assert sources["schedule_and_kickoff_crosscheck"] == (
+        "https://www.historicoquiniela.com/historico/2020-2021/25"
+    )
+    assert sources["football_data_sp1_crosscheck"] == (
+        "https://www.football-data.co.uk/mmz4281/2021/SP1.csv"
+    )
+    assert sources["football_data_sp2_crosscheck"] == (
+        "https://www.football-data.co.uk/mmz4281/2021/SP2.csv"
+    )
+    assert actual == expected
+    assert snapshot["pleno"] == {
+        "number": 15,
+        "home": "Valencia",
+        "away": "Cádiz",
+        "home_goals": 1,
+        "away_goals": 1,
+        "home_category": "1",
+        "away_category": "1",
+    }
+
+    coupon = {
+        "coupon_id": "2020-2021:25",
+        "source_date": "2021-01-03",
+        "fixtures": [
+            {
+                "number": item["number"],
+                "home": item["home"],
+                "away": item["away"],
+                "home_goals": item["home_goals"],
+                "away_goals": item["away_goals"],
+                "result": item["result"],
+            }
+            for item in snapshot["fixtures"]
+        ]
+        + [
+            {
+                "number": 15,
+                "home": snapshot["pleno"]["home"],
+                "away": snapshot["pleno"]["away"],
+                "home_goals": snapshot["pleno"]["home_goals"],
+                "away_goals": snapshot["pleno"]["away_goals"],
+                "pleno_home_category": snapshot["pleno"]["home_category"],
+                "pleno_away_category": snapshot["pleno"]["away_category"],
+            }
+        ],
+    }
+    verified = verify_coupon_against_selae_snapshot(
+        coupon, snapshot, snapshot_sha256=digest
+    )
+    assert verified["official_main_matches_verified"] is True
+    assert verified["official_pleno_verified"] is True
+    assert digest == hashlib.sha256(path.read_bytes()).hexdigest()

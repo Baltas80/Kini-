@@ -1,0 +1,202 @@
+{
+  "schema_version": 1,
+  "source": "SELAE",
+  "draw_date": "2021-01-03",
+  "source_url": "https://www.loteriasyapuestas.es/es/la-quiniela/resultados/la-quiniela-resultados-del-03-de-enero-de-2021",
+  "verified_at": "2026-11-17",
+  "verification_method": "Manual review of the official SELAE result page and official SELAE press-release PDF. The 14 ordered main fixtures, team labels, scores and signs, plus the Valencia-Cádiz Pleno al 15 (1-1), were cross-checked against the HistoricalQuiniela Jornada 25 schedule and Europe/Madrid kickoff timestamps and the validated Football-Data 2020/2021 SP1/SP2 historical dataset. HistoricalQuiniela supplies kickoff times; Football-Data supplies date/team/score reconciliation only. The official PDF was available as parsed source text, but its original bytes were not retrieved in this run; no raw-PDF digest is claimed.",
+  "snapshot_type": "normalized_json_extract_not_raw_html",
+  "supporting_sources": [
+    {
+      "role": "official_selae_result_page",
+      "url": "https://www.loteriasyapuestas.es/es/la-quiniela/resultados/la-quiniela-resultados-del-03-de-enero-de-2021"
+    },
+    {
+      "role": "official_selae_press_release_pdf",
+      "url": "https://www.loteriasyapuestas.es/f/loterias/documentos/Quiniela/Notas%20de%20prensa/NOTA_DE_PRENSA_DE_LA_QUINIELA_DE_FECHA_3_1_21.pdf"
+    },
+    {
+      "role": "schedule_and_kickoff_crosscheck",
+      "url": "https://www.historicoquiniela.com/historico/2020-2021/25"
+    },
+    {
+      "role": "football_data_sp1_crosscheck",
+      "url": "https://www.football-data.co.uk/mmz4281/2021/SP1.csv"
+    },
+    {
+      "role": "football_data_sp2_crosscheck",
+      "url": "https://www.football-data.co.uk/mmz4281/2021/SP2.csv"
+    }
+  ],
+  "fixtures": [
+    {
+      "number": 1,
+      "home": "Villarreal",
+      "away": "Levante",
+      "home_goals": 2,
+      "away_goals": 1,
+      "result": "1"
+    },
+    {
+      "number": 2,
+      "home": "Betis",
+      "away": "Sevilla",
+      "home_goals": 1,
+      "away_goals": 1,
+      "result": "X"
+    },
+    {
+      "number": 3,
+      "home": "Getafe",
+      "away": "Valladolid",
+      "home_goals": 0,
+      "away_goals": 1,
+      "result": "2"
+    },
+    {
+      "number": 4,
+      "home": "Real Madrid",
+      "away": "Celta",
+      "home_goals": 2,
+      "away_goals": 0,
+      "result": "1"
+    },
+    {
+      "number": 5,
+      "home": "Athletic Club",
+      "away": "Elche",
+      "home_goals": 1,
+      "away_goals": 0,
+      "result": "1"
+    },
+    {
+      "number": 6,
+      "home": "Alavés",
+      "away": "At. Madrid",
+      "home_goals": 1,
+      "away_goals": 2,
+      "result": "2"
+    },
+    {
+      "number": 7,
+      "home": "Eibar",
+      "away": "Granada",
+      "home_goals": 2,
+      "away_goals": 0,
+      "result": "1"
+    },
+    {
+      "number": 8,
+      "home": "Real Sociedad",
+      "away": "Osasuna",
+      "home_goals": 1,
+      "away_goals": 1,
+      "result": "X"
+    },
+    {
+      "number": 9,
+      "home": "Huesca",
+      "away": "Barcelona",
+      "home_goals": 0,
+      "away_goals": 1,
+      "result": "2"
+    },
+    {
+      "number": 10,
+      "home": "Fuenlabrada",
+      "away": "Leganés",
+      "home_goals": 0,
+      "away_goals": 0,
+      "result": "X"
+    },
+    {
+      "number": 11,
+      "home": "Rayo Vallecano",
+      "away": "Alcorcón",
+      "home_goals": 2,
+      "away_goals": 1,
+      "result": "1"
+    },
+    {
+      "number": 12,
+      "home": "Las Palmas",
+      "away": "Espanyol",
+      "home_goals": 1,
+      "away_goals": 0,
+      "result": "1"
+    },
+    {
+      "number": 13,
+      "home": "Almería",
+      "away": "Ponferradina",
+      "home_goals": 3,
+      "away_goals": 1,
+      "result": "1"
+    },
+    {
+      "number": 14,
+      "home": "R. Oviedo",
+      "away": "Mallorca",
+      "home_goals": 2,
+      "away_goals": 2,
+      "result": "X"
+    }
+  ],
+  "pleno": {
+    "number": 15,
+    "home": "Valencia",
+    "away": "Cádiz",
+    "home_goals": 1,
+    "away_goals": 1,
+    "home_category": "1",
+    "away_category": "1"
+  },
+  "prize_distribution": {
+    "source_type": "official_selae_press_release_pdf_transcribed_to_normalized_extract",
+    "source_url": "https://www.loteriasyapuestas.es/f/loterias/documentos/Quiniela/Notas%20de%20prensa/NOTA_DE_PRENSA_DE_LA_QUINIELA_DE_FECHA_3_1_21.pdf",
+    "revenue_eur": 2669930.25,
+    "categories": [
+      {
+        "category": "pleno_al_15",
+        "winner_count": 1,
+        "unit_prize_eur": 200244.77,
+        "status": "awarded"
+      },
+      {
+        "category": "14",
+        "winner_count": 14,
+        "unit_prize_eur": 30513.49,
+        "status": "awarded"
+      },
+      {
+        "category": "13",
+        "winner_count": 275,
+        "unit_prize_eur": 728.16,
+        "status": "awarded"
+      },
+      {
+        "category": "12",
+        "winner_count": 3660,
+        "unit_prize_eur": 54.71,
+        "status": "awarded"
+      },
+      {
+        "category": "11",
+        "winner_count": 30768,
+        "unit_prize_eur": 6.51,
+        "status": "awarded"
+      },
+      {
+        "category": "10",
+        "winner_count": 143371,
+        "unit_prize_eur": 1.68,
+        "status": "awarded"
+      }
+    ],
+    "elige8": {
+      "revenue_eur": 73222.5,
+      "winner_count": 286,
+      "unit_prize_eur": 140.81
+    }
+  }
+}
