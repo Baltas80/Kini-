@@ -3592,9 +3592,9 @@ PR #10 remains open and draft. No merge or `master` modification occurred.
 
 ### Next priority
 
-1. Test the strict validator against the real Jornada 19 normalized SELAE snapshot.
+1. Strict validator against the real Jornada 19 normalized SELAE snapshot: tested in `tests/test_prize_scoring.py`.
 2. Add conservative winner-count consistency diagnostics without assuming the 14-category count includes or excludes Pleno winners.
-3. Preserve original PDF byte digests when retrievable.
+3. CLI scorer now accepts `--official-result-snapshot` alongside `--pleno15`; preserve original PDF byte digests when retrievable.
 4. Expand official coupon/prize evidence across seasons; do not use the two-coupon smoke test for model ranking or profitability claims.
 
 PR #10 remains draft and targets the existing feature branch. No merge and no changes to `master`.

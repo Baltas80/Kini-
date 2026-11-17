@@ -65,6 +65,14 @@ def main(argv: list[str] | None = None) -> int:
         type=Path,
         help="Optional separately verified official SELAE Pleno al 15 result JSON.",
     )
+    parser.add_argument(
+        "--official-result-snapshot",
+        type=Path,
+        help=(
+            "Optional normalized SELAE result snapshot with official prize "
+            "distribution; requires --pleno15."
+        ),
+    )
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args(argv)
 
@@ -76,6 +84,15 @@ def main(argv: list[str] | None = None) -> int:
         if args.pleno15 is not None:
             pleno15, pleno15_bytes = _load_json(args.pleno15)
             pleno15_digest = hashlib.sha256(pleno15_bytes).hexdigest()
+        official_snapshot = None
+        official_snapshot_digest = None
+        if args.official_result_snapshot is not None:
+            official_snapshot, official_snapshot_bytes = _load_json(
+                args.official_result_snapshot
+            )
+            official_snapshot_digest = hashlib.sha256(
+                official_snapshot_bytes
+            ).hexdigest()
         result = score_ticket_record(
             ticket,
             reconciliation,
@@ -83,6 +100,8 @@ def main(argv: list[str] | None = None) -> int:
             reconciliation_sha256=hashlib.sha256(reconciliation_bytes).hexdigest(),
             pleno15_report=pleno15,
             pleno15_report_sha256=pleno15_digest,
+            official_result_snapshot=official_snapshot,
+            official_result_snapshot_sha256=official_snapshot_digest,
         )
         _write_json_once(args.output, result)
     except (OSError, TicketOutcomeError, TypeError, ValueError) as exc:
@@ -97,6 +116,9 @@ def main(argv: list[str] | None = None) -> int:
         f"pleno15_evaluated={result.get('pleno15_evaluated', False)} "
         f"pleno15_hit={result.get('pleno15_hit')} "
         f"covered_full_coupon={result.get('covered_full_coupon')} "
+        f"prize_tiers_evaluated={result.get('prize_tiers_evaluated', False)} "
+        f"conditional_prize_reference_eur="
+        f"{result.get('conditional_published_prize_reference_eur')} "
         f"best_column_hits={result['best_column_hits']}"
     )
     print(f"Result: {args.output}")

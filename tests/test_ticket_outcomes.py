@@ -16,6 +16,7 @@ from kini_engine.ticket_outcomes import (
     validate_pleno15_report,
     validate_preclose_public_draw_snapshot,
 )
+from scripts.score_selae_ticket import main as score_ticket_cli_main
 
 DRAW_DATE = "2026-11-08"
 SELAE_URL = (
@@ -1107,3 +1108,49 @@ def test_official_prize_scoring_rejects_snapshot_result_conflict() -> None:
             official_result_snapshot=snapshot,
             official_result_snapshot_sha256=hashlib.sha256(snapshot_raw).hexdigest(),
         )
+
+
+def test_ticket_scoring_cli_accepts_official_prize_snapshot(tmp_path: Path) -> None:
+    reconciliation = _reconciliation()
+    ticket = _ticket(reconciliation)
+    ticket["pleno15_combinations"] = [{"home_goals": "2", "away_goals": "M"}]
+    pleno_report = _pleno15_report()
+    snapshot = _official_prize_snapshot_for_test(
+        ticket, reconciliation, pleno_report
+    )
+    inputs = {
+        "ticket.json": ticket,
+        "reconciliation.json": reconciliation,
+        "pleno15.json": pleno_report,
+        "official-result.json": snapshot,
+    }
+    input_paths = {}
+    for name, value in inputs.items():
+        path = tmp_path / name
+        path.write_text(
+            json.dumps(value, ensure_ascii=False, separators=(",", ":")),
+            encoding="utf-8",
+        )
+        input_paths[name] = path
+    output = tmp_path / "score.json"
+
+    exit_code = score_ticket_cli_main(
+        [
+            "--ticket",
+            str(input_paths["ticket.json"]),
+            "--reconciliation",
+            str(input_paths["reconciliation.json"]),
+            "--pleno15",
+            str(input_paths["pleno15.json"]),
+            "--official-result-snapshot",
+            str(input_paths["official-result.json"]),
+            "--output",
+            str(output),
+        ]
+    )
+
+    assert exit_code == 0
+    score = json.loads(output.read_text(encoding="utf-8"))
+    assert score["prize_tiers_evaluated"] is True
+    assert score["conditional_published_prize_reference_eur"] == "120.00"
+    assert score["payout_evaluated"] is False

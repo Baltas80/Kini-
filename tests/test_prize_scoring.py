@@ -7,10 +7,9 @@ from pathlib import Path
 import pytest
 
 from kini_engine.prize_scoring import (
-    _validate_prize_distribution,
     PrizeScoringError,
+    _validate_prize_distribution,
 )
-
 
 SNAPSHOT_PATH = (
     Path(__file__).parents[1]
