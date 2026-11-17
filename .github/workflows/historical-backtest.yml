@@ -526,6 +526,68 @@ jobs:
           )
           PY
 
+      - name: Enforce snapshot-aligned common-time market benchmark
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          result = json.loads(Path("backtest-results.json").read_text())
+          snapshot = result.get("snapshot_aligned_market")
+          if not isinstance(snapshot, dict):
+              raise SystemExit(
+                  "Snapshot-aligned benchmark is missing; the existing-cutoff "
+                  "filter is not a substitute for refitting at the market snapshot"
+              )
+
+          minimum = 500
+          n_common = int(snapshot.get("n_common_time_eligible", 0))
+          n_snapshots = int(snapshot.get("n_snapshot_dates", 0))
+          if n_snapshots <= 0 or n_common < minimum:
+              raise SystemExit(
+                  f"Snapshot-aligned sample is insufficient: n={n_common}, "
+                  f"snapshot_dates={n_snapshots}, required_n>={minimum}"
+              )
+
+          expected_rule = (
+              "completed_result_date < market_snapshot_date; "
+              "refit once per snapshot date"
+          )
+          if snapshot.get("training_rule") != expected_rule:
+              raise SystemExit("Snapshot-aligned training rule is missing or changed")
+
+          required = (
+              "dc", "ml", "ensemble", "ensemble_dc_ml",
+              "ensemble_dc_ml_adaptive",
+          )
+          common = snapshot.get("common_sample", {})
+          errors = snapshot.get("prediction_errors", {})
+          for name in required:
+              sample = common.get(name, {})
+              sample_n = int(sample.get("n", 0))
+              model_n = int(sample.get("model", {}).get("n", 0))
+              market_n = int(sample.get("market", {}).get("n", 0))
+              error_count = int(errors.get(name, {}).get("count", -1))
+              if (
+                  sample_n < minimum
+                  or model_n != sample_n
+                  or market_n != sample_n
+                  or error_count != 0
+              ):
+                  raise SystemExit(
+                      f"{name} failed snapshot-aligned acceptance: "
+                      f"sample={sample_n}, model={model_n}, market={market_n}, "
+                      f"errors={error_count}, required_n>={minimum}"
+                  )
+
+          print(
+              "SNAPSHOT_ALIGNED_MARKET_ACCEPTANCE_OK: "
+              f"{n_common} common fixtures across {n_snapshots} snapshot dates; "
+              "all five model streams are non-empty, error-free and paired "
+              "with the same market fixtures"
+          )
+          PY
+
       - name: Enforce fixed-book Bet365 benchmark acceptance
         run: |
           python - <<'PY'
