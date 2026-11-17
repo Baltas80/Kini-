@@ -38,6 +38,17 @@ def test_jornada_19_official_prize_distribution_passes_strict_validation() -> No
     assert validated["categories"]["10"]["unit_prize_eur"] == Decimal("10.06")
 
 
+def test_prize_validation_rejects_verification_before_draw_date() -> None:
+    snapshot = _jornada_19_snapshot()
+    snapshot["verified_at"] = "2020-12-05"
+
+    with pytest.raises(
+        PrizeScoringError,
+        match="verified_at cannot precede draw_date",
+    ):
+        _validate_prize_distribution(snapshot, expected_draw_date="2020-12-06")
+
+
 def test_jornada_19_prize_validation_rejects_rollover_with_winners() -> None:
     snapshot = _jornada_19_snapshot()
     pleno_tier = next(

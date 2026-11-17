@@ -96,14 +96,19 @@ def _validate_prize_distribution(
     if snapshot.get("source") != "SELAE":
         raise PrizeScoringError("official result snapshot provider must be SELAE")
     try:
-        draw_date = date.fromisoformat(
+        draw_date_value = date.fromisoformat(
             _required_text(snapshot.get("draw_date"), "draw_date")
-        ).isoformat()
-        date.fromisoformat(_required_text(snapshot.get("verified_at"), "verified_at"))
+        )
+        verified_at = date.fromisoformat(
+            _required_text(snapshot.get("verified_at"), "verified_at")
+        )
     except ValueError as exc:
         raise PrizeScoringError(
             "snapshot draw_date and verified_at must be ISO dates"
         ) from exc
+    draw_date = draw_date_value.isoformat()
+    if verified_at < draw_date_value:
+        raise PrizeScoringError("snapshot verified_at cannot precede draw_date")
     if draw_date != expected_draw_date:
         raise PrizeScoringError(
             "official result snapshot draw date does not match ticket"
