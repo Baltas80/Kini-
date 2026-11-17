@@ -65,13 +65,9 @@ def _validate_recorded_at(value: object, validated: dict[str, Any]) -> str:
 
     recorded_at = parsed.astimezone(UTC)
     if recorded_at < validated["ticket_created_at_utc"]:
-        raise TicketLedgerError(
-            "ticket ledger append must not precede ticket creation"
-        )
+        raise TicketLedgerError("ticket ledger append must not precede ticket creation")
     if recorded_at >= validated["ticket_cutoff_at_utc"]:
-        raise TicketLedgerError(
-            "ticket ledger append must occur before ticket cutoff"
-        )
+        raise TicketLedgerError("ticket ledger append must occur before ticket cutoff")
     return recorded_at.isoformat().replace("+00:00", "Z")
 
 
