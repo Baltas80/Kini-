@@ -20,8 +20,12 @@
       "url": "https://www.historicoquiniela.com/historico/2020-2021/19"
     },
     {
-      "role": "football_data_crosscheck",
+      "role": "football_data_sp1_crosscheck",
       "url": "https://www.football-data.co.uk/mmz4281/2021/SP1.csv"
+    },
+    {
+      "role": "football_data_sp2_crosscheck",
+      "url": "https://www.football-data.co.uk/mmz4281/2021/SP2.csv"
     }
   ],
   "fixtures": [
