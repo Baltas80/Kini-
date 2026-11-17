@@ -211,6 +211,8 @@ jobs:
           import json
           from pathlib import Path
 
+          from kini_engine.coupons import COUPON_SCHEMA_VERSION
+
           source_paths = (
               Path("coupon-archive-2020-2021.jsonl"),
               Path("coupon-archive-2021-2022.jsonl"),
@@ -226,7 +228,7 @@ jobs:
               if not records or records[0].get("record_type") != "manifest":
                   raise SystemExit(f"{source_path}: missing archive manifest")
               manifest = records[0]
-              if manifest.get("schema_version") != 1 or manifest.get("coupon_count") != len(records) - 1:
+              if manifest.get("schema_version") != COUPON_SCHEMA_VERSION or manifest.get("coupon_count") != len(records) - 1:
                   raise SystemExit(f"{source_path}: source manifest count/schema mismatch")
               source_manifests.append(manifest)
               for record in records[1:]:
@@ -248,7 +250,7 @@ jobs:
           ] + [{"season": "2021-2022", "number": 1}]
           manifest = {
               "record_type": "manifest",
-              "schema_version": 1,
+              "schema_version": COUPON_SCHEMA_VERSION,
               "source": "historicoquiniela.com",
               "seasons": ["2020-2021", "2021-2022"],
               "journey_numbers": journey_numbers,
@@ -290,6 +292,8 @@ jobs:
           import json
           from pathlib import Path
 
+          from kini_engine.coupons import COUPON_SCHEMA_VERSION
+
           result = json.loads(Path("coupon-backtest.json").read_text(encoding="utf-8"))
           archive = [
               json.loads(line)
@@ -316,6 +320,7 @@ jobs:
           ]
           if (
               manifest.get("record_type") != "manifest"
+              or manifest.get("schema_version") != COUPON_SCHEMA_VERSION
               or manifest.get("coupon_count") != len(expected)
               or manifest.get("seasons") != ["2020-2021", "2021-2022"]
               or manifest.get("journey_numbers") != expected_journey_numbers
