@@ -3247,7 +3247,7 @@ Próxima prioridad: integrar el plan en el flujo real de generación de boletos,
 
 ## Integración del plan pre-ticket en KiniEngine y MCP — 2026-11-17
 
-<badge>Implementada y validada por CI</badge>
+**Estado: Implementada y validada por CI**
 
 La integración que figuraba como pendiente queda implementada en el head de código `4e9056b90386024e3771f1c178d4f0d5b4507f1d`:
 
