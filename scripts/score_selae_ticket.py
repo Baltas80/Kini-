@@ -60,17 +60,29 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--ticket", type=Path, required=True)
     parser.add_argument("--reconciliation", type=Path, required=True)
+    parser.add_argument(
+        "--pleno15",
+        type=Path,
+        help="Optional separately verified official SELAE Pleno al 15 result JSON.",
+    )
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args(argv)
 
     try:
         ticket, ticket_bytes = _load_json(args.ticket)
         reconciliation, reconciliation_bytes = _load_json(args.reconciliation)
+        pleno15 = None
+        pleno15_digest = None
+        if args.pleno15 is not None:
+            pleno15, pleno15_bytes = _load_json(args.pleno15)
+            pleno15_digest = hashlib.sha256(pleno15_bytes).hexdigest()
         result = score_ticket_record(
             ticket,
             reconciliation,
             ticket_sha256=hashlib.sha256(ticket_bytes).hexdigest(),
             reconciliation_sha256=hashlib.sha256(reconciliation_bytes).hexdigest(),
+            pleno15_report=pleno15,
+            pleno15_report_sha256=pleno15_digest,
         )
         _write_json_once(args.output, result)
     except (OSError, TicketOutcomeError, TypeError, ValueError) as exc:
@@ -82,6 +94,9 @@ def main(argv: list[str] | None = None) -> int:
         f"columns={result['column_count']} "
         f"public_draw_positions={result['public_draw_positions']} "
         f"covered_14={result['covered_14']} "
+        f"pleno15_evaluated={result['pleno15_evaluated']} "
+        f"pleno15_hit={result['pleno15_hit']} "
+        f"covered_full_coupon={result['covered_full_coupon']} "
         f"best_column_hits={result['best_column_hits']}"
     )
     print(f"Result: {args.output}")
