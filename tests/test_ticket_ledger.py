@@ -211,4 +211,3 @@ def test_ticket_ledger_score_json_rejects_invalid_or_non_object_payload(tmp_path
         ledger.score_ticket_json(str(ticket["ticket_id"]), "[]")
 
     assert ledger.list_ticket_scores(str(ticket["ticket_id"])) == []
-
