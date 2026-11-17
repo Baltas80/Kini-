@@ -87,6 +87,8 @@ jobs:
           tests/test_coupon_backtest.py
           tests/test_coupon_identity.py
           kini_engine/ticket_outcomes.py
+          kini_engine/ticket_ledger.py
+          tests/test_ticket_ledger.py
           scripts/score_selae_ticket.py
           tests/test_ticket_outcomes.py
       - name: Verify formatting for predictive core, Liga F and SELAE evidence code
@@ -127,6 +129,8 @@ jobs:
           tests/test_coupon_backtest.py
           tests/test_coupon_identity.py
           kini_engine/ticket_outcomes.py
+          kini_engine/ticket_ledger.py
+          tests/test_ticket_ledger.py
           scripts/score_selae_ticket.py
           tests/test_ticket_outcomes.py
       - run: pytest -q
