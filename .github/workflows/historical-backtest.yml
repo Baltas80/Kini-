@@ -130,15 +130,48 @@ jobs:
         with:
           python-version: "3.12"
       - run: python -m pip install -e ".[ml]"
-      - name: Restore Football-Data raw CSV cache
-        uses: actions/cache/restore@v4
-        with:
-          path: .cache/football-data
-          key: football-data-${{ runner.os }}-${{ github.ref_name }}-${{ github.run_id }}
-          restore-keys: |
-            football-data-${{ runner.os }}-${{ github.ref_name }}-
-            football-data-${{ runner.os }}-
-      - run: python scripts/build_history.py --offline
+      - name: Download and validate a fresh Football-Data snapshot
+        run: python scripts/build_history.py --refresh --require-fresh
+      - name: Enforce fresh source snapshot
+        run: |
+          python - <<'PY'
+          import json
+          import math
+          from pathlib import Path
+
+          profile = json.loads(
+              Path("data/historical_spain.profile.json").read_text(encoding="utf-8")
+          )
+          sources = profile.get("source_cache_metadata")
+          if not profile.get("integrity_passed"):
+              raise SystemExit("Historical dataset profile reports failed integrity")
+          if not isinstance(sources, list) or len(sources) != 14:
+              raise SystemExit("Expected exactly 14 fresh Football-Data source files")
+
+          stale = []
+          for source in sources:
+              age = source.get("cache_age_hours")
+              if (
+                  not isinstance(age, (int, float))
+                  or isinstance(age, bool)
+                  or not math.isfinite(float(age))
+                  or float(age) > 1.0
+                  or not source.get("cache_file_mtime_utc")
+              ):
+                  stale.append(
+                      (source.get("source_url"), source.get("cache_age_hours"))
+                  )
+          if stale:
+              raise SystemExit(f"Source files are missing or older than one hour: {stale}")
+
+          rows = int(profile.get("rows_after_deduplication", 0))
+          if rows <= 0:
+              raise SystemExit("Historical dataset contains no completed fixtures")
+          print(
+              "FRESH_HISTORY_SOURCE_ACCEPTANCE_OK: "
+              f"{rows} completed fixtures from {len(sources)} recently downloaded sources"
+          )
+          PY
       - name: Diagnose first ML forecast
         run: python scripts/diagnose_ml.py data/historical_spain.csv --min-train 300
       - name: Run historical comparison
