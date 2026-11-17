@@ -340,40 +340,215 @@ def validate_preclose_public_draw_snapshot(
     }
 
 
+def _validate_coupon_plan(
+    plan: dict[str, Any],
+    draw_date: str,
+) -> dict[str, Any]:
+    """Validate a pre-kickoff coupon plan without reading realized match outcomes."""
+    if not isinstance(plan, dict):
+        raise TicketOutcomeError("pre-ticket coupon plan must be an object")
+    _require_schema_v1(plan, "pre-ticket coupon plan")
+    allowed_plan_fields = {
+        "schema_version",
+        "provider",
+        "draw_date",
+        "schedule_captured_at_utc",
+        "schedule_evidence_url",
+        "schedule_evidence_sha256",
+        "ticket_cutoff_at_utc",
+        "first_kickoff_at",
+        "positions",
+    }
+    if set(plan) != allowed_plan_fields:
+        unexpected = sorted(set(plan) - allowed_plan_fields)
+        missing = sorted(allowed_plan_fields - set(plan))
+        raise TicketOutcomeError(
+            f"pre-ticket coupon plan fields mismatch; missing={missing}, "
+            f"unexpected={unexpected}"
+        )
+    if plan.get("provider") != "SELAE":
+        raise TicketOutcomeError("pre-ticket coupon plan provider must be SELAE")
+    expected_date = _parse_draw_date(draw_date, "draw_date")
+    if _parse_draw_date(plan.get("draw_date"), "plan.draw_date") != expected_date:
+        raise TicketOutcomeError("pre-ticket coupon plan draw date mismatch")
+
+    schedule_url = _validate_official_selae_url(
+        plan.get("schedule_evidence_url"), "schedule_evidence_url"
+    )
+    schedule_sha256 = _validate_sha256(
+        plan.get("schedule_evidence_sha256"), "schedule_evidence_sha256"
+    )
+    cutoff = _parse_utc_timestamp(
+        plan.get("ticket_cutoff_at_utc"), "plan.ticket_cutoff_at_utc"
+    )
+    schedule_captured_at = _parse_utc_timestamp(
+        plan.get("schedule_captured_at_utc"), "schedule_captured_at_utc"
+    )
+    if schedule_captured_at >= cutoff:
+        raise TicketOutcomeError(
+            "coupon schedule must be captured strictly before ticket close"
+        )
+    first_kickoff = _parse_timestamp(
+        plan.get("first_kickoff_at"), "plan.first_kickoff_at"
+    )
+    if cutoff >= first_kickoff.astimezone(UTC):
+        raise TicketOutcomeError("ticket cutoff must be earlier than first kickoff")
+
+    raw_positions = plan.get("positions")
+    if not isinstance(raw_positions, list) or len(raw_positions) != len(POSITIONS):
+        raise TicketOutcomeError("pre-ticket coupon plan must cover positions 1..14")
+    positions: dict[int, dict[str, Any]] = {}
+    scheduled_kickoffs: list[datetime] = []
+    public_draw_positions: set[int] = set()
+    common_fields = {
+        "position",
+        "fixture_status",
+        "home",
+        "away",
+        "kickoff_at",
+    }
+    public_draw_fields = common_fields | {
+        "status_evidence_url",
+        "status_evidence_sha256",
+        "status_captured_at_utc",
+    }
+
+    for raw in raw_positions:
+        if not isinstance(raw, dict):
+            raise TicketOutcomeError("each coupon-plan position must be an object")
+        position = _position(raw.get("position"), "plan position")
+        if position in positions:
+            raise TicketOutcomeError(
+                f"pre-ticket coupon plan contains duplicate position {position}"
+            )
+        status = raw.get("fixture_status")
+        if status == "scheduled":
+            if set(raw) != common_fields:
+                raise TicketOutcomeError(
+                    f"scheduled position {position} contains unsupported or missing fields"
+                )
+        elif status == "public_draw_expected":
+            if set(raw) != public_draw_fields:
+                raise TicketOutcomeError(
+                    f"public-draw position {position} contains unsupported or missing fields"
+                )
+        else:
+            raise TicketOutcomeError(
+                f"position {position} fixture_status must be scheduled "
+                "or public_draw_expected"
+            )
+
+        home = _required_text(raw.get("home"), f"position {position}.home")
+        away = _required_text(raw.get("away"), f"position {position}.away")
+        kickoff = _parse_timestamp(
+            raw.get("kickoff_at"), f"position {position}.kickoff_at"
+        )
+        if status == "scheduled":
+            if kickoff.astimezone(UTC) <= cutoff:
+                raise TicketOutcomeError(
+                    f"scheduled position {position} kickoff must be after ticket close"
+                )
+            scheduled_kickoffs.append(kickoff.astimezone(UTC))
+        else:
+            status_url = _validate_official_selae_url(
+                raw.get("status_evidence_url"),
+                f"position {position}.status_evidence_url",
+            )
+            status_sha256 = _validate_sha256(
+                raw.get("status_evidence_sha256"),
+                f"position {position}.status_evidence_sha256",
+            )
+            status_captured_at = _parse_utc_timestamp(
+                raw.get("status_captured_at_utc"),
+                f"position {position}.status_captured_at_utc",
+            )
+            if status_captured_at >= cutoff:
+                raise TicketOutcomeError(
+                    f"public-draw status at position {position} must be evidenced "
+                    "strictly before ticket close"
+                )
+            public_draw_positions.add(position)
+
+        positions[position] = {
+            "fixture_status": status,
+            "home": home,
+            "away": away,
+            "kickoff_at": kickoff,
+        }
+        if status == "public_draw_expected":
+            positions[position].update(
+                {
+                    "status_evidence_url": status_url,
+                    "status_evidence_sha256": status_sha256,
+                    "status_captured_at_utc": status_captured_at,
+                }
+            )
+
+    if set(positions) != set(POSITIONS):
+        missing = sorted(set(POSITIONS) - set(positions))
+        raise TicketOutcomeError(
+            f"pre-ticket coupon plan must cover positions 1..14; missing={missing}"
+        )
+    if not scheduled_kickoffs:
+        raise TicketOutcomeError(
+            "pre-ticket coupon plan must contain at least one scheduled fixture"
+        )
+    if min(scheduled_kickoffs) != first_kickoff.astimezone(UTC):
+        raise TicketOutcomeError(
+            "first_kickoff_at does not match the earliest scheduled fixture kickoff"
+        )
+
+    return {
+        "draw_date": expected_date,
+        "ticket_cutoff_at_utc": cutoff,
+        "first_kickoff_at": first_kickoff,
+        "schedule_evidence_url": schedule_url,
+        "schedule_evidence_sha256": schedule_sha256,
+        "schedule_captured_at_utc": schedule_captured_at,
+        "positions": positions,
+        "scheduled_positions": set(POSITIONS) - public_draw_positions,
+        "public_draw_positions": public_draw_positions,
+    }
+
+
 def build_ticket_probability_vectors(
     *,
     draw_date: str,
-    reconciliation_report: dict[str, Any],
+    coupon_plan: dict[str, Any],
     model_probabilities_by_position: Mapping[int, dict[str, float]],
     public_draw_snapshots: Mapping[int, dict[str, Any]],
-    ticket_cutoff_at_utc: str,
-    first_kickoff_at: str,
 ) -> dict[str, Any]:
-    """Prepare the 14 vectors for TicketOptimizer without inventing public-draw priors.
+    """Build pre-kickoff vectors from a schedule-only plan and timestamped sources.
 
-    Football model probabilities are accepted only for played fixtures. A public-draw
-    position requires its own official, timestamped pre-close participant snapshot.
+    This function deliberately does not accept the post-match reconciliation report:
+    realized scores/signs are unavailable at ticket-construction time and must never
+    determine which forecasts are produced.
     """
-    outcomes = outcomes_from_reconciliation(reconciliation_report, draw_date)
-    cutoff = _parse_utc_timestamp(ticket_cutoff_at_utc, "ticket_cutoff_at_utc")
-    first_kickoff = _parse_timestamp(first_kickoff_at, "first_kickoff_at")
-    if cutoff >= first_kickoff.astimezone(UTC):
-        raise TicketOutcomeError("ticket cutoff must be earlier than first kickoff")
-    public_positions = {
-        item["position"] for item in outcomes if item["outcome_type"] == "public_draw"
+    plan = _validate_coupon_plan(coupon_plan, draw_date)
+    scheduled_positions = plan["scheduled_positions"]
+    public_positions = plan["public_draw_positions"]
+
+    if not isinstance(model_probabilities_by_position, Mapping):
+        raise TicketOutcomeError("model probabilities must be a position mapping")
+    if not isinstance(public_draw_snapshots, Mapping):
+        raise TicketOutcomeError("public-draw snapshots must be a position mapping")
+    model_positions = {
+        _position(position, "model probability position")
+        for position in model_probabilities_by_position
     }
-    played_positions = set(POSITIONS) - public_positions
-    if set(model_probabilities_by_position) != played_positions:
+    snapshot_positions = {
+        _position(position, "public-draw snapshot position")
+        for position in public_draw_snapshots
+    }
+    if model_positions != scheduled_positions:
         raise TicketOutcomeError(
-            "football model probabilities must cover played positions only; "
-            f"expected={sorted(played_positions)}, "
-            f"received={sorted(model_probabilities_by_position)}"
+            "football model probabilities must cover scheduled positions only; "
+            f"expected={sorted(scheduled_positions)}, received={sorted(model_positions)}"
         )
-    if set(public_draw_snapshots) != public_positions:
+    if snapshot_positions != public_positions:
         raise TicketOutcomeError(
             "pre-close participant snapshots must cover every public-draw position only; "
-            f"expected={sorted(public_positions)}, "
-            f"received={sorted(public_draw_snapshots)}"
+            f"expected={sorted(public_positions)}, received={sorted(snapshot_positions)}"
         )
 
     probabilities = []
@@ -384,7 +559,9 @@ def build_ticket_probability_vectors(
                 public_draw_snapshots[position],
                 draw_date=draw_date,
                 position=position,
-                ticket_cutoff_at_utc=ticket_cutoff_at_utc,
+                ticket_cutoff_at_utc=plan["ticket_cutoff_at_utc"]
+                .isoformat()
+                .replace("+00:00", "Z"),
             )
             probabilities.append(validated["probabilities"])
             sources.append(
@@ -406,14 +583,22 @@ def build_ticket_probability_vectors(
             sources.append({"position": position, "source": "football_model"})
 
     return {
-        "draw_date": _parse_draw_date(draw_date, "draw_date"),
-        "ticket_cutoff_at_utc": cutoff.isoformat().replace("+00:00", "Z"),
-        "first_kickoff_at": first_kickoff.isoformat(),
+        "draw_date": plan["draw_date"],
+        "ticket_cutoff_at_utc": plan["ticket_cutoff_at_utc"]
+        .isoformat()
+        .replace("+00:00", "Z"),
+        "first_kickoff_at": plan["first_kickoff_at"].isoformat(),
+        "schedule_evidence": {
+            "source_url": plan["schedule_evidence_url"],
+            "source_sha256": plan["schedule_evidence_sha256"],
+            "captured_at_utc": plan["schedule_captured_at_utc"]
+            .isoformat()
+            .replace("+00:00", "Z"),
+        },
         "probabilities": probabilities,
         "probability_sources": sources,
         "public_draw_positions": sorted(public_positions),
     }
-
 
 def _validate_ticket_record(ticket: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(ticket, dict):
