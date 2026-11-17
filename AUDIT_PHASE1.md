@@ -3347,9 +3347,15 @@ Decision: do not ship a market/model blend or select the current ensemble as pro
 
 ### Market source provenance
 
-Football-Data's [official data notes](https://football-data.co.uk/data.php) distinguish, since 2019/20, an initial post-market-opening odds set from a separate closing-odds set whose column headings include C. The parser uses un-suffixed pre-closing columns such as B365H/D/A, not B365CH/CD/CA. Football-Data describes weekend collection on Friday afternoons and midweek collection on Tuesday afternoons; the current evaluator maps those days and excludes fixtures played on the collection weekday.
+Football-Data's [official data notes](https://football-data.co.uk/data.php) distinguish, since 2019/20, an initial post-market-opening odds set from a separate closing-odds set whose column headings include C. The parser uses un-suffixed pre-closing columns such as B365H/D/A, not B365CH/CD/CA. The [fixtures page](https://football-data.co.uk/matches.php) states that weekend odds are collected on Fridays, generally not later than 17:00 British time, and midweek odds on Tuesdays, not later than 13:00 British time. The evaluator maps those collection days and excludes fixtures played on either collection weekday.
 
 The CSV does not expose exact per-fixture capture timestamps or kickoff timezones. This supports a schedule-compatible pre-closing snapshot, but does not prove exact executable availability for every fixture. Pinnacle is excluded from market inputs for match dates on/after 2025-07-23 following the provider's stale-feed warning.
+
+### Data licensing and commercial-use gate
+
+Football-Data's [official data page](https://football-data.co.uk/data.php) states that its free data is intended for private individuals only and not for commercial or data-training products using automated bots/scrapers/AI. This repository currently automates source downloads and trains ML models. Treat the present Football-Data dataset as private/research-only under the provider's stated terms unless written permission or a different licence is obtained. Commercial release or redistribution must not rely on this source until that restriction is resolved.
+
+Potential paid replacement: Football-Data promotes [TheStatsAPI](https://www.thestatsapi.com/football-api). Its current plan page advertises commercial use, 10 years of historical data, odds and statistics, with Starter from USD 50/month and a 7-day trial. La Liga is explicitly listed; Spanish Segunda coverage must be requested and verified. The published historical-odds example exposes opening and last-seen prices but does not establish an exact per-fixture capture timestamp field. Before migration, verify Segunda coverage, timestamp semantics, historical depth, rate limits and contract terms during a trial. Do not treat this as an approved provider until those checks pass.
 
 ### Ticket ledger admission-window hardening
 
