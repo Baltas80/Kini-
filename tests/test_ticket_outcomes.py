@@ -300,6 +300,47 @@ def test_pleno15_validator_accepts_committed_official_selae_extract() -> None:
     assert validated["source_sha256"] == hashlib.sha256(raw).hexdigest()
 
 
+def _pleno15_press_release_report() -> dict[str, object]:
+    return {
+        "schema_version": 1,
+        "provider": "SELAE",
+        "draw_date": DRAW_DATE,
+        "source_url": "https://www.loteriasyapuestas.es/f/loterias/documentos/nota.pdf",
+        "source_sha256": HASH_A,
+        "evidence_type": "official_press_release_pdf",
+        "verified_at_utc": "2026-11-08T16:00:00Z",
+        "verification_method": "Synthetic unit-test PDF vector; no live result asserted.",
+        "home_category": "2",
+        "away_category": "M",
+    }
+
+
+def test_ticket_scoring_evaluates_pleno15_from_official_pdf_vector() -> None:
+    report = _reconciliation()
+    ticket = _ticket(report)
+    ticket["pleno15_combinations"] = [{"home_goals": "2", "away_goals": "M"}]
+
+    result = score_ticket_record(
+        ticket,
+        report,
+        pleno15_report=_pleno15_press_release_report(),
+        pleno15_report_sha256=HASH_B,
+    )
+
+    assert result["pleno15_evaluated"] is True
+    assert result["pleno15_hit"] is True
+    assert result["covered_full_coupon"] is True
+    assert result["pleno15_actual"] == {
+        "home_goals": None,
+        "away_goals": None,
+        "home_category": "2",
+        "away_category": "M",
+    }
+    assert result["pleno15_outcome_provenance"]["team_identity_source"] == (
+        "ticket_plan_draw_date_binding"
+    )
+
+
 def test_ticket_scoring_evaluates_official_pleno15_categories() -> None:
     report = _reconciliation()
     ticket = _ticket(report)
@@ -363,6 +404,11 @@ def test_ticket_scoring_marks_pleno15_unassessed_without_official_evidence() -> 
         ("home_category", ["2"], "categories must be 0, 1, 2 or M"),
         ("verified_at_utc", "2026-11-08T13:00:00Z", "must not precede"),
         ("evidence_type", "unverified_summary", "evidence_type"),
+        (
+            "source_url",
+            "https://www.loteriasyapuestas.es/es/la-quiniela",
+            "official PDF",
+        ),
     ],
 )
 def test_ticket_scoring_rejects_invalid_pleno15_evidence(
