@@ -3584,11 +3584,13 @@ PR #10 remains open and draft. No merge or `master` modification occurred.
 - Every expanded bet (14-sign direct column × selected Pleno pair) is classified independently. A bet receives the 14 tier for 14 main hits; the Pleno tier is additionally counted only when those 14 hits and the exact Pleno pair both match. Rollover tiers are never assigned an invented unit prize.
 - Published unit prizes are exposed only as a conditional reference. The ledger has no SELAE purchase/validation receipt proving that a stored pre-ticket was entered in the draw, and adding hypothetical bets changes the winner-sharing denominator. Therefore `payout_evaluated` and `profitability_evaluated` remain false; no net return, ROI or expected value is claimed.
 - Jornada 19's normalized snapshot SHA-256 after correcting its verification-method wording: `f74e3e0afc7b4c0aa6f2f7582c80b378f3bc29e6671a34bddf04925896c607cf`. This hashes the normalized JSON, not the original PDF bytes.
-- CI [44113438341](https://github.com/Baltas80/Kini-/actions/runs/44113438341): **395 passed, 25 warnings**; Ruff lint, Ruff formatting and workflow validation passed.
-- Historical-data validation [44113438470](https://github.com/Baltas80/Kini-/actions/runs/44113438470): **success**.
-- Coupon workflow [44113438389](https://github.com/Baltas80/Kini-/actions/runs/44113438389): workflow success, but the pilot job was **skipped** (not a new coupon evaluation).
-- Historical-model workflow [44113438510](https://github.com/Baltas80/Kini-/actions/runs/44113438510): pending at this record; predictive-model code was not changed, so it is not counted as a model backtest.
-- Commits on the PR branch: `b9978dd` (prize-tier implementation), `f208b7e` (ledger API wiring), `b3f9c79` (CI lint/format coverage), `2dfd286` and `053a80c` (Ruff formatting corrections). Current head: `053a80c5336c5915d349fe8cb6cc5e3511688212`.
+- CI [44115126901](https://github.com/Baltas80/Kini-/actions/runs/44115126901): **398 passed, 25 warnings**; Ruff lint, Ruff formatting and GitHub Actions workflow validation passed.
+- Historical-data validation [44115125319](https://github.com/Baltas80/Kini-/actions/runs/44115125319): **success**.
+- Coupon workflow [44115125369](https://github.com/Baltas80/Kini-/actions/runs/44115125369): workflow success, but the pilot job was **skipped** (not a new coupon evaluation).
+- Historical-model workflow [44115126897](https://github.com/Baltas80/Kini-/actions/runs/44115126897): pending with no backtest job started; this scoring-only change is not counted as a model backtest. The change gate now explicitly excludes `kini_engine/prize_scoring.py` as well as the ticket-scoring modules.
+- Commits on the PR branch: `b9978dd` (prize-tier implementation), `f208b7e` (ledger API wiring), `b3f9c79` (CI lint/format coverage), `2dfd286` and `053a80c` (Ruff corrections), `1d70a83` (real SELAE snapshot validation test and provenance wording), `7692200` (import ordering), `50c52bb` (CLI prize-snapshot support), `f8a3db1` (formatter and backtest change-gate updates), `9332616` (allow HTTPS non-SELAE cross-check sources while keeping the two official SELAE roles host-locked). Current head: `9332616949535c919482b55b6932be29540cb5f4`.
+
+The real Jornada 19 snapshot test initially exposed that supporting-source validation incorrectly required every cross-check URL to be hosted by SELAE. The validator now requires the result page and prize PDF roles to use official SELAE hosts, while independently cited HistoricalQuiniela/Football-Data cross-checks must use HTTPS. The full suite now passes.
 
 ### Next priority
 
