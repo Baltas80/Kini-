@@ -21,6 +21,14 @@ HASH_A = "a" * 64
 HASH_B = "b" * 64
 
 
+@pytest.fixture(autouse=True)
+def _freeze_ledger_clock(monkeypatch):
+    monkeypatch.setattr(
+        "kini_engine.ticket_ledger._utc_now",
+        lambda: "2026-11-08T09:45:00Z",
+    )
+
+
 def _ticket() -> dict[str, object]:
     positions = [
         {
@@ -248,3 +256,90 @@ def test_ticket_ledger_score_json_rejects_invalid_or_non_object_payload(tmp_path
         ledger.score_ticket_json(str(ticket["ticket_id"]), "[]")
 
     assert ledger.list_ticket_scores(str(ticket["ticket_id"])) == []
+
+def test_ticket_ledger_rejects_append_at_or_after_cutoff(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        "kini_engine.ticket_ledger._utc_now",
+        lambda: "2026-11-08T11:00:00Z",
+    )
+    ledger = TicketLedger(tmp_path / "tickets.sqlite3")
+
+    with pytest.raises(TicketLedgerError, match="before ticket cutoff"):
+        ledger.append_ticket(_ticket())
+
+    assert ledger.list_ticket_records() == []
+
+
+def test_ticket_ledger_rejects_append_before_declared_creation(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        "kini_engine.ticket_ledger._utc_now",
+        lambda: "2026-11-08T09:29:59Z",
+    )
+    ledger = TicketLedger(tmp_path / "tickets.sqlite3")
+
+    with pytest.raises(TicketLedgerError, match="must not precede ticket creation"):
+        ledger.append_ticket(_ticket())
+
+    assert ledger.list_ticket_records() == []
+
+
+def test_ticket_ledger_idempotent_replay_after_cutoff_keeps_original_timestamp(
+    tmp_path,
+    monkeypatch,
+):
+    ledger = TicketLedger(tmp_path / "tickets.sqlite3")
+    ticket = _ticket()
+    monkeypatch.setattr(
+        "kini_engine.ticket_ledger._utc_now",
+        lambda: "2026-11-08T10:59:59Z",
+    )
+    first = ledger.append_ticket(ticket)
+
+    monkeypatch.setattr(
+        "kini_engine.ticket_ledger._utc_now",
+        lambda: "2026-11-08T11:00:00Z",
+    )
+    second = ledger.append_ticket(ticket)
+
+    assert first["inserted"] is True
+    assert second["inserted"] is False
+    assert second["idempotent_replay"] is True
+    assert second["recorded_at_utc"] == first["recorded_at_utc"]
+
+
+def test_ticket_ledger_rejects_legacy_late_record_on_read(tmp_path):
+    ledger = TicketLedger(tmp_path / "tickets.sqlite3")
+    ticket = _ticket()
+    payload_json = json.dumps(
+        ticket,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    )
+    payload_sha256 = hashlib.sha256(payload_json.encode("utf-8")).hexdigest()
+
+    with sqlite3.connect(ledger.path) as connection:
+        connection.execute(
+            """
+            INSERT INTO tickets (
+                ticket_id, draw_date, ticket_created_at_utc,
+                ticket_cutoff_at_utc, first_kickoff_at, payload_json,
+                payload_sha256, recorded_at_utc
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                ticket["ticket_id"],
+                ticket["draw_date"],
+                ticket["ticket_created_at_utc"],
+                ticket["ticket_cutoff_at_utc"],
+                ticket["first_kickoff_at"],
+                payload_json,
+                payload_sha256,
+                "2026-11-08T11:00:00Z",
+            ),
+        )
+
+    with pytest.raises(TicketLedgerError, match="before ticket cutoff"):
+        ledger.get_ticket_record(str(ticket["ticket_id"]))
+
