@@ -144,7 +144,7 @@ The output stores the realized 14-sign vector, outcome type per position, public
 Ticket scoring can use the realized official public-draw sign without any probability estimate. Ticket construction is stricter: `build_ticket_probability_vectors` accepts football-model probabilities only for played positions. Each public-draw position must have exactly one schema-version-1 SELAE participant-forecast snapshot with:
 - matching draw date and coupon position;
 - a stable source ID, official HTTPS source URL and source SHA-256;
-- a timezone-aware UTC capture timestamp strictly earlier than the ticket admission cutoff;
+- a timezone-aware UTC capture timestamp strictly earlier than ticket creation; ticket creation must itself be strictly earlier than the ticket admission cutoff;
 - the exact same declared ticket cutoff;
 - a finite normalized 1/X/2 probability vector.
 
@@ -184,12 +184,13 @@ The plan is schema version 1 and contains exactly these root fields:
 - `provider`: `SELAE`;
 - `draw_date`;
 - `schedule_captured_at_utc`;
+- `ticket_created_at_utc`;
 - `schedule_evidence_url` and `schedule_evidence_sha256`;
 - `ticket_cutoff_at_utc`;
 - `first_kickoff_at`;
 - `positions`: exactly one record for each position 1–14.
 
-A scheduled position contains only `position`, `fixture_status="scheduled"`, `home`, `away` and timezone-aware `kickoff_at`. Its kickoff must be after ticket close. A position already known to be resolved by public draw before ticket close uses `fixture_status="public_draw_expected"` and must additionally carry an official SELAE status-evidence URL, SHA-256 and timezone-aware capture timestamp strictly before ticket close. The declared first kickoff must equal the earliest kickoff among scheduled positions.
+A scheduled position contains only `position`, `fixture_status="scheduled"`, `home`, `away` and timezone-aware `kickoff_at`. Its kickoff must be after ticket close. A position already known to be resolved by public draw before ticket close uses `fixture_status="public_draw_expected"` and must additionally carry an official SELAE status-evidence URL, SHA-256 and timezone-aware capture timestamp strictly before ticket creation. The declared first kickoff must equal the earliest kickoff among scheduled positions.
 
 Example (abbreviated to one public-draw position; the actual plan must contain all 14):
 
@@ -219,7 +220,7 @@ Example (abbreviated to one public-draw position; the actual plan must contain a
 }
 ```
 
-The strict validator rejects unknown fields, including any actual score, result sign, target label or post-match reconciliation collection. Football-model vectors must cover scheduled positions only. Every public-draw-expected position must have exactly one official SELAE participant-forecast snapshot captured strictly before the same ticket cutoff. Final ball counts remain post-close metadata and are not accepted as pre-ticket probabilities.
+The strict validator rejects unknown fields, including any actual score, result sign, target label or post-match reconciliation collection. Football-model vectors must cover scheduled positions only. Every public-draw-expected position must have exactly one official SELAE participant-forecast snapshot captured strictly before ticket creation. Final ball counts remain post-close metadata and are not accepted as pre-ticket probabilities.
 
 The post-match path remains separate: `score_ticket_record` consumes the fully reconciled official outcomes, including the realized public-draw sign, to score already persisted ticket columns. This separation prevents realized results from determining which forecasts are generated.
 
