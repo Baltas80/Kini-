@@ -3202,3 +3202,8 @@ Implementation:
 - `b53e89d`: regression tests proving the builder works without realized results, rejects post-match reconciliation input and rejects future/unknown schedule data.
 
 The previous builder contract was not safe for pre-kickoff use. This correction is a P2 leakage fix and a prerequisite for claiming that the public-draw ticket construction path is temporally valid. CI for the corrected code is being run on the current PR head; no new predictive metrics, public-draw forecast sample, prize estimate or profitability claim is made. The local schedule and snapshot timestamps remain declared metadata and are not independently authenticated.
+
+
+### Stronger point-in-time boundary — ticket creation
+
+The pre-ticket plan now records `ticket_created_at_utc`. Schedule evidence, public-draw status evidence and participant-forecast snapshots must all be captured strictly before ticket creation, not merely before the admission cutoff. The required order is schedule capture / status evidence / forecast snapshot, then ticket creation, then admission cutoff, then first scheduled kickoff. This closes the remaining gap where a source captured after the ticket was generated but before cutoff could otherwise be accepted. Regression tests cover each late-capture case. The first CI attempt exposed a duplicate legacy test definition; that duplicate has been removed before the next validation.
