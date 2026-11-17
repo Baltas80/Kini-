@@ -617,6 +617,7 @@ def build_ticket_probability_vectors(
         "public_draw_positions": sorted(public_positions),
     }
 
+
 def _validate_ticket_record(ticket: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(ticket, dict):
         raise TicketOutcomeError("direct-ticket record must be an object")
