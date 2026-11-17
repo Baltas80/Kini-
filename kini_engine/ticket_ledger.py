@@ -331,23 +331,48 @@ class TicketLedger:
     ) -> dict[str, Any]:
         """Score a stored ticket against exact fixture and optional Pleno evidence."""
         reconciliation_digest = _sha256(reconciliation_sha256, "reconciliation_sha256")
-        if pleno15_report is None:
-            if pleno15_sha256 is not None:
+        if official_result_snapshot is None:
+            if official_result_snapshot_sha256 is not None:
                 raise TicketLedgerError(
-                    "pleno15_sha256 requires a Pleno al 15 result report"
+                    "official_result_snapshot_sha256 requires an official result snapshot"
                 )
-            score_evidence_digest = reconciliation_digest
-            pleno15_digest = None
+            snapshot_digest = None
+            if pleno15_report is None:
+                if pleno15_sha256 is not None:
+                    raise TicketLedgerError(
+                        "pleno15_sha256 requires a Pleno al 15 result report"
+                    )
+                score_evidence_digest = reconciliation_digest
+                pleno15_digest = None
+            else:
+                if pleno15_sha256 is None:
+                    raise TicketLedgerError(
+                        "pleno15_sha256 is required with a Pleno al 15 result report"
+                    )
+                pleno15_digest = _sha256(pleno15_sha256, "pleno15_sha256")
+                score_evidence_digest = hashlib.sha256(
+                    b"KINI-TICKET-SCORE-EVIDENCE-V1\\x00"
+                    + bytes.fromhex(reconciliation_digest)
+                    + bytes.fromhex(pleno15_digest)
+                ).hexdigest()
         else:
-            if pleno15_sha256 is None:
+            if pleno15_report is None or pleno15_sha256 is None:
                 raise TicketLedgerError(
-                    "pleno15_sha256 is required with a Pleno al 15 result report"
+                    "official prize scoring requires hashed Pleno result evidence"
+                )
+            if official_result_snapshot_sha256 is None:
+                raise TicketLedgerError(
+                    "official_result_snapshot_sha256 is required with an official result snapshot"
                 )
             pleno15_digest = _sha256(pleno15_sha256, "pleno15_sha256")
+            snapshot_digest = _sha256(
+                official_result_snapshot_sha256, "official_result_snapshot_sha256"
+            )
             score_evidence_digest = hashlib.sha256(
-                b"KINI-TICKET-SCORE-EVIDENCE-V1\x00"
+                b"KINI-TICKET-SCORE-EVIDENCE-V2\\x00"
                 + bytes.fromhex(reconciliation_digest)
                 + bytes.fromhex(pleno15_digest)
+                + bytes.fromhex(snapshot_digest)
             ).hexdigest()
         stored = self.get_ticket_record(ticket_id)
         if stored is None:
@@ -359,8 +384,10 @@ class TicketLedger:
             reconciliation_sha256=reconciliation_digest,
             pleno15_report=pleno15_report,
             pleno15_report_sha256=pleno15_digest,
+            official_result_snapshot=official_result_snapshot,
+            official_result_snapshot_sha256=snapshot_digest,
         )
-        if pleno15_report is not None:
+        if pleno15_report is not None or official_result_snapshot is not None:
             score["score_evidence_sha256"] = score_evidence_digest
         score_json = _canonical_json(score)
         score_sha256 = hashlib.sha256(score_json.encode("utf-8")).hexdigest()
@@ -423,8 +450,9 @@ class TicketLedger:
         reconciliation_json: str | bytes,
         *,
         pleno15_json: str | bytes | None = None,
+        official_result_snapshot_json: str | bytes | None = None,
     ) -> dict[str, Any]:
-        """Hash exact fixture-reconciliation and optional Pleno JSON source bytes."""
+        """Hash exact reconciliation, Pleno and optional official prize-snapshot bytes."""
         if isinstance(reconciliation_json, str):
             raw = reconciliation_json.encode("utf-8")
         elif isinstance(reconciliation_json, bytes):
@@ -460,12 +488,37 @@ class TicketLedger:
             pleno_digest = hashlib.sha256(pleno_raw).hexdigest()
 
         digest = hashlib.sha256(raw).hexdigest()
+        snapshot = None
+        snapshot_digest = None
+        if official_result_snapshot_json is not None:
+            if isinstance(official_result_snapshot_json, str):
+                snapshot_raw = official_result_snapshot_json.encode("utf-8")
+            elif isinstance(official_result_snapshot_json, bytes):
+                snapshot_raw = official_result_snapshot_json
+            else:
+                raise TypeError(
+                    "official_result_snapshot_json must be UTF-8 text or bytes"
+                )
+            try:
+                snapshot = json.loads(snapshot_raw.decode("utf-8"))
+            except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+                raise TicketLedgerError(
+                    "official result snapshot JSON must contain a valid UTF-8 JSON document"
+                ) from exc
+            if not isinstance(snapshot, dict):
+                raise TicketLedgerError(
+                    "official result snapshot JSON root must be an object"
+                )
+            snapshot_digest = hashlib.sha256(snapshot_raw).hexdigest()
+
         return self.score_ticket(
             ticket_id,
             report,
             reconciliation_sha256=digest,
             pleno15_report=pleno_report,
             pleno15_sha256=pleno_digest,
+            official_result_snapshot=snapshot,
+            official_result_snapshot_sha256=snapshot_digest,
         )
 
     def list_ticket_scores(self, ticket_id: str) -> list[dict[str, Any]]:

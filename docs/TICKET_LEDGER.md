@@ -84,3 +84,12 @@ This evidence is a verified result record, not a trusted timestamp or digital si
 
 
 The official press-release PDF parser supplies the two Pleno categories but not exact goal counts or team names. Its report is therefore explicitly typed `official_press_release_pdf`; the ledger binds it to the stored draw's Pleno fixture by draw date and ticket plan. It does not fabricate goals or team identities from the PDF. The PDF SHA-256 covers the exact downloaded PDF bytes, while the generated report JSON is independently hashed by the ledger.
+
+
+## Official prize-tier evidence (conditional reference only)
+
+The score API can optionally accept a third, exact UTF-8 JSON document: a normalized SELAE result snapshot containing the 14 ordered outcomes, Pleno al 15 score/categories, and the official press-release prize table. The snapshot must bind its official result-page URL and prize-PDF URL through `supporting_sources`; its exact bytes are hashed by the ledger and included in the score-evidence digest (evidence bundle version 2). Fixture order, team identity, signs, Pleno categories/goals, prize categories, winner counts, rollover states and unit-prize amounts are validated before scoring.
+
+For every expanded direct bet (14-match column × selected Pleno category pair), the score records its 10–14 main-match tier and, only for 14 main hits plus the exact Pleno pair, the special Pleno tier. A published-unit-prize reference is calculated only when every tier qualified by the stored bets has an awarded unit prize. Rollover tiers remain unpriced; the engine does not invent a prize for them.
+
+**This is not an actual payout or a counterfactual return estimate.** The immutable ticket ledger proves that a pre-ticket record was created, not that the ticket was purchased or included in SELAE's official winner counts. The published unit prize is therefore exposed only as a conditional reference under that assumption. Adding hypothetical bets would also change the winner-sharing denominator and potentially the prize distribution. No net return, ROI, expected value or profitability is calculated; `payout_evaluated` and `profitability_evaluated` remain false. The normalized snapshot hash identifies the exact JSON supplied to the scorer, but the current historical extract does not itself retain a cryptographic digest of the original PDF bytes.

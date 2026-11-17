@@ -935,3 +935,185 @@ def test_ticket_record_rejects_budget_or_cost_inconsistency() -> None:
     ticket["cost_eur"] = 2.0
     with pytest.raises(TicketOutcomeError, match="cost does not match"):
         score_ticket_record(ticket, _reconciliation())
+
+
+def _official_prize_snapshot_for_test(
+    ticket: dict[str, object],
+    reconciliation: dict[str, object],
+    pleno_report: dict[str, object],
+) -> dict[str, object]:
+    outcomes = outcomes_from_reconciliation(reconciliation, DRAW_DATE)
+    positions = ticket["coupon_plan"]["positions"]
+    fixtures = []
+    for position, outcome, plan_fixture in zip(
+        range(1, 15), outcomes, positions, strict=True
+    ):
+        sign = outcome["sign"]
+        home_goals, away_goals = (
+            (1, 0) if sign == "1" else (0, 1) if sign == "2" else (0, 0)
+        )
+        fixtures.append(
+            {
+                "number": position,
+                "home": plan_fixture["home"],
+                "away": plan_fixture["away"],
+                "home_goals": home_goals,
+                "away_goals": away_goals,
+                "result": sign,
+            }
+        )
+    pdf_url = (
+        "https://www.loteriasyapuestas.es/f/loterias/documentos/"
+        "Quiniela/Notas%20de%20prensa/test.pdf"
+    )
+    categories = [
+        ("pleno_al_15", 1, 100.0, "awarded"),
+        ("14", 2, 20.0, "awarded"),
+        ("13", 5, 5.0, "awarded"),
+        ("12", 10, 2.0, "awarded"),
+        ("11", 100, 1.0, "awarded"),
+        ("10", 200, 0.0, "awarded"),
+    ]
+    return {
+        "schema_version": 1,
+        "source": "SELAE",
+        "draw_date": DRAW_DATE,
+        "source_url": SELAE_URL,
+        "verified_at": DRAW_DATE,
+        "verification_method": (
+            "Synthetic unit-test snapshot; no real SELAE result is asserted."
+        ),
+        "snapshot_type": "normalized_json_extract_not_raw_html",
+        "supporting_sources": [
+            {"role": "official_selae_result_page", "url": SELAE_URL},
+            {"role": "official_selae_press_release_pdf", "url": pdf_url},
+        ],
+        "fixtures": fixtures,
+        "pleno": {
+            "number": 15,
+            "home": ticket["pleno15_home"],
+            "away": ticket["pleno15_away"],
+            "home_goals": pleno_report["home_goals"],
+            "away_goals": pleno_report["away_goals"],
+            "home_category": pleno_report["home_category"],
+            "away_category": pleno_report["away_category"],
+        },
+        "prize_distribution": {
+            "source_type": (
+                "official_selae_press_release_pdf_transcribed_to_normalized_extract"
+            ),
+            "source_url": pdf_url,
+            "revenue_eur": 1000.0,
+            "categories": [
+                {
+                    "category": name,
+                    "winner_count": winners,
+                    "unit_prize_eur": prize,
+                    "status": status,
+                }
+                for name, winners, prize, status in categories
+            ],
+        },
+    }
+
+
+def test_official_prize_scoring_expands_columns_by_pleno_pairs() -> None:
+    reconciliation = _reconciliation()
+    ticket = _ticket(reconciliation)
+    pleno_report = _pleno15_report()
+    ticket["pleno15_combinations"] = [
+        {"home_goals": "2", "away_goals": "M"},
+        {"home_goals": "0", "away_goals": "0"},
+    ]
+    ticket["cost_eur"] = 3.0
+    snapshot = _official_prize_snapshot_for_test(
+        ticket, reconciliation, pleno_report
+    )
+    snapshot_raw = json.dumps(
+        snapshot, ensure_ascii=False, separators=(",", ":")
+    ).encode()
+    snapshot_digest = hashlib.sha256(snapshot_raw).hexdigest()
+
+    result = score_ticket_record(
+        ticket,
+        reconciliation,
+        pleno15_report=pleno_report,
+        pleno15_report_sha256=HASH_B,
+        official_result_snapshot=snapshot,
+        official_result_snapshot_sha256=snapshot_digest,
+    )
+
+    assert result["prize_tiers_evaluated"] is True
+    assert result["prize_tier_counts"] == {
+        "pleno_al_15": 1,
+        "14": 2,
+        "13": 0,
+        "12": 0,
+        "11": 0,
+        "10": 0,
+    }
+    assert result["conditional_published_prize_reference_eur"] == "140.00"
+    assert result["conditional_prize_reference_complete"] is True
+    assert result["official_result_snapshot_sha256"] == snapshot_digest
+    assert result["payout_evaluated"] is False
+    assert result["profitability_evaluated"] is False
+
+
+def test_official_prize_scoring_does_not_price_a_rollover_tier() -> None:
+    reconciliation = _reconciliation()
+    ticket = _ticket(reconciliation)
+    pleno_report = _pleno15_report()
+    ticket["pleno15_combinations"] = [
+        {"home_goals": "2", "away_goals": "M"}
+    ]
+    snapshot = _official_prize_snapshot_for_test(
+        ticket, reconciliation, pleno_report
+    )
+    pleno_tier = next(
+        item
+        for item in snapshot["prize_distribution"]["categories"]
+        if item["category"] == "pleno_al_15"
+    )
+    pleno_tier.update(
+        {"winner_count": 0, "unit_prize_eur": None, "status": "rollover"}
+    )
+    snapshot_raw = json.dumps(
+        snapshot, ensure_ascii=False, separators=(",", ":")
+    ).encode()
+
+    result = score_ticket_record(
+        ticket,
+        reconciliation,
+        pleno15_report=pleno_report,
+        pleno15_report_sha256=HASH_B,
+        official_result_snapshot=snapshot,
+        official_result_snapshot_sha256=hashlib.sha256(snapshot_raw).hexdigest(),
+    )
+
+    assert result["prize_tier_counts"]["pleno_al_15"] == 1
+    assert result["conditional_prize_reference_complete"] is False
+    assert result["conditional_published_prize_reference_eur"] is None
+    assert result["payout_evaluated"] is False
+
+
+def test_official_prize_scoring_rejects_snapshot_result_conflict() -> None:
+    reconciliation = _reconciliation()
+    ticket = _ticket(reconciliation)
+    pleno_report = _pleno15_report()
+    snapshot = _official_prize_snapshot_for_test(
+        ticket, reconciliation, pleno_report
+    )
+    snapshot["fixtures"][0]["result"] = "X"
+    snapshot_raw = json.dumps(
+        snapshot, ensure_ascii=False, separators=(",", ":")
+    ).encode()
+
+    with pytest.raises(TicketOutcomeError, match="conflicts with its score"):
+        score_ticket_record(
+            ticket,
+            reconciliation,
+            pleno15_report=pleno_report,
+            pleno15_report_sha256=HASH_B,
+            official_result_snapshot=snapshot,
+            official_result_snapshot_sha256=hashlib.sha256(snapshot_raw).hexdigest(),
+        )

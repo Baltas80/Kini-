@@ -416,3 +416,116 @@ def test_ticket_ledger_rejects_legacy_late_record_on_read(tmp_path):
 
     with pytest.raises(TicketLedgerError, match="before ticket cutoff"):
         ledger.get_ticket_record(str(ticket["ticket_id"]))
+
+
+def _official_prize_snapshot_for_ledger_test(
+    ticket: dict[str, object],
+    pleno_report: dict[str, object],
+) -> dict[str, object]:
+    pdf_url = (
+        "https://www.loteriasyapuestas.es/f/loterias/documentos/"
+        "Quiniela/Notas%20de%20prensa/test.pdf"
+    )
+    return {
+        "schema_version": 1,
+        "source": "SELAE",
+        "draw_date": DRAW_DATE,
+        "source_url": SELAE_URL,
+        "verified_at": DRAW_DATE,
+        "verification_method": (
+            "Synthetic ledger unit-test snapshot; no real SELAE result is asserted."
+        ),
+        "snapshot_type": "normalized_json_extract_not_raw_html",
+        "supporting_sources": [
+            {"role": "official_selae_result_page", "url": SELAE_URL},
+            {"role": "official_selae_press_release_pdf", "url": pdf_url},
+        ],
+        "fixtures": [
+            {
+                "number": position,
+                "home": f"Home {position}",
+                "away": f"Away {position}",
+                "home_goals": 1,
+                "away_goals": 0,
+                "result": "1",
+            }
+            for position in range(1, 15)
+        ],
+        "pleno": {
+            "number": 15,
+            "home": ticket["pleno15_home"],
+            "away": ticket["pleno15_away"],
+            "home_goals": pleno_report["home_goals"],
+            "away_goals": pleno_report["away_goals"],
+            "home_category": pleno_report["home_category"],
+            "away_category": pleno_report["away_category"],
+        },
+        "prize_distribution": {
+            "source_type": (
+                "official_selae_press_release_pdf_transcribed_to_normalized_extract"
+            ),
+            "source_url": pdf_url,
+            "revenue_eur": 1000.0,
+            "categories": [
+                {
+                    "category": name,
+                    "winner_count": winners,
+                    "unit_prize_eur": prize,
+                    "status": "awarded",
+                }
+                for name, winners, prize in [
+                    ("pleno_al_15", 1, 100.0),
+                    ("14", 2, 20.0),
+                    ("13", 5, 5.0),
+                    ("12", 10, 2.0),
+                    ("11", 100, 1.0),
+                    ("10", 200, 0.0),
+                ]
+            ],
+        },
+    }
+
+
+def test_ticket_ledger_scores_official_prize_snapshot_idempotently(tmp_path):
+    ledger = TicketLedger(tmp_path / "tickets.sqlite3")
+    ticket = _ticket()
+    ticket["pleno15_combinations"] = [{"home_goals": "2", "away_goals": "M"}]
+    ledger.append_ticket(ticket)
+    reconciliation_json = json.dumps(
+        _reconciliation(), ensure_ascii=False, separators=(",", ":")
+    )
+    pleno15_json = json.dumps(
+        _pleno15_report(), ensure_ascii=False, separators=(",", ":")
+    )
+    snapshot = _official_prize_snapshot_for_ledger_test(
+        ticket, _pleno15_report()
+    )
+    snapshot_json = json.dumps(
+        snapshot, ensure_ascii=False, separators=(",", ":")
+    )
+    expected_snapshot_digest = hashlib.sha256(
+        snapshot_json.encode("utf-8")
+    ).hexdigest()
+
+    first = ledger.score_ticket_json(
+        str(ticket["ticket_id"]),
+        reconciliation_json,
+        pleno15_json=pleno15_json,
+        official_result_snapshot_json=snapshot_json,
+    )
+    second = ledger.score_ticket_json(
+        str(ticket["ticket_id"]),
+        reconciliation_json,
+        pleno15_json=pleno15_json,
+        official_result_snapshot_json=snapshot_json,
+    )
+
+    assert first["inserted"] is True
+    assert second["idempotent_replay"] is True
+    assert first["score"]["official_result_snapshot_sha256"] == (
+        expected_snapshot_digest
+    )
+    assert first["score"]["prize_tier_counts"]["pleno_al_15"] == 1
+    assert first["score"]["conditional_published_prize_reference_eur"] == "120.00"
+    assert first["score"]["payout_evaluated"] is False
+    assert len(ledger.list_ticket_scores(str(ticket["ticket_id"]))) == 1

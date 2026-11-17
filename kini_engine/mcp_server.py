@@ -209,12 +209,14 @@ def create_server(engine: KiniEngine | None = None):
         ticket_id: str,
         reconciliation_json: str,
         pleno15_json: str | None = None,
+        official_result_snapshot_json: str | None = None,
     ) -> dict[str, Any]:
-        """Score 14 signs and optional official Pleno al 15 result evidence."""
+        """Score signs, Pleno and optional official SELAE prize-distribution evidence."""
         return ledger.score_ticket_json(
             ticket_id,
             reconciliation_json,
             pleno15_json=pleno15_json,
+            official_result_snapshot_json=official_result_snapshot_json,
         )
 
     return mcp

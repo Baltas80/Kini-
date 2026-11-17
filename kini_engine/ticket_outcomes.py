@@ -8,6 +8,7 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from .team_identity import normalize_team_name
+from .prize_scoring import PrizeScoringError, evaluate_official_prize_snapshot
 
 SIGNS = ("1", "X", "2")
 PLENO15_CATEGORIES = frozenset({"0", "1", "2", "M"})
@@ -1127,8 +1128,11 @@ def score_ticket_record(
     reconciliation_sha256: str | None = None,
     pleno15_report: dict[str, Any] | None = None,
     pleno15_report_sha256: str | None = None,
+    official_result_snapshot: dict[str, Any] | None = None,
+    official_result_snapshot_sha256: str | None = None,
 ) -> dict[str, Any]:
-    """Score 14 signs and, when supplied, official Pleno al 15 categories."""
+    """Score 14 signs, optional Pleno categories and official prize-tier evidence."""
+
     validated = _validate_ticket_record(ticket)
     outcomes = outcomes_from_reconciliation(
         reconciliation_report, validated["draw_date"]
@@ -1152,6 +1156,25 @@ def score_ticket_record(
         if pleno15_report_sha256 is not None
         else None
     )
+    if official_result_snapshot is None:
+        if official_result_snapshot_sha256 is not None:
+            raise TicketOutcomeError(
+                "official_result_snapshot_sha256 requires an official result snapshot"
+            )
+        snapshot_digest = None
+    else:
+        if validated_pleno15 is None or pleno15_digest is None:
+            raise TicketOutcomeError(
+                "official prize scoring requires hashed official Pleno result evidence"
+            )
+        if official_result_snapshot_sha256 is None:
+            raise TicketOutcomeError(
+                "official_result_snapshot_sha256 is required with an official result snapshot"
+            )
+        snapshot_digest = _validate_sha256(
+            official_result_snapshot_sha256, "official_result_snapshot_sha256"
+        )
+
     actual = tuple(item["sign"] for item in outcomes)
     columns = validated["columns"]
     hit_counts = [
@@ -1227,4 +1250,21 @@ def score_ticket_record(
         )
         if pleno15_digest is not None:
             result["pleno15_report_sha256"] = pleno15_digest
+    if official_result_snapshot is not None:
+        try:
+            prize_evaluation = evaluate_official_prize_snapshot(
+                official_result_snapshot,
+                snapshot_sha256=snapshot_digest,
+                expected_draw_date=validated["draw_date"],
+                expected_main_results=actual,
+                expected_fixtures=ticket["coupon_plan"]["positions"],
+                expected_pleno_home=validated["pleno15_home"],
+                expected_pleno_away=validated["pleno15_away"],
+                validated_pleno15=validated_pleno15,
+                columns=columns,
+                pleno15_combinations=validated["pleno15_combinations"],
+            )
+        except PrizeScoringError as exc:
+            raise TicketOutcomeError(str(exc)) from exc
+        result.update(prize_evaluation)
     return result
