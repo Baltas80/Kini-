@@ -176,6 +176,75 @@ def test_ticket_ledger_rejects_updates_and_deletes(tmp_path):
             )
 
 
+def _pleno15_report() -> dict[str, object]:
+    return {
+        "schema_version": 1,
+        "provider": "SELAE",
+        "draw_date": DRAW_DATE,
+        "source_url": SELAE_URL,
+        "source_sha256": HASH_A,
+        "evidence_type": "normalized_official_extract",
+        "verified_at_utc": "2026-11-08T16:00:00Z",
+        "verification_method": "Manual review of the official SELAE result page.",
+        "home": "Pleno Home",
+        "away": "Pleno Away",
+        "home_goals": 2,
+        "away_goals": 3,
+        "home_category": "2",
+        "away_category": "M",
+    }
+
+
+def test_ticket_ledger_scores_and_persists_pleno15_evidence_idempotently(tmp_path):
+    ledger = TicketLedger(tmp_path / "tickets.sqlite3")
+    ticket = _ticket()
+    ticket["pleno15_combinations"] = [
+        {"home_goals": "2", "away_goals": "M"}
+    ]
+    ledger.append_ticket(ticket)
+    reconciliation_json = json.dumps(
+        _reconciliation(), ensure_ascii=False, separators=(",", ":")
+    )
+    pleno15_json = json.dumps(
+        _pleno15_report(), ensure_ascii=False, separators=(",", ":")
+    )
+    pleno15_digest = hashlib.sha256(pleno15_json.encode("utf-8")).hexdigest()
+
+    first = ledger.score_ticket_json(
+        str(ticket["ticket_id"]),
+        reconciliation_json,
+        pleno15_json=pleno15_json,
+    )
+    second = ledger.score_ticket_json(
+        str(ticket["ticket_id"]),
+        reconciliation_json,
+        pleno15_json=pleno15_json,
+    )
+
+    assert first["inserted"] is True
+    assert second["inserted"] is False
+    assert second["idempotent_replay"] is True
+    assert first["score"]["pleno15_evaluated"] is True
+    assert first["score"]["pleno15_hit"] is True
+    assert first["score"]["covered_full_coupon"] is True
+    assert first["score"]["pleno15_report_sha256"] == pleno15_digest
+    assert first["score"]["score_evidence_sha256"] == first["score_evidence_sha256"]
+    assert len(ledger.list_ticket_scores(str(ticket["ticket_id"]))) == 1
+
+
+def test_ticket_ledger_requires_pleno15_digest_when_scoring_report(tmp_path):
+    ledger = TicketLedger(tmp_path / "tickets.sqlite3")
+    ticket = _ticket()
+    ledger.append_ticket(ticket)
+    with pytest.raises(TicketLedgerError, match="pleno15_sha256 is required"):
+        ledger.score_ticket(
+            str(ticket["ticket_id"]),
+            _reconciliation(),
+            reconciliation_sha256=HASH_A,
+            pleno15_report=_pleno15_report(),
+        )
+
+
 def test_ticket_ledger_scores_and_persists_result_idempotently(tmp_path):
     ledger = TicketLedger(tmp_path / "tickets.sqlite3")
     ticket = _ticket()
