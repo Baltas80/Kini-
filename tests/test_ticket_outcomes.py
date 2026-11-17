@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 from copy import deepcopy
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -290,7 +290,7 @@ def test_pleno15_validator_accepts_committed_official_selae_extract() -> None:
         expected_home=pleno["home"],
         expected_away=pleno["away"],
         # Only a lower bound for temporal validation in this unit test.
-        kickoff_at=datetime(2020, 12, 13, tzinfo=timezone.utc),
+        kickoff_at=datetime(2020, 12, 13, tzinfo=UTC),
     )
 
     assert validated["home_goals"] == 4
