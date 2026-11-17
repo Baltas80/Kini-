@@ -35,6 +35,7 @@ The MCP server configures a ledger automatically and exposes:
 - `get_ticket_record`: retrieves one record and verifies its digest.
 - `list_ticket_records`: lists records, optionally by draw date.
 - `score_persisted_ticket`: accepts the exact SELAE reconciliation JSON text, hashes those bytes internally, scores the stored ticket and persists the result.
+- `list_ticket_scores`: retrieves the immutable scoring history for one ticket.
 
 The local database path must be on persistent storage in a deployed environment. If the MCP server runs in an ephemeral container, mount a persistent volume at the configured path or records will be lost when the container is replaced.
 
