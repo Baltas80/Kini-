@@ -347,7 +347,9 @@ def test_probability_builder_requires_snapshot_for_every_public_draw_position() 
         )
 
 
-def test_probability_builder_rejects_model_probability_for_public_draw_position() -> None:
+def test_probability_builder_rejects_model_probability_for_public_draw_position() -> (
+    None
+):
     plan = _coupon_plan()
     model_probabilities = {
         position: {"1": 0.5, "X": 0.3, "2": 0.2} for position in range(1, 15)
@@ -369,7 +371,9 @@ def test_probability_builder_rejects_schedule_captured_at_or_after_cutoff() -> N
         for position in range(1, 15)
         if position != 7
     }
-    with pytest.raises(TicketOutcomeError, match="schedule must be captured strictly before"):
+    with pytest.raises(
+        TicketOutcomeError, match="schedule must be captured strictly before"
+    ):
         build_ticket_probability_vectors(
             draw_date=DRAW_DATE,
             coupon_plan=plan,
@@ -386,7 +390,9 @@ def test_probability_builder_rejects_public_draw_status_evidence_after_cutoff() 
         for position in range(1, 15)
         if position != 7
     }
-    with pytest.raises(TicketOutcomeError, match="status.*strictly before ticket creation"):
+    with pytest.raises(
+        TicketOutcomeError, match="status.*strictly before ticket creation"
+    ):
         build_ticket_probability_vectors(
             draw_date=DRAW_DATE,
             coupon_plan=plan,
@@ -514,6 +520,7 @@ def test_preclose_snapshot_rejects_probability_vector_with_wrong_sum() -> None:
             ticket_cutoff_at_utc="2026-11-08T11:00:00Z",
         )
 
+
 def test_probability_builder_rejects_schedule_captured_after_ticket_creation() -> None:
     plan = _coupon_plan()
     plan["schedule_captured_at_utc"] = "2026-11-08T10:50:00Z"
@@ -522,7 +529,9 @@ def test_probability_builder_rejects_schedule_captured_after_ticket_creation() -
         for position in range(1, 15)
         if position != 7
     }
-    with pytest.raises(TicketOutcomeError, match="schedule.*before ticket creation"):
+    with pytest.raises(
+        TicketOutcomeError, match="schedule.*before ticket creation"
+    ):
         build_ticket_probability_vectors(
             draw_date=DRAW_DATE,
             coupon_plan=plan,
@@ -531,7 +540,9 @@ def test_probability_builder_rejects_schedule_captured_after_ticket_creation() -
         )
 
 
-def test_probability_builder_rejects_public_draw_status_captured_after_ticket_creation() -> None:
+def test_probability_builder_rejects_public_draw_status_captured_after_ticket_creation() -> (
+    None
+):
     plan = _coupon_plan()
     plan["positions"][6]["status_captured_at_utc"] = "2026-11-08T10:50:00Z"
     model_probabilities = {
@@ -559,4 +570,3 @@ def test_preclose_snapshot_rejects_capture_after_ticket_creation() -> None:
             ticket_created_at_utc="2026-11-08T10:45:00Z",
             ticket_cutoff_at_utc="2026-11-08T11:00:00Z",
         )
-
