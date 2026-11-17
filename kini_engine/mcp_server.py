@@ -151,7 +151,7 @@ def create_server(engine: KiniEngine | None = None):
             normalized_snapshots = {}
             for raw_position, snapshot in public_draw_snapshots.items():
                 if isinstance(raw_position, bool):
-                    raise ValueError("public-draw snapshot keys must be positions 1..14")
+                    raise TypeError("public-draw snapshot keys must be integer positions")
                 try:
                     position = int(raw_position)
                 except (TypeError, ValueError) as exc:
