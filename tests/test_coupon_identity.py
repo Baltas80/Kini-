@@ -104,3 +104,23 @@ def test_canonicalize_coupon_rejects_date_or_score_mismatch() -> None:
         canonicalize_coupon(
             coupon, matches, alias_document=alias_document, registry=FakeRegistry()
         )
+
+
+def test_jornada_19_aliases_resolve_through_canonical_team_registry() -> None:
+    from kini_engine.coupon_identity import load_coupon_team_aliases
+    from kini_engine.team_identity import TeamIdentityRegistry
+
+    aliases = load_coupon_team_aliases()["seasons"]["2020-2021"]
+    registry = TeamIdentityRegistry.from_default()
+    expected = {
+        "Valladolid": "Valladolid",
+        "Osasuna": "Osasuna",
+        "Lugo": "Lugo",
+        "Rayo Vallecano": "Vallecano",
+        "Sabadell": "Sabadell",
+        "R. Oviedo": "Oviedo",
+    }
+
+    for source_name, target_name in expected.items():
+        assert aliases[source_name] == target_name
+        assert registry.resolve(target_name, source="football-data") is not None

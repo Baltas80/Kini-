@@ -302,3 +302,16 @@ This is a single-coupon integration smoke test, not a performance sample. It doe
 Run [44091537438](https://github.com/Baltas80/Kini-/actions/runs/44091537438), artifact ID `14332240705`, code revision `7d1cd819e304907ed17e8157a6c765e184c63287`. The emitted result declares `schema_version: 3`; the batch writer and fail-closed validator use the shared `COUPON_BACKTEST_RESULT_SCHEMA_VERSION` constant. The pilot passed all acceptance steps and reproduced the same one-coupon metrics above: 303 training matches, 14 predictions per model, 8 columns/€6 per candidate, no exact 14/14 coverage, no Pleno hit and no full 15/15 coverage. The fitted date range is `2020-09-12`–`2020-12-11`.
 
 This rerun verifies the result-contract migration, not a new performance sample.
+
+
+## Second independently reviewed historical coupon — Jornada 19, 2020-12-06
+
+A second coupon is now represented by a normalized SELAE result extract at `kini_engine/data/selae_official_coupon_results/2020-2021-19.json`. It contains all 14 ordered main fixtures and the Eibar–Valencia Pleno al 15 result (0–0, categories 0–0). The official result page and the official SELAE press-release PDF are recorded as supporting sources. The 14 match identities, scores and dates were cross-checked against the HistoricalQuiniela Jornada 19 page and the Football-Data SP1/SP2 historical dataset.
+
+The official press release reports €3,491,465.25 in Quiniela revenue, no winners in the Pleno al 15 or 14 categories (both rollovers), and unit prizes of €7,077.29 (13), €460.21 (12), €49.97 (11) and €10.06 (10). These values are preserved in the normalized extract as source evidence; the current backtest does **not** yet consume them to calculate payouts or return on stake.
+
+The earliest main fixture kicked off on 2020-12-05 at 14:00 Europe/Madrid. The conservative previous-local-calendar-day cutoff is 2020-12-04, with 277 completed Football-Data matches in the validated 5,322-row source snapshot. The coupon pilot minimum is therefore set to 250 matches, below the observed 277 but still explicitly enforced. This is an engineering smoke-test threshold, not a claim of statistically sufficient model training.
+
+The pilot now imports journeys 19 and 21 together and requires two independently reviewed SELAE snapshots, 30 reconciled fixtures, and 14 predictions from each of Dixon-Coles, ML and the fixed DC/ML ensemble for each coupon. It reuses the immutable validated historical-data artifact from the PR base branch instead of downloading Football-Data again for every PR run. Manual workflow dispatch performs a fresh, fail-closed history build.
+
+This expands the end-to-end sample from one to two coupons. It remains far too small for model selection, hit-rate estimation, payout performance or profitability claims. The next separate task is to validate the stored prize-distribution schema and implement exact-column payout scoring without assuming that a 14-match hit and a Pleno hit are interchangeable.

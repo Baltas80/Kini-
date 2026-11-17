@@ -152,3 +152,97 @@ def test_snapshot_loader_rejects_non_object_json(tmp_path: Path) -> None:
 def test_snapshot_directory_rejects_unsafe_season_slug(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="YYYY-YYYY"):
         load_official_snapshot_for_journey(tmp_path, "../2020-2021", 21)
+
+
+def test_jornada_19_official_snapshot_matches_reviewed_selae_results() -> None:
+    path = (
+        Path(__file__).resolve().parents[1]
+        / "kini_engine"
+        / "data"
+        / "selae_official_coupon_results"
+        / "2020-2021-19.json"
+    )
+    snapshot, digest = load_official_coupon_snapshot(path)
+
+    expected = [
+        ("Levante", "Getafe", 3, 0, "1"),
+        ("Sevilla", "Real Madrid", 0, 1, "2"),
+        ("At. Madrid", "Valladolid", 2, 0, "1"),
+        ("Cádiz", "Barcelona", 2, 1, "1"),
+        ("Granada", "Huesca", 3, 3, "X"),
+        ("Osasuna", "Betis", 0, 2, "2"),
+        ("Villarreal", "Elche", 0, 0, "X"),
+        ("Alavés", "Real Sociedad", 0, 0, "X"),
+        ("Alcorcón", "Almería", 0, 1, "2"),
+        ("Espanyol", "Sporting", 2, 0, "1"),
+        ("Mirandés", "Lugo", 0, 0, "X"),
+        ("Rayo Vallecano", "Logroñés", 2, 1, "1"),
+        ("Zaragoza", "Fuenlabrada", 1, 0, "1"),
+        ("Sabadell", "R. Oviedo", 0, 1, "2"),
+    ]
+    actual = [
+        (
+            item["home"],
+            item["away"],
+            item["home_goals"],
+            item["away_goals"],
+            item["result"],
+        )
+        for item in snapshot["fixtures"]
+    ]
+    assert snapshot["draw_date"] == "2020-12-06"
+    assert snapshot["source_url"] == (
+        "https://www.loteriasyapuestas.es/es/la-quiniela/resultados/"
+        "la-quiniela-resultados-del-06-de-diciembre-de-2020"
+    )
+    assert actual == expected
+    assert snapshot["pleno"] == {
+        "number": 15,
+        "home": "Eibar",
+        "away": "Valencia",
+        "home_goals": 0,
+        "away_goals": 0,
+        "home_category": "0",
+        "away_category": "0",
+    }
+    assert snapshot["prize_distribution"]["categories"] == [
+        {"category": "pleno_al_15", "winner_count": 0, "unit_prize_eur": None, "status": "rollover"},
+        {"category": "14", "winner_count": 0, "unit_prize_eur": None, "status": "rollover"},
+        {"category": "13", "winner_count": 37, "unit_prize_eur": 7077.29, "status": "awarded"},
+        {"category": "12", "winner_count": 569, "unit_prize_eur": 460.21, "status": "awarded"},
+        {"category": "11", "winner_count": 5240, "unit_prize_eur": 49.97, "status": "awarded"},
+        {"category": "10", "winner_count": 31232, "unit_prize_eur": 10.06, "status": "awarded"},
+    ]
+    assert digest == hashlib.sha256(path.read_bytes()).hexdigest()
+
+    coupon = {
+        "coupon_id": "2020-2021:19",
+        "source_date": "2020-12-06",
+        "fixtures": [
+            {
+                "number": item["number"],
+                "home": item["home"],
+                "away": item["away"],
+                "home_goals": item["home_goals"],
+                "away_goals": item["away_goals"],
+                "result": item["result"],
+            }
+            for item in snapshot["fixtures"]
+        ]
+        + [
+            {
+                "number": 15,
+                "home": "Eibar",
+                "away": "Valencia",
+                "home_goals": 0,
+                "away_goals": 0,
+                "pleno_home_category": "0",
+                "pleno_away_category": "0",
+            }
+        ],
+    }
+    verified = verify_coupon_against_selae_snapshot(
+        coupon, snapshot, snapshot_sha256=digest
+    )
+    assert verified["official_main_matches_verified"] is True
+    assert verified["official_pleno_verified"] is True
