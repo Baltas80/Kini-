@@ -186,10 +186,11 @@ def multiclass_metrics(
     rows: list[tuple[dict[str, float], str]],
     calibration_bins: int = 10,
 ) -> dict[str, Any]:
-    """Evaluate 1/X/2 forecasts, including one-vs-rest class calibration.
+    """Evaluate strict 1/X/2 forecasts, including one-vs-rest class calibration.
 
     Class-wise diagnostics are computed only from the supplied out-of-sample
     forecasts. They describe reliability; they do not fit or apply a calibrator.
+    Invalid vectors are rejected rather than silently normalized.
     """
     if (
         isinstance(calibration_bins, bool)
@@ -219,17 +220,7 @@ def multiclass_metrics(
     for probabilities, outcome in rows:
         if outcome not in idx:
             raise ValueError(f"unknown 1/X/2 outcome: {outcome!r}")
-        try:
-            vector = np.asarray([probabilities[sign] for sign in SIGNS], dtype=float)
-        except (KeyError, TypeError, ValueError) as exc:
-            raise ValueError(
-                "forecast must contain finite 1/X/2 probabilities"
-            ) from exc
-        if not np.isfinite(vector).all() or np.any(vector < 0.0) or vector.sum() <= 0.0:
-            raise ValueError(
-                "forecast probabilities must be finite, non-negative and have positive sum"
-            )
-        probability_vectors.append(vector / vector.sum())
+        probability_vectors.append(_probability_vector(probabilities))
         target_indices.append(idx[outcome])
 
     probability_matrix = np.vstack(probability_vectors)
@@ -287,10 +278,28 @@ DEFAULT_DC_ML_WEIGHT = 0.58 / (0.58 + 0.17)
 
 
 def _probability_vector(probabilities: dict[str, float]) -> np.ndarray:
-    values = np.asarray([probabilities[s] for s in SIGNS], dtype=float)
-    if not np.isfinite(values).all() or np.any(values < 0.0) or values.sum() <= 0.0:
-        raise ValueError("DC/ML ensemble received invalid probabilities")
-    return values / values.sum()
+    """Validate an exact 1/X/2 vector without silently renormalizing it."""
+    if not isinstance(probabilities, dict) or set(probabilities) != set(SIGNS):
+        raise ValueError("probabilities must contain exactly the 1/X/2 signs")
+
+    raw_values = [probabilities[sign] for sign in SIGNS]
+    if any(
+        isinstance(value, (bool, np.bool_))
+        or not isinstance(value, (int, float, np.integer, np.floating))
+        for value in raw_values
+    ):
+        raise ValueError("probabilities must be numeric and non-boolean")
+
+    values = np.asarray(raw_values, dtype=float)
+    if (
+        not np.isfinite(values).all()
+        or np.any(values < 0.0)
+        or np.any(values > 1.0)
+    ):
+        raise ValueError("each probability must be finite and in [0, 1]")
+    if not np.isclose(values.sum(), 1.0, rtol=0.0, atol=1e-6):
+        raise ValueError("1/X/2 probabilities must sum to one within 1e-6")
+    return values
 
 
 def _blend_dc_ml(
