@@ -244,8 +244,10 @@ def test_2021_2022_coupon_aliases_resolve_through_canonical_team_registry() -> N
         registry.resolve("Tenerife", source="football-data").team_id
         == "team:es:tenerife"
     )
- 
-def test_2022_2023_jornada_1_aliases_resolve_in_the_correct_competition_and_season() -> None:
+
+def test_2022_2023_jornada_1_aliases_resolve_in_the_correct_competition_and_season() -> (
+    None
+):
     from kini_engine.coupon_identity import load_coupon_team_aliases
     from kini_engine.team_identity import TeamIdentityRegistry
 
@@ -294,4 +296,3 @@ def test_2022_2023_jornada_1_aliases_resolve_in_the_correct_competition_and_seas
         )
         assert identity is not None, source_name
         assert identity.canonical_name == target_name
-
