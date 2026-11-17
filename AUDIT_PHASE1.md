@@ -3497,3 +3497,8 @@ All candidates used 8 columns, 3 doubles, no triples and €6.00 cost. Dixon-Col
 ### Next action
 
 Expand the archive to multiple coupons only where each journey has independently reviewed official SELAE evidence. Then implement a separate payout layer using official per-bet prize tiers and exact persisted direct columns. Do not infer expected value or profitability from the current single-coupon pilot. Keep market comparisons limited to odds with verifiable pre-kickoff capture timestamps.
+
+
+## Coupon backtest result schema version 3 — 2026-11-17
+
+The fitted training-window provenance added in the coupon backtest is a required result-contract change. To avoid silently changing the meaning of schema version 2, introduced `COUPON_BACKTEST_RESULT_SCHEMA_VERSION = 3` and use it in both the batch result writer and the fail-closed acceptance validator. The coupon archive itself remains `COUPON_SCHEMA_VERSION = 2`; the two version domains are deliberately separate. The regression suite now rejects legacy result schema version 2 and uses the shared version constant for current fixtures.

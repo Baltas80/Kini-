@@ -15,6 +15,7 @@ from .core import SIGNS, KiniEngine, Match
 from .team_identity import normalize_team_name
 
 COUPON_SCHEMA_VERSION = 2
+COUPON_BACKTEST_RESULT_SCHEMA_VERSION = 3
 COUPON_SOURCE = "historicoquiniela.com"
 SELAE_SOURCE = "loteriasyapuestas.es"
 SPAIN_TIMEZONE = ZoneInfo("Europe/Madrid")
@@ -831,7 +832,7 @@ def evaluate_coupon_batch(
             "total_cost_eur": round(sum(item["cost_eur"] for item in successful), 2),
         }
     return {
-        "schema_version": 2,
+        "schema_version": COUPON_BACKTEST_RESULT_SCHEMA_VERSION,
         "method": {
             "cutoff": "all training results dated strictly before the local calendar date of the earliest coupon kickoff",
             "training_history": "one fitted snapshot shared by all 15 coupon fixtures and all model candidates in that coupon",

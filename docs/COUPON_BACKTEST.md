@@ -82,7 +82,7 @@ This option makes multi-journey import reproducible when official pages have bee
 
 ## Reproducible direct-ticket audit
 
-Coupon backtest result schema version 2 stores the exact generated columns for each model candidate. Each column contains 14 ordered 1/X/2 signs. The result also stores the actual 14 main outcomes, the actual Pleno categories, selected Pleno category sets, and the price per payable bet.
+Coupon backtest result schema version 3 stores the exact generated columns for each model candidate and adds the explicit `training_history_min_date` / `training_history_max_date` fitted-window provenance. Each column contains 14 ordered 1/X/2 signs. The result also stores the actual 14 main outcomes, the actual Pleno categories, selected Pleno category sets, and the price per payable bet. The acceptance gate rejects legacy result schema version 2; the separate coupon archive remains schema version 2.
 
 The acceptance validator requires:
 

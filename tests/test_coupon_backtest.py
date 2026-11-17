@@ -386,7 +386,7 @@ def _accepted_coupon_backtest_result() -> tuple[dict[str, object], list[str]]:
     }
     return (
         {
-            "schema_version": 2,
+            "schema_version": coupons.COUPON_BACKTEST_RESULT_SCHEMA_VERSION,
             "config": {"budget_columns": 8, "min_history_matches": 300},
             "summary": {"coupon_count": 1, "models": summary_models},
             "coupons": [coupon_result],
@@ -403,6 +403,18 @@ def test_coupon_backtest_acceptance_requires_all_models_and_valid_vectors() -> N
         budget=8,
         min_history_matches=300,
     )
+
+
+def test_coupon_backtest_acceptance_rejects_legacy_result_schema() -> None:
+    result, coupon_ids = _accepted_coupon_backtest_result()
+    result["schema_version"] = 2
+    with pytest.raises(ValueError, match="unsupported coupon backtest result schema"):
+        validate_coupon_backtest_acceptance(
+            result,
+            coupon_ids,
+            budget=8,
+            min_history_matches=300,
+        )
 
 
 def test_coupon_backtest_acceptance_rejects_training_history_after_cutoff() -> None:

@@ -12,7 +12,11 @@ from pathlib import Path
 
 from kini_engine.core import SIGNS
 from kini_engine.coupon_identity import canonicalize_coupon
-from kini_engine.coupons import evaluate_coupon_batch, read_coupon_jsonl
+from kini_engine.coupons import (
+    COUPON_BACKTEST_RESULT_SCHEMA_VERSION,
+    evaluate_coupon_batch,
+    read_coupon_jsonl,
+)
 from kini_engine.dataio import load_matches_csv, validate_matches
 
 OFFICIAL_QUINIELA_BET_PRICE_EUR = 0.75
@@ -55,7 +59,7 @@ def validate_coupon_backtest_acceptance(
     min_history_matches: int,
 ) -> None:
     """Fail closed unless every coupon, model and direct-ticket expansion is auditable."""
-    if result.get("schema_version") != 2:
+    if result.get("schema_version") != COUPON_BACKTEST_RESULT_SCHEMA_VERSION:
         raise ValueError("unsupported coupon backtest result schema")
     if not expected_coupon_ids or len(set(expected_coupon_ids)) != len(
         expected_coupon_ids
