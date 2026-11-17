@@ -238,7 +238,7 @@ jobs:
 
           expected_ids = [
               "2020-2021:19", "2020-2021:21", "2020-2021:22",
-              "2020-2021:25", "2020-2021:29", "2021-2022:01",
+              "2020-2021:25", "2020-2021:29", "2021-2022:01", "2021-2022:02", "2021-2022:03",
           ]
           actual_ids = [coupon.get("coupon_id") for coupon in coupons]
           if actual_ids != expected_ids:
@@ -247,7 +247,7 @@ jobs:
           journey_numbers = [
               {"season": "2020-2021", "number": number}
               for number in (19, 21, 22, 25, 29)
-          ] + [{"season": "2021-2022", "number": 1}]
+          ] + [{"season": "2021-2022", "number": number} for number in (1, 2, 3)]
           manifest = {
               "record_type": "manifest",
               "schema_version": COUPON_SCHEMA_VERSION,
@@ -307,6 +307,8 @@ jobs:
               "2020-2021:25": ("2020-2021", 25, "2021-01-03"),
               "2020-2021:29": ("2020-2021", 29, "2021-01-24"),
               "2021-2022:01": ("2021-2022", 1, "2021-08-15"),
+              "2021-2022:02": ("2021-2022", 2, "2021-08-22"),
+              "2021-2022:03": ("2021-2022", 3, "2021-08-29"),
           }
           expected_ids = list(expected)
           if len(archive) != len(expected) + 1:
@@ -326,7 +328,7 @@ jobs:
               or manifest.get("journey_numbers") != expected_journey_numbers
               or manifest.get("journey_ids") != expected_ids
           ):
-              raise SystemExit("coupon archive manifest does not describe the six verified journeys")
+              raise SystemExit("coupon archive manifest does not describe the eight verified journeys")
           archive_coupons = {
               item.get("coupon_id"): item
               for item in archive[1:]
@@ -368,8 +370,8 @@ jobs:
               raise SystemExit(f"backtest coupon IDs/order differ: {[c.get('coupon_id') for c in coupons]}")
           if result.get("schema_version") != 3 or result.get("config", {}).get("min_history_matches") != 250:
               raise SystemExit("backtest result schema or minimum-history configuration mismatch")
-          if result.get("summary", {}).get("coupon_count") != 6:
-              raise SystemExit("backtest summary does not contain six coupons")
+          if result.get("summary", {}).get("coupon_count") != 8:
+              raise SystemExit("backtest summary does not contain eight coupons")
 
           for coupon in coupons:
               coupon_id = coupon["coupon_id"]
@@ -422,9 +424,9 @@ jobs:
 
           for mode in ("dc", "ml", "ensemble_dc_ml"):
               aggregate = result.get("summary", {}).get("models", {}).get(mode, {})
-              if aggregate.get("evaluated_coupons") != 6 or aggregate.get("failed_coupons") != 0:
-                  raise SystemExit(f"{mode}: aggregate did not evaluate all six coupons: {aggregate}")
-          print("COUPON_ACCEPTANCE_OK: 6 official coupons across two seasons, 90 SELAE results, 90 canonical fixture reconciliations, 18 x 14 forecasts, optimizer within SELAE limits")
+              if aggregate.get("evaluated_coupons") != 8 or aggregate.get("failed_coupons") != 0:
+                  raise SystemExit(f"{mode}: aggregate did not evaluate all eight coupons: {aggregate}")
+          print("COUPON_ACCEPTANCE_OK: 8 official coupons across two seasons, 120 SELAE results, 120 canonical fixture reconciliations, 24 x 14 forecasts, optimizer within SELAE limits")
           PY
       - name: Upload coupon pilot evidence
         uses: actions/upload-artifact@v4
