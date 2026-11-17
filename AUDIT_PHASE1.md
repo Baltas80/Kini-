@@ -3099,3 +3099,23 @@ Fuentes oficiales consultadas el 2026-11-17:
 **Estado P2:** auditoría del contrato de features y de la ventana de mercado implementada y probada a nivel de código/documentación; disponibilidad exacta por timestamp de los resultados y cuotas históricos sigue sin demostrarse. No se declara P2 completamente cerrado.
 
 **Siguiente acción prioritaria:** completar el inventario de fuentes y timestamps para cada campo histórico consumido por el entrenamiento; después, continuar la expansión verificable del archivo de escrutinios SELAE y la evaluación de cobertura conjunta/premios del boleto, sin usar un único cupón piloto como evidencia de rendimiento.
+
+## Public-draw outcome preservation — 2026-11-17
+
+A review of the current reconciliation output found that the loader validated a non-played public-draw record but discarded the official coupon sign and its supporting evidence before writing `excluded_fixtures`. This prevented a downstream ticket evaluator from recovering the realized coupon outcome, even though the record was correctly excluded from football training.
+
+Changes on PR #9 branch `feat/selae-fixture-reconciliation`:
+
+- [`77a45f8`](https://github.com/Baltas80/Kini-/commit/77a45f8765ded11ba4eb46b12e9f1892060c9e11) preserves `reported_score_raw`, the official sign-evidence URL and UTC check time, status reason, sign, source URL and raw SHA-256 in normalized non-played fixtures and the reconciliation report.
+- [`f751c0c`](https://github.com/Baltas80/Kini-/commit/f751c0caac9a9a6cd388f77cde49c9b2a1407c64) adds regression assertions proving that a public-draw sign can differ from the reported placeholder score while goals remain null, training eligibility is false and ticket-outcome eligibility is true.
+- [`66eafab`](https://github.com/Baltas80/Kini-/commit/66eafab4af21e3333ec4c3707fd58bb309155b7f) documents the output contract and its current boundary.
+- The first CI attempt [44023322722](https://github.com/Baltas80/Kini-/actions/runs/44023322722) exposed two compatibility failures: two existing in-memory reconciliation tests construct already-normalized fixtures without source URL/hash fields. The report builder had incorrectly made those optional provenance fields mandatory outside the validated file-loader path.
+- [`b7e8d84`](https://github.com/Baltas80/Kini-/commit/b7e8d84fc9c832b39298cb2371ac38a9c23b2a0c) fixes that regression by copying source URL/hash only when present. Production records loaded through `load_draw_records` still contain both fields; the in-memory API remains compatible.
+
+Validation on the corrected code head:
+
+- PR CI [44023470088](https://github.com/Baltas80/Kini-/actions/runs/44023470088): actionlint, Ruff lint, Ruff format and **310 tests passed** in 3.24 seconds. The 21 warnings are upstream `penaltyblog`/NumPy 2.5 deprecations.
+- Historical-data validation [44023470052](https://github.com/Baltas80/Kini-/actions/runs/44023470052): **5,322 completed fixtures**, 10,644 team references resolved across 56 IDs, zero unresolved/ambiguous references, zero duplicates/conflicts and `integrity_passed=true`. Artifact ID 14302051921; ZIP SHA-256 `4d3410ded7f16598ead565cfd070117e1265b9b139210d396c8bd38ecb339dad`.
+- Coupon backtest [44023470025](https://github.com/Baltas80/Kini-/actions/runs/44023470025) skipped by its path filter because coupon-model code/data did not change. Historical walk-forward [44023470115](https://github.com/Baltas80/Kini-/actions/runs/44023470115) skipped because no predictive code changed. Archive discovery [44023470044](https://github.com/Baltas80/Kini-/actions/runs/44023470044) skipped the live fetch because the discovery script did not change; it produced no new SELAE archive evidence.
+
+Scope remains deliberately narrow: public-draw signs and provenance are now preserved in `excluded_fixtures`, but the current coupon-level backtest does not yet consume those records. No model forecast or historical ticket-performance claim is added. A future ticket evaluator must handle the public-draw event separately from football predictions and keep it out of match-level accuracy/calibration metrics.
