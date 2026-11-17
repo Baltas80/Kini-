@@ -7,8 +7,8 @@ from math import isfinite
 from typing import Any
 from urllib.parse import urlsplit
 
-from .team_identity import normalize_team_name
 from .prize_scoring import PrizeScoringError, evaluate_official_prize_snapshot
+from .team_identity import normalize_team_name
 
 SIGNS = ("1", "X", "2")
 PLENO15_CATEGORIES = frozenset({"0", "1", "2", "M"})

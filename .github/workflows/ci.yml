@@ -87,6 +87,7 @@ jobs:
           tests/test_coupon_backtest.py
           tests/test_coupon_identity.py
           kini_engine/ticket_outcomes.py
+          kini_engine/prize_scoring.py
           kini_engine/ticket_ledger.py
           tests/test_ticket_ledger.py
           scripts/score_selae_ticket.py
@@ -129,6 +130,7 @@ jobs:
           tests/test_coupon_backtest.py
           tests/test_coupon_identity.py
           kini_engine/ticket_outcomes.py
+          kini_engine/prize_scoring.py
           kini_engine/ticket_ledger.py
           tests/test_ticket_ledger.py
           scripts/score_selae_ticket.py
