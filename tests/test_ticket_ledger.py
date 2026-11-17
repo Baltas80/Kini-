@@ -67,9 +67,7 @@ def _ticket() -> dict[str, object]:
         "pleno15_away": "Pleno Away",
         "pleno15_kickoff_at": "2026-11-08T15:00:00+01:00",
         "coupon_plan": plan,
-        "probability_vectors": [
-            {"1": 0.5, "X": 0.3, "2": 0.2} for _ in range(14)
-        ],
+        "probability_vectors": [{"1": 0.5, "X": 0.3, "2": 0.2} for _ in range(14)],
         "probability_sources": [
             {"position": position, "source": "football_model", "model_mode": "ensemble"}
             for position in range(1, 15)
