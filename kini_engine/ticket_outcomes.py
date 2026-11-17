@@ -1169,11 +1169,6 @@ def score_ticket_record(
         "best_columns_1_based": best_columns,
         "covered_14": actual in set(columns),
         "outcome_provenance": outcomes,
-        "pleno15_evaluated": validated_pleno15 is not None,
-        "pleno15_actual": None,
-        "pleno15_hit": None,
-        "covered_full_coupon": None,
-        "pleno15_outcome_provenance": None,
         "payout_evaluated": False,
         "profitability_evaluated": False,
     }
@@ -1195,6 +1190,7 @@ def score_ticket_record(
         pleno15_hit = actual_pleno_pair in selected_pleno_pairs
         result.update(
             {
+                "pleno15_evaluated": True,
                 "pleno15_actual": {
                     "home_goals": validated_pleno15["home_goals"],
                     "away_goals": validated_pleno15["away_goals"],
