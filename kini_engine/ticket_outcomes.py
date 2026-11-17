@@ -205,7 +205,9 @@ def outcomes_from_reconciliation(
     for item in collections["excluded_fixtures"]:
         position = _position(item.get("position"), "excluded position")
         if position in outcomes:
-            raise TicketOutcomeError(f"{expected_date}: duplicate outcome at position {position}")
+            raise TicketOutcomeError(
+                f"{expected_date}: duplicate outcome at position {position}"
+            )
         if (
             item.get("score_status") != "not_played"
             or item.get("sign_determination") != "public_draw"
