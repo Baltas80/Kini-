@@ -245,6 +245,7 @@ def test_2021_2022_coupon_aliases_resolve_through_canonical_team_registry() -> N
         == "team:es:tenerife"
     )
 
+
 def test_2022_2023_jornada_1_aliases_resolve_in_the_correct_competition_and_season() -> (
     None
 ):
