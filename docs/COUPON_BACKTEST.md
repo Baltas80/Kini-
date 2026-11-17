@@ -152,3 +152,24 @@ Post-close ball counts are explicitly rejected as a substitute. There is no unif
 
 The ticket record's timestamp ordering is checked, but the timestamps and evidence documents are declarations supplied with the ticket artifact; the scorer does not cryptographically timestamp or independently authenticate a local ticket. A historical performance study must preserve the original ticket artifact and independently review the cutoff/schedule evidence. One scored ticket is an outcome audit, not a performance sample.
 
+The scorer is intentionally limited to the 14 main matches. It does not score Pleno al 15, validate the total stake, or calculate prize tiers. Pleno remains covered by the existing coupon-level backtest path; a combined 14+Pleno ticket ledger is a separate pending integration.
+
+A pre-close snapshot accepted by the construction helper has this shape:
+
+```json
+{
+  "schema_version": 1,
+  "provider": "SELAE",
+  "source_id": "stable-capture-id",
+  "draw_date": "2026-11-08",
+  "position": 7,
+  "captured_at_utc": "2026-11-08T10:30:00Z",
+  "ticket_cutoff_at_utc": "2026-11-08T11:00:00Z",
+  "source_url": "https://www.loteriasyapuestas.es/example-preclose-snapshot",
+  "source_sha256": "<64 lowercase hex characters>",
+  "probabilities": {"1": 0.12, "X": 0.16, "2": 0.72}
+}
+```
+
+The construction helper also requires the first scheduled kickoff and rejects a cutoff at or after it. The snapshot timestamp, cutoff and first kickoff are validated as declared timestamps; the corresponding evidence URLs and digests still require independent review.
+

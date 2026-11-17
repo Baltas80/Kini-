@@ -17,6 +17,12 @@ class TicketOutcomeError(ValueError):
     """Raised when ticket or official coupon outcome evidence is incomplete."""
 
 
+def _require_schema_v1(record: dict[str, Any], field: str) -> None:
+    version = record.get("schema_version")
+    if isinstance(version, bool) or not isinstance(version, int) or version != 1:
+        raise TicketOutcomeError(f"unsupported {field} schema")
+
+
 def _required_text(value: object, field: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise TicketOutcomeError(f"{field} must be a non-empty string")
@@ -124,8 +130,9 @@ def outcomes_from_reconciliation(
     use the official coupon sign, never the reported placeholder score.
     """
     expected_date = _parse_draw_date(draw_date, "draw_date")
-    if not isinstance(report, dict) or report.get("schema_version") != 1:
-        raise TicketOutcomeError("unsupported SELAE fixture reconciliation schema")
+    if not isinstance(report, dict):
+        raise TicketOutcomeError("SELAE fixture reconciliation must be an object")
+    _require_schema_v1(report, "SELAE fixture reconciliation")
 
     collection_names = (
         "resolved_fixtures",
@@ -284,8 +291,9 @@ def validate_preclose_public_draw_snapshot(
     expected_date = _parse_draw_date(draw_date, "draw_date")
     expected_position = _position(position, "position")
     cutoff = _parse_utc_timestamp(ticket_cutoff_at_utc, "ticket_cutoff_at_utc")
-    if not isinstance(snapshot, dict) or snapshot.get("schema_version") != 1:
-        raise TicketOutcomeError("unsupported pre-close forecast snapshot schema")
+    if not isinstance(snapshot, dict):
+        raise TicketOutcomeError("pre-close forecast snapshot must be an object")
+    _require_schema_v1(snapshot, "pre-close forecast snapshot")
     if snapshot.get("provider") != "SELAE":
         raise TicketOutcomeError("pre-close forecast provider must be SELAE")
     if (
@@ -339,6 +347,7 @@ def build_ticket_probability_vectors(
     model_probabilities_by_position: Mapping[int, dict[str, float]],
     public_draw_snapshots: Mapping[int, dict[str, Any]],
     ticket_cutoff_at_utc: str,
+    first_kickoff_at: str,
 ) -> dict[str, Any]:
     """Prepare the 14 vectors for TicketOptimizer without inventing public-draw priors.
 
@@ -346,6 +355,10 @@ def build_ticket_probability_vectors(
     position requires its own official, timestamped pre-close participant snapshot.
     """
     outcomes = outcomes_from_reconciliation(reconciliation_report, draw_date)
+    cutoff = _parse_utc_timestamp(ticket_cutoff_at_utc, "ticket_cutoff_at_utc")
+    first_kickoff = _parse_timestamp(first_kickoff_at, "first_kickoff_at")
+    if cutoff >= first_kickoff.astimezone(UTC):
+        raise TicketOutcomeError("ticket cutoff must be earlier than first kickoff")
     public_positions = {
         item["position"] for item in outcomes if item["outcome_type"] == "public_draw"
     }
@@ -394,11 +407,10 @@ def build_ticket_probability_vectors(
 
     return {
         "draw_date": _parse_draw_date(draw_date, "draw_date"),
-        "ticket_cutoff_at_utc": _parse_utc_timestamp(
-            ticket_cutoff_at_utc, "ticket_cutoff_at_utc"
-        )
+        "ticket_cutoff_at_utc": cutoff
         .isoformat()
         .replace("+00:00", "Z"),
+        "first_kickoff_at": first_kickoff.isoformat(),
         "probabilities": probabilities,
         "probability_sources": sources,
         "public_draw_positions": sorted(public_positions),
@@ -406,8 +418,9 @@ def build_ticket_probability_vectors(
 
 
 def _validate_ticket_record(ticket: dict[str, Any]) -> dict[str, Any]:
-    if not isinstance(ticket, dict) or ticket.get("schema_version") != 1:
-        raise TicketOutcomeError("unsupported direct-ticket record schema")
+    if not isinstance(ticket, dict):
+        raise TicketOutcomeError("direct-ticket record must be an object")
+    _require_schema_v1(ticket, "direct-ticket record")
     ticket_id = _required_text(ticket.get("ticket_id"), "ticket_id")
     draw_date = _parse_draw_date(ticket.get("draw_date"), "draw_date")
     created_at = _parse_utc_timestamp(

@@ -144,6 +144,7 @@ def test_ticket_scoring_uses_public_draw_sign_not_reported_placeholder_score() -
     assert result["actual_main_results"][6] == "2"
     assert result["outcome_types"][6] == "public_draw"
     assert result["public_draw_positions"] == [7]
+    assert result["first_kickoff_at"] == "2026-11-08T14:00:00+01:00"
     assert result["covered_14"] is True
     assert result["best_column_hits"] == 14
     assert result["best_columns_1_based"] == [1]
@@ -249,6 +250,7 @@ def test_build_probability_vectors_uses_preclose_snapshot_for_public_draw_only()
         model_probabilities_by_position=model_probabilities,
         public_draw_snapshots={7: _preclose_snapshot()},
         ticket_cutoff_at_utc="2026-11-08T11:00:00Z",
+        first_kickoff_at="2026-11-08T14:00:00+01:00",
     )
 
     assert len(result["probabilities"]) == 14
@@ -272,6 +274,7 @@ def test_probability_builder_requires_snapshot_for_every_public_draw_position() 
             model_probabilities_by_position=model_probabilities,
             public_draw_snapshots={},
             ticket_cutoff_at_utc="2026-11-08T11:00:00Z",
+        first_kickoff_at="2026-11-08T14:00:00+01:00",
         )
 
 
@@ -289,6 +292,7 @@ def test_probability_builder_rejects_model_probability_for_public_draw_position(
             model_probabilities_by_position=model_probabilities,
             public_draw_snapshots={7: _preclose_snapshot()},
             ticket_cutoff_at_utc="2026-11-08T11:00:00Z",
+        first_kickoff_at="2026-11-08T14:00:00+01:00",
         )
 
 
@@ -301,6 +305,7 @@ def test_preclose_snapshot_rejects_capture_at_or_after_close() -> None:
             draw_date=DRAW_DATE,
             position=7,
             ticket_cutoff_at_utc="2026-11-08T11:00:00Z",
+        first_kickoff_at="2026-11-08T14:00:00+01:00",
         )
 
 
@@ -313,6 +318,7 @@ def test_preclose_snapshot_rejects_post_close_ball_counts() -> None:
             draw_date=DRAW_DATE,
             position=7,
             ticket_cutoff_at_utc="2026-11-08T11:00:00Z",
+        first_kickoff_at="2026-11-08T14:00:00+01:00",
         )
 
 
@@ -325,4 +331,50 @@ def test_preclose_snapshot_rejects_probability_vector_with_wrong_sum() -> None:
             draw_date=DRAW_DATE,
             position=7,
             ticket_cutoff_at_utc="2026-11-08T11:00:00Z",
+        first_kickoff_at="2026-11-08T14:00:00+01:00",
         )
+
+def test_probability_builder_rejects_cutoff_after_first_kickoff() -> None:
+    report = _reconciliation()
+    model_probabilities = {
+        position: {"1": 0.5, "X": 0.3, "2": 0.2}
+        for position in range(1, 15)
+        if position != 7
+    }
+    with pytest.raises(TicketOutcomeError, match="earlier than first kickoff"):
+        build_ticket_probability_vectors(
+            draw_date=DRAW_DATE,
+            reconciliation_report=report,
+            model_probabilities_by_position=model_probabilities,
+            public_draw_snapshots={7: _preclose_snapshot()},
+            ticket_cutoff_at_utc="2026-11-08T11:00:00Z",
+            first_kickoff_at="2026-11-08T10:00:00Z",
+        )
+
+
+def test_reconciliation_rejects_boolean_schema_version() -> None:
+    report = _reconciliation()
+    report["schema_version"] = True
+    with pytest.raises(TicketOutcomeError, match="unsupported"):
+        outcomes_from_reconciliation(report, DRAW_DATE)
+
+
+def test_ticket_rejects_boolean_schema_version() -> None:
+    report = _reconciliation()
+    ticket = _ticket(report)
+    ticket["schema_version"] = True
+    with pytest.raises(TicketOutcomeError, match="unsupported"):
+        score_ticket_record(ticket, report)
+
+
+def test_preclose_snapshot_rejects_boolean_schema_version() -> None:
+    snapshot = _preclose_snapshot()
+    snapshot["schema_version"] = True
+    with pytest.raises(TicketOutcomeError, match="unsupported"):
+        validate_preclose_public_draw_snapshot(
+            snapshot,
+            draw_date=DRAW_DATE,
+            position=7,
+            ticket_cutoff_at_utc="2026-11-08T11:00:00Z",
+        )
+
