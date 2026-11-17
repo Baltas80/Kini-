@@ -562,10 +562,10 @@ def reconcile_draws(
                 "sign_determination": fixture["sign_determination"],
                 "home_goals": fixture["home_goals"],
                 "away_goals": fixture["away_goals"],
-                "source_url": fixture["source_url"],
-                "raw_sha256": fixture["raw_sha256"],
             }
             for field in (
+                "source_url",
+                "raw_sha256",
                 "reported_score_raw",
                 "sign_evidence_url",
                 "sign_evidence_checked_at_utc",
