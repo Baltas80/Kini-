@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import sqlite3
 
 import pytest
@@ -65,7 +66,7 @@ def test_ticket_ledger_persists_valid_record_and_is_idempotent(tmp_path):
     ledger = TicketLedger(tmp_path / "tickets.sqlite3")
     ticket = _ticket()
     digest = hashlib.sha256(
-        __import__("json").dumps(
+        json.dumps(
             ticket,
             ensure_ascii=False,
             sort_keys=True,
