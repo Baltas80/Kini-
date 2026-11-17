@@ -46,25 +46,29 @@ def _money(value: object, field: str, *, allow_none: bool = False) -> Decimal | 
     return rounded
 
 
-def _official_url(value: object, field: str, *, pdf: bool = False) -> str:
+def _https_url(value: object, field: str, *, pdf: bool = False) -> str:
     raw = _required_text(value, field)
     try:
         parsed = urlsplit(raw)
         port = parsed.port
     except ValueError as exc:
-        raise PrizeScoringError(
-            f"{field} must be a valid official SELAE HTTPS URL"
-        ) from exc
+        raise PrizeScoringError(f"{field} must be a valid HTTPS URL") from exc
     if (
         parsed.scheme != "https"
-        or parsed.hostname not in SELAE_HOSTS
         or port not in {None, 443}
         or parsed.username is not None
         or parsed.password is not None
     ):
-        raise PrizeScoringError(f"{field} must use an official SELAE HTTPS host")
+        raise PrizeScoringError(f"{field} must use HTTPS without embedded credentials")
     if pdf and not parsed.path.lower().endswith(".pdf"):
-        raise PrizeScoringError(f"{field} must point to an official PDF")
+        raise PrizeScoringError(f"{field} must point to a PDF")
+    return raw
+
+
+def _official_url(value: object, field: str, *, pdf: bool = False) -> str:
+    raw = _https_url(value, field, pdf=pdf)
+    if urlsplit(raw).hostname not in SELAE_HOSTS:
+        raise PrizeScoringError(f"{field} must use an official SELAE HTTPS host")
     return raw
 
 
@@ -117,7 +121,17 @@ def _validate_prize_distribution(
     source_urls: dict[str, str] = {}
     for item in sources:
         role = _required_text(item.get("role"), "supporting source role")
-        url = _official_url(item.get("url"), f"supporting_sources.{role}")
+        if role in {
+            "official_selae_result_page",
+            "official_selae_press_release_pdf",
+        }:
+            url = _official_url(
+                item.get("url"),
+                f"supporting_sources.{role}",
+                pdf=role == "official_selae_press_release_pdf",
+            )
+        else:
+            url = _https_url(item.get("url"), f"supporting_sources.{role}")
         if role in source_urls:
             raise PrizeScoringError(f"duplicate supporting source role {role!r}")
         source_urls[role] = url
