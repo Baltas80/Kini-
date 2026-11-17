@@ -1,5 +1,8 @@
 import scripts.diagnose_kinielagpt_details as diagnostic_module
-from kini_engine.sources import KinielaGPTAuthorizationRequired
+from kini_engine.sources import (
+    KinielaGPTAuthorizationRequired,
+    KinielaGPTSource,
+)
 from scripts.diagnose_kinielagpt_details import (
     _http_error_evidence,
     reconcile_fixture_order,
@@ -327,6 +330,10 @@ def test_collect_live_diagnostic_continues_when_details_authorization_is_missing
         authorization = None
         LAE = "https://example.com/lae/{}/{}"
         LAE_SOURCE = "test:lae"
+
+        @staticmethod
+        def _probability_map(payload):
+            return KinielaGPTSource._probability_map(payload)
 
         def __init__(self, timeout):
             self.timeout = timeout
