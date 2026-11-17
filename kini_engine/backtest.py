@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from itertools import pairwise
 from typing import Any
 
@@ -613,6 +613,32 @@ def _football_data_snapshot_date(match_date: datetime | str) -> str | None:
     return (fixture_day - timedelta(days=days_since_snapshot)).isoformat()
 
 
+def _lae_capture_precedes_market_snapshot(
+    match: Match,
+    snapshot_date: str,
+) -> bool:
+    """Require LAE response receipt on a UTC date before the market snapshot day.
+
+    The provider schedule documents the snapshot day, not an exact intraday
+    capture instant. Same-day LAE captures are therefore excluded
+    conservatively, even if they may have arrived before the snapshot time.
+    """
+    if not match.has_temporally_eligible_lae:
+        return True
+
+    captured_raw = match.detail.get("lae_captured_at")
+    if not isinstance(captured_raw, str) or not captured_raw.strip():
+        return False
+    try:
+        captured_at = datetime.fromisoformat(captured_raw.strip())
+        snapshot = date.fromisoformat(snapshot_date)
+    except ValueError:
+        return False
+    if captured_at.tzinfo is None or captured_at.utcoffset() is None:
+        return False
+    return captured_at.astimezone(UTC).date() < snapshot
+
+
 def _temporal_classwise_calibration(
     dated_rows: list[tuple[str, dict[str, float], str]],
     calibration_bins: int = 10,
@@ -955,6 +981,12 @@ def compare_walk_forward(
             ):
                 strict_common_time_exclusion_reason = (
                     "training_cutoff_not_before_snapshot"
+                )
+            elif lae_is_eligible and not _lae_capture_precedes_market_snapshot(
+                match, market_snapshot_date
+            ):
+                strict_common_time_exclusion_reason = (
+                    "lae_capture_not_before_snapshot"
                 )
             elif not set(all_modes).issubset(model_probabilities):
                 strict_common_time_exclusion_reason = "incomplete_model_predictions"

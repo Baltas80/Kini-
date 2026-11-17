@@ -1061,3 +1061,91 @@ def test_compare_exports_fixture_level_forecast_rows(monkeypatch):
     assert rows[0]["market_probabilities"] == market_vector
     assert rows[1]["market_eligible"] is False
     assert rows[1]["market_probabilities"] is None
+
+
+def test_strict_common_time_excludes_lae_captured_on_snapshot_day(monkeypatch):
+    class FakeEngine:
+        def __init__(self, enable_ml=False):
+            self.dc = type("DC", (), {"decay": 0.995})()
+
+        def fit(self, history):
+            return self
+
+        def predict(self, match, mode="ensemble", history=None):
+            probabilities = {
+                "dc": {"1": 0.6, "X": 0.25, "2": 0.15},
+                "ml": {"1": 0.4, "X": 0.35, "2": 0.25},
+                "ensemble": {"1": 0.52, "X": 0.28, "2": 0.20},
+                "ensemble_dc_ml": {"1": 0.5, "X": 0.3, "2": 0.2},
+            }
+            return type("Prediction", (), {"probabilities": probabilities[mode]})()
+
+    monkeypatch.setattr(backtest, "KiniEngine", FakeEngine)
+    start = datetime(2025, 1, 1)
+    training = [Match(start, f"H{i}", f"A{i}", 1, 0, "1") for i in range(12)]
+    market = {"1": 0.45, "X": 0.30, "2": 0.25}
+    lae = {"1": 0.50, "X": 0.28, "2": 0.22}
+
+    def fixture(home, captured_at, evidence_checked_at):
+        return Match(
+            datetime(2025, 1, 8),
+            home,
+            "Away",
+            1,
+            0,
+            "1",
+            lae=lae,
+            market=market,
+            detail={
+                "market_temporal_status": "schedule_compatible",
+                "market_pre_match_eligible": True,
+                "lae_source": LAE_SOURCE_ID,
+                "fixture_identity_status": "verified",
+                "kickoff_evidence_url": "https://example.com/official-schedule",
+                "lae_captured_at": captured_at,
+                "kickoff_evidence_checked_at_utc": evidence_checked_at,
+                "kickoff_at": "2025-01-08T12:00:00+00:00",
+            },
+        )
+
+    matches = training + [
+        fixture(
+            "EarlyLAE",
+            "2025-01-06T18:00:00+00:00",
+            "2025-01-06T17:00:00+00:00",
+        ),
+        fixture(
+            "SameDayLAE",
+            "2025-01-07T18:00:00+00:00",
+            "2025-01-07T17:00:00+00:00",
+        ),
+    ]
+
+    result = backtest.compare_walk_forward(matches, min_train=12)
+    rows_by_home = {row["home"]: row for row in result["forecast_rows"]}
+    strict = result["strict_common_time_market"]
+
+    assert rows_by_home["EarlyLAE"]["lae_eligible"] is True
+    assert rows_by_home["EarlyLAE"]["strict_common_time_eligible"] is True
+    assert rows_by_home["SameDayLAE"]["lae_eligible"] is True
+    assert rows_by_home["SameDayLAE"]["strict_common_time_eligible"] is False
+    assert (
+        rows_by_home["SameDayLAE"]["strict_common_time_exclusion_reason"]
+        == "lae_capture_not_before_snapshot"
+    )
+    assert strict["n_schedule_eligible"] == 2
+    assert strict["n_common_time_eligible"] == 1
+    assert strict["exclusion_reason_counts"] == {
+        "lae_capture_not_before_snapshot": 1
+    }
+    for mode in (
+        "dc",
+        "ml",
+        "ensemble",
+        "ensemble_dc_ml",
+        "ensemble_dc_ml_adaptive",
+    ):
+        assert strict["common_sample"][mode]["n"] == 1
+        assert strict["common_sample"][mode]["model"]["n"] == 1
+        assert strict["common_sample"][mode]["market"]["n"] == 1
+
