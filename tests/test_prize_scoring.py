@@ -126,7 +126,9 @@ def test_jornada_22_official_prize_distribution_passes_strict_validation() -> No
 
     assert validated["revenue_eur"] == Decimal("3973360.50")
     assert validated["categories"]["pleno_al_15"]["winner_count"] == 1
-    assert validated["categories"]["pleno_al_15"]["unit_prize_eur"] == Decimal("1677247.92")
+    assert validated["categories"]["pleno_al_15"]["unit_prize_eur"] == Decimal(
+        "1677247.92"
+    )
     assert validated["categories"]["14"]["winner_count"] == 3
     assert validated["categories"]["14"]["unit_prize_eur"] == Decimal("211912.56")
     assert validated["categories"]["13"]["winner_count"] == 71
@@ -134,7 +136,10 @@ def test_jornada_22_official_prize_distribution_passes_strict_validation() -> No
     assert validated["categories"]["12"]["winner_count"] == 970
     assert validated["categories"]["11"]["winner_count"] == 7954
     assert validated["categories"]["10"]["winner_count"] == 44645
-    assert validated["winner_count_diagnostics"]["pleno_vs_14_relationship"] == "not_assessed"
+    assert (
+        validated["winner_count_diagnostics"]["pleno_vs_14_relationship"]
+        == "not_assessed"
+    )
     assert snapshot["prize_distribution"]["elige8"] == {
         "revenue_eur": 95926.00,
         "winner_count": 26,
