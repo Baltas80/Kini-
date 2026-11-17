@@ -100,17 +100,17 @@ The current coupon backtest scope is one selected Pleno category pair (multiplie
 
 ## Public-draw ticket scoring and pre-close probability contract
 
-Public-draw outcomes are now consumable by a separate ticket-level scoring layer. The implementation lives in \`kini_engine/ticket_outcomes.py\`; the CLI is \`scripts/score_selae_ticket.py\`.
+Public-draw outcomes are now consumable by a separate ticket-level scoring layer. The implementation lives in `kini_engine/ticket_outcomes.py`; the CLI is `scripts/score_selae_ticket.py`.
 
 The scorer consumes:
 - A persisted direct-ticket record with its 14-sign columns, ticket creation time, official admission cutoff, first kickoff, and evidence URLs/digests for the cutoff and schedule.
-- A schema-version-1 fixture reconciliation report produced by \`scripts/reconcile_selae_fixtures.py\`.
+- A schema-version-1 fixture reconciliation report produced by `scripts/reconcile_selae_fixtures.py`.
 
-For the requested draw date, the reconciliation must account for all positions 1–14 exactly once. Every played fixture must have a score-consistent official sign and remain training-label eligible. Every public-draw fixture must have an official SELAE sign, \`score_status=not_played\`, \`sign_determination=public_draw\`, null football goals, \`training_label_eligible=false\` and \`ticket_outcome_eligible=true\`. Any unresolved fixture or unused crosswalk entry for that draw rejects scoring. The reported placeholder score is retained as provenance and is never converted into football goals or used to derive the sign.
+For the requested draw date, the reconciliation must account for all positions 1–14 exactly once. Every played fixture must have a score-consistent official sign and remain training-label eligible. Every public-draw fixture must have an official SELAE sign, `score_status=not_played`, `sign_determination=public_draw`, null football goals, `training_label_eligible=false` and `ticket_outcome_eligible=true`. Any unresolved fixture or unused crosswalk entry for that draw rejects scoring. The reported placeholder score is retained as provenance and is never converted into football goals or used to derive the sign.
 
 Example ticket record:
 
-\`\`\`json
+```json
 {
   "schema_version": 1,
   "ticket_id": "quiniela-2026-11-08-001",
@@ -126,22 +126,22 @@ Example ticket record:
     ["1", "X", "2", "1", "X", "2", "1", "X", "2", "1", "X", "2", "1", "X"]
   ]
 }
-\`\`\`
+```
 
 Run:
 
-\`\`\`bash
-python -m scripts.score_selae_ticket \\
-  --ticket artifacts/ticket.json \\
-  --reconciliation data/selae_fixture_reconciliation.json \\
+```bash
+python -m scripts.score_selae_ticket \
+  --ticket artifacts/ticket.json \
+  --reconciliation data/selae_fixture_reconciliation.json \
   --output artifacts/ticket-score.json
-\`\`\`
+```
 
 The output stores the realized 14-sign vector, outcome type per position, public-draw positions, hits per direct column, best-column hits, exact 14/14 coverage and the SHA-256 digests of both input files. It explicitly marks payout and profitability as not evaluated. It does not estimate prize tiers, pari-mutuel payout, expected value or return on stake.
 
 ### Public-draw probability use during ticket construction
 
-Ticket scoring can use the realized official public-draw sign without any probability estimate. Ticket construction is stricter: \`build_ticket_probability_vectors\` accepts football-model probabilities only for played positions. Each public-draw position must have exactly one schema-version-1 SELAE participant-forecast snapshot with:
+Ticket scoring can use the realized official public-draw sign without any probability estimate. Ticket construction is stricter: `build_ticket_probability_vectors` accepts football-model probabilities only for played positions. Each public-draw position must have exactly one schema-version-1 SELAE participant-forecast snapshot with:
 - matching draw date and coupon position;
 - a stable source ID, official HTTPS source URL and source SHA-256;
 - a timezone-aware UTC capture timestamp strictly earlier than the ticket admission cutoff;

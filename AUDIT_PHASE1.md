@@ -1266,16 +1266,16 @@ Evidence from live jornada 22 / temporada 2027:
 - Detail records: 15.
 - Percentage records: 15.
 - Exact normalized home/away crosswalk: **15/15**.
-- \`orden == num\` for all 15 fixtures.
+- `orden == num` for all 15 fixtures.
 - Official kickoff mapping: **15/15**.
 - Schedule evidence fresh at the probability capture: **15/15**.
 - LAE source rows: 15.
 - Valid LAE probability vectors: **0/15**.
 - Temporally eligible LAE rows: **0/15**.
 
-The LAE XML schema contains the parser's expected fields: \`num\`, \`local\`, \`visitante\`, \`porc_1\`, \`porc_X\`, \`porc_2\`. The three percentage fields are zero in the sampled records. \`_probability_map\` correctly rejects an all-zero vector because it has no probability mass. This is **not a field-name/parser mismatch**; the provider has not supplied usable LAE percentages for this jornada snapshot.
+The LAE XML schema contains the parser's expected fields: `num`, `local`, `visitante`, `porc_1`, `porc_X`, `porc_2`. The three percentage fields are zero in the sampled records. `_probability_map` correctly rejects an all-zero vector because it has no probability mass. This is **not a field-name/parser mismatch**; the provider has not supplied usable LAE percentages for this jornada snapshot.
 
-Diagnostic run [43755104246](https://github.com/Baltas80/Kini-/actions/runs/43755104246) succeeded. Bounded artifact [14177602838](https://github.com/Baltas80/Kini-/actions/runs/43755104246/artifacts/14177602838), 3,760 bytes, SHA-256 \`91e204e173282b2e36e01f796fdabedd0f1a797044c0df6999920f38bf9a5a83\`.
+Diagnostic run [43755104246](https://github.com/Baltas80/Kini-/actions/runs/43755104246) succeeded. Bounded artifact [14177602838](https://github.com/Baltas80/Kini-/actions/runs/43755104246/artifacts/14177602838), 3,760 bytes, SHA-256 `91e204e173282b2e36e01f796fdabedd0f1a797044c0df6999920f38bf9a5a83`.
 
 The fixture schedule is independently grounded in the official UEFA pages:
 
@@ -1286,11 +1286,11 @@ The fixture schedule is independently grounded in the official UEFA pages:
 
 A stale official schedule can become unsafe if a fixture's kickoff is amended after the schedule was checked. The previous gate only required that the schedule check preceded the LAE capture; it did not bound the age of that evidence.
 
-The shared contract now defines \`LAE_KICKOFF_EVIDENCE_MAX_AGE = timedelta(hours=24)\` and applies it in three layers:
+The shared contract now defines `LAE_KICKOFF_EVIDENCE_MAX_AGE = timedelta(hours=24)` and applies it in three layers:
 
-1. \`KinielaGPTSource.probabilities()\` attaches kickoff metadata to an LAE row only when the exact fixture identity is verified and the schedule evidence is between zero and 24 hours old at capture. Older evidence is labelled \`schedule_evidence_stale\`; evidence checked after capture remains \`schedule_evidence_after_lae_capture\`.
-2. \`Match.has_temporally_eligible_lae\` independently requires the exact LAE source ID, verified fixture identity, an HTTPS evidence URL, timezone-aware evidence/capture/kickoff timestamps, evidence age in \`[0, 24h]\`, capture strictly before kickoff, and a valid normalized 1/X/2 vector.
-3. The live diagnostic summary applies the same freshness rule and reports \`evidence_fresh_at_capture\`.
+1. `KinielaGPTSource.probabilities()` attaches kickoff metadata to an LAE row only when the exact fixture identity is verified and the schedule evidence is between zero and 24 hours old at capture. Older evidence is labelled `schedule_evidence_stale`; evidence checked after capture remains `schedule_evidence_after_lae_capture`.
+2. `Match.has_temporally_eligible_lae` independently requires the exact LAE source ID, verified fixture identity, an HTTPS evidence URL, timezone-aware evidence/capture/kickoff timestamps, evidence age in `[0, 24h]`, capture strictly before kickoff, and a valid normalized 1/X/2 vector.
+3. The live diagnostic summary applies the same freshness rule and reports `evidence_fresh_at_capture`.
 
 The 24-hour threshold is a conservative project safety policy, not a provider guarantee. It means the schedule evidence must be refreshed before a later LAE capture can be accepted. LAE remains excluded until the provider supplies non-zero, valid vectors.
 
@@ -1298,7 +1298,7 @@ Regression coverage now includes missing or wrong source identity, unverified fi
 
 ### Validation of this unit
 
-On final code commit \`86b88213734ec2d84204965e0add064086f7cbb2\`:
+On final code commit `86b88213734ec2d84204965e0add064086f7cbb2`:
 
 - CI [run 43755104132](https://github.com/Baltas80/Kini-/actions/runs/43755104132): Ruff passed, formatting passed, **173 tests passed**, four upstream deprecation warnings.
 - Live diagnostic [run 43755104246](https://github.com/Baltas80/Kini-/actions/runs/43755104246): change filter and read-only inspection passed; all 15 fixture mappings and freshness checks passed; no usable LAE vectors were returned.
@@ -1328,7 +1328,7 @@ The market temporal audit still excludes 587 of 5,011 odds-bearing fixtures beca
 3. Continue the point-in-time feature audit.
 4. Continue correlation-aware ticket-coverage work. The current ticket coverage objective still uses an independence approximation; do not describe it as a joint-probability optimizer until a validated joint scenario source is available.
 
-PR #9 remains open as a draft against \`feat/canonical-team-identity-registry\`. No changes were made to \`master\`, and no PR was merged.
+PR #9 remains open as a draft against `feat/canonical-team-identity-registry`. No changes were made to `master`, and no PR was merged.
 
 ## Correlation-aware ticket coverage evaluator — 2026-11-15
 
@@ -2046,9 +2046,9 @@ P0 is closed for the current predictive code as recorded above. The next P1 unit
 ### Implemented, awaiting final CI evidence
 
 **PR #7 — offline coupon importer**
-- Branch: \`feat/selae-official-coupon-ingestion\`.
-- Current head: \`fb0f01dbd152681a5b79abbd40a18082be0b96d9\`.
-- Offline HTML now requires a \`.meta.json\` sidecar with the exact date-specific official HTTPS URL, UTC capture timestamp, raw-byte SHA-256 and encoding.
+- Branch: `feat/selae-official-coupon-ingestion`.
+- Current head: `fb0f01dbd152681a5b79abbd40a18082be0b96d9`.
+- Offline HTML now requires a `.meta.json` sidecar with the exact date-specific official HTTPS URL, UTC capture timestamp, raw-byte SHA-256 and encoding.
 - Cache reuse now requires a valid sidecar and a SHA-256 match against the cached bytes; tampered/missing cache metadata causes a fresh fetch.
 - HTTPS downgrade, non-official hosts, missing/naive/non-UTC timestamps, hash mismatch and invalid encoding fail closed.
 - UTF-8 sidecars with or without BOM are supported. The Windows PowerShell example writes UTF-8 without BOM.
@@ -2056,12 +2056,12 @@ P0 is closed for the current predictive code as recorded above. The next P1 unit
 - The latest branch head has no successful workflow run exposed yet. Earlier CI runs predate this patch; do not mark this unit validated.
 
 **PR #9 — historical calendar and archive URL boundaries**
-- Branch: \`feat/selae-fixture-reconciliation\`.
-- Current head at this record: \`275b3004a376082150d19725183a3d5a5d5f8eb6\`.
+- Branch: `feat/selae-fixture-reconciliation`.
+- Current head at this record: `275b3004a376082150d19725183a3d5a5d5f8eb6`.
 - The official historical XLS downloader rejects final redirects outside HTTPS on an exact SELAE host and standard port.
 - Archive index/detail URLs now reject HTTP downgrade, deceptive subdomains, user-info and non-standard ports.
 - Regression tests cover off-domain XLS redirects and unsafe archive URL variants.
-- CI run [43850954338](https://github.com/Baltas80/Kini-/actions/runs/43850954338) passed workflow validation and Ruff lint, then failed only in Ruff formatting of the newly added calendar tests. The exact formatting corrections are committed at \`81f1b51\` and \`275b3004\`. No successful final-head CI run has been returned yet; this work remains implemented, not validated.
+- CI run [43850954338](https://github.com/Baltas80/Kini-/actions/runs/43850954338) passed workflow validation and Ruff lint, then failed only in Ruff formatting of the newly added calendar tests. The exact formatting corrections are committed at `81f1b51` and `275b3004`. No successful final-head CI run has been returned yet; this work remains implemented, not validated.
 
 ### Source access and remaining evidence
 
@@ -2086,14 +2086,14 @@ Implemented on PR #9:
 - Central strict HTTPS URL validation: HTTPS only, non-empty host, standard port 443/default, no user-info.
 - SELAE source and public-draw evidence URLs must use the exact official host.
 - Crosswalk evidence URLs must pass the safe HTTPS check.
-- \`sign_evidence_checked_at_utc\` must have UTC offset zero.
-- \`schema_version\`, \`fixture_count\` and fixture \`position\` must be actual integers, not booleans/floats.
+- `sign_evidence_checked_at_utc` must have UTC offset zero.
+- `schema_version`, `fixture_count` and fixture `position` must be actual integers, not booleans/floats.
 - Regression tests cover HTTP downgrade, port 8443, user-info, non-UTC public-draw timestamps, float positions and float fixture counts.
 
 Commits:
-- \`12d7517082d0016d47c9f954d78a19a9c479c8cb\` — implementation.
-- \`280e59d674f0a95a2c0447953c1c9e8a2556d14c\` — regression tests.
-- \`be9b5d1dea93d84fec73d10cf78d0bbbf23bb150\` — Ruff formatting.
+- `12d7517082d0016d47c9f954d78a19a9c479c8cb` — implementation.
+- `280e59d674f0a95a2c0447953c1c9e8a2556d14c` — regression tests.
+- `be9b5d1dea93d84fec73d10cf78d0bbbf23bb150` — Ruff formatting.
 
 Validation status: **implemented, not validated**. The most recent visible CI attempt remains [43850954338](https://github.com/Baltas80/Kini-/actions/runs/43850954338), which failed only on Ruff formatting in earlier calendar tests; those formatting corrections and this new patch are committed after that run. No final-head CI run or test artifact has been returned. Do not mark this unit tested or validated until a run on the final commit completes.
 
@@ -2102,14 +2102,14 @@ Validation status: **implemented, not validated**. The most recent visible CI at
 
 ### PR #7 importer provenance patch — validated
 
-The final head of \`feat/selae-official-coupon-ingestion\` is \`fb0f01dbd152681a5b79abbd40a18082be0b96d9\`.
+The final head of `feat/selae-official-coupon-ingestion` is `fb0f01dbd152681a5b79abbd40a18082be0b96d9`.
 - CI [43850584199](https://github.com/Baltas80/Kini-/actions/runs/43850584199): **87 tests passed**, 4 upstream NumPy/penaltyblog deprecation warnings.
-- Historical-data validation [43850584212](https://github.com/Baltas80/Kini-/actions/runs/43850584212): succeeded; historical dataset/profile built, validated and uploaded (artifact ID \`14217885532\`, 713,793 bytes).
+- Historical-data validation [43850584212](https://github.com/Baltas80/Kini-/actions/runs/43850584212): succeeded; historical dataset/profile built, validated and uploaded (artifact ID `14217885532`, 713,793 bytes).
 - This validates the offline sidecar/cache integrity tests and the full existing test suite. It does not prove that GitHub runners can fetch SELAE live pages; that remains a separate 403 source-access limitation.
 
 ### PR #9 reconciliation/calendar patch — awaiting final-head CI
 
-The latest implementation commit is \`1a517110c47654f2498fb1b115bc655af8bb6239\`. It includes:
+The latest implementation commit is `1a517110c47654f2498fb1b115bc655af8bb6239`. It includes:
 - Strict SELAE source URL validation (HTTPS, exact host, default/443 port, no user-info).
 - UTC-only public-draw evidence-check timestamps.
 - Strict integer validation for schema version, coupon fixture count and fixture positions.
@@ -2127,24 +2127,24 @@ The current official SELAE result page for 8 November 2026 confirms the 14 coupo
 - Position 12 Logroño United–Sevilla FC, 8 Nov 12:00, 2–2.
 - Position 13 SD Eibar–Real Sociedad, 7 Nov 17:00, 1–2.
 
-SELAE's official postponement PDF states that Tenerife–Alavés was scheduled for 8 Nov 13:00, postponed, and would be decided by public draw from 22:00 if it could not be played within 24 hours. This supports keeping position 14 out of football training labels. The separate Liga F evidence manifest continues to declare \`training_eligibility.eligible=false\` because no validated multi-season Liga F training dataset exists.
+SELAE's official postponement PDF states that Tenerife–Alavés was scheduled for 8 Nov 13:00, postponed, and would be decided by public draw from 22:00 if it could not be played within 24 hours. This supports keeping position 14 out of football training labels. The separate Liga F evidence manifest continues to declare `training_eligibility.eligible=false` because no validated multi-season Liga F training dataset exists.
 
 These official pages are content-level cross-checks only. Their extracted web text is not the original HTML response and has not been substituted for a raw-byte import or SHA-256 provenance artifact.
 
 
 ## 2026-11-16 — P1 reconciliation CI and data reproducibility passed
 
-Final source/test head before this documentation update: \`abaea2a35d018b4685852d7962abf8699aee6552\`.
+Final source/test head before this documentation update: `abaea2a35d018b4685852d7962abf8699aee6552`.
 
 - CI [43852804478](https://github.com/Baltas80/Kini-/actions/runs/43852804478): **244 passed**, 21 upstream deprecation warnings. Workflow validation, Ruff lint and Ruff format all passed.
 - Historical-data validation [43852804294](https://github.com/Baltas80/Kini-/actions/runs/43852804294): successful build, canonical team identity validation, dataset/profile validation and artifact upload.
-- Historical-data artifact ID: \`14219255876\`; ZIP digest: \`sha256:3b3ff9bf56f2816baf7e4078901192ca52a5854176c54f5d3e1a26a4c6664c53\`.
-- The generated \`historical_spain.csv\` SHA-256 is \`a01a68393de69c7ad37d2088864093a50108df9e299f1993d855cad87147acab\`. It is byte-identical to the CSV from PR #7 data-validation artifact \`14217885532\` and the preceding PR #9 validation artifact \`14219400394\`.
-- Profile: 5,311/5,311 complete rows, date coverage 2020-09-12 through 2026-11-09, 0 missing team names, 0 missing final scores, 0 incomplete scores, 0 duplicate fixtures, 0 conflicting duplicates, 0 invalid result labels, 0 score/result mismatches; \`integrity_passed=true\`.
+- Historical-data artifact ID: `14219255876`; ZIP digest: `sha256:3b3ff9bf56f2816baf7e4078901192ca52a5854176c54f5d3e1a26a4c6664c53`.
+- The generated `historical_spain.csv` SHA-256 is `a01a68393de69c7ad37d2088864093a50108df9e299f1993d855cad87147acab`. It is byte-identical to the CSV from PR #7 data-validation artifact `14217885532` and the preceding PR #9 validation artifact `14219400394`.
+- Profile: 5,311/5,311 complete rows, date coverage 2020-09-12 through 2026-11-09, 0 missing team names, 0 missing final scores, 0 incomplete scores, 0 duplicate fixtures, 0 conflicting duplicates, 0 invalid result labels, 0 score/result mismatches; `integrity_passed=true`.
 - The historical-backtest workflow [43852804242](https://github.com/Baltas80/Kini-/actions/runs/43852804242) correctly skipped the model backtest because this P1 change does not modify predictive code.
 - Archive discovery [43852804421](https://github.com/Baltas80/Kini-/actions/runs/43852804421) skipped its discovery step because archive-discovery inputs did not change; no new archive inventory is claimed.
 
-The preceding CI attempt [43852613210](https://github.com/Baltas80/Kini-/actions/runs/43852613210) reached pytest and reported 238 passed / 6 failed. All six failures shared one test-fixture defect: the new JSONL regression tests wrote a literal backslash-n instead of a line-feed, so the loader correctly rejected the malformed JSONL before reaching the intended assertions. The test fixture was corrected in commit \`abaea2a\`; the final CI above confirms the corrected suite passes.
+The preceding CI attempt [43852613210](https://github.com/Baltas80/Kini-/actions/runs/43852613210) reached pytest and reported 238 passed / 6 failed. All six failures shared one test-fixture defect: the new JSONL regression tests wrote a literal backslash-n instead of a line-feed, so the loader correctly rejected the malformed JSONL before reaching the intended assertions. The test fixture was corrected in commit `abaea2a`; the final CI above confirms the corrected suite passes.
 
 P1 URL/provenance hardening in PR #9 is now **implemented and validated by CI**. Live SELAE source access, complete official archive inventory and original raw HTML/XLS capture remain separate open evidence items.
 
@@ -3168,11 +3168,22 @@ No changes were made to `master`, no PR was merged, and no new predictive metric
 
 A separate ticket-level layer now consumes the official fixture-reconciliation report without changing football-model labels.
 
-- \`kini_engine/ticket_outcomes.py\` builds a complete ordered 1–14 outcome vector from the report's played and excluded records. Played signs are checked against their goals; public-draw signs are taken only from the official SELAE sign field. Public-draw placeholder scores remain metadata, goals remain null, and the training/ticket eligibility flags are enforced.
-- \`score_ticket_record\` scores persisted direct-ticket columns against the realized 14-sign vector, including public-draw positions. It reports exact coverage and per-column hits, but does not estimate prizes or profitability.
-- \`build_ticket_probability_vectors\` keeps football-model vectors restricted to played fixtures. A public-draw position requires a matching official SELAE participant-forecast snapshot captured strictly before the declared ticket cutoff. Post-close ball counts are rejected; no uniform probability fallback exists.
-- \`scripts/score_selae_ticket.py\` provides a no-overwrite CLI that hashes the ticket and reconciliation inputs and writes an auditable scoring artifact.
+- `kini_engine/ticket_outcomes.py` builds a complete ordered 1–14 outcome vector from the report's played and excluded records. Played signs are checked against their goals; public-draw signs are taken only from the official SELAE sign field. Public-draw placeholder scores remain metadata, goals remain null, and the training/ticket eligibility flags are enforced.
+- `score_ticket_record` scores persisted direct-ticket columns against the realized 14-sign vector, including public-draw positions. It reports exact coverage and per-column hits, but does not estimate prizes or profitability.
+- `build_ticket_probability_vectors` keeps football-model vectors restricted to played fixtures. A public-draw position requires a matching official SELAE participant-forecast snapshot captured strictly before the declared ticket cutoff. Post-close ball counts are rejected; no uniform probability fallback exists.
+- `scripts/score_selae_ticket.py` provides a no-overwrite CLI that hashes the ticket and reconciliation inputs and writes an auditable scoring artifact.
 - Tests cover complete position accounting, public-draw placeholder isolation, official evidence, ticket timestamp ordering, direct-column validation, pre-close snapshot timing and rejection of post-close ball counts.
 
-The CLI and data contract are documented in \`docs/COUPON_BACKTEST.md\`. This layer is not yet a multi-season performance backtest: no ticket ledger with independently timestamped pre-close snapshots has been imported. Local ticket timestamps are declared metadata and are not cryptographically authenticated. Payout and profitability remain out of scope.
+The CLI and data contract are documented in `docs/COUPON_BACKTEST.md`. This layer is not yet a multi-season performance backtest: no ticket ledger with independently timestamped pre-close snapshots has been imported. Local ticket timestamps are declared metadata and are not cryptographically authenticated. Payout and profitability remain out of scope.
 
+## CI validation of public-draw ticket bridge — 2026-11-17
+
+Implementation commit: [ac609de](https://github.com/Baltas80/Kini-/commit/ac609de99b88f4b688eebb4a1dc90b7fe34c35ee).
+
+- PR CI [44038263952](https://github.com/Baltas80/Kini-/actions/runs/44038263952) succeeded: **330 tests passed** in 2.90 seconds; Ruff reported all selected checks passed and formatting passed for the 34 files included in that workflow. The 21 warnings remain upstream penaltyblog/NumPy 2.5 deprecations. At this point the three new ticket-outcome files were included in pytest discovery but had not yet been added to the explicit Ruff lint/format lists; the follow-up workflow change adds them.
+- Historical-data validation [44038263885](https://github.com/Baltas80/Kini-/actions/runs/44038263885) succeeded. Artifact kini-historical-data, ID 14308361779, ZIP digest sha256:2fe2ca9a23038c691ee322c9a0b037250a5516dab70262ec6eb6def728745291.
+- Coupon pilot [44038263935](https://github.com/Baltas80/Kini-/actions/runs/44038263935) succeeded on the existing one-coupon 2020/21 pilot. This is an integration smoke test, not a multi-season performance sample. It was unnecessarily rerun because the coupon workflow's change filter treated a documentation-only update as model code; the filter is corrected in the follow-up.
+- Historical walk-forward [44038263862](https://github.com/Baltas80/Kini-/actions/runs/44038263862) was still running when this record was written. The new ticket-outcome module does not alter predictive features or model code; the historical workflow's change filter is narrowed so this evidence-only path will not trigger another expensive walk-forward.
+- No new model metric, ticket payout, expected-value or profitability claim is made.
+
+Follow-up workflow changes add the ticket-outcome module, CLI and tests to the explicit Ruff lint/format commands; exclude the evidence-only ticket scorer from historical model backtests; and prevent coupon documentation-only changes from rerunning the single-coupon pilot.

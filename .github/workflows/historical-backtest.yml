@@ -103,7 +103,7 @@ jobs:
           run_backtest=false
           while IFS= read -r path; do
             case "$path" in
-              AUDIT_PHASE1.md|tests/*|.github/workflows/*)
+              AUDIT_PHASE1.md|docs/COUPON_BACKTEST.md|tests/*|.github/workflows/*|kini_engine/ticket_outcomes.py|scripts/score_selae_ticket.py)
                 ;;
               kini_engine/team_identity.py|kini_engine/coupons.py|kini_engine/coupon_identity.py|kini_engine/coupon_snapshot.py|kini_engine/fixture_reconciliation.py|kini_engine/ligaf_evidence.py|kini_engine/ligaf_history.py|kini_engine/ligaf_team_profiles.py|kini_engine/sources.py|kini_engine/mcp_server.py|kini_engine/data/*)
                 ;;
