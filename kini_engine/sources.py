@@ -250,7 +250,9 @@ class KinielaGPTSource:
         for candidate in range(base_jornada, max(base_jornada - 3, 0), -1):
             lae_payload = self._xml(self.LAE.format(candidate, temporada))
             percentages = lae_payload.get("quinielista", {}).get("porcentajes", {})
-            active_raw = percentages.get("activo") if isinstance(percentages, dict) else None
+            active_raw = (
+                percentages.get("activo") if isinstance(percentages, dict) else None
+            )
             active = self._active_flag(active_raw)
             lae_rows = self._probability_map(lae_payload)
             valid_vector_count = sum(
