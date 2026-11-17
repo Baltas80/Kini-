@@ -51,11 +51,15 @@ def _utc_now() -> str:
 def _validate_recorded_at(value: object, validated: dict[str, Any]) -> str:
     """Validate the host-clock append time against the ticket admission window."""
     if not isinstance(value, str) or not value.strip():
-        raise TicketLedgerError("recorded_at_utc must be a non-empty ISO-8601 timestamp")
+        raise TicketLedgerError(
+            "recorded_at_utc must be a non-empty ISO-8601 timestamp"
+        )
     try:
         parsed = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
     except ValueError as exc:
-        raise TicketLedgerError("recorded_at_utc must be an ISO-8601 timestamp") from exc
+        raise TicketLedgerError(
+            "recorded_at_utc must be an ISO-8601 timestamp"
+        ) from exc
     if parsed.tzinfo is None or parsed.utcoffset() != timedelta(0):
         raise TicketLedgerError("recorded_at_utc must be expressed in UTC")
 
