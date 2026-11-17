@@ -213,20 +213,26 @@ def _validate_draw(draw: object, location: str) -> tuple[str, list[dict[str, Any
             item["home_goals"] = home_goals
             item["away_goals"] = away_goals
         elif score_status == "not_played":
+            reported_score_raw = _required_text(
+                raw_fixture.get("reported_score_raw"),
+                f"{fixture_location}.reported_score_raw",
+            )
             if (
                 raw_fixture.get("home_goals") is not None
                 or raw_fixture.get("away_goals") is not None
                 or raw_fixture.get("score_raw") is not None
                 or determination != "public_draw"
-                or SCORE_PATTERN.fullmatch(
-                    str(raw_fixture.get("reported_score_raw") or "").strip()
-                ) is None
+                or SCORE_PATTERN.fullmatch(reported_score_raw) is None
             ):
                 raise FixtureReconciliationError(
                     f"{fixture_location} non-played fixture contains a football result "
                     "or lacks its reported coupon score"
                 )
-            if not _is_official_selae_url(raw_fixture.get("sign_evidence_url")):
+            evidence_url = _required_text(
+                raw_fixture.get("sign_evidence_url"),
+                f"{fixture_location}.sign_evidence_url",
+            )
+            if not _is_official_selae_url(evidence_url):
                 raise FixtureReconciliationError(
                     f"{fixture_location} non-played fixture lacks official SELAE evidence"
                 )
@@ -238,9 +244,24 @@ def _validate_draw(draw: object, location: str) -> tuple[str, list[dict[str, Any
                 raise FixtureReconciliationError(
                     f"{fixture_location}.sign_evidence_checked_at_utc must be UTC"
                 )
-            _required_text(raw_fixture.get("status_reason"), f"{fixture_location}.status_reason")
-            item["home_goals"] = None
-            item["away_goals"] = None
+            status_reason = _required_text(
+                raw_fixture.get("status_reason"),
+                f"{fixture_location}.status_reason",
+            )
+            item.update(
+                {
+                    "reported_score_raw": reported_score_raw,
+                    "sign_evidence_url": evidence_url,
+                    "sign_evidence_checked_at_utc": (
+                        evidence_checked_at.astimezone(UTC).isoformat().replace(
+                            "+00:00", "Z"
+                        )
+                    ),
+                    "status_reason": status_reason,
+                    "home_goals": None,
+                    "away_goals": None,
+                }
+            )
         else:
             raise FixtureReconciliationError(
                 f"{fixture_location}.score_status must be played or not_played"
@@ -536,9 +557,32 @@ def reconcile_draws(
                 "position": fixture["position"],
                 "home": fixture["home_display_name"],
                 "away": fixture["away_display_name"],
+                "sign": fixture["sign"],
+                "score_status": fixture["score_status"],
+                "sign_determination": fixture["sign_determination"],
+                "home_goals": fixture["home_goals"],
+                "away_goals": fixture["away_goals"],
+                "source_url": fixture["source_url"],
+                "raw_sha256": fixture["raw_sha256"],
             }
+            for field in (
+                "reported_score_raw",
+                "sign_evidence_url",
+                "sign_evidence_checked_at_utc",
+                "status_reason",
+            ):
+                if field in fixture:
+                    base[field] = fixture[field]
+
             if fixture["score_status"] == "not_played":
-                excluded.append({**base, "status": "excluded_not_played_public_draw"})
+                excluded.append(
+                    {
+                        **base,
+                        "status": "excluded_not_played_public_draw",
+                        "training_label_eligible": False,
+                        "ticket_outcome_eligible": True,
+                    }
+                )
                 continue
 
             played_count += 1
