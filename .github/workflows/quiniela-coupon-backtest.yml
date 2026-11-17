@@ -203,7 +203,7 @@ jobs:
             --official-snapshot-dir kini_engine/data/selae_official_coupon_results
           python scripts/import_historical_coupons.py \
             --season 2021-2022 \
-            --journeys 1 \
+            --journeys 1 2 3 \
             --output coupon-archive-2021-2022.jsonl \
             --raw-dir coupon-raw \
             --official-snapshot-dir kini_engine/data/selae_official_coupon_results
