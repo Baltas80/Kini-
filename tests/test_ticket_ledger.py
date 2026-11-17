@@ -152,6 +152,7 @@ def test_ticket_ledger_scores_and_persists_result_idempotently(tmp_path):
     assert second["idempotent_replay"] is True
     assert first["score"]["covered_14"] is True
     assert first["score"]["best_column_hits"] == 14
+    assert first["score"]["reconciliation_sha256"] == reconciliation_digest
     assert first["score"]["payout_evaluated"] is False
     assert len(ledger.list_ticket_scores(str(ticket["ticket_id"]))) == 1
 
