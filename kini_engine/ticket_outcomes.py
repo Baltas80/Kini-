@@ -3,7 +3,8 @@ from __future__ import annotations
 import re
 from datetime import UTC, date, datetime, timedelta
 from math import isfinite
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 from urllib.parse import urlsplit
 
 SIGNS = ("1", "X", "2")
@@ -25,7 +26,7 @@ def _required_text(value: object, field: str) -> str:
 def _parse_timestamp(value: object, field: str) -> datetime:
     raw = _required_text(value, field)
     try:
-        parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(raw)
     except ValueError as exc:
         raise TicketOutcomeError(f"{field} must be an ISO-8601 timestamp") from exc
     if parsed.tzinfo is None or parsed.utcoffset() is None:

@@ -19,7 +19,7 @@ def _load_json(path: Path) -> tuple[dict[str, Any], bytes]:
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise ValueError(f"{path}: invalid UTF-8 JSON input") from exc
     if not isinstance(value, dict):
-        raise ValueError(f"{path}: JSON root must be an object")
+        raise TypeError(f"{path}: JSON root must be an object")
     return value, raw
 
 
@@ -73,7 +73,7 @@ def main(argv: list[str] | None = None) -> int:
             reconciliation_sha256=hashlib.sha256(reconciliation_bytes).hexdigest(),
         )
         _write_json_once(args.output, result)
-    except (OSError, TicketOutcomeError, ValueError) as exc:
+    except (OSError, TicketOutcomeError, TypeError, ValueError) as exc:
         print(f"SELAE_TICKET_SCORE_ERROR: {exc}", file=sys.stderr)
         return 2
 

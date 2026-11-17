@@ -85,9 +85,6 @@ jobs:
           kini_engine/ticket_outcomes.py
           scripts/score_selae_ticket.py
           tests/test_ticket_outcomes.py
-          kini_engine/ticket_outcomes.py
-          scripts/score_selae_ticket.py
-          tests/test_ticket_outcomes.py
       - name: Verify formatting for predictive core, Liga F and SELAE evidence code
         run: >-
           ruff format --check
@@ -125,4 +122,7 @@ jobs:
           tests/test_build_history.py
           tests/test_coupon_backtest.py
           tests/test_coupon_identity.py
+          kini_engine/ticket_outcomes.py
+          scripts/score_selae_ticket.py
+          tests/test_ticket_outcomes.py
       - run: pytest -q
