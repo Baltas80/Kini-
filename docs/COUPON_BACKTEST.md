@@ -25,7 +25,8 @@ This pilot introduces a coupon-level evaluation with one immutable training snap
 2. Find the earliest kickoff.
 3. Set the training cutoff to the previous local calendar day.
 4. Include only completed historical matches whose source calendar date is on or before that cutoff.
-5. Fit Dixon-Coles once and use the same history snapshot for all 15 fixtures and all model candidates in that coupon.
+5. Record the minimum and maximum source dates actually used for the fitted history. The acceptance validator independently requires the recorded range to be ordered, no later than the cutoff, and strictly before the first kickoff.
+6. Fit Dixon-Coles once and use the same history snapshot for all 15 fixtures and all model candidates in that coupon.
 6. Do not use historical market odds: this coupon archive does not contain verified pre-kickoff odds-capture timestamps.
 
 The previous-calendar-day cutoff is deliberately conservative because the Football-Data historical dataset has date-only match timestamps and cannot establish the exact completion time of another match on the same day. The secondary source supplies kickoff times; the Football-Data cross-check validates each fixture's calendar date, team identity and score, but not the exact kickoff minute.
@@ -268,3 +269,10 @@ The timestamps and hashes remain declared metadata: structural validation does n
 ## Operational immutable ticket history
 
 Generated pre-ticket records can be persisted in the SQLite ledger described in [TICKET_LEDGER.md](TICKET_LEDGER.md). The ledger stores the exact generated columns and probability/source provenance, rejects conflicting reuse of ticket IDs, and can append reproducible 14-match scoring results against hashed SELAE reconciliation reports. It does not calculate prizes or profitability, and the configured database must reside on persistent storage in deployment.
+
+
+## Training-window provenance
+
+Each coupon result now records `training_history_min_date` and `training_history_max_date` from the exact rows passed to the model fit. The batch acceptance validator rejects missing, reversed or post-cutoff ranges and requires the latest training source date to precede the first kickoff. This makes the actual date window visible in the artifact instead of recording only a row count and a declared cutoff.
+
+The date-range fields are audit metadata derived from the filtered input dataset. They do not independently authenticate match completion timestamps; the dataset's date-only limitation and previous-local-calendar-day cutoff remain in force.

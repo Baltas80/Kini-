@@ -229,6 +229,19 @@ def validate_coupon_backtest_acceptance(
             raise ValueError(
                 f"{coupon_id}: common training history is below minimum or inconsistent"
             )
+        try:
+            training_min = date.fromisoformat(coupon["training_history_min_date"])
+            training_max = date.fromisoformat(coupon["training_history_max_date"])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ValueError(f"{coupon_id}: invalid training history date range") from exc
+        if (
+            training_min > training_max
+            or training_max > cutoff
+            or training_max >= first_kickoff.date()
+        ):
+            raise ValueError(
+                f"{coupon_id}: training history dates cross the common pre-kickoff cutoff"
+            )
 
         pleno = coupon.get("pleno_prediction")
         if not isinstance(pleno, dict) or pleno.get("model") != "dixon_coles":

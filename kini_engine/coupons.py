@@ -664,10 +664,13 @@ def evaluate_coupon(
         raise ValueError(
             f"{coupon['coupon_id']}: only {len(history)} prior matches; minimum is {min_history_matches}"
         )
-    if any(_match_day(match.date) >= first_kickoff.date() for match in history):
+    training_dates = [_match_day(match.date) for match in history]
+    if any(training_date >= first_kickoff.date() for training_date in training_dates):
         raise RuntimeError(
             f"{coupon['coupon_id']}: training history crosses the coupon kickoff date"
         )
+    training_history_min_date = min(training_dates)
+    training_history_max_date = max(training_dates)
 
     engine = KiniEngine(enable_ml=True).fit(history)
     if not engine.dc.fitted:
@@ -758,6 +761,8 @@ def evaluate_coupon(
             "away": actual_pleno_away,
         },
         "training_match_count": len(history),
+        "training_history_min_date": training_history_min_date.isoformat(),
+        "training_history_max_date": training_history_max_date.isoformat(),
         "model_fit_match_count": engine.dc.n_training_matches,
         "pleno_prediction": {
             "model": "dixon_coles",
