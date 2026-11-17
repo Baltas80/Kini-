@@ -255,6 +255,15 @@ def main(argv: list[str] | None = None) -> int:
     output_path = (
         args.output or Path("artifacts/selae-press-releases") / f"{args.draw_date}.json"
     )
+    if (
+        args.pleno15_output is not None
+        and args.pleno15_output.resolve() == output_path.resolve()
+    ):
+        print(
+            "SELAE_PRESS_RELEASE_IMPORT_ERROR: --pleno15-output must differ from --output",
+            file=sys.stderr,
+        )
+        return 2
     try:
         record = import_press_release(args.pdf, args.draw_date, args.source_url)
         output_path.parent.mkdir(parents=True, exist_ok=True)
