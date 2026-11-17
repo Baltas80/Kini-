@@ -3322,13 +3322,19 @@ A separate paired cluster bootstrap was recomputed directly from the 3,991-row s
 
 The later 5,311-row run 44054909376 independently produced 5,011 forecasts with zero errors and a 3,983-fixture snapshot-aligned comparison. Its market Brier/Log Loss/accuracy were 0.594112/0.994568/0.510670; the market-assisted ensemble scored 0.610921/1.019508/0.482801. It reaches the same directional conclusion, but its dataset is older and its fixture sample is different.
 
-### Fresh-source workflow correction
+### Weekly cache selection and freshness correction
 
 **Implemented on `feat/immutable-ticket-ledger`; validation pending.**
 
+The defect was not that every PR should download Football-Data again. That would disregard the provider's weekly download allowance. The defect was that the cache restore order preferred a branch-specific cache (48.63 hours old) over the newer default-branch cache (approximately 9.24 hours old).
+
 - `scripts/build_history.py` now exposes `--require-fresh`. When a forced refresh fails, it raises instead of silently falling back to a previously cached CSV.
 - Added regression tests for stale-cache rejection and the incompatible offline/require-fresh combination.
-- `.github/workflows/historical-backtest.yml` no longer restores an old branch cache. It builds with `--refresh --require-fresh` and requires all 14 source CSVs to have cache timestamps within one hour, plus a passing dataset-integrity profile.
-- The script change is included in the PR change filter, so the next PR run should execute the historical backtest rather than being skipped.
+- Both `.github/workflows/historical-backtest.yml` and `.github/workflows/historical-data-validation.yml` now restore the default `master` cache prefix for PR validation, instead of preferring a branch-local cache.
+- The weekly scheduled data-validation run (and an explicitly requested refresh) uses `--refresh --require-fresh`; it cannot silently publish a stale fallback.
+- PR backtests remain offline to respect the source download allowance. They validate that all 14 source files belong to one hourly snapshot and are no more than seven days old. A scheduled/manual refresh must produce source files no more than one hour old before the cache is saved.
+- The script change remains in the historical-backtest change filter, so the next PR run should execute the historical comparison.
 
-Do not treat this workflow correction as validated until the new run completes with a fresh dataset profile and non-empty model ledgers. The next acceptance check is to compare the new source profile, dataset hash, date coverage and model/market metrics against the prior immutable artifacts. No PR has been merged and `master` remains untouched.
+The data-validation run 44072041469 was created before the cache-selection correction and still used the old branch-local cache (49.96 hours old, 5,311 rows). It is diagnostic evidence of the defect, not the accepted source snapshot. The intermediate historical run 44071883972 also began before the workflow correction and must not be used to validate the new cache policy.
+
+Do not treat this correction as validated until the new CI, data-validation and historical-backtest runs complete. Compare the new profile, cache mtimes, dataset hash, date coverage and model/market metrics against the prior immutable artifacts. No PR has been merged and `master` remains untouched.
