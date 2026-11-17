@@ -51,7 +51,6 @@ def test_jornada_19_prize_validation_rejects_rollover_with_winners() -> None:
         _validate_prize_distribution(snapshot, expected_draw_date="2020-12-06")
 
 
-
 def test_winner_count_diagnostics_keep_pleno_and_14_separate() -> None:
     validated = _validate_prize_distribution(
         _jornada_19_snapshot(),
@@ -104,5 +103,7 @@ def test_prize_validation_rejects_non_integer_schema_version() -> None:
     snapshot = _jornada_19_snapshot()
     snapshot["schema_version"] = 1.0
 
-    with pytest.raises(PrizeScoringError, match="unsupported official SELAE result snapshot schema"):
+    with pytest.raises(
+        PrizeScoringError, match="unsupported official SELAE result snapshot schema"
+    ):
         _validate_prize_distribution(snapshot, expected_draw_date="2020-12-06")
