@@ -23,7 +23,7 @@ def create_server(engine: KiniEngine | None = None):
     if ledger is None:
         ledger = TicketLedger(ledger_path)
     model = engine or KiniEngine(ticket_ledger=ledger)
-    if model.ticket_ledger is None:
+    if isinstance(model, KiniEngine) and model.ticket_ledger is None:
         model.ticket_ledger = ledger
     source = KinielaGPTSource()
 
