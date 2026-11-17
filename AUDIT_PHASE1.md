@@ -3292,3 +3292,43 @@ The coupon-backtest workflow was correctly skipped by its change filter; it is n
 Limitations remain explicit: SHA-256 is not a signature or trusted timestamp; SQLite triggers do not protect against a database owner replacing the file; a persistent volume is required in deployment; multi-host replicas need shared transactional storage; prize/payout/profitability modelling is not included.
 
 Next priority: obtain the result of the already-running historical comparison and verify non-empty model samples. Do not start a duplicate full backtest unless the code or dataset changes. PR #10 remains a draft stacked on PR #9; do not merge either PR or change `master`.
+
+
+## Fresh-source enforcement for historical backtests — 2026-11-17
+
+### Root cause of inconsistent historical snapshots
+
+Two successful walk-forward runs on the stacked PR chain produced different source datasets:
+
+- [Run 44047529531](https://github.com/Baltas80/Kini-/actions/runs/44047529531), code revision `412e11bde62a9df4baa0b2a18d96a25a79680869`: 5,322 completed fixtures, ending 2026-11-16; dataset SHA-256 `7251b84acd803047746c0c55c6bdabb60d9499208cfd6c781f72080295346f44`. The 14 restored source files were approximately 9.24 hours old.
+- [Run 44054909376](https://github.com/Baltas80/Kini-/actions/runs/44054909376), code revision `f4d0c4c4bfd9acc7820af8f968a5739dd35cda9c`: 5,311 completed fixtures, ending 2026-11-09; dataset SHA-256 `a01a68393de69c7ad37d2088864093a50108df9e299f1993d855cad87147acab`. Its restored source files were approximately 48.63 hours old; 2026/27 Segunda contained 140 rows rather than 151.
+
+The workflow restored a branch/fallback Actions cache and invoked `build_history.py --offline`. Offline mode intentionally accepts a valid stale cache, so the second successful run did not represent the same data vintage as the first. The two snapshots must not be pooled or described as a single reproducible dataset. This is an ingestion/workflow freshness defect, not evidence of a change in model quality.
+
+### Snapshot-aligned model comparison
+
+The 5,322-row dataset from run 44047529531 contains 5,022 out-of-sample forecasts and a snapshot-aligned market comparison on 3,991 identical fixtures across 319 market-snapshot dates. All five model configurations generated 5,022/5,022 forecasts with zero prediction errors. The exact common-sample fixture-ID digest is `41ef0afaafbdcece288ce77ca26e7f436997a6478797bf4be746fa1e934032f0`.
+
+| Model | Brier | Log Loss | Accuracy |
+|---|---:|---:|---:|
+| Market | **0.594152** | **0.994611** | **0.510649** |
+| Market-assisted ensemble | 0.610967 | 1.019536 | 0.482836 |
+| Dixon-Coles | 0.614828 | 1.028365 | 0.482836 |
+| Fixed DC/ML ensemble | 0.613521 | 1.023526 | 0.479830 |
+| Adaptive DC/ML ensemble | 0.613768 | 1.023933 | 0.480080 |
+| ML | 0.638916 | 1.060673 | 0.442496 |
+
+A separate paired cluster bootstrap was recomputed directly from the 3,991-row snapshot-aligned ledger, resampling its 319 snapshot dates with replacement (5,000 replicates; seed 20261117). Differences are model minus market; positive Brier/Log Loss and negative accuracy favour the market. For the market-assisted ensemble, the differences were +0.016815 Brier (95% percentile interval +0.013143 to +0.020453), +0.024926 Log Loss (+0.019442 to +0.030292), and -0.027813 accuracy (-0.038202 to -0.017387). All intervals exclude zero. This is conditional historical uncertainty, not a prospective guarantee; it is not adjusted for model selection or multiple comparisons.
+
+The later 5,311-row run 44054909376 independently produced 5,011 forecasts with zero errors and a 3,983-fixture snapshot-aligned comparison. Its market Brier/Log Loss/accuracy were 0.594112/0.994568/0.510670; the market-assisted ensemble scored 0.610921/1.019508/0.482801. It reaches the same directional conclusion, but its dataset is older and its fixture sample is different.
+
+### Fresh-source workflow correction
+
+**Implemented on `feat/immutable-ticket-ledger`; validation pending.**
+
+- `scripts/build_history.py` now exposes `--require-fresh`. When a forced refresh fails, it raises instead of silently falling back to a previously cached CSV.
+- Added regression tests for stale-cache rejection and the incompatible offline/require-fresh combination.
+- `.github/workflows/historical-backtest.yml` no longer restores an old branch cache. It builds with `--refresh --require-fresh` and requires all 14 source CSVs to have cache timestamps within one hour, plus a passing dataset-integrity profile.
+- The script change is included in the PR change filter, so the next PR run should execute the historical backtest rather than being skipped.
+
+Do not treat this workflow correction as validated until the new run completes with a fresh dataset profile and non-empty model ledgers. The next acceptance check is to compare the new source profile, dataset hash, date coverage and model/market metrics against the prior immutable artifacts. No PR has been merged and `master` remains untouched.
