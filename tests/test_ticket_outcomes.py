@@ -230,6 +230,97 @@ def test_ticket_scoring_uses_public_draw_sign_not_reported_placeholder_score() -
     assert result["profitability_evaluated"] is False
 
 
+def _pleno15_report() -> dict[str, object]:
+    return {
+        "schema_version": 1,
+        "provider": "SELAE",
+        "draw_date": DRAW_DATE,
+        "source_url": SELAE_URL,
+        "source_sha256": HASH_A,
+        "evidence_type": "normalized_official_extract",
+        "verified_at_utc": "2026-11-08T16:00:00Z",
+        "verification_method": "Manual review of the official SELAE result page.",
+        "home": "Pleno Home (M)",
+        "away": "Pleno Away (M)",
+        "home_goals": 2,
+        "away_goals": 3,
+        "home_category": "2",
+        "away_category": "M",
+    }
+
+
+def test_ticket_scoring_evaluates_official_pleno15_categories() -> None:
+    report = _reconciliation()
+    ticket = _ticket(report)
+    ticket["pleno15_combinations"] = [
+        {"home_goals": "2", "away_goals": "M"}
+    ]
+
+    result = score_ticket_record(
+        ticket,
+        report,
+        pleno15_report=_pleno15_report(),
+        pleno15_report_sha256=HASH_B,
+    )
+
+    assert result["covered_14"] is True
+    assert result["pleno15_evaluated"] is True
+    assert result["pleno15_actual"] == {
+        "home_goals": 2,
+        "away_goals": 3,
+        "home_category": "2",
+        "away_category": "M",
+    }
+    assert result["pleno15_hit"] is True
+    assert result["covered_full_coupon"] is True
+    assert result["pleno15_report_sha256"] == HASH_B
+    assert result["pleno15_outcome_provenance"]["evidence_type"] == (
+        "normalized_official_extract"
+    )
+
+
+def test_ticket_scoring_marks_pleno15_unassessed_without_official_evidence() -> None:
+    report = _reconciliation()
+    result = score_ticket_record(_ticket(report), report)
+
+    assert result["covered_14"] is True
+    assert result["pleno15_evaluated"] is False
+    assert result["pleno15_actual"] is None
+    assert result["pleno15_hit"] is None
+    assert result["covered_full_coupon"] is None
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("source_url", "https://example.com/result", "official SELAE host"),
+        ("draw_date", "2026-11-09", "draw date mismatch"),
+        ("home", "Different Team", "team identity"),
+        ("home_category", "1", "categories conflict"),
+        ("verified_at_utc", "2026-11-08T13:00:00Z", "must not precede"),
+        ("evidence_type", "unverified_summary", "evidence_type"),
+    ],
+)
+def test_ticket_scoring_rejects_invalid_pleno15_evidence(
+    field: str, value: object, message: str
+) -> None:
+    report = _reconciliation()
+    pleno = _pleno15_report()
+    pleno[field] = value
+    with pytest.raises(TicketOutcomeError, match=message):
+        score_ticket_record(_ticket(report), report, pleno15_report=pleno)
+
+
+def test_ticket_scoring_rejects_pleno15_report_digest_without_report() -> None:
+    report = _reconciliation()
+    with pytest.raises(TicketOutcomeError, match="requires a Pleno"):
+        score_ticket_record(
+            _ticket(report),
+            report,
+            pleno15_report_sha256=HASH_B,
+        )
+
+
 def test_reconciliation_rejects_missing_or_duplicate_positions() -> None:
     report = _reconciliation()
     report["excluded_fixtures"].clear()
