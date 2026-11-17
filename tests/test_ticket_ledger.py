@@ -79,6 +79,7 @@ def _ticket() -> dict[str, object]:
         "cost_eur": 1.5,
     }
 
+
 def _reconciliation() -> dict[str, object]:
     return {
         "schema_version": 1,
