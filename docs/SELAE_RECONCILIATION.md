@@ -212,3 +212,15 @@ To avoid fabricating data or relying on unverified third-party mirrors, scripts/
     python -m scripts.import_selae_press_release --pdf <file.pdf> --draw-date YYYY-MM-DD --source-url <official-pdf-url>
 
 The importer checks the PDF signature, official HTTPS host, explicit date text, exactly 14 ordered signs and the two Pleno categories. It stores the PDF SHA-256 and marks the record scenario_imported_unreconciled. It deliberately does not infer fixture identities, football scores, postponed-match semantics or draw IDs. A local official PDF download is still required; no historical batch has been imported yet.
+
+## Public-draw outcome preservation — 2026-11-17
+
+A SELAE fixture with `score_status=not_played` and `sign_determination=public_draw` is excluded from `resolved_fixtures`; it cannot be joined to a played Football-Data match or used as a football training label. Its reported coupon score is not a match score.
+
+The normalized draw loader and reconciliation report now retain the public-draw sign, `reported_score_raw`, official sign-evidence URL and UTC check time, status reason, source result URL and raw-source SHA-256. Each excluded record explicitly declares:
+
+- `training_label_eligible=false`;
+- `ticket_outcome_eligible=true`;
+- `home_goals=null` and `away_goals=null`.
+
+This preserves the actual coupon outcome for a future ticket-level evaluator without converting a public draw into a played fixture or a model target. The current coupon backtest does not yet consume these excluded records; no ticket-performance result is claimed for public-draw positions. Any future prediction treatment must model the public-draw mechanism separately and keep it out of football forecast metrics.
