@@ -299,3 +299,32 @@ def test_jornada_1_2022_2023_official_prize_distribution_passes_strict_validatio
         "winner_count": 25,
         "unit_prize_eur": 1511.13,
     }
+
+def test_prize_validation_rejects_selae_lookalike_hosts() -> None:
+    snapshot = json.loads(
+        (
+            Path(__file__).parents[1]
+            / "kini_engine"
+            / "data"
+            / "selae_official_coupon_results"
+            / "2022-2023-1.json"
+        ).read_text(encoding="utf-8")
+    )
+    snapshot["supporting_sources"] = [
+        {
+            **source,
+            "url": (
+                "https://www.selae.es.evil.example/forged.pdf"
+                if source["role"] == "official_selae_press_release_pdf"
+                else source["url"]
+            ),
+        }
+        for source in snapshot["supporting_sources"]
+    ]
+
+    with pytest.raises(PrizeScoringError, match="official SELAE HTTPS host"):
+        _validate_prize_distribution(
+            snapshot,
+            expected_draw_date="2022-08-14",
+        )
+
