@@ -4,6 +4,7 @@ import hashlib
 import json
 import re
 import sqlite3
+from contextlib import closing
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -75,7 +76,7 @@ class TicketLedger:
         return connection
 
     def _initialize(self) -> None:
-        with self._connect() as connection:
+        with closing(self._connect()) as connection:
             connection.execute("PRAGMA journal_mode = WAL")
             connection.executescript(
                 """
@@ -146,7 +147,7 @@ class TicketLedger:
 
         ticket_id = validated["ticket_id"]
         recorded_at = _utc_now()
-        with self._connect() as connection:
+        with closing(self._connect()) as connection:
             connection.execute("BEGIN IMMEDIATE")
             existing = connection.execute(
                 "SELECT payload_sha256, recorded_at_utc FROM tickets WHERE ticket_id = ?",
@@ -203,7 +204,7 @@ class TicketLedger:
     def get_ticket_record(self, ticket_id: str) -> dict[str, Any] | None:
         if not isinstance(ticket_id, str) or not ticket_id.strip():
             raise ValueError("ticket_id must be a non-empty string")
-        with self._connect() as connection:
+        with closing(self._connect()) as connection:
             row = connection.execute(
                 """
                 SELECT ticket_id, payload_json, payload_sha256, recorded_at_utc
@@ -257,7 +258,7 @@ class TicketLedger:
         else:
             normalized_date = None
 
-        with self._connect() as connection:
+        with closing(self._connect()) as connection:
             if normalized_date is None:
                 rows = connection.execute(
                     """
@@ -307,7 +308,7 @@ class TicketLedger:
         score_sha256 = hashlib.sha256(score_json.encode("utf-8")).hexdigest()
         recorded_at = _utc_now()
 
-        with self._connect() as connection:
+        with closing(self._connect()) as connection:
             connection.execute("BEGIN IMMEDIATE")
             existing = connection.execute(
                 """
@@ -359,7 +360,7 @@ class TicketLedger:
     def list_ticket_scores(self, ticket_id: str) -> list[dict[str, Any]]:
         if not isinstance(ticket_id, str) or not ticket_id.strip():
             raise ValueError("ticket_id must be a non-empty string")
-        with self._connect() as connection:
+        with closing(self._connect()) as connection:
             rows = connection.execute(
                 """
                 SELECT reconciliation_sha256, score_json, score_sha256, recorded_at_utc
