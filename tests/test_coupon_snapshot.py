@@ -286,3 +286,103 @@ def test_jornada_19_official_snapshot_matches_reviewed_selae_results() -> None:
     )
     assert verified["official_main_matches_verified"] is True
     assert verified["official_pleno_verified"] is True
+
+
+def test_jornada_22_official_snapshot_matches_reviewed_selae_results() -> None:
+    path = (
+        Path(__file__).resolve().parents[1]
+        / "kini_engine"
+        / "data"
+        / "selae_official_coupon_results"
+        / "2020-2021-22.json"
+    )
+    snapshot, digest = load_official_coupon_snapshot(path)
+
+    expected = [
+        ("At. Madrid", "Elche", 3, 1, "1"),
+        ("Barcelona", "Valencia", 2, 2, "X"),
+        ("Levante", "Real Sociedad", 2, 1, "1"),
+        ("Osasuna", "Villarreal", 1, 3, "2"),
+        ("Sevilla", "Valladolid", 1, 1, "X"),
+        ("Celta", "Alavés", 2, 0, "1"),
+        ("Granada", "Betis", 2, 0, "1"),
+        ("Cádiz", "Getafe", 0, 2, "2"),
+        ("Mallorca", "Fuenlabrada", 2, 3, "2"),
+        ("Zaragoza", "Lugo", 1, 0, "1"),
+        ("Alcorcón", "Cartagena", 2, 1, "1"),
+        ("Espanyol", "Almería", 2, 1, "1"),
+        ("Rayo Vallecano", "Las Palmas", 2, 0, "1"),
+        ("Málaga", "Logroñés", 0, 0, "X"),
+    ]
+    actual = [
+        (
+            item["home"],
+            item["away"],
+            item["home_goals"],
+            item["away_goals"],
+            item["result"],
+        )
+        for item in snapshot["fixtures"]
+    ]
+    assert snapshot["draw_date"] == "2020-12-20"
+    assert snapshot["source_url"] == (
+        "https://www.loteriasyapuestas.es/es/la-quiniela/resultados/"
+        "la-quiniela-resultados-del-20-de-diciembre-de-2020"
+    )
+    sources = {item["role"]: item["url"] for item in snapshot["supporting_sources"]}
+    assert sources["official_selae_result_page"] == snapshot["source_url"]
+    assert sources["official_selae_press_release_pdf"] == (
+        "https://www.loteriasyapuestas.es/f/loterias/documentos/Quiniela/Notas%20de%20prensa/"
+        "NOTA_DE_PRENSA_DE_LA_QUINIELA_DE_FECHA_20_12_20.pdf"
+    )
+    assert sources["schedule_and_kickoff_crosscheck"] == (
+        "https://www.historicoquiniela.com/historico/2020-2021/22"
+    )
+    assert sources["football_data_sp1_crosscheck"] == (
+        "https://www.football-data.co.uk/mmz4281/2021/SP1.csv"
+    )
+    assert sources["football_data_sp2_crosscheck"] == (
+        "https://www.football-data.co.uk/mmz4281/2021/SP2.csv"
+    )
+    assert actual == expected
+    assert snapshot["pleno"] == {
+        "number": 15,
+        "home": "Eibar",
+        "away": "Real Madrid",
+        "home_goals": 1,
+        "away_goals": 3,
+        "home_category": "1",
+        "away_category": "M",
+    }
+
+    coupon = {
+        "coupon_id": "2020-2021:22",
+        "source_date": "2020-12-20",
+        "fixtures": [
+            {
+                "number": item["number"],
+                "home": item["home"],
+                "away": item["away"],
+                "home_goals": item["home_goals"],
+                "away_goals": item["away_goals"],
+                "result": item["result"],
+            }
+            for item in snapshot["fixtures"]
+        ]
+        + [
+            {
+                "number": 15,
+                "home": snapshot["pleno"]["home"],
+                "away": snapshot["pleno"]["away"],
+                "home_goals": snapshot["pleno"]["home_goals"],
+                "away_goals": snapshot["pleno"]["away_goals"],
+                "pleno_home_category": snapshot["pleno"]["home_category"],
+                "pleno_away_category": snapshot["pleno"]["away_category"],
+            }
+        ],
+    }
+    verified = verify_coupon_against_selae_snapshot(
+        coupon, snapshot, snapshot_sha256=digest
+    )
+    assert verified["official_main_matches_verified"] is True
+    assert verified["official_pleno_verified"] is True

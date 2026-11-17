@@ -1,0 +1,202 @@
+{
+  "schema_version": 1,
+  "source": "SELAE",
+  "draw_date": "2020-12-20",
+  "source_url": "https://www.loteriasyapuestas.es/es/la-quiniela/resultados/la-quiniela-resultados-del-20-de-diciembre-de-2020",
+  "verified_at": "2026-11-17",
+  "verification_method": "Manual review of the official SELAE result page and official SELAE press-release PDF. The 14 ordered main fixtures, team labels, scores and 1/X/2 signs, plus the Pleno al 15 teams, score and categories, were cross-checked against the HistoricalQuiniela Jornada 22 fixture schedule and kickoff timestamps and the Football-Data 2020/2021 SP1/SP2 historical result files. HistoricalQuiniela supplies kickoff times; Football-Data supplies date/team/score reconciliation only. The snapshot is a normalized transcription, not raw SELAE HTML or PDF bytes; no raw-PDF digest is claimed.",
+  "snapshot_type": "normalized_json_extract_not_raw_html",
+  "supporting_sources": [
+    {
+      "role": "official_selae_result_page",
+      "url": "https://www.loteriasyapuestas.es/es/la-quiniela/resultados/la-quiniela-resultados-del-20-de-diciembre-de-2020"
+    },
+    {
+      "role": "official_selae_press_release_pdf",
+      "url": "https://www.loteriasyapuestas.es/f/loterias/documentos/Quiniela/Notas%20de%20prensa/NOTA_DE_PRENSA_DE_LA_QUINIELA_DE_FECHA_20_12_20.pdf"
+    },
+    {
+      "role": "schedule_and_kickoff_crosscheck",
+      "url": "https://www.historicoquiniela.com/historico/2020-2021/22"
+    },
+    {
+      "role": "football_data_sp1_crosscheck",
+      "url": "https://www.football-data.co.uk/mmz4281/2021/SP1.csv"
+    },
+    {
+      "role": "football_data_sp2_crosscheck",
+      "url": "https://www.football-data.co.uk/mmz4281/2021/SP2.csv"
+    }
+  ],
+  "fixtures": [
+    {
+      "number": 1,
+      "home": "At. Madrid",
+      "away": "Elche",
+      "home_goals": 3,
+      "away_goals": 1,
+      "result": "1"
+    },
+    {
+      "number": 2,
+      "home": "Barcelona",
+      "away": "Valencia",
+      "home_goals": 2,
+      "away_goals": 2,
+      "result": "X"
+    },
+    {
+      "number": 3,
+      "home": "Levante",
+      "away": "Real Sociedad",
+      "home_goals": 2,
+      "away_goals": 1,
+      "result": "1"
+    },
+    {
+      "number": 4,
+      "home": "Osasuna",
+      "away": "Villarreal",
+      "home_goals": 1,
+      "away_goals": 3,
+      "result": "2"
+    },
+    {
+      "number": 5,
+      "home": "Sevilla",
+      "away": "Valladolid",
+      "home_goals": 1,
+      "away_goals": 1,
+      "result": "X"
+    },
+    {
+      "number": 6,
+      "home": "Celta",
+      "away": "Alavés",
+      "home_goals": 2,
+      "away_goals": 0,
+      "result": "1"
+    },
+    {
+      "number": 7,
+      "home": "Granada",
+      "away": "Betis",
+      "home_goals": 2,
+      "away_goals": 0,
+      "result": "1"
+    },
+    {
+      "number": 8,
+      "home": "Cádiz",
+      "away": "Getafe",
+      "home_goals": 0,
+      "away_goals": 2,
+      "result": "2"
+    },
+    {
+      "number": 9,
+      "home": "Mallorca",
+      "away": "Fuenlabrada",
+      "home_goals": 2,
+      "away_goals": 3,
+      "result": "2"
+    },
+    {
+      "number": 10,
+      "home": "Zaragoza",
+      "away": "Lugo",
+      "home_goals": 1,
+      "away_goals": 0,
+      "result": "1"
+    },
+    {
+      "number": 11,
+      "home": "Alcorcón",
+      "away": "Cartagena",
+      "home_goals": 2,
+      "away_goals": 1,
+      "result": "1"
+    },
+    {
+      "number": 12,
+      "home": "Espanyol",
+      "away": "Almería",
+      "home_goals": 2,
+      "away_goals": 1,
+      "result": "1"
+    },
+    {
+      "number": 13,
+      "home": "Rayo Vallecano",
+      "away": "Las Palmas",
+      "home_goals": 2,
+      "away_goals": 0,
+      "result": "1"
+    },
+    {
+      "number": 14,
+      "home": "Málaga",
+      "away": "Logroñés",
+      "home_goals": 0,
+      "away_goals": 0,
+      "result": "X"
+    }
+  ],
+  "pleno": {
+    "number": 15,
+    "home": "Eibar",
+    "away": "Real Madrid",
+    "home_goals": 1,
+    "away_goals": 3,
+    "home_category": "1",
+    "away_category": "M"
+  },
+  "prize_distribution": {
+    "source_type": "official_selae_press_release_pdf_transcribed_to_normalized_extract",
+    "source_url": "https://www.loteriasyapuestas.es/f/loterias/documentos/Quiniela/Notas%20de%20prensa/NOTA_DE_PRENSA_DE_LA_QUINIELA_DE_FECHA_20_12_20.pdf",
+    "revenue_eur": 3973360.5,
+    "categories": [
+      {
+        "category": "pleno_al_15",
+        "winner_count": 1,
+        "unit_prize_eur": 1677247.92,
+        "status": "awarded"
+      },
+      {
+        "category": "14",
+        "winner_count": 3,
+        "unit_prize_eur": 211912.56,
+        "status": "awarded"
+      },
+      {
+        "category": "13",
+        "winner_count": 71,
+        "unit_prize_eur": 4197.21,
+        "status": "awarded"
+      },
+      {
+        "category": "12",
+        "winner_count": 970,
+        "unit_prize_eur": 307.22,
+        "status": "awarded"
+      },
+      {
+        "category": "11",
+        "winner_count": 7954,
+        "unit_prize_eur": 37.47,
+        "status": "awarded"
+      },
+      {
+        "category": "10",
+        "winner_count": 44645,
+        "unit_prize_eur": 8.01,
+        "status": "awarded"
+      }
+    ],
+    "elige8": {
+      "revenue_eur": 95926,
+      "winner_count": 26,
+      "unit_prize_eur": 2029.2
+    }
+  }
+}

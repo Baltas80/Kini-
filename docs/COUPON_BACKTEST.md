@@ -12,7 +12,7 @@ This pilot introduces a coupon-level evaluation with one immutable training snap
 - Its summary field labelled "Fecha" is stored only as `source_date_label_at` plus its calendar date. It is **not** a result-publication timestamp: Jornada 21/2020-21 displays 13-12-2020 22:57 even though its Pleno fixture Celta–Cádiz kicked off on 14-12-2020. The label is used only to select the corresponding SELAE draw-date URL and is never used as evidence that results were available at that time.
 - The ordered 14 main fixtures, their teams, scores and 1/X/2 signs, plus the Pleno al 15 score/categories, must reconcile exactly against the corresponding public SELAE results page.
 - Raw HTML from HistoricalQuiniela is retained as a workflow artifact. The archive records SHA-256 digests, source URLs and retrieval timestamps.
-- The SELAE detail page returned HTTP 403 from the GitHub Actions runner. For the single pilot coupon, a normalized JSON extract of the public official SELAE page is committed at kini_engine/data/selae_official_coupon_results/2020-2021-21.json. Its SHA-256 covers the JSON extract, not raw HTML; the file records the official URL, verification date and method. This is an explicit manual-source limitation, not an automated raw-page capture.
+- The SELAE detail page returned HTTP 403 from the GitHub Actions runner. The three-coupon pilot therefore uses individually reviewed normalized extracts for Jornadas 19, 21 and 22 under kini_engine/data/selae_official_coupon_results/. Each digest covers the exact JSON extract bytes, not raw SELAE HTML or PDF bytes. Jornada 19 and Jornada 22 include prize distributions transcribed from their official press-release PDFs; Jornada 21 remains result-only. This is an explicit manual-source limitation, not an automated raw-page capture.
 - Team labels from HistoricalQuiniela are mapped through a season-scoped explicit alias file and the canonical Football-Data registry. Every one of the 15 fixtures must match exactly one Football-Data fixture by local calendar date, canonical home/away identity and final score.
 - No fuzzy matching or silent alias substitution is allowed. A missing alias, ambiguous identity, missing fixture, duplicate candidate or score/date mismatch rejects the coupon.
 - The full historical results are used only to verify fixture identity/date/result. The model training history is filtered separately to the common pre-first-kickoff cutoff.
@@ -52,9 +52,9 @@ The independent marginal coverage estimate is reported separately from realized 
 
 ## Pilot scope and limitations
 
-The first CI pilot imports and evaluates Jornada 21 of 2020/2021 only. It validates ingestion, normalized official reconciliation, canonical identity, common cutoff, model execution and optimizer integration. The official snapshot is a manually reviewed normalized extract, not the original SELAE HTML; a future full-season archive needs an accessible official endpoint or individually reviewed official snapshots.
+The expanded CI pilot imports and evaluates Jornadas 19, 21 and 22 of 2020/2021. It validates ingestion, normalized official reconciliation, canonical identity, common cutoff, model execution and optimizer integration for three separated coupon dates. The official snapshots are manually reviewed normalized extracts, not original SELAE HTML/PDF captures; a full-season archive still requires an accessible official endpoint or individually reviewed official snapshots.
 
-One coupon is not a performance sample and must not be used to select a model or claim an improvement. After the pilot passes, the importer can retrieve all 63 jornadas for 2020/2021 and later seasons. Full-season expansion requires checking every official reconciliation and documenting missing, postponed or rescheduled fixtures before aggregate ticket metrics are interpreted.
+Three adjacent/nearby coupons remain far too small for model selection, hit-rate estimation, payout performance or profitability claims. The importer can retrieve all 63 jornadas for 2020/2021, but full-season expansion requires official reconciliation for every draw and explicit handling of missing, postponed or rescheduled fixtures before aggregate ticket metrics are interpreted.
 
 
 ## Fail-closed acceptance for multi-coupon runs
@@ -349,3 +349,16 @@ The Jornada 19 official result URL was normalized to the SELAE route generated b
 - Historical model workflow [44103112931](https://github.com/Baltas80/Kini-/actions/runs/44103112931): workflow succeeded, but the predictive-model backtest job was skipped by its change filter. No new full historical model backtest is claimed.
 
 PR #10 remains open and draft. No merge or `master` modification occurred.
+
+
+## Jornada 22 expansion — 2026-11-17
+
+The pilot is configured for three coupons: Jornada 19 (2020-12-06), Jornada 21 (2020-12-13) and Jornada 22 (2020-12-20). Jornada 22's normalized SELAE extract records all 14 ordered outcomes and the Eibar–Real Madrid Pleno al 15 (1–3, categories 1–M). Its official press-release PDF reports €3,973,360.50 revenue, one Pleno winner, three 14-category winners, and the remaining four prize tiers; Elige8 reports €95,926 revenue, 26 winners and €2,029.20 per winner.
+
+Sources for Jornada 22:
+- [Official SELAE result page](https://www.loteriasyapuestas.es/es/la-quiniela/resultados/la-quiniela-resultados-del-20-de-diciembre-de-2020)
+- [Official SELAE press-release PDF](https://www.loteriasyapuestas.es/f/loterias/documentos/Quiniela/Notas%20de%20prensa/NOTA_DE_PRENSA_DE_LA_QUINIELA_DE_FECHA_20_12_20.pdf)
+- [HistoricalQuiniela schedule and kickoff timestamps](https://www.historicoquiniela.com/historico/2020-2021/22)
+- Football-Data 2020/2021 [SP1](https://www.football-data.co.uk/mmz4281/2021/SP1.csv) and [SP2](https://www.football-data.co.uk/mmz4281/2021/SP2.csv) are used as independent date/team/score reconciliation sources, not as kickoff-time evidence.
+
+HistoricalQuiniela reports the first Jornada 22 kickoff on 19 December 2020 at 14:00 local time; the conservative training cutoff is therefore 18 December 2020. The workflow must still prove that at least 250 completed training matches exist by that cutoff and reconcile all 15 fixtures to Football-Data before any model output is accepted. The pilot is not considered expanded successfully until all three models produce 14 valid forecasts for each of the three coupons and the optimizer's cost/coverage checks pass.
