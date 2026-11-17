@@ -265,10 +265,10 @@ jobs:
               {"record_type": "coupon", **coupon} for coupon in coupons
           ]
           Path("coupon-archive.jsonl").write_text(
-              "\\n".join(
+              "\n".join(
                   json.dumps(record, ensure_ascii=False, sort_keys=True)
                   for record in output
-              ) + "\\n",
+              ) + "\n",
               encoding="utf-8",
           )
           print(f"COMBINED_COUPON_ARCHIVE_OK: {len(coupons)} coupons across two seasons")
