@@ -23,7 +23,7 @@ The engine can also receive an explicit `TicketLedger` instance. A generated rec
 
 Each ticket is serialized as canonical UTF-8 JSON (sorted keys, compact separators, non-finite numbers rejected) and stored with its SHA-256 digest. Reads recompute the digest and revalidate the ticket structure.
 
-A stored ticket can be scored against a schema-version-1 SELAE fixture-reconciliation report. The caller must supply the SHA-256 digest of the exact reconciliation source bytes. The ledger invokes `score_ticket_record` itself; it does not accept caller-authored score summaries. Scores are immutable and uniquely keyed by the ticket ID plus reconciliation digest. Repeating the same scoring operation is idempotent.
+A stored ticket can be scored against a schema-version-1 SELAE fixture-reconciliation report. The MCP scoring tool accepts the exact UTF-8 JSON document and computes its SHA-256 digest internally; Python callers can use `score_ticket_json` for the same behavior. The lower-level `score_ticket` method is available when the exact source-byte digest has already been computed by a trusted reader. The ledger invokes `score_ticket_record` itself; it does not accept caller-authored score summaries. Scores are immutable and uniquely keyed by the ticket ID plus reconciliation digest. Repeating the same scoring operation is idempotent.
 
 The score layer measures 14-match hits and exact coverage. It explicitly leaves payout and profitability unevaluated.
 
@@ -34,7 +34,7 @@ The MCP server configures a ledger automatically and exposes:
 - `predict_quiniela`: generates and persists a ticket when the strict pre-ticket plan is supplied.
 - `get_ticket_record`: retrieves one record and verifies its digest.
 - `list_ticket_records`: lists records, optionally by draw date.
-- `score_persisted_ticket`: scores a stored record against an explicitly hashed reconciliation report and persists the score.
+- `score_persisted_ticket`: accepts the exact SELAE reconciliation JSON text, hashes those bytes internally, scores the stored ticket and persists the result.
 
 The local database path must be on persistent storage in a deployed environment. If the MCP server runs in an ephemeral container, mount a persistent volume at the configured path or records will be lost when the container is replaced.
 
