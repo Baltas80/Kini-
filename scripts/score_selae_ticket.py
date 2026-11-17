@@ -94,9 +94,9 @@ def main(argv: list[str] | None = None) -> int:
         f"columns={result['column_count']} "
         f"public_draw_positions={result['public_draw_positions']} "
         f"covered_14={result['covered_14']} "
-        f"pleno15_evaluated={result['pleno15_evaluated']} "
-        f"pleno15_hit={result['pleno15_hit']} "
-        f"covered_full_coupon={result['covered_full_coupon']} "
+        f"pleno15_evaluated={result.get('pleno15_evaluated', False)} "
+        f"pleno15_hit={result.get('pleno15_hit')} "
+        f"covered_full_coupon={result.get('covered_full_coupon')} "
         f"best_column_hits={result['best_column_hits']}"
     )
     print(f"Result: {args.output}")
