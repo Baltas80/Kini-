@@ -202,14 +202,9 @@ def create_server(engine: KiniEngine | None = None):
     @mcp.tool()
     def score_persisted_ticket(
         ticket_id: str,
-        reconciliation_report: dict[str, Any],
-        reconciliation_sha256: str,
+        reconciliation_json: str,
     ) -> dict[str, Any]:
-        """Score and persist a stored ticket against a hashed SELAE reconciliation."""
-        return ledger.score_ticket(
-            ticket_id,
-            reconciliation_report,
-            reconciliation_sha256=reconciliation_sha256,
-        )
+        """Score a stored ticket and hash the exact supplied SELAE JSON bytes."""
+        return ledger.score_ticket_json(ticket_id, reconciliation_json)
 
     return mcp
