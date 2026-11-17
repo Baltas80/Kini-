@@ -2,16 +2,16 @@
 
 ## Current status override — 2026-11-17
 
-- **Working branch:** feat/immutable-ticket-ledger (PR #10 stacked on PR #9); master remains untouched.
-- **Latest accepted historical model validation:** [run 44073721157](https://github.com/Baltas80/Kini-/actions/runs/44073721157), code revision d7a577dc6fe47761d199d402e36a4fe5f7bdb251. It used the validated 5,322-row dataset (SHA-256 7251b84acd803047746c0c55c6bdabb60d9499208cfd6c781f72080295346f44), produced 5,022/5,022 model forecasts with zero errors, and evaluated 3,991 snapshot-aligned fixtures over 319 refits.
-- **Predictive conclusion:** the market remains better than every tested model configuration. No market/model blend is selected; no claim of profitability is made.
-- **Latest accepted data validation:** [run 44083919651](https://github.com/Baltas80/Kini-/actions/runs/44083919651): 5,322 fixtures, 14 sources, profile integrity passed, zero duplicate/conflicting fixtures, invalid result labels or score/result mismatches. The canonical identity audit remains 56 teams with 10,644/10,644 references resolved.
-- **Latest CI:** [run 44083919679](https://github.com/Baltas80/Kini-/actions/runs/44083919679) passed Actionlint, Ruff lint, Ruff format and pytest: **368 passed**, 25 upstream penaltyblog/NumPy deprecation warnings, 2.89 seconds. The timestamp admission guard is CI-validated on head 5bb724017d698888fd5de43e841d559d147b06e9.
-- **Backtest workflow efficiency:** commit a94c3fc1be011f2af102845c2067110163b789de changed concurrency to cancel-in-progress=false and excluded ticket_ledger.py from model-backtest triggers. [Run 44082824018](https://github.com/Baltas80/Kini-/actions/runs/44082824018) confirmed that ledger/docs/tests-only changes set run_backtest=false.
-- **Ticket ledger:** append time is now checked against ticket creation and cutoff; four regression tests and an engine integration-clock fixture were added. The host clock is not a trusted timestamp.
-- **Still open:** Pleno al 15 scoring in the persistent ledger, coupon-level backtesting, official payout/expected-return evaluation, and exact per-fixture market capture timestamps.
-- **No PR has been merged and master has not been modified.**
-- **Latest code/test head:** 5bb724017d698888fd5de43e841d559d147b06e9; all subsequent branch commits in this execution modify audit documentation only, not model, ledger or test code. Historical workflow [run 44083919624](https://github.com/Baltas80/Kini-/actions/runs/44083919624) completed with the backtest job skipped because only ledger/docs/tests changed; coupon pilot [run 44083919776](https://github.com/Baltas80/Kini-/actions/runs/44083919776) was also skipped and is not a coupon validation.
+- **Working branch:** `feat/immutable-ticket-ledger`, PR #10 stacked on PR #9. Current head: `ba61b48ce307a536b1ddd7da5957c41c1ff92208`. PR remains draft; `master` is untouched.
+- **Pleno al 15 scoring:** implemented as an optional, separately evidenced scoring input. The validator checks SELAE provider/host, draw date, exact home/away identities, Pleno kickoff ordering, non-negative integer goals, categories `0`/`1`/`2`/`M`, category/goal consistency and SHA-256 provenance. `M` means three or more goals per official SELAE rules.
+- **Persistent scoring:** `score_ticket_json` and MCP `score_persisted_ticket` accept optional exact Pleno JSON bytes. The ledger hashes the document and combines its digest with the 14-fixture reconciliation digest for an immutable evidence-bundle key. Historical 14-match-only score JSON remains unchanged for idempotent replay. CLI support is `--pleno15`.
+- **Latest CI:** [run 44086610179](https://github.com/Baltas80/Kini-/actions/runs/44086610179) passed Actionlint, Ruff lint, Ruff format and pytest: **381 passed**, 25 upstream penaltyblog/NumPy deprecation warnings, 3.35 seconds. An earlier attempt on head 742afb92 failed only Ruff formatting; formatting was corrected before this accepted run.
+- **Latest data validation:** [run 44086610180](https://github.com/Baltas80/Kini-/actions/runs/44086610180) passed on head ba61b48. It validated 5,322 completed fixtures, all 14 Football-Data source files within the seven-day freshness window, 56 canonical teams and 10,644/10,644 resolved team references, with zero unresolved or ambiguous references. The validated historical artifact was republished as artifact 14328834088.
+- **Historical model backtest:** [run 44086610188](https://github.com/Baltas80/Kini-/actions/runs/44086610188) completed, but its model job was correctly skipped because this change did not modify model code. The accepted model evidence remains [run 44073721157](https://github.com/Baltas80/Kini-/actions/runs/44073721157): 5,022/5,022 forecasts, zero prediction errors, 3,991 snapshot-aligned fixtures and 319 refits. The market still outperforms all tested model configurations.
+- **Coupon-level pilot:** [run 44086610493](https://github.com/Baltas80/Kini-/actions/runs/44086610493) completed with the pilot job skipped by its workflow filter. This is not a coupon-backtest validation.
+- **Still open:** automate ingestion/verification of official Pleno result documents for each draw; run the coupon-level pilot; evaluate official payout/prize tiers and expected return; establish exact per-fixture market capture timestamps; resolve Football-Data's private/research-use licensing restriction before commercial deployment.
+- **Evidence limitations:** the scoring layer validates the declared source hash format and hashes the exact submitted JSON bytes, but it does not fetch the SELAE page or independently verify that the nested source hash matches raw HTML. `verified_at_utc` is a declared verification time, not a trusted timestamp or digital signature. Payout and profitability remain unevaluated.
+- **No PR has been merged and `master` has not been modified.**
 
 Date: 2026-11-15  
 Repository: Baltas80/Kini-  
@@ -3441,3 +3441,22 @@ The defect was not that every PR should download Football-Data again. That would
 The data-validation run 44072041469 was created before the artifact-based workflow correction and still used the old branch-local cache (49.96 hours old, 5,311 rows). It is diagnostic evidence of the defect, not the accepted source snapshot. The intermediate historical run 44071883972 also began before the workflow correction and must not be used to validate the new source-artifact policy.
 
 Do not treat this correction as validated until the new CI, data-validation and historical-backtest runs complete. Compare the new profile, cache mtimes, dataset hash, date coverage and model/market metrics against the prior immutable artifacts. No PR has been merged and `master` remains untouched.
+
+
+## Pleno al 15 persistent-ledger scoring — 2026-11-17
+
+Implemented on `feat/immutable-ticket-ledger`:
+
+- Added a strict optional Pleno result schema in `kini_engine/ticket_outcomes.py`. It binds the result to the stored coupon's draw date, home/away teams and Pleno kickoff; requires an official SELAE URL and a 64-character source SHA-256; and rejects negative/non-integer goals, unsupported categories, category/goal mismatches and verification times before kickoff.
+- Categories are derived/checked as exact `0`, `1`, `2`, or `M` for 3+ goals. Official SELAE documentation: [Cómo jugar a La Quiniela](https://www.loteriasyapuestas.es/es/centro-de-ayuda/como-se-juega/como-jugar-a-la-quiniela). The official results page also publishes the Pleno score and category pair (for example, `2-3 | 2-M`).
+- `score_ticket_record` now reports `pleno15_hit` and `covered_full_coupon` only when the separate Pleno evidence is supplied. A 14-match hit is kept separate from a full 15-match hit.
+- `TicketLedger.score_ticket_json` accepts optional `pleno15_json`, hashes its exact UTF-8 bytes and forms a domain-separated evidence-bundle digest with the fixture-reconciliation hash. The list API exposes the original reconciliation digest and combined score-evidence digest separately. Legacy 14-match score JSON remains unchanged.
+- MCP `score_persisted_ticket` accepts optional `pleno15_json`; the standalone CLI accepts `--pleno15`.
+- Added tests for successful 2-M scoring, 14-match coverage without Pleno coverage, missing evidence, invalid host/date/team/category/evidence type/time, digest pairing and idempotent persistent scoring.
+
+Validation:
+- CI [44086610179](https://github.com/Baltas80/Kini-/actions/runs/44086610179): **381 passed**, Ruff lint/format and Actionlint passed.
+- Data validation [44086610180](https://github.com/Baltas80/Kini-/actions/runs/44086610180): 5,322 complete fixtures; 14 source files; 56 teams; 10,644/10,644 team references resolved; no ambiguous or unresolved references.
+- Historical model job skipped because model code was unchanged. Coupon pilot skipped by its filter. Neither is represented as a successful predictive or coupon-level evaluation.
+
+The importer that produces this Pleno evidence for every historical/current draw remains to be implemented. Until that exists, the ledger can score Pleno only when a separately verified report is supplied. The engine does not calculate prize tiers, payouts, expected value or profitability.
