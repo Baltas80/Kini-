@@ -11,6 +11,7 @@ import numpy as np
 from scipy.stats import poisson
 
 from .team_identity import normalize_team_name
+from .ticket_ledger import TicketLedger
 from .ticket_outcomes import (
     TicketOutcomeError,
     build_ticket_probability_vectors,
@@ -1285,7 +1286,12 @@ class TicketOptimizer:
 class KiniEngine:
     """Main pipeline: KinielaGPT data/context + Dixon-Coles + supervised ML + LAE/market ensemble."""
 
-    def __init__(self, enable_ml: bool = False, enable_context: bool = False) -> None:
+    def __init__(
+        self,
+        enable_ml: bool = False,
+        enable_context: bool = False,
+        ticket_ledger: TicketLedger | None = None,
+    ) -> None:
         self.dc = DixonColes()
         self.ml = FeatureModel() if enable_ml else None
         self.enable_ml = enable_ml
@@ -1295,6 +1301,7 @@ class KiniEngine:
         self.fitted = False
         self.dc_fit_error: str | None = None
         self.temperature = 1.0
+        self.ticket_ledger = ticket_ledger
 
     def fit(self, history: list[Match]) -> KiniEngine:
         self.history = sorted(history, key=lambda m: _date_num(m.date))
@@ -1668,6 +1675,12 @@ class KiniEngine:
             ticket_record_sha256 = hashlib.sha256(
                 ticket_record_json.encode("utf-8")
             ).hexdigest()
+            ticket_ledger_receipt = None
+            if self.ticket_ledger is not None:
+                ticket_ledger_receipt = self.ticket_ledger.append_ticket(
+                    ticket_payload,
+                    expected_sha256=ticket_record_sha256,
+                )
             result.update(
                 {
                     "ticket_id": ticket_payload["ticket_id"],
@@ -1679,5 +1692,7 @@ class KiniEngine:
                     "coupon_plan": coupon_plan,
                 }
             )
+            if ticket_ledger_receipt is not None:
+                result["ticket_ledger"] = ticket_ledger_receipt
 
         return result
