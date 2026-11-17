@@ -274,7 +274,7 @@ def test_probability_builder_requires_snapshot_for_every_public_draw_position() 
             model_probabilities_by_position=model_probabilities,
             public_draw_snapshots={},
             ticket_cutoff_at_utc="2026-11-08T11:00:00Z",
-        first_kickoff_at="2026-11-08T14:00:00+01:00",
+            first_kickoff_at="2026-11-08T14:00:00+01:00",
         )
 
 
@@ -292,7 +292,7 @@ def test_probability_builder_rejects_model_probability_for_public_draw_position(
             model_probabilities_by_position=model_probabilities,
             public_draw_snapshots={7: _preclose_snapshot()},
             ticket_cutoff_at_utc="2026-11-08T11:00:00Z",
-        first_kickoff_at="2026-11-08T14:00:00+01:00",
+            first_kickoff_at="2026-11-08T14:00:00+01:00",
         )
 
 
