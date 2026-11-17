@@ -113,6 +113,7 @@ def test_jornada_19_aliases_resolve_through_canonical_team_registry() -> None:
     aliases = load_coupon_team_aliases()["seasons"]["2020-2021"]
     registry = TeamIdentityRegistry.from_default()
     expected = {
+        "Valencia": "Valencia",
         "Valladolid": "Valladolid",
         "Osasuna": "Osasuna",
         "Lugo": "Lugo",
@@ -192,11 +193,13 @@ def test_2021_2022_coupon_aliases_resolve_through_canonical_team_registry() -> N
         "Betis": "Betis",
         "Burgos": "Burgos",
         "Cádiz": "Cadiz",
+        "Cartagena": "Cartagena",
         "Celta": "Celta",
         "Eibar": "Eibar",
         "Elche": "Elche",
         "Espanyol": "Espanol",
         "Fuenlabrada": "Fuenlabrada",
+        "Getafe": "Getafe",
         "Girona": "Girona",
         "Granada": "Granada",
         "Huesca": "Huesca",
@@ -214,6 +217,7 @@ def test_2021_2022_coupon_aliases_resolve_through_canonical_team_registry() -> N
         "Rayo Vallecano": "Vallecano",
         "Real Madrid": "Real Madrid",
         "Real Sociedad": "Sociedad",
+        "Real Sociedad B": "Sociedad B",
         "Sevilla": "Sevilla",
         "Sporting": "Sp Gijon",
         "Tenerife": "Tenerife",
