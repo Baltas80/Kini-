@@ -299,4 +299,3 @@ def test_jornada_1_2022_2023_official_prize_distribution_passes_strict_validatio
         "winner_count": 25,
         "unit_prize_eur": 1511.13,
     }
-
