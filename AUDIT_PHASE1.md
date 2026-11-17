@@ -3137,3 +3137,14 @@ Technical decision:
 - Keep the public-draw outcome, its ex-post ball distribution and played-match P(1/X/2) probabilities as separate data types.
 
 The new ticket_outcome_eligible flag only preserves the realized coupon sign; it does not imply that the current optimizer consumes the record or that a probability vector has been estimated. No public-draw probability or ticket-performance metric has been added.
+
+
+## Ticket optimizer exhaustive-objective regression — 2026-11-17
+
+The multiple-direct optimizer was reviewed against the official double/triple constraints and configured budget semantics. Its dynamic program maximizes the product of per-fixture selected-sign masses under the independent-match approximation, and expands the chosen sign sets into the complete Cartesian multiple.
+
+A deterministic regression test now compares the dynamic-programming result for a small budget (8 columns) with an exhaustive reference search over every legal placement of doubles and triples. It also verifies that each fixture receives its highest-probability signs and that persisted columns equal the complete Cartesian product. This closes a test-coverage gap around optimizer optimality; it does not establish cross-match independence, model accuracy, prize expectation or profitability.
+
+The rules document now states the optimization objective and explicitly distinguishes the legacy `joint_coverage` field from a true dependence-aware joint probability. No predictive model or historical backtest metric was changed.
+
+**Next action:** integrate public-draw outcome/provenance records into coupon-level ticket evaluation without using post-close ball counts as pre-close probabilities; then expand historical coupon coverage only where each journey has independently verified SELAE evidence.

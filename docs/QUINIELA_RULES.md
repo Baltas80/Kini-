@@ -28,3 +28,10 @@ The current optimizer supports **multiple-direct systems with one or more explic
 Sources:
 - SELAE, current normative index: https://www.selae.es/es/web-corporativa/normativa/normativa-de-los-juegos/normativa-de-los-juegos-web-corporativa
 - SELAE, Normas de La Quiniela (from 2019/20; see normas 5, 18, 22, 52.4 and Anexo I): https://testportal.selae.es/f/loterias/documentos/Quiniela/Normativa%20Quiniela/NORMAS_LA_QUINIELA_TEMPORADA_19_20.pdf
+
+
+## Optimizer objective and interpretation
+
+The multiple-direct optimizer uses dynamic programming over the number of doubles and triples. For each fixture it selects the one, two or three signs with the highest supplied marginal probabilities, then maximizes the product of the selected marginal masses subject to the configured 14-match column budget, SELAE's double/triple table, the total-bet cap after the Pleno multiplier, and the minimum participation.
+
+This is an **independent-match approximation**. The legacy `joint_coverage` field is an alias for `independent_coverage_estimate`; it is not a dependence-aware joint probability. The generated columns are the complete Cartesian multiple, not a reduced or conditioned system. Cross-match dependence, diversification across separately generated tickets, prize allocation and expected payout are not modeled.

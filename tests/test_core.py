@@ -1,6 +1,6 @@
 import sys
 from datetime import datetime, timedelta
-from itertools import combinations
+from itertools import combinations, product
 from types import SimpleNamespace
 
 import numpy as np
@@ -809,6 +809,82 @@ def test_optimizer_enforces_selae_direct_double_triple_table():
     assert result["maximum_authorized_columns"] == 31_104
     assert result["pleno15_multiplier"] == 1
     assert result["cost_eur"] == 23_328.0
+
+
+def test_optimizer_dp_matches_exhaustive_legal_assignment_search():
+    signs = ("1", "X", "2")
+    rng = np.random.default_rng(20261117)
+    predictions = []
+    for _ in range(14):
+        values = rng.uniform(0.05, 1.0, size=3)
+        values /= values.sum()
+        predictions.append(
+            {sign: float(values[index]) for index, sign in enumerate(signs)}
+        )
+
+    budget = 8
+    result = TicketOptimizer().optimize(predictions, budget=budget)
+    best_coverage = 0.0
+
+    # Independent exhaustive reference: enumerate every legal placement of
+    # doubles/triples, using the highest-probability signs for each width.
+    for double_count in range(15):
+        for triple_count in range(15 - double_count):
+            column_count = (2**double_count) * (3**triple_count)
+            if (
+                column_count > budget
+                or column_count < 2
+                or triple_count > TicketOptimizer.MAX_TRIPLES_BY_DOUBLES[double_count]
+                or column_count > TicketOptimizer.MAX_AUTHORIZED_TOTAL_BETS
+            ):
+                continue
+
+            for triple_positions in combinations(range(14), triple_count):
+                triple_set = set(triple_positions)
+                remaining = [
+                    index for index in range(14) if index not in triple_set
+                ]
+                for double_positions in combinations(remaining, double_count):
+                    double_set = set(double_positions)
+                    coverage = 1.0
+                    for index, probabilities in enumerate(predictions):
+                        width = (
+                            3
+                            if index in triple_set
+                            else 2
+                            if index in double_set
+                            else 1
+                        )
+                        ordered = sorted(
+                            signs,
+                            key=probabilities.__getitem__,
+                            reverse=True,
+                        )
+                        coverage *= sum(
+                            probabilities[sign] for sign in ordered[:width]
+                        )
+                    best_coverage = max(best_coverage, coverage)
+
+    assert result["independent_coverage_estimate"] == pytest.approx(
+        best_coverage, abs=1e-12
+    )
+
+    columns = [tuple(column) for column in result["columns"]]
+    selected_by_fixture = [
+        {column[index] for column in columns} for index in range(14)
+    ]
+    expected_by_fixture = []
+    for index, probabilities in enumerate(predictions):
+        ordered = sorted(
+            signs,
+            key=probabilities.__getitem__,
+            reverse=True,
+        )
+        expected = tuple(ordered[: len(selected_by_fixture[index])])
+        expected_by_fixture.append(expected)
+        assert selected_by_fixture[index] == set(expected)
+
+    assert set(columns) == set(product(*expected_by_fixture))
 
 
 def test_optimizer_applies_pleno_multiplier_to_the_total_bet_cap():
