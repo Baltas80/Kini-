@@ -1115,9 +1115,7 @@ def test_ticket_scoring_cli_accepts_official_prize_snapshot(tmp_path: Path) -> N
     ticket = _ticket(reconciliation)
     ticket["pleno15_combinations"] = [{"home_goals": "2", "away_goals": "M"}]
     pleno_report = _pleno15_report()
-    snapshot = _official_prize_snapshot_for_test(
-        ticket, reconciliation, pleno_report
-    )
+    snapshot = _official_prize_snapshot_for_test(ticket, reconciliation, pleno_report)
     inputs = {
         "ticket.json": ticket,
         "reconciliation.json": reconciliation,
