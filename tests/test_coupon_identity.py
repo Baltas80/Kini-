@@ -124,3 +124,17 @@ def test_jornada_19_aliases_resolve_through_canonical_team_registry() -> None:
     for source_name, target_name in expected.items():
         assert aliases[source_name] == target_name
         assert registry.resolve(target_name, source="football-data") is not None
+
+
+def test_jornada_22_cartagena_alias_resolves_through_canonical_registry() -> None:
+    from kini_engine.coupon_identity import load_coupon_team_aliases
+    from kini_engine.team_identity import TeamIdentityRegistry
+
+    aliases = load_coupon_team_aliases()["seasons"]["2020-2021"]
+    registry = TeamIdentityRegistry.from_default()
+
+    assert aliases["Cartagena"] == "Cartagena"
+    identity = registry.resolve("Cartagena", source="football-data")
+    assert identity is not None
+    assert identity.team_id == "team:es:cartagena"
+    assert identity.canonical_name == "Cartagena"
