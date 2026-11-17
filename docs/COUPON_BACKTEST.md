@@ -455,3 +455,54 @@ Validation on the final code/test head:
 PR #10 remains open/draft on feat/immutable-ticket-ledger, stacked on the existing feature branch. No merge and no changes to master.
 
 **Next priority:** expand the official coupon/prize archive across additional draws and seasons only where every ordered fixture can be independently reconciled. Preserve raw PDF byte digests whenever source bytes are actually retrievable; do not infer them from normalized JSON hashes.
+
+
+## Jornada 29 and five-coupon pilot — validated 2026-11-17
+
+### Jornada 29 source reconciliation
+
+Jornada 29 (draw date 2021-01-24) was added from the official SELAE result page and its official press-release PDF. The 14 ordered main fixtures and the Athletic Club–Getafe Pleno al 15 (5–1; categories M–1) were checked against the HistoricalQuiniela Jornada 29 schedule and its Europe/Madrid kickoff timestamps, then reconciled one-to-one against the validated Football-Data 2020/2021 SP1/SP2 dataset. All 15 fixtures matched by competition, date, explicit team alias and full-time score. The only new aliases were Girona → Girona and Castellón → Castellon; both resolve to their canonical Football-Data team IDs through the existing registry.
+
+HistoricalQuiniela gives the first kickoff as 2021-01-23 14:00 Europe/Madrid. The training cutoff is therefore 2021-01-22, with 417 completed historical matches from 2020-09-12 through 2021-01-22. The latest validated historical dataset contains 5,322 fixtures and has SHA-256 `7251b84acd803047746c0c55c6bdabb60d9499208cfd6c781f72080295346f44`.
+
+Sources:
+- [Official SELAE result page](https://www.loteriasyapuestas.es/es/la-quiniela/resultados/la-quiniela-resultados-del-24-de-enero-de-2021)
+- [Official SELAE press-release PDF](https://www.loteriasyapuestas.es/f/loterias/documentos/Quiniela/Notas%20de%20prensa/NOTA_DE_PRENSA_DE_LA_QUINIELA_DE_FECHA_24_1_21.pdf)
+- [HistoricalQuiniela Jornada 29 schedule and kickoff times](https://www.historicoquiniela.com/historico/2020-2021/29)
+- Football-Data 2020/2021 [SP1](https://www.football-data.co.uk/mmz4281/2021/SP1.csv) and [SP2](https://www.football-data.co.uk/mmz4281/2021/SP2.csv)
+
+The official press release reports €3,149,695.50 Quiniela revenue; Pleno al 15 and 14 both had zero winners and rolled over; 13: 40 winners at €5,905.68; 12: 609 at €387.89; 11: 4,756 at €49.67; 10: 25,968 at €10.92. Elige8 reports €83,271.50 revenue, 66 winners and €693.93 per winner. These values are in the normalized SELAE snapshot and covered by a strict prize-validation regression test.
+
+The official PDF text was retrievable through the official indexed PDF page, but its original bytes were not captured. No raw-PDF digest is claimed. Jornada 29 normalized snapshot SHA-256: `4794789c451a10a3a8b7cf82b3fb9ea0e857007280e42546312b0c695205c34e`.
+
+### Five-coupon common-cutoff pilot
+
+Final run: [GitHub Actions 44156981828](https://github.com/Baltas80/Kini-/actions/runs/44156981828), on functional code revision `a2dd2cac50278c53b3d64997cf3125058b99dd73`. Evidence artifact: [quiniela-coupon-pilot, ID 14360688825](https://github.com/Baltas80/Kini-/actions/runs/44156981828/artifacts/14360688825), ZIP SHA-256 `4e7d5f21f8dcf4c871606db3fe24b3ff7eb2af02d908b6c381a3406723ad98b2`.
+
+Acceptance evidence:
+- Five official SELAE snapshots: Jornadas 19, 21, 22, 25 and 29.
+- 75/75 ordered main-plus-Pleno fixtures reconciled to Football-Data.
+- Fifteen successful model/coupon evaluations: Dixon–Coles, ML and fixed DC/ML ensemble on each coupon.
+- Fourteen 1/X/2 forecasts per evaluation: 210 forecasts total; zero failed evaluations and zero empty prediction sets.
+- Every candidate used eight direct columns, three doubles, zero triples, eight payable bets and €6.00 cost per coupon.
+- The new Jornada 29 training set is strictly pre-first-kickoff: 417 matches through 2021-01-22.
+
+| Coupon | First kickoff (Europe/Madrid) | Training cutoff | Training matches | DC single/best | ML single/best | Ensemble single/best |
+|---|---|---|---:|---:|---:|---:|
+| 2020-2021:19 | 2020-12-05 14:00 | 2020-12-04 | 277 | 5 / 6 | 6 / 7 | 4 / 7 |
+| 2020-2021:21 | 2020-12-12 14:00 | 2020-12-11 | 303 | 7 / 7 | 5 / 6 | 7 / 8 |
+| 2020-2021:22 | 2020-12-19 14:00 | 2020-12-18 | 325 | 6 / 7 | 7 / 7 | 6 / 7 |
+| 2020-2021:25 | 2021-01-02 14:00 | 2021-01-01 | 364 | 8 / 9 | 7 / 8 | 8 / 8 |
+| 2020-2021:29 | 2021-01-23 14:00 | 2021-01-22 | 417 | 4 / 6 | 5 / 6 | 5 / 5 |
+
+Across the five draws, mean single-sign/best-column hits were 6.00/7.00 (DC), 6.00/6.80 (ML) and 6.00/7.00 (fixed ensemble). No candidate covered 14/14 main signs, no full 15/15 coupon was covered, and none of the five Dixon–Coles Pleno category-pair predictions matched the official pair. These adjacent draws share overlapping training histories; this remains a pipeline smoke test, not a statistically adequate sample for model ranking, calibrated-performance claims or future hit-rate estimates.
+
+The pilot does not calculate Brier Score, Log Loss or a market comparison. The historical model workflow [44156982053](https://github.com/Baltas80/Kini-/actions/runs/44156982053) correctly skipped its expensive backtest job under the change filter; no new full historical model metrics are claimed. Actual payout and profitability remain unevaluated: the archive has official published prize tiers, but no evidence that these hypothetical tickets were purchased or entered, and pari-mutuel winner counts cannot be inferred.
+
+Final validation on the report HEAD:
+- CI [44156981868](https://github.com/Baltas80/Kini-/actions/runs/44156981868): Actionlint, Ruff lint/format and **412 tests passed**, with 25 upstream NumPy/penaltyblog deprecation warnings.
+- Historical data validation [44156981922](https://github.com/Baltas80/Kini-/actions/runs/44156981922): 5,322 completed fixtures; 56 canonical team IDs; 10,644/10,644 team references resolved; zero unresolved/ambiguous identities, zero duplicates removed and zero score/result mismatches. All 14 source files were within the 168-hour freshness limit (maximum observed cache age approximately 8.84 hours).
+
+PR #10 remains open/draft and stacked on `feat/selae-fixture-reconciliation`. No merge and no changes to `master`.
+
+**Next priority:** add a fully reconciled coupon from a different season, then continue expanding the archive without treating adjacent same-season smoke-test draws as independent statistical evidence.

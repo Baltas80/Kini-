@@ -232,7 +232,7 @@ jobs:
               29: ("2021-01-24", "2020-2021:29"),
           }
           if len(archive) != 6:
-              raise SystemExit(f"expected manifest plus four coupons, received {len(archive)} records")
+              raise SystemExit(f"expected manifest plus five coupons, received {len(archive)} records")
           manifest = archive[0]
           if (
               manifest.get("record_type") != "manifest"
@@ -277,7 +277,7 @@ jobs:
           if result.get("schema_version") != 3 or result.get("config", {}).get("min_history_matches") != 250:
               raise SystemExit("backtest result schema or minimum-history configuration mismatch")
           if result.get("summary", {}).get("coupon_count") != 5:
-              raise SystemExit("backtest summary does not contain two coupons")
+              raise SystemExit("backtest summary does not contain five coupons")
 
           for coupon in coupons:
               coupon_id = coupon["coupon_id"]
@@ -331,7 +331,7 @@ jobs:
           for mode in ("dc", "ml", "ensemble_dc_ml"):
               aggregate = result.get("summary", {}).get("models", {}).get(mode, {})
               if aggregate.get("evaluated_coupons") != 5 or aggregate.get("failed_coupons") != 0:
-                  raise SystemExit(f"{mode}: aggregate did not evaluate both coupons: {aggregate}")
+                  raise SystemExit(f"{mode}: aggregate did not evaluate all five coupons: {aggregate}")
           print("COUPON_ACCEPTANCE_OK: 5 official coupons, 75 SELAE results, 75 canonical fixture reconciliations, 15 x 14 forecasts, optimizer within SELAE limits")
           PY
       - name: Upload coupon pilot evidence

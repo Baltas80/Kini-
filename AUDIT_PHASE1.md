@@ -3664,3 +3664,19 @@ This is a provenance-validation fix only; it does not change forecasts, optimize
 - PR #10 remains open/draft and stacked; no merge and no modification of master.
 
 **Next action:** continue the P6 archive expansion across more dates/seasons with strict official-source and fixture reconciliation, retaining raw PDF bytes/hashes only when retrievable.
+
+
+## P6 archive expansion — Jornada 29 / five-coupon pilot (2026-11-17)
+
+- Added normalized SELAE snapshot `2020-2021-29.json` for draw 2021-01-24. Official result page and press-release PDF agree on 14 signs and Pleno M–1; prize table is validated by regression test.
+- Reconciled all 15 ordered fixtures (14 main + Pleno Athletic Club–Getafe 5–1) against HistoricalQuiniela kickoff schedule and Football-Data SP1/SP2. New explicit aliases: Girona → Girona and Castellón → Castellon.
+- First kickoff: 2021-01-23 14:00 Europe/Madrid. Training cutoff: 2021-01-22. Pre-kickoff history: 417 matches, 2020-09-12 through 2021-01-22.
+- Jornada 29 official prize evidence: revenue €3,149,695.50; Pleno and 14 rolled over; 13: 40 × €5,905.68; 12: 609 × €387.89; 11: 4,756 × €49.67; 10: 25,968 × €10.92; Elige8: €83,271.50 revenue, 66 winners, €693.93 each.
+- The original PDF bytes were not captured. No PDF SHA-256 is claimed. Normalized snapshot SHA-256: `4794789c451a10a3a8b7cf82b3fb9ea0e857007280e42546312b0c695205c34e`.
+- Five-coupon pilot [44156981828](https://github.com/Baltas80/Kini-/actions/runs/44156981828), artifact 14360688825, ZIP SHA-256 `4e7d5f21f8dcf4c871606db3fe24b3ff7eb2af02d908b6c381a3406723ad98b2`: 5 official coupons; 75/75 fixtures reconciled; 15 successful DC/ML/ensemble evaluations; 210 forecasts; zero failures and zero empty prediction sets. Each candidate generated 8 columns, 3 doubles, no triples, 8 bets and €6.00 per coupon.
+- Jornada 29 results: DC 4/6, ML 5/6, ensemble 5/5 (single-sign/best-column hits). Aggregate five-draw means: DC 6.00/7.00, ML 6.00/6.80, ensemble 6.00/7.00. No 14/14, full 15/15 or Pleno pair hit; no model ranking is justified.
+- CI [44156981868](https://github.com/Baltas80/Kini-/actions/runs/44156981868): **412 tests passed**, 25 upstream deprecation warnings; Actionlint and Ruff passed. Data validation [44156981922](https://github.com/Baltas80/Kini-/actions/runs/44156981922): 5,322 fixtures, 56 canonical team IDs, 10,644/10,644 references resolved, zero unresolved/ambiguous identities, duplicates or score/result mismatches; 14 source files within 168 hours.
+- Historical model workflow [44156982053](https://github.com/Baltas80/Kini-/actions/runs/44156982053): model-backtest job skipped by the change filter; no new Brier/Log Loss or market comparison. Actual payout/ROI remain unevaluated.
+- PR #10 remains open/draft, based on `feat/selae-fixture-reconciliation`; `master` remains untouched.
+
+**Next action:** identify and reconcile a candidate coupon from a different season, retaining strict source, kickoff, team-identity, score and prize evidence.
