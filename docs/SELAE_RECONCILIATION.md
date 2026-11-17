@@ -224,3 +224,15 @@ The normalized draw loader and reconciliation report now retain the public-draw 
 - `home_goals=null` and `away_goals=null`.
 
 This preserves the actual coupon outcome for a future ticket-level evaluator without converting a public draw into a played fixture or a model target. The current coupon backtest does not yet consume these excluded records; no ticket-performance result is claimed for public-draw positions. Any future prediction treatment must model the public-draw mechanism separately and keep it out of football forecast metrics.
+
+### Public-draw ball distribution is not uniform
+
+Do not assign a uniform 1/3–1/3–1/3 probability to a public-draw position. Official SELAE actas show that the balls placed in the draw are weighted by the distribution of signs forecast by participants, supplied by SELAE's central system. Examples:
+
+- Levante–Villarreal, 15-12-2025: **12 / 16 / 72** balls for 1 / X / 2 ([official acta](https://www.loteriasyapuestas.es/f/loterias/web_corporativa/Comunicacion/Avisos_de_interes/ACTA%20PORCENTAJE%20BOLAS%20Y%20PRON%C3%93STICOS%20JORNADA%2028%C2%AA%20DE%20LA%20QUINIELA.pdf)).
+- Villarreal–Espanyol, 04-03-2025: **83 / 11 / 6** ([official acta](https://www.loteriasyapuestas.es/f/loterias/web_corporativa/Comunicacion/Avisos_de_interes/QUINIELA%20JDA%2046%20PORCENTAJES%20BOLAS%20SUSPENSI%C3%93N.pdf)).
+- Dundee United–Aberdeen, 12-02-2026: **39 / 35 / 26** ([official acta](https://www.loteriasyapuestas.es/f/loterias/web_corporativa/Comunicacion/Avisos_de_interes/QUINIELA%20JDA%2041%20PORCENTAJES%20BOLAS%20SUSPENSI%C3%93N.pdf)).
+
+The actas state that the number of balls is determined from the central system's participant forecasts after betting admission closes. These counts therefore describe the official public-draw mechanism, but are **post-close information** for that coupon. They may be retained as ex-post draw metadata; they must not be fed into the football models or treated as a pre-ticket feature for the same draw. A pre-ticket estimate would require a separately timestamped forecast available before the relevant ticket-submission cutoff.
+
+Keep three concepts separate: the realized public-draw sign (coupon outcome), the official post-close ball counts (draw-mechanism metadata), and football-match probabilities (not applicable to a fixture that was not played).
