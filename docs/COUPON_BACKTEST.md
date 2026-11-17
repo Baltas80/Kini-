@@ -315,3 +315,25 @@ The earliest main fixture kicked off on 2020-12-05 at 14:00 Europe/Madrid. The c
 The pilot now imports journeys 19 and 21 together and requires two independently reviewed SELAE snapshots, 30 reconciled fixtures, and 14 predictions from each of Dixon-Coles, ML and the fixed DC/ML ensemble for each coupon. It reuses the immutable validated historical-data artifact from the PR base branch instead of downloading Football-Data again for every PR run. Manual workflow dispatch performs a fresh, fail-closed history build.
 
 This expands the end-to-end sample from one to two coupons. It remains far too small for model selection, hit-rate estimation, payout performance or profitability claims. The next separate task is to validate the stored prize-distribution schema and implement exact-column payout scoring without assuming that a 14-match hit and a Pleno hit are interchangeable.
+
+
+## Multi-coupon pilot validation — 2026-11-17
+
+Final run [44102306745](https://github.com/Baltas80/Kini-/actions/runs/44102306745), artifact ID `14336777336`, code revision `b2c1d9b5b04858f22058c5ff84ba2289d878ece3`. The pilot used the validated 5,322-row Football-Data artifact (SHA-256 `7251b84acd803047746c0c55c6bdabb60d9499208cfd6c781f72080295346f44`) from the PR base branch, rather than downloading the source files again.
+
+Both official snapshots reconciled successfully: Jornada 19 (2020-12-06) and Jornada 21 (2020-12-13). The first coupon had 277 training matches through 2020-12-04; the second had 303 through 2020-12-11. Each of DC, ML and fixed DC/ML ensemble emitted 14 forecasts for each coupon. All six evaluations produced eight columns, three doubles, zero triples and €6.00 cost; no 14/14, Pleno or full 15/15 coverage occurred.
+
+| Coupon | Model | Single-sign hits | Best direct column |
+|---|---|---:|---:|
+| 2020-2021:19 | Dixon-Coles | 5 | 6 |
+| 2020-2021:19 | ML | 6 | 7 |
+| 2020-2021:19 | Fixed DC/ML ensemble | 4 | 7 |
+| 2020-2021:21 | Dixon-Coles | 7 | 7 |
+| 2020-2021:21 | ML | 5 | 6 |
+| 2020-2021:21 | Fixed DC/ML ensemble | 7 | 8 |
+
+The two coupons are adjacent and their training windows overlap substantially. These results validate the import/reconciliation/prediction/optimizer pipeline, not model quality. They are not sufficient for model selection, hit-rate estimation or profitability claims.
+
+CI [44102306450](https://github.com/Baltas80/Kini-/actions/runs/44102306450) passed with 391 tests and 25 warnings. Historical data validation [44102306414](https://github.com/Baltas80/Kini-/actions/runs/44102306414) passed. The historical model backtest job was skipped by its change filter and is not represented as a new full backtest.
+
+The official prize distribution for Jornada 19 is captured in the normalized SELAE extract, but payout scoring is not implemented. The next step is to validate that prize schema and calculate realized payout for every exact direct column and Pleno combination; only then should the archive be expanded for a larger multi-season sample.
