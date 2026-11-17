@@ -130,13 +130,20 @@ jobs:
         with:
           python-version: "3.12"
       - run: python -m pip install -e ".[ml]"
-      - name: Download and validate a fresh Football-Data snapshot
-        run: python scripts/build_history.py --refresh --require-fresh
-      - name: Enforce fresh source snapshot
+      - name: Restore latest default-branch Football-Data cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .cache/football-data
+          key: football-data-${{ runner.os }}-${{ github.ref_name }}-${{ github.run_id }}
+          restore-keys: |
+            football-data-${{ runner.os }}-master-
+      - run: python scripts/build_history.py --offline
+      - name: Enforce weekly Football-Data cache snapshot
         run: |
           python - <<'PY'
           import json
           import math
+          from datetime import datetime, timezone
           from pathlib import Path
 
           profile = json.loads(
@@ -145,31 +152,43 @@ jobs:
           sources = profile.get("source_cache_metadata")
           if not profile.get("integrity_passed"):
               raise SystemExit("Historical dataset profile reports failed integrity")
+          if len(profile.get("source_urls", [])) != 14:
+              raise SystemExit("Expected exactly 14 Football-Data source URLs")
           if not isinstance(sources, list) or len(sources) != 14:
-              raise SystemExit("Expected exactly 14 fresh Football-Data source files")
+              raise SystemExit("Expected exactly 14 cached Football-Data source files")
 
           stale = []
+          mtimes = []
           for source in sources:
               age = source.get("cache_age_hours")
+              modified = source.get("cache_file_mtime_utc")
               if (
                   not isinstance(age, (int, float))
                   or isinstance(age, bool)
                   or not math.isfinite(float(age))
-                  or float(age) > 1.0
-                  or not source.get("cache_file_mtime_utc")
+                  or float(age) > 168.0
+                  or not isinstance(modified, str)
               ):
                   stale.append(
                       (source.get("source_url"), source.get("cache_age_hours"))
                   )
+                  continue
+              timestamp = datetime.fromisoformat(modified)
+              if timestamp.tzinfo is None or timestamp.utcoffset() is None:
+                  stale.append((source.get("source_url"), "timezone-naive mtime"))
+                  continue
+              mtimes.append(timestamp.astimezone(timezone.utc))
           if stale:
-              raise SystemExit(f"Source files are missing or older than one hour: {stale}")
+              raise SystemExit(f"Football-Data cache is missing or older than seven days: {stale}")
+          if len(mtimes) != 14 or (max(mtimes) - min(mtimes)).total_seconds() > 3600:
+              raise SystemExit("Football-Data source files do not belong to one hourly snapshot")
 
           rows = int(profile.get("rows_after_deduplication", 0))
           if rows <= 0:
               raise SystemExit("Historical dataset contains no completed fixtures")
           print(
-              "FRESH_HISTORY_SOURCE_ACCEPTANCE_OK: "
-              f"{rows} completed fixtures from {len(sources)} recently downloaded sources"
+              "WEEKLY_HISTORY_SOURCE_ACCEPTANCE_OK: "
+              f"{rows} completed fixtures from one validated 14-file snapshot"
           )
           PY
       - name: Diagnose first ML forecast
