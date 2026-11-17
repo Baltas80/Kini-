@@ -581,7 +581,7 @@ def test_preclose_snapshot_rejects_capture_after_ticket_creation() -> None:
 
 
 
-def test_coupon_plan_includes_pleno15_kickoff_when_validating_first_kickoff() -> None:
+def test_coupon_plan_uses_pleno15_kickoff_for_first_kickoff() -> None:
     plan = _coupon_plan()
     plan["pleno15_kickoff_at"] = "2026-11-08T13:00:00+01:00"
     plan["first_kickoff_at"] = "2026-11-08T13:00:00+01:00"
