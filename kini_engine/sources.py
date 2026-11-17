@@ -7,7 +7,7 @@ import time
 import unicodedata
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 import pandas as pd
 import requests
@@ -59,12 +59,12 @@ class KinielaGPTSource:
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
         "(KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"
     )
-    DETAILS_HOME_HEADERS = {
+    DETAILS_HOME_HEADERS: ClassVar[dict[str, str]] = {
         "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "accept-language": "es-ES,es;q=0.9,en;q=0.8",
         "user-agent": DETAILS_USER_AGENT,
     }
-    DETAILS_REQUEST_HEADERS = {
+    DETAILS_REQUEST_HEADERS: ClassVar[dict[str, str]] = {
         "accept": "application/json, text/plain, */*",
         "accept-language": "es-ES,es;q=0.9,en;q=0.8",
         "cache-control": "no-cache",
