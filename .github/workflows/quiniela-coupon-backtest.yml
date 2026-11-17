@@ -381,7 +381,7 @@ jobs:
           if result.get("schema_version") != 3 or result.get("config", {}).get("min_history_matches") != 250:
               raise SystemExit("backtest result schema or minimum-history configuration mismatch")
           if result.get("summary", {}).get("coupon_count") != 9:
-              raise SystemExit("backtest summary does not contain eight coupons")
+              raise SystemExit("backtest summary does not contain nine coupons")
 
           for coupon in coupons:
               coupon_id = coupon["coupon_id"]
@@ -435,7 +435,7 @@ jobs:
           for mode in ("dc", "ml", "ensemble_dc_ml"):
               aggregate = result.get("summary", {}).get("models", {}).get(mode, {})
               if aggregate.get("evaluated_coupons") != 9 or aggregate.get("failed_coupons") != 0:
-                  raise SystemExit(f"{mode}: aggregate did not evaluate all eight coupons: {aggregate}")
+                  raise SystemExit(f"{mode}: aggregate did not evaluate all nine coupons: {aggregate}")
           print("COUPON_ACCEPTANCE_OK: 9 official coupons across three seasons, 135 SELAE results, 135 canonical fixture reconciliations, 27 x 14 forecasts, optimizer within SELAE limits")
           PY
       - name: Upload coupon pilot evidence
