@@ -375,4 +375,3 @@ def test_preclose_snapshot_rejects_boolean_schema_version() -> None:
             position=7,
             ticket_cutoff_at_utc="2026-11-08T11:00:00Z",
         )
-
