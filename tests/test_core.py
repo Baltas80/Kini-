@@ -19,6 +19,7 @@ from kini_engine.core import (
     surprise_signal,
 )
 from kini_engine.ticket_outcomes import TicketOutcomeError
+from kini_engine.ticket_ledger import TicketLedger
 
 
 def sample():
@@ -1422,3 +1423,24 @@ def test_quiniela_pre_ticket_plan_validates_pleno15_kickoff_against_fixture():
             coupon_plan=plan,
             public_draw_snapshots=snapshots,
         )
+
+def test_quiniela_persists_pre_ticket_record_to_immutable_ledger(tmp_path):
+    plan, fixtures, snapshots = _planned_coupon_with_public_draw()
+    ledger = TicketLedger(tmp_path / "tickets.sqlite3")
+    engine = KiniEngine(enable_ml=False, ticket_ledger=ledger).fit(sample())
+
+    result = engine.quiniela(
+        fixtures,
+        budget=2,
+        coupon_plan=plan,
+        public_draw_snapshots=snapshots,
+    )
+
+    receipt = result["ticket_ledger"]
+    stored = ledger.get_ticket_record(result["ticket_id"])
+    assert receipt["inserted"] is True
+    assert stored is not None
+    assert stored["ticket_record"] == result["ticket_record"]
+    assert stored["ticket_sha256"] == result["ticket_record_sha256"]
+    assert stored["ticket_record"]["columns"] == result["ticket"]["columns"]
+
