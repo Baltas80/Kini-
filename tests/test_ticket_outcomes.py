@@ -239,7 +239,7 @@ def _pleno15_report() -> dict[str, object]:
         "source_sha256": HASH_A,
         "evidence_type": "normalized_official_extract",
         "verified_at_utc": "2026-11-08T16:00:00Z",
-        "verification_method": "Manual review of the official SELAE result page.",
+        "verification_method": "Synthetic unit-test fixture; no real SELAE result is asserted.",
         "home": "Pleno Home (M)",
         "away": "Pleno Away (M)",
         "home_goals": 2,
