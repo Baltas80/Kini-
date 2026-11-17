@@ -198,6 +198,7 @@ def test_ticket_ledger_lists_by_draw_date_and_enforces_limit(tmp_path):
     with pytest.raises(ValueError, match="draw_date"):
         ledger.list_ticket_records(draw_date="2026-11-08T00:00:00")
 
+
 def test_ticket_ledger_score_json_rejects_invalid_or_non_object_payload(tmp_path):
     ledger = TicketLedger(tmp_path / "tickets.sqlite3")
     ticket = _ticket()
