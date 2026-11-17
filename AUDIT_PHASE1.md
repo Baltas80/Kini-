@@ -3207,3 +3207,12 @@ The previous builder contract was not safe for pre-kickoff use. This correction 
 ### Stronger point-in-time boundary — ticket creation
 
 The pre-ticket plan now records `ticket_created_at_utc`. Schedule evidence, public-draw status evidence and participant-forecast snapshots must all be captured strictly before ticket creation, not merely before the admission cutoff. The required order is schedule capture / status evidence / forecast snapshot, then ticket creation, then admission cutoff, then first scheduled kickoff. This closes the remaining gap where a source captured after the ticket was generated but before cutoff could otherwise be accepted. Regression tests cover each late-capture case. The first CI attempt exposed a duplicate legacy test definition; that duplicate has been removed before the next validation.
+
+
+## CI trigger de-duplication — 2026-11-17
+
+The CI workflow previously ran on both every feature-branch push and the corresponding pull-request synchronize event. Both runs shared the same concurrency group, so rapid commits caused avoidable cancellations and pending runs. The `push` trigger is now restricted to `master`; feature branches are validated through `pull_request`, while direct integration changes on `master` retain push validation.
+
+- Commit: `56d7a3f`.
+- The change is workflow-only; it does not alter application or model behavior.
+- The current PR-head CI must still complete after this trigger change. Actionlint is part of that validation.
