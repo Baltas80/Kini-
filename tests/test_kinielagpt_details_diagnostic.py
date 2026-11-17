@@ -279,4 +279,3 @@ def test_http_error_evidence_is_bounded_and_does_not_expose_response_headers():
     assert len(evidence["response_body_preview"]) == 400
     assert "sensitive-cookie-value" not in str(evidence)
     assert "set-cookie" not in evidence
-
