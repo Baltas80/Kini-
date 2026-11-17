@@ -2824,3 +2824,44 @@ Current PR #9 head is `577633fa9c623f812ce80e00c366e9f6b9e6e6aa`; its CI [439903
 
 Next priority: finish the current-head walk-forward run and inspect its artifact for non-empty, identical strict common-time model/market samples. Keep the benchmark labelled date-aligned rather than timestamp-verified. The missing provider-issued `KINIELAGPT_AUTHORIZATION` and Football-Data commercial-use permission remain explicit external blockers. PR #9 remains a draft stacked on PR #8; no merge or direct change to `master`.
 
+
+## 2026-11-17 — First completed walk-forward metrics and market comparison
+
+Historical-backtest run [43983233928](https://github.com/Baltas80/Kini-/actions/runs/43983233928) completed successfully on code revision `76cf820caa5841efe129e96c52777810bb2832f8`. This is a completed baseline run, not yet the final validation of the newer snapshot-time and live-source changes.
+
+### Non-empty prediction streams
+
+- Dataset snapshot: 5,322 rows, SHA-256 `7251b84acd803047746c0c55c6bdabb60d9499208cfd6c781f72080295346f44`.
+- Forecast ledger: 5,022 fixtures, 2020-12-11 through 2026-11-16; ledger SHA-256 `ee612fffe69e56e1fb55707949f27f54c5d113eb9ae7495c626a89d22aa1abb6`.
+- All five modes produced **5,022 forecasts**: Dixon–Coles, ML, ensemble, DC+ML ensemble and adaptive DC+ML ensemble. The former `n=0` condition did not recur in this run.
+- Market probabilities were available for 4,433 fixtures. The wider model/market comparison therefore uses the same 4,433 fixtures, but not necessarily the same information cutoff.
+
+### Wider common-fixture benchmark (not snapshot-time fair)
+
+Market consensus on the 4,433-fixture common sample: accuracy **0.507331**, multiclass Brier **0.597459**, log loss **0.999371**.
+
+The best model mode was the standard ensemble, but it remained materially worse: accuracy **0.478231**, Brier **0.613559**, log loss **1.022974**. Its paired model-minus-market differences were:
+
+- Brier: **+0.016099**, 95% weekly-cluster bootstrap CI **[+0.012319, +0.019869]**.
+- Log loss: **+0.023603**, 95% CI **[+0.018076, +0.029212]**.
+- Accuracy: **−0.029100**, 95% CI **[−0.0395, −0.0190]**.
+
+ML was substantially weaker: accuracy **0.438078**, Brier **0.647430**, log loss **1.074138**. Market Brier was lower in all **14/14 competition-season segments** in this wider sample. The paired uncertainty used 10,000 bootstrap resamples clustered by ISO week (249 weeks).
+
+This is strong evidence that the current learned models are not adding value on this dataset, even though their forecasts may have access to later information than the market snapshot. It is not a fair same-information-time market comparison and must not be used to claim market superiority under strict temporal parity.
+
+### Strict common-information-time sample
+
+The conservative existing-cutoff gate produced only **111 fixtures**. On that sample market Brier was **0.595927**, versus **0.623886** for the ensemble and **0.670224** for ML. The direction is consistent, but 111 fixtures are insufficient for a robust model-selection decision. The current gate filters existing forecasts whose history/model-fit cutoff predates the snapshot; it does not yet regenerate each model at the snapshot date.
+
+The prequential-calibration diagnostic had a larger 3,856-fixture common market sample, but it is also not the strict snapshot-time comparison. Calibrated ensemble Brier/log loss were approximately **0.61153 / 1.0217**, against market **0.59665 / 0.99799**. Calibration does not close the observed gap.
+
+### Decision and next engineering unit
+
+- Keep the market as the strongest measured reference; do not promote ML or an ensemble as superior on the present evidence.
+- Do not discard Dixon–Coles or the ensemble solely from this non-parity comparison. First implement **snapshot-aligned walk-forward forecasts**: for each market snapshot date, refit using only results strictly earlier than that date, predict the corresponding fixtures, and compare model and market on the resulting identical sample.
+- Raise the strict common-time acceptance floor to at least **500 fixtures** (or report the benchmark as insufficient and fail the acceptance gate). The current `n=111` must not be labelled a validated market comparison.
+- Keep the wider 4,433-fixture comparison as a sensitivity benchmark, explicitly labelled with its information-time limitation.
+
+The next full historical run [43988937525](https://github.com/Baltas80/Kini-/actions/runs/43988937525) is still running on revision `4892fc6`; the newer current-head run [43990435803](https://github.com/Baltas80/Kini-/actions/runs/43990435803) is queued. Current PR head at this log update is `a83661f27a42da0f43b8d9c376e9e6a8da7f17ee`. PR #9 remains unmerged; `master` has not been modified.
+
