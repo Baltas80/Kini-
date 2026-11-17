@@ -157,7 +157,7 @@ def _normalize_verified_at_utc(value: str | None) -> str:
         parsed = datetime.now(UTC)
     else:
         try:
-            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+            parsed = datetime.fromisoformat(value)
         except ValueError as exc:
             raise ValueError("verified_at_utc must be an ISO UTC timestamp") from exc
         if (
