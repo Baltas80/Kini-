@@ -91,7 +91,7 @@ def _validate_prize_distribution(
     if not isinstance(snapshot, dict):
         raise PrizeScoringError("official SELAE result snapshot must be an object")
     version = snapshot.get("schema_version")
-    if isinstance(version, bool) or version != 1:
+    if type(version) is not int or version != 1:
         raise PrizeScoringError("unsupported official SELAE result snapshot schema")
     if snapshot.get("source") != "SELAE":
         raise PrizeScoringError("official result snapshot provider must be SELAE")
@@ -157,7 +157,7 @@ def _validate_prize_distribution(
             raise PrizeScoringError(
                 f"official fixture {position} has an invalid schema"
             )
-        if fixture.get("number") != position:
+        if type(fixture.get("number")) is not int or fixture["number"] != position:
             raise PrizeScoringError("official fixtures must be ordered from 1 to 14")
         _required_text(fixture.get("home"), f"fixture {position} home")
         _required_text(fixture.get("away"), f"fixture {position} away")
@@ -186,7 +186,7 @@ def _validate_prize_distribution(
         "away_category",
     }:
         raise PrizeScoringError("official Pleno al 15 snapshot has an invalid schema")
-    if pleno.get("number") != 15:
+    if type(pleno.get("number")) is not int or pleno["number"] != 15:
         raise PrizeScoringError("official Pleno al 15 fixture number must be 15")
     _required_text(pleno.get("home"), "Pleno home")
     _required_text(pleno.get("away"), "Pleno away")
@@ -270,6 +270,32 @@ def _validate_prize_distribution(
     if set(categories) != set(PRIZE_CATEGORIES):
         raise PrizeScoringError("prize distribution is missing a required category")
 
+    # Keep official counts separate by category. In particular, do not infer
+    # whether SELAE includes Pleno al 15 winners in the published 14 category.
+    winner_count_diagnostics = {
+        "status": "validated_per_category_only",
+        "counts_by_category": {
+            name: categories[name]["winner_count"] for name in PRIZE_CATEGORIES
+        },
+        "rollover_categories_have_zero_winners": all(
+            item["winner_count"] == 0
+            for item in categories.values()
+            if item["status"] == "rollover"
+        ),
+        "awarded_categories_have_positive_winners": all(
+            item["winner_count"] > 0
+            for item in categories.values()
+            if item["status"] == "awarded"
+        ),
+        "pleno_vs_14_relationship": "not_assessed",
+        "aggregate_winner_count": None,
+        "interpretation_note": (
+            "Counts are retained independently by published category. The source "
+            "does not establish whether Pleno al 15 winners are included in or "
+            "excluded from the 14 category; no overlap or aggregate is inferred."
+        ),
+    }
+
     if "elige8" in distribution:
         elige8 = distribution["elige8"]
         if not isinstance(elige8, dict) or set(elige8) != {
@@ -283,7 +309,13 @@ def _validate_prize_distribution(
             elige8.get("winner_count"), "elige8.winner_count"
         )
         elige8_prize = _money(elige8.get("unit_prize_eur"), "elige8.unit_prize_eur")
-        if elige8_revenue is None or elige8_prize is None or elige8_winners < 1:
+        if (
+            elige8_revenue is None
+            or elige8_revenue <= 0
+            or elige8_prize is None
+            or elige8_prize <= 0
+            or elige8_winners < 1
+        ):
             raise PrizeScoringError(
                 "Elige8 prize evidence must contain positive revenue, winners and unit prize"
             )
@@ -294,6 +326,7 @@ def _validate_prize_distribution(
         "prize_pdf_url": prize_url,
         "revenue_eur": revenue,
         "categories": categories,
+        "winner_count_diagnostics": winner_count_diagnostics,
         "fixtures": fixtures,
         "pleno": pleno,
     }
@@ -443,6 +476,7 @@ def evaluate_official_prize_snapshot(
         "prize_distribution_revenue_eur": f"{validated['revenue_eur']:.2f}",
         "prize_tier_counts": tier_counts,
         "prize_tier_details": tier_details,
+        "official_winner_count_diagnostics": validated["winner_count_diagnostics"],
         "conditional_published_prize_reference_eur": (
             f"{reference_total:.2f}" if reference_complete else None
         ),
