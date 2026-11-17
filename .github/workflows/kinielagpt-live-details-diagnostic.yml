@@ -6,8 +6,6 @@ on:
     paths:
       - "kini_engine/sources.py"
       - "scripts/diagnose_kinielagpt_details.py"
-      - "tests/test_sources.py"
-      - "tests/test_kinielagpt_details_diagnostic.py"
       - ".github/workflows/kinielagpt-live-details-diagnostic.yml"
   workflow_dispatch:
 
@@ -76,13 +74,13 @@ jobs:
           inspect=false
           while IFS= read -r path; do
             case "$path" in
-              kini_engine/sources.py|scripts/diagnose_kinielagpt_details.py|tests/test_sources.py|tests/test_kinielagpt_details_diagnostic.py|.github/workflows/kinielagpt-live-details-diagnostic.yml)
+              kini_engine/sources.py|scripts/diagnose_kinielagpt_details.py|.github/workflows/kinielagpt-live-details-diagnostic.yml)
                 inspect=true
                 ;;
             esac
           done <<<"$changed_files"
 
-          echo "Files since last successful live inspection:"
+          echo "Files since last completed live diagnostic attempt:"
           printf '%s\n' "$changed_files"
           echo "Last completed live diagnostic attempt head: ${last_attempt:-none}"
           echo "inspect=$inspect" >> "$GITHUB_OUTPUT"

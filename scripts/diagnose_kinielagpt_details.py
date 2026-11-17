@@ -158,6 +158,7 @@ def summarize_probability_payload(payload: Any) -> dict[str, Any]:
             "payload_type": type(payload).__name__,
             "root_keys": [],
             "percentage_keys": [],
+            "metadata": {},
             "record_count": 0,
             "record_fields": [],
             "probability_field_samples": {},
@@ -211,6 +212,11 @@ def summarize_probability_payload(payload: Any) -> dict[str, Any]:
             if isinstance(percentages, Mapping)
             else []
         ),
+        "metadata": {
+            key: _safe_sample(percentages.get(key))
+            for key in ("jornada", "temporada", "activo")
+            if isinstance(percentages, Mapping) and key in percentages
+        },
         "record_count": len(records),
         "record_fields": field_names[:80],
         "probability_field_samples": field_samples,
@@ -603,6 +609,38 @@ def collect_live_diagnostic() -> dict[str, Any]:
     report["kickoff_attachment"] = summarize_kickoff_attachment(
         probability_rows, source.LAE_SOURCE
     )
+    previous_jornada = jornada - 1
+    if previous_jornada > 0:
+        try:
+            previous_rows = source.probabilities(previous_jornada, temporada)
+            previous_attachment = summarize_kickoff_attachment(
+                previous_rows, source.LAE_SOURCE
+            )
+            valid_previous_vectors = previous_attachment["valid_lae_vector_count"]
+            report["previous_jornada_probe"] = {
+                "jornada": previous_jornada,
+                "temporada": temporada,
+                "rows_count": len(previous_rows),
+                "valid_lae_vector_count": valid_previous_vectors,
+                "status": "ok" if valid_previous_vectors else "no_valid_lae_vectors",
+                "fixture_samples": [
+                    {
+                        "id": row.get("id"),
+                        "local": row.get("local"),
+                        "visitante": row.get("visitante"),
+                        "lae": row.get("lae"),
+                    }
+                    for row in previous_rows[:3]
+                    if isinstance(row, Mapping)
+                ],
+            }
+        except Exception as exc:  # noqa: BLE001 - keep current-round evidence
+            report["previous_jornada_probe"] = {
+                "jornada": previous_jornada,
+                "temporada": temporada,
+                "status": "error",
+                "error": str(exc)[:200],
+            }
     if details_blocked:
         report["status"] = "blocked_missing_authorization"
     else:

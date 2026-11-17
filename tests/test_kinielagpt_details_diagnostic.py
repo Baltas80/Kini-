@@ -345,6 +345,16 @@ def test_collect_live_diagnostic_continues_when_details_authorization_is_missing
             )
 
         def probabilities(self, jornada, temporada):
+            if jornada == 22:
+                return [
+                    {
+                        "id": 1,
+                        "local": "Home",
+                        "visitante": "Away",
+                        "lae": {"1": 0.5, "X": 0.3, "2": 0.2},
+                        "lae_source": "test:lae",
+                    }
+                ]
             return []
 
     monkeypatch.setattr(diagnostic_module, "KinielaGPTSource", FakeSource)
@@ -357,3 +367,38 @@ def test_collect_live_diagnostic_continues_when_details_authorization_is_missing
     assert report["details_status"] == "blocked_missing_authorization"
     assert report["lae_probability_schema"]["record_count"] == 0
     assert report["kickoff_attachment"]["rows_count"] == 0
+    assert report["previous_jornada_probe"]["jornada"] == 22
+    assert report["previous_jornada_probe"]["rows_count"] == 1
+    assert report["previous_jornada_probe"]["valid_lae_vector_count"] == 1
+    assert report["previous_jornada_probe"]["status"] == "ok"
+
+
+def test_probability_summary_exposes_jornada_season_and_active_metadata():
+    payload = {
+        "quinielista": {
+            "porcentajes": {
+                "jornada": "23",
+                "temporada": "2027",
+                "activo": "0",
+                "partido": [
+                    {
+                        "num": "1",
+                        "local": "Home",
+                        "visitante": "Away",
+                        "porc_1": "0",
+                        "porc_X": "0",
+                        "porc_2": "0",
+                    }
+                ],
+            }
+        }
+    }
+
+    summary = summarize_probability_payload(payload)
+
+    assert summary["metadata"] == {
+        "jornada": "23",
+        "temporada": "2027",
+        "activo": "0",
+    }
+    assert summary["valid_probability_vector_count"] == 0
