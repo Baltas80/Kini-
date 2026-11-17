@@ -43,25 +43,27 @@ jobs:
             exit 0
           fi
 
-          # Compare with the latest completed run whose inspect job actually
-          # succeeded. A cancelled run or a successful run with inspect skipped
-          # must not hide an unvalidated source/script change.
-          last_success=""
-          runs_json="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/kinielagpt-live-details-diagnostic.yml/runs?branch=$PR_BRANCH&event=pull_request&status=completed&per_page=100" 2>/dev/null || printf '{"workflow_runs":[]}')"
+          # Use the latest completed attempt that uploaded its bounded evidence
+          # artifact. The artifact records upstream HTTP/schema failures too, so
+          # an external 4xx must not cause this diagnostic to rerun on every
+          # unrelated commit. A cancelled run or a run without an artifact is
+          # not a completed attempt.
+          last_attempt=""
+          runs_json="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/kinielagpt-live-details-diagnostic.yml/runs?branch=$PR_BRANCH&event=pull_request&status=completed&per_page=30" 2>/dev/null || printf '{"workflow_runs":[]}')"
           while read -r run_id head_sha; do
             [[ -n "$run_id" && -n "$head_sha" ]] || continue
             jobs_json="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/jobs?per_page=100" 2>/dev/null || printf '{"jobs":[]}')"
-            if jq -e '[.jobs[]? | select(.name == "inspect" and .conclusion == "success")] | length > 0' <<<"$jobs_json" >/dev/null; then
-              last_success="$head_sha"
+            if jq -e '[.jobs[]? | select(.name == "inspect") | .steps[]? | select(.name == "Upload bounded schema and crosswalk evidence" and .conclusion == "success")] | length > 0' <<<"$jobs_json" >/dev/null; then
+              last_attempt="$head_sha"
               break
             fi
           done < <(
-            jq -r '.workflow_runs[]? | select(.conclusion == "success") | [.id, .head_sha] | @tsv' <<<"$runs_json"
+            jq -r '.workflow_runs[]? | [.id, .head_sha] | @tsv' <<<"$runs_json"
           )
 
-          if [[ -n "$last_success" ]] && git fetch --no-tags origin "$last_success"; then
-            if git merge-base --is-ancestor "$last_success" HEAD; then
-              changed_files="$(git diff --name-only "$last_success" HEAD)"
+          if [[ -n "$last_attempt" ]] && git fetch --no-tags origin "$last_attempt"; then
+            if git merge-base --is-ancestor "$last_attempt" HEAD; then
+              changed_files="$(git diff --name-only "$last_attempt" HEAD)"
             else
               git fetch --no-tags --depth=1 origin "$PR_BASE_SHA"
               changed_files="$(git diff --name-only "$PR_BASE_SHA" HEAD)"
@@ -82,7 +84,7 @@ jobs:
 
           echo "Files since last successful live inspection:"
           printf '%s\n' "$changed_files"
-          echo "Last successful live inspection head: ${last_success:-none}"
+          echo "Last completed live diagnostic attempt head: ${last_attempt:-none}"
           echo "inspect=$inspect" >> "$GITHUB_OUTPUT"
           echo "Live inspection required: $inspect"
 
