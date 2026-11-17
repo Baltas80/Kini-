@@ -239,7 +239,8 @@ def test_build_probability_vectors_uses_preclose_snapshot_for_public_draw_only()
 ):
     report = _reconciliation()
     model_probabilities = {
-        position: {"1": 0.5, "X": 0.3, "2": 0.2} for position in range(1, 15)
+        position: {"1": 0.5, "X": 0.3, "2": 0.2}
+        for position in range(1, 15)
         if position != 7
     }
     result = build_ticket_probability_vectors(
@@ -279,8 +280,7 @@ def test_probability_builder_rejects_model_probability_for_public_draw_position(
 ):
     report = _reconciliation()
     model_probabilities = {
-        position: {"1": 0.5, "X": 0.3, "2": 0.2}
-        for position in range(1, 15)
+        position: {"1": 0.5, "X": 0.3, "2": 0.2} for position in range(1, 15)
     }
     with pytest.raises(TicketOutcomeError, match="played positions only"):
         build_ticket_probability_vectors(
