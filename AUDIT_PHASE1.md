@@ -2922,3 +2922,19 @@ El preflight ya realizado sobre el CSV y ledger del artefacto anterior identific
 PR #9 sigue abierto y en borrador, con base en `feat/canonical-team-identity-registry`. No se ha fusionado ninguna PR ni se ha modificado `master`.
 
 **Siguiente acción P0:** implementar el motor walk-forward alineado a snapshot y ejecutar el benchmark completo contra la nueva puerta de aceptación. Mantener la limitación de fecha (no timestamp) explícita; no afirmar que las cuotas históricas tienen hora exacta de captura.
+
+## 2026-11-17 — Implementación del walk-forward alineado por snapshot
+
+Se incorpora el motor snapshot-aligned y su integración en el comando compare.
+
+- Agrupa los partidos con mercado explícitamente elegible por la fecha de captura documentada de Football-Data: martes para miércoles/jueves y viernes para sábado/domingo.
+- Para cada fecha de snapshot construye de nuevo el historial con resultados completos cuya fecha de partido sea estrictamente anterior al snapshot. Se excluyen resultados del propio día del snapshot.
+- Ejecuta un único ajuste de KiniEngine por fecha de snapshot. Todos los partidos asignados a esa captura comparten el mismo historial y el mismo modelo.
+- Predice Dixon–Coles, ML, ensemble, DC/ML y DC/ML adaptativo. El peso adaptativo solo utiliza predicciones OOF de snapshots anteriores cuyos partidos ya son anteriores al snapshot actual.
+- El ensemble solo recibe LAE si la captura LAE verificada es anterior a la fecha del snapshot. Los valores capturados el mismo día o después se excluyen de la predicción snapshot-aligned.
+- La muestra común se forma únicamente cuando los cinco modelos y el mercado producen vectores 1/X/2 válidos para el mismo fixture. Se registran errores por modelo y no se normalizan silenciosamente vectores inválidos.
+- Se genera un ledger inmutable separado, snapshot-aligned-prediction-ledger.jsonl, con SHA-256 del dataset, revisión de código, fixture, snapshot, historial de entrenamiento y probabilidades de cada modelo.
+- La puerta de CI exige al menos 500 fixtures comunes, cero errores, un único ajuste por snapshot, cutoff estrictamente anterior, historial idéntico para todos los partidos de una captura y coincidencia del hash de fixtures entre ledger, modelos y mercado.
+
+La implementación y las nuevas pruebas se incorporan en una sola revisión de la rama. La validación CI y el backtest completo deben finalizar antes de declarar el benchmark aceptado. La limitación de timestamps exactos de captura de cuotas permanece abierta: el benchmark es de alineación conservadora por fecha, no de verificación por hora.
+

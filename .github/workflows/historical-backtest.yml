@@ -529,8 +529,13 @@ jobs:
       - name: Enforce snapshot-aligned common-time market benchmark
         run: |
           python - <<'PY'
+          import hashlib
           import json
+          import re
+          from datetime import date
           from pathlib import Path
+
+          from kini_engine.ledger import read_prediction_ledger
 
           result = json.loads(Path("backtest-results.json").read_text())
           snapshot = result.get("snapshot_aligned_market")
@@ -562,6 +567,12 @@ jobs:
           )
           common = snapshot.get("common_sample", {})
           errors = snapshot.get("prediction_errors", {})
+          fixture_ids_sha256 = snapshot.get("fixture_ids_sha256")
+          if not isinstance(fixture_ids_sha256, str) or not re.fullmatch(
+              r"[0-9a-f]{64}", fixture_ids_sha256
+          ):
+              raise SystemExit("Snapshot-aligned fixture-set SHA-256 is invalid")
+
           for name in required:
               sample = common.get(name, {})
               sample_n = int(sample.get("n", 0))
@@ -573,18 +584,118 @@ jobs:
                   or model_n != sample_n
                   or market_n != sample_n
                   or error_count != 0
+                  or sample.get("fixture_ids_sha256") != fixture_ids_sha256
               ):
                   raise SystemExit(
                       f"{name} failed snapshot-aligned acceptance: "
                       f"sample={sample_n}, model={model_n}, market={market_n}, "
-                      f"errors={error_count}, required_n>={minimum}"
+                      f"errors={error_count}, fixture_hash="
+                      f"{sample.get('fixture_ids_sha256')}, required_n>={minimum}"
                   )
+
+          snapshots = snapshot.get("snapshots")
+          if not isinstance(snapshots, list) or len(snapshots) != n_snapshots:
+              raise SystemExit("Snapshot fit audit is missing or inconsistent")
+          if int(snapshot.get("model_fit_count", -1)) != n_snapshots:
+              raise SystemExit("There must be exactly one model fit per snapshot date")
+
+          snapshots_by_date = {}
+          for item in snapshots:
+              if not isinstance(item, dict):
+                  raise SystemExit("Snapshot fit audit contains a malformed entry")
+              snapshot_date = date.fromisoformat(item["snapshot_date"])
+              training_cutoff = date.fromisoformat(item["training_cutoff_date"])
+              history_hash = item.get("training_history_sha256")
+              if training_cutoff >= snapshot_date:
+                  raise SystemExit(
+                      f"Snapshot {snapshot_date} includes same-day or future training data"
+                  )
+              if (
+                  not isinstance(history_hash, str)
+                  or not re.fullmatch(r"[0-9a-f]{64}", history_hash)
+                  or int(item.get("model_fit_count", 0)) != 1
+              ):
+                  raise SystemExit(f"Snapshot {snapshot_date} has invalid fit provenance")
+              if int(item.get("common_prediction_count", -1)) != int(
+                  item.get("fixture_count", 0)
+              ):
+                  raise SystemExit(
+                      f"Snapshot {snapshot_date} did not predict every eligible fixture"
+                  )
+              if snapshot_date.isoformat() in snapshots_by_date:
+                  raise SystemExit(f"Duplicate snapshot date: {snapshot_date}")
+              snapshots_by_date[snapshot_date.isoformat()] = item
+
+          ledger_meta = snapshot.get("forecast_ledger", {})
+          ledger_path = Path(ledger_meta.get("path", ""))
+          ledger_hash = ledger_meta.get("sha256")
+          if (
+              not ledger_path.is_file()
+              or not isinstance(ledger_hash, str)
+              or not re.fullmatch(r"[0-9a-f]{64}", ledger_hash)
+          ):
+              raise SystemExit("Snapshot-aligned forecast ledger is missing")
+          manifest, forecasts = read_prediction_ledger(
+              ledger_path,
+              expected_sha256=ledger_hash,
+          )
+          if (
+              len(forecasts) != n_common
+              or int(manifest.get("forecast_count", 0)) != n_common
+              or not set(required).issubset(manifest.get("model_modes", []))
+          ):
+              raise SystemExit("Snapshot-aligned ledger count or model contract is invalid")
+
+          ledger_counts = {}
+          fixture_ids = []
+          for row in forecasts:
+              snapshot_date = row.get("market_snapshot_date")
+              if snapshot_date not in snapshots_by_date:
+                  raise SystemExit("Ledger row references an unknown market snapshot")
+              audit = snapshots_by_date[snapshot_date]
+              fixture_date = date.fromisoformat(row["fixture_date"])
+              cutoff = date.fromisoformat(row["training_cutoff_date"])
+              if (
+                  row.get("forecast_as_of_date") != snapshot_date
+                  or date.fromisoformat(snapshot_date) >= fixture_date
+                  or cutoff >= date.fromisoformat(snapshot_date)
+                  or row.get("model_fit_cutoff_date") != row["training_cutoff_date"]
+                  or row.get("training_history_sha256")
+                  != audit.get("training_history_sha256")
+                  or int(row.get("training_match_count", 0))
+                  != int(audit.get("training_match_count", -1))
+                  or int(row.get("model_fit_match_count", 0))
+                  != int(audit.get("training_match_count", -1))
+                  or row.get("market_eligible") is not True
+              ):
+                  raise SystemExit(
+                      f"Snapshot ledger row {row.get('forecast_index')} violates "
+                      "its snapshot training contract"
+                  )
+              if int(row.get("model_fit_count_for_snapshot", 0)) != 1:
+                  raise SystemExit("A fixture does not reference exactly one snapshot fit")
+              ledger_counts[snapshot_date] = ledger_counts.get(snapshot_date, 0) + 1
+              fixture_ids.append(row["fixture_id"])
+
+          for snapshot_date, audit in snapshots_by_date.items():
+              if ledger_counts.get(snapshot_date, 0) != int(
+                  audit.get("common_prediction_count", 0)
+              ):
+                  raise SystemExit(
+                      f"Snapshot ledger count disagrees for {snapshot_date}"
+                  )
+
+          calculated_hash = hashlib.sha256(
+              "\n".join(sorted(fixture_ids)).encode("utf-8")
+          ).hexdigest()
+          if calculated_hash != fixture_ids_sha256:
+              raise SystemExit("Snapshot ledger fixture IDs disagree with benchmark metrics")
 
           print(
               "SNAPSHOT_ALIGNED_MARKET_ACCEPTANCE_OK: "
               f"{n_common} common fixtures across {n_snapshots} snapshot dates; "
-              "all five model streams are non-empty, error-free and paired "
-              "with the same market fixtures"
+              "one fit per snapshot, strictly prior training history, identical "
+              "model/market fixtures and a validated immutable forecast ledger"
           )
           PY
 
@@ -729,6 +840,7 @@ jobs:
             backtest-results.json
             prediction-ledger.jsonl
             prediction-diagnostics.json
+            snapshot-aligned-prediction-ledger.jsonl
             data/historical_spain.csv
             data/historical_spain.profile.json
           retention-days: 90

@@ -8,7 +8,11 @@ import platform
 from datetime import UTC, datetime
 from pathlib import Path
 
-from .backtest import compare_walk_forward, walk_forward
+from .backtest import (
+    compare_walk_forward,
+    snapshot_aligned_market_backtest,
+    walk_forward,
+)
 from .dataio import load_matches_csv, validate_matches
 from .ledger import write_prediction_ledger
 
@@ -42,6 +46,12 @@ def main() -> None:
         result = compare_walk_forward(
             matches, min_train=args.min_train, refit_every=args.refit_every
         )
+        snapshot_result = snapshot_aligned_market_backtest(
+            matches,
+            min_train=args.min_train,
+        )
+        snapshot_rows = snapshot_result.pop("forecast_rows", [])
+        result["snapshot_aligned_market"] = snapshot_result
         forecast_rows = result.pop("forecast_rows", [])
         if args.ledger_jsonl is not None:
             dataset_path = Path(args.csv)
@@ -95,12 +105,79 @@ def main() -> None:
                 "rows": ledger_rows,
                 "sha256": ledger_sha256,
             }
+
+            if snapshot_rows:
+                snapshot_ledger_path = args.ledger_jsonl.with_name(
+                    "snapshot-aligned-prediction-ledger.jsonl"
+                )
+                snapshot_manifest = {
+                    "schema_version": 1,
+                    "run_id": os.getenv("GITHUB_RUN_ID"),
+                    "run_attempt": os.getenv("GITHUB_RUN_ATTEMPT"),
+                    "workflow_event": os.getenv("GITHUB_EVENT_NAME"),
+                    "code_revision": (
+                        os.getenv("KINI_CODE_REVISION")
+                        or os.getenv("GITHUB_SHA")
+                        or "unknown"
+                    ),
+                    "generated_at_utc": datetime.now(UTC).isoformat(),
+                    "python_version": platform.python_version(),
+                    "dataset_path": str(dataset_path),
+                    "dataset_sha256": hashlib.sha256(dataset_bytes).hexdigest(),
+                    "dataset_size_bytes": len(dataset_bytes),
+                    "dataset_rows": len(matches),
+                    "dataset_profile_path": (
+                        str(profile_path) if profile_bytes is not None else None
+                    ),
+                    "dataset_profile_sha256": (
+                        hashlib.sha256(profile_bytes).hexdigest()
+                        if profile_bytes is not None
+                        else None
+                    ),
+                    "forecast_start_date": min(
+                        row["forecast_as_of_date"] for row in snapshot_rows
+                    ),
+                    "forecast_end_date": max(
+                        row["forecast_as_of_date"] for row in snapshot_rows
+                    ),
+                    "forecast_count": len(snapshot_rows),
+                    "model_modes": sorted(
+                        snapshot_rows[0]["model_probabilities"]
+                    ),
+                    "run_config": snapshot_result.get("run_config", {}),
+                }
+                snapshot_ledger_rows = write_prediction_ledger(
+                    snapshot_ledger_path,
+                    snapshot_manifest,
+                    snapshot_rows,
+                )
+                snapshot_ledger_sha256 = hashlib.sha256(
+                    snapshot_ledger_path.read_bytes()
+                ).hexdigest()
+                snapshot_result["forecast_ledger"] = {
+                    "schema_version": 1,
+                    "path": str(snapshot_ledger_path),
+                    "rows": snapshot_ledger_rows,
+                    "sha256": snapshot_ledger_sha256,
+                }
+            else:
+                snapshot_result["forecast_ledger"] = {
+                    "schema_version": 1,
+                    "rows_available": 0,
+                    "persisted": False,
+                }
         elif args.include_forecast_rows:
             result["forecast_rows"] = forecast_rows
+            result["snapshot_aligned_market"]["forecast_rows"] = snapshot_rows
         else:
             result["forecast_ledger"] = {
                 "schema_version": result.get("forecast_ledger_schema_version", 1),
                 "rows_available": len(forecast_rows),
+                "persisted": False,
+            }
+            result["snapshot_aligned_market"]["forecast_ledger"] = {
+                "schema_version": 1,
+                "rows_available": len(snapshot_rows),
                 "persisted": False,
             }
         output = result

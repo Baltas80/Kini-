@@ -1481,3 +1481,445 @@ def compare_walk_forward(
         "calibration_min_class_count": calibration_min_class_count,
     }
     return result
+def _snapshot_training_history_sha256(training: list[Match]) -> str:
+    """Hash the exact ordered, completed result history used by one snapshot fit."""
+    rows = [
+        {
+            "date": _calendar_day(match.date),
+            "home": match.home,
+            "away": match.away,
+            "home_goals": int(match.home_goals),
+            "away_goals": int(match.away_goals),
+            "outcome": match.outcome(),
+        }
+        for match in training
+    ]
+    payload = json.dumps(
+        rows,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _snapshot_probability_mapping(
+    probabilities: Any,
+    label: str,
+) -> dict[str, float]:
+    """Validate a strict normalized 1/X/2 vector without silently renormalizing it."""
+    if not isinstance(probabilities, dict) or set(probabilities) != set(SIGNS):
+        raise ValueError(f"{label} must contain exactly the 1/X/2 signs")
+
+    values: list[float] = []
+    for sign in SIGNS:
+        raw = probabilities[sign]
+        if isinstance(raw, (bool, np.bool_)):
+            raise ValueError(f"{label} contains a boolean probability")
+        try:
+            value = float(raw)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"{label} contains a non-numeric probability") from exc
+        if not np.isfinite(value) or not 0.0 <= value <= 1.0:
+            raise ValueError(f"{label} contains a probability outside [0, 1]")
+        values.append(value)
+
+    if not np.isclose(sum(values), 1.0, rtol=0.0, atol=1e-6):
+        raise ValueError(f"{label} probabilities must sum to one")
+    return dict(zip(SIGNS, values))
+
+
+def snapshot_aligned_market_backtest(
+    matches: list[Match],
+    min_train: int = 300,
+    decay: float = 0.995,
+    adaptive_min_history: int = 300,
+    adaptive_window: int = 1000,
+    adaptive_regularization: float = 0.02,
+) -> dict[str, Any]:
+    """Refit once per documented market snapshot date and score its exact fixtures.
+
+    For each Tuesday/Friday snapshot, only completed matches whose calendar
+    date is strictly earlier than the snapshot are used for fitting. Every
+    fixture assigned to that snapshot is predicted with the same fitted
+    engine and the same training-history fingerprint. All five model streams
+    are evaluated on the intersection where every stream and the market are
+    valid. Date-level alignment is conservative but is not exact timestamp
+    verification of historical odds capture.
+    """
+    if isinstance(min_train, bool) or not isinstance(min_train, int) or min_train < 12:
+        raise ValueError("min_train must be an integer of at least 12")
+    if not np.isfinite(decay) or not 0.0 < decay <= 1.0:
+        raise ValueError("decay must be finite and in (0, 1]")
+
+    all_modes = (
+        "dc",
+        "ml",
+        "ensemble",
+        "ensemble_dc_ml",
+        "ensemble_dc_ml_adaptive",
+    )
+    base_modes = ("dc", "ml", "ensemble", "ensemble_dc_ml")
+    snapshot_groups: dict[str, list[Match]] = {}
+    n_market_schedule_eligible = 0
+    n_unmapped_market_fixtures = 0
+    n_invalid_snapshot_mapping = 0
+
+    for match in matches:
+        if not match.has_temporally_eligible_market:
+            continue
+        n_market_schedule_eligible += 1
+        fixture_date = _calendar_day(match.date)
+        snapshot_date = _football_data_snapshot_date(fixture_date)
+        if snapshot_date is None:
+            n_unmapped_market_fixtures += 1
+            continue
+        if snapshot_date >= fixture_date:
+            n_invalid_snapshot_mapping += 1
+            continue
+        snapshot_groups.setdefault(snapshot_date, []).append(match)
+
+    model_rows: dict[str, list[tuple[dict[str, float], str]]] = {
+        mode: [] for mode in all_modes
+    }
+    market_rows: list[tuple[dict[str, float], str]] = []
+    forecast_rows: list[dict[str, Any]] = []
+    fixture_ids: list[str] = []
+    prediction_errors = {
+        mode: {"count": 0, "first_error": None} for mode in all_modes
+    }
+    adaptive_history: list[
+        tuple[str, dict[str, float], dict[str, float], str]
+    ] = []
+    snapshot_summaries: list[dict[str, Any]] = []
+    model_fit_count = 0
+    n_skipped_insufficient_history_fixtures = 0
+    n_skipped_missing_actual_fixtures = 0
+    n_fixtures_with_prediction_errors = 0
+
+    def record_error(mode: str, exc: Exception, count: int = 1) -> None:
+        diagnostic = prediction_errors[mode]
+        diagnostic["count"] += count
+        if diagnostic["first_error"] is None:
+            diagnostic["first_error"] = (
+                f"{type(exc).__name__}: {exc}"
+            )[:1000]
+
+    for snapshot_date, group in sorted(snapshot_groups.items()):
+        ordered_group = sorted(
+            group,
+            key=lambda match: (
+                _calendar_day(match.date),
+                _date_num(match.date),
+                match.home.casefold(),
+                match.away.casefold(),
+            ),
+        )
+        training: list[Match] = []
+        for candidate in matches:
+            if _calendar_day(candidate.date) >= snapshot_date:
+                continue
+            if candidate.home_goals is None or candidate.away_goals is None:
+                continue
+            try:
+                candidate.outcome()
+            except ValueError:
+                continue
+            training.append(candidate)
+
+        training.sort(
+            key=lambda match: (
+                _calendar_day(match.date),
+                _date_num(match.date),
+                match.home.casefold(),
+                match.away.casefold(),
+            )
+        )
+        if len(training) < min_train:
+            n_skipped_insufficient_history_fixtures += len(ordered_group)
+            continue
+
+        training_cutoff_date = _calendar_day(training[-1].date)
+        if training_cutoff_date >= snapshot_date:
+            raise RuntimeError(
+                "snapshot training history contains a result on or after its snapshot"
+            )
+        training_hash = _snapshot_training_history_sha256(training)
+
+        prior_adaptive_records = [
+            record
+            for record in adaptive_history
+            if record[0] < snapshot_date
+        ]
+        prior_adaptive_records.sort(key=lambda record: record[0])
+        prior_adaptive = [
+            (record[1], record[2], record[3])
+            for record in prior_adaptive_records
+        ]
+        dc_weight = select_dc_ml_weight(
+            prior_adaptive,
+            min_history=adaptive_min_history,
+            window=adaptive_window,
+            regularization=adaptive_regularization,
+        )
+
+        engine = KiniEngine(enable_ml=True)
+        engine.dc.decay = decay
+        model_fit_count += 1
+        fit_error: str | None = None
+        try:
+            engine.fit(training)
+        except Exception as exc:
+            fit_error = f"{type(exc).__name__}: {exc}"[:1000]
+            for mode in all_modes:
+                record_error(mode, exc, count=len(ordered_group))
+
+        snapshot_common_count = 0
+        pending_adaptive: list[
+            tuple[str, dict[str, float], dict[str, float], str]
+        ] = []
+
+        if fit_error is None:
+            for match in ordered_group:
+                try:
+                    actual = match.outcome()
+                except ValueError:
+                    n_skipped_missing_actual_fixtures += 1
+                    continue
+
+                snapshot_lae_eligible = (
+                    match.has_temporally_eligible_lae
+                    and _lae_capture_precedes_market_snapshot(match, snapshot_date)
+                )
+                prediction_match = match
+                if match.has_temporally_eligible_lae and not snapshot_lae_eligible:
+                    prediction_match = Match(
+                        date=match.date,
+                        home=match.home,
+                        away=match.away,
+                        home_goals=match.home_goals,
+                        away_goals=match.away_goals,
+                        result=match.result,
+                        lae=None,
+                        market=match.market,
+                        detail=match.detail,
+                    )
+
+                predictions: dict[str, dict[str, float]] = {}
+                for mode in base_modes:
+                    try:
+                        raw = engine.predict(
+                            prediction_match,
+                            mode=mode,
+                            history=training,
+                        ).probabilities
+                        predictions[mode] = _snapshot_probability_mapping(
+                            raw,
+                            f"{mode} forecast for {match.home} vs {match.away}",
+                        )
+                    except Exception as exc:
+                        record_error(mode, exc)
+
+                if "dc" in predictions and "ml" in predictions:
+                    pending_adaptive.append(
+                        (
+                            _calendar_day(match.date),
+                            predictions["dc"],
+                            predictions["ml"],
+                            actual,
+                        )
+                    )
+                    try:
+                        predictions["ensemble_dc_ml_adaptive"] = _blend_dc_ml(
+                            predictions["dc"],
+                            predictions["ml"],
+                            dc_weight,
+                        )
+                    except Exception as exc:
+                        record_error("ensemble_dc_ml_adaptive", exc)
+                else:
+                    record_error(
+                        "ensemble_dc_ml_adaptive",
+                        ValueError(
+                            "adaptive ensemble requires valid DC and ML forecasts"
+                        ),
+                    )
+
+                if not set(all_modes).issubset(predictions):
+                    n_fixtures_with_prediction_errors += 1
+                    continue
+
+                market_probabilities = _snapshot_probability_mapping(
+                    match.market,
+                    f"market forecast for {match.home} vs {match.away}",
+                )
+                fixture_id, source_fixture_id = _fixture_ledger_identity(
+                    match,
+                    snapshot_date,
+                )
+                league, season_code, season_label = _season_identity(match)
+                detail = match.detail if isinstance(match.detail, dict) else {}
+                model_probabilities = {
+                    mode: predictions[mode] for mode in all_modes
+                }
+                model_signs = {
+                    mode: max(
+                        SIGNS,
+                        key=lambda sign: model_probabilities[mode][sign],
+                    )
+                    for mode in all_modes
+                }
+                bet365_probabilities = _bookmaker_probability(match, "bet365")
+                lae_probabilities = (
+                    {
+                        sign: float(match.lae[sign])
+                        for sign in SIGNS
+                    }
+                    if snapshot_lae_eligible
+                    else None
+                )
+
+                fixture_ids.append(fixture_id)
+                market_rows.append((market_probabilities, actual))
+                for mode in all_modes:
+                    model_rows[mode].append((model_probabilities[mode], actual))
+                forecast_rows.append(
+                    {
+                        "forecast_index": len(forecast_rows) + 1,
+                        "fixture_id": fixture_id,
+                        "source_fixture_id": source_fixture_id,
+                        "forecast_as_of_date": snapshot_date,
+                        "market_snapshot_date": snapshot_date,
+                        "fixture_date": _calendar_day(match.date),
+                        "fixture_date_raw": str(match.date),
+                        "competition": league,
+                        "season_code": season_code,
+                        "season_label": season_label,
+                        "division": _ledger_text(detail.get("Div")),
+                        "home": match.home,
+                        "away": match.away,
+                        "actual_result": actual,
+                        "model_probabilities": model_probabilities,
+                        "model_signs": model_signs,
+                        "training_cutoff_date": training_cutoff_date,
+                        "training_match_count": len(training),
+                        "model_fit_cutoff_date": training_cutoff_date,
+                        "model_fit_match_count": len(training),
+                        "training_history_sha256": training_hash,
+                        "model_fit_count_for_snapshot": 1,
+                        "dc_weight": dc_weight,
+                        "prior_oof_predictions": len(prior_adaptive),
+                        "market_temporal_status": (
+                            _ledger_text(detail.get("market_temporal_status"))
+                            or "unclassified"
+                        ),
+                        "market_eligible": True,
+                        "market_probabilities": market_probabilities,
+                        "bet365_probabilities": bet365_probabilities,
+                        "lae_eligible": snapshot_lae_eligible,
+                        "lae_probabilities": lae_probabilities,
+                        "lae_source": (
+                            _ledger_text(detail.get("lae_source"))
+                            if snapshot_lae_eligible
+                            else None
+                        ),
+                        "lae_captured_at": (
+                            _ledger_text(detail.get("lae_captured_at"))
+                            if snapshot_lae_eligible
+                            else None
+                        ),
+                        "kickoff_at": (
+                            _ledger_text(detail.get("kickoff_at"))
+                            if snapshot_lae_eligible
+                            else None
+                        ),
+                        "source_url": _ledger_text(detail.get("SourceURL")),
+                    }
+                )
+                snapshot_common_count += 1
+
+        adaptive_history.extend(pending_adaptive)
+        snapshot_summaries.append(
+            {
+                "snapshot_date": snapshot_date,
+                "fixture_count": len(ordered_group),
+                "common_prediction_count": snapshot_common_count,
+                "training_match_count": len(training),
+                "training_cutoff_date": training_cutoff_date,
+                "training_history_sha256": training_hash,
+                "model_fit_count": 1,
+                "dc_weight": dc_weight,
+                "prior_oof_predictions": len(prior_adaptive),
+                "fit_error": fit_error,
+            }
+        )
+
+    if len(set(fixture_ids)) != len(fixture_ids):
+        raise ValueError("snapshot-aligned benchmark produced duplicate fixture IDs")
+
+    fixture_ids_sha256 = hashlib.sha256(
+        "\n".join(sorted(fixture_ids)).encode("utf-8")
+    ).hexdigest()
+    market_metrics = multiclass_metrics(market_rows)
+    common_sample = {
+        mode: {
+            "n": len(model_rows[mode]),
+            "model": multiclass_metrics(model_rows[mode]),
+            "market": market_metrics,
+            "fixture_ids_sha256": fixture_ids_sha256,
+        }
+        for mode in all_modes
+    }
+    n_common = len(market_rows)
+    return {
+        "n_market_schedule_eligible": n_market_schedule_eligible,
+        "n_mapped_market_fixtures": sum(
+            len(group) for group in snapshot_groups.values()
+        ),
+        "n_unmapped_market_fixtures": n_unmapped_market_fixtures,
+        "n_invalid_snapshot_mapping": n_invalid_snapshot_mapping,
+        "n_snapshot_dates_seen": len(snapshot_groups),
+        "n_snapshot_dates": len(snapshot_summaries),
+        "model_fit_count": model_fit_count,
+        "n_skipped_insufficient_history_fixtures": (
+            n_skipped_insufficient_history_fixtures
+        ),
+        "n_skipped_missing_actual_fixtures": n_skipped_missing_actual_fixtures,
+        "n_fixtures_with_prediction_errors": n_fixtures_with_prediction_errors,
+        "n_common_time_eligible": n_common,
+        "fixture_ids_sha256": fixture_ids_sha256,
+        "training_rule": (
+            "completed_result_date < market_snapshot_date; "
+            "refit once per snapshot date"
+        ),
+        "model_refit_rule": (
+            "one fresh KiniEngine.fit call per snapshot date; all fixtures "
+            "assigned to that date share the fitted engine and training history"
+        ),
+        "snapshot_schedule": {
+            "weekend_fixtures": "Friday snapshot for Saturday/Sunday fixtures",
+            "midweek_fixtures": "Tuesday snapshot for Wednesday/Thursday fixtures",
+            "unmapped_weekdays": ["Monday", "Tuesday", "Friday"],
+            "same_snapshot_day_results": "excluded",
+        },
+        "market": market_metrics,
+        "common_sample": common_sample,
+        "prediction_errors": prediction_errors,
+        "snapshots": snapshot_summaries,
+        "limitations": (
+            "Conservative date-level alignment to the documented Tuesday/Friday "
+            "collection schedule. Historical odds do not provide exact per-fixture "
+            "capture timestamps; the fixture calendar date is used as a proxy for "
+            "result availability. This is not timestamp verification or proof of "
+            "executable pre-kickoff odds."
+        ),
+        "run_config": {
+            "min_train_matches": min_train,
+            "dixon_coles_decay": decay,
+            "adaptive_min_history": adaptive_min_history,
+            "adaptive_window": adaptive_window,
+            "adaptive_regularization": adaptive_regularization,
+            "snapshot_refit_frequency": "once_per_snapshot_date",
+        },
+        "forecast_rows": forecast_rows,
+    }
