@@ -148,7 +148,13 @@ def _coupon_plan() -> dict[str, object]:
         "schedule_evidence_url": SELAE_URL,
         "schedule_evidence_sha256": HASH_A,
         "ticket_cutoff_at_utc": "2026-11-08T11:00:00Z",
+        "cutoff_evidence_url": SELAE_URL,
+        "cutoff_evidence_sha256": HASH_C,
+        "cutoff_evidence_captured_at_utc": "2026-11-08T09:15:00Z",
         "first_kickoff_at": "2026-11-08T14:00:00+01:00",
+        "pleno15_home": "Pleno Home (M)",
+        "pleno15_away": "Pleno Away (M)",
+        "pleno15_kickoff_at": "2026-11-08T15:00:00+01:00",
         "positions": positions,
     }
 
@@ -295,6 +301,10 @@ def test_build_probability_vectors_uses_preclose_plan_not_realized_outcomes() ->
     assert result["probability_sources"][6]["captured_at_utc"] == "2026-11-08T10:30:00Z"
     assert result["public_draw_positions"] == [7]
     assert result["schedule_evidence"]["source_sha256"] == HASH_A
+    assert result["cutoff_evidence"]["source_sha256"] == HASH_C
+    assert result["pleno15_home"] == "Pleno Home (M)"
+    assert result["pleno15_away"] == "Pleno Away (M)"
+    assert result["pleno15_kickoff_at"] == "2026-11-08T15:00:00+01:00"
     assert "actual_main_results" not in result
 
 
@@ -567,4 +577,83 @@ def test_preclose_snapshot_rejects_capture_after_ticket_creation() -> None:
             position=7,
             ticket_created_at_utc="2026-11-08T10:45:00Z",
             ticket_cutoff_at_utc="2026-11-08T11:00:00Z",
+        )
+
+
+
+def test_coupon_plan_includes_pleno15_kickoff_when_validating_first_kickoff() -> None:
+    plan = _coupon_plan()
+    plan["pleno15_kickoff_at"] = "2026-11-08T13:00:00+01:00"
+    plan["first_kickoff_at"] = "2026-11-08T13:00:00+01:00"
+    model_probabilities = {
+        position: {"1": 0.5, "X": 0.3, "2": 0.2}
+        for position in range(1, 15)
+        if position != 7
+    }
+
+    result = build_ticket_probability_vectors(
+        draw_date=DRAW_DATE,
+        coupon_plan=plan,
+        model_probabilities_by_position=model_probabilities,
+        public_draw_snapshots={7: _preclose_snapshot()},
+    )
+
+    assert result["first_kickoff_at"] == "2026-11-08T13:00:00+01:00"
+    assert result["pleno15_kickoff_at"] == "2026-11-08T13:00:00+01:00"
+
+
+def test_coupon_plan_rejects_pleno15_kickoff_at_or_before_ticket_cutoff() -> None:
+    plan = _coupon_plan()
+    plan["pleno15_kickoff_at"] = "2026-11-08T10:30:00Z"
+    model_probabilities = {
+        position: {"1": 0.5, "X": 0.3, "2": 0.2}
+        for position in range(1, 15)
+        if position != 7
+    }
+
+    with pytest.raises(TicketOutcomeError, match="Pleno al 15 kickoff must be after"):
+        build_ticket_probability_vectors(
+            draw_date=DRAW_DATE,
+            coupon_plan=plan,
+            model_probabilities_by_position=model_probabilities,
+            public_draw_snapshots={7: _preclose_snapshot()},
+        )
+
+
+def test_coupon_plan_rejects_first_kickoff_that_ignores_earlier_pleno15() -> None:
+    plan = _coupon_plan()
+    plan["pleno15_kickoff_at"] = "2026-11-08T13:00:00+01:00"
+    model_probabilities = {
+        position: {"1": 0.5, "X": 0.3, "2": 0.2}
+        for position in range(1, 15)
+        if position != 7
+    }
+
+    with pytest.raises(TicketOutcomeError, match="earliest scheduled fixture kickoff"):
+        build_ticket_probability_vectors(
+            draw_date=DRAW_DATE,
+            coupon_plan=plan,
+            model_probabilities_by_position=model_probabilities,
+            public_draw_snapshots={7: _preclose_snapshot()},
+        )
+
+
+def test_coupon_plan_rejects_cutoff_evidence_captured_after_ticket_creation() -> None:
+    plan = _coupon_plan()
+    plan["cutoff_evidence_captured_at_utc"] = "2026-11-08T10:45:00Z"
+    model_probabilities = {
+        position: {"1": 0.5, "X": 0.3, "2": 0.2}
+        for position in range(1, 15)
+        if position != 7
+    }
+
+    with pytest.raises(
+        TicketOutcomeError,
+        match="cutoff evidence must be captured strictly before ticket creation",
+    ):
+        build_ticket_probability_vectors(
+            draw_date=DRAW_DATE,
+            coupon_plan=plan,
+            model_probabilities_by_position=model_probabilities,
+            public_draw_snapshots={7: _preclose_snapshot()},
         )
