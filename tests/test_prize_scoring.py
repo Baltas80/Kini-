@@ -230,7 +230,9 @@ def test_jornada_29_official_prize_distribution_passes_strict_validation() -> No
     }
 
 
-def test_jornada_1_2021_2022_official_prize_distribution_passes_strict_validation() -> None:
+def test_jornada_1_2021_2022_official_prize_distribution_passes_strict_validation() -> (
+    None
+):
     snapshot = json.loads(
         (
             Path(__file__).parents[1]
@@ -247,7 +249,9 @@ def test_jornada_1_2021_2022_official_prize_distribution_passes_strict_validatio
 
     assert validated["revenue_eur"] == Decimal("2417637.75")
     assert validated["categories"]["pleno_al_15"]["winner_count"] == 1
-    assert validated["categories"]["pleno_al_15"]["unit_prize_eur"] == Decimal("479523.55")
+    assert validated["categories"]["pleno_al_15"]["unit_prize_eur"] == Decimal(
+        "479523.55"
+    )
     assert validated["categories"]["14"]["winner_count"] == 16
     assert validated["categories"]["14"]["unit_prize_eur"] == Decimal("24176.38")
     assert validated["categories"]["13"]["winner_count"] == 384

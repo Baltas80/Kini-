@@ -219,6 +219,14 @@ def test_jornada_1_2021_2022_aliases_resolve_through_canonical_team_registry() -
         assert identity is not None, source_name
         assert identity.canonical_name == target_name
 
-    assert registry.resolve("Sociedad B", source="football-data").team_id == "team:es:sociedad-b"
-    assert registry.resolve("Burgos", source="football-data").team_id == "team:es:burgos"
-    assert registry.resolve("Tenerife", source="football-data").team_id == "team:es:tenerife"
+    assert (
+        registry.resolve("Sociedad B", source="football-data").team_id
+        == "team:es:sociedad-b"
+    )
+    assert (
+        registry.resolve("Burgos", source="football-data").team_id == "team:es:burgos"
+    )
+    assert (
+        registry.resolve("Tenerife", source="football-data").team_id
+        == "team:es:tenerife"
+    )
