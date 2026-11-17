@@ -326,9 +326,29 @@ class TicketLedger:
         reconciliation_report: dict[str, Any],
         *,
         reconciliation_sha256: str,
+        pleno15_report: dict[str, Any] | None = None,
+        pleno15_sha256: str | None = None,
     ) -> dict[str, Any]:
-        """Score a stored ticket and persist the result against exact source bytes."""
+        """Score a stored ticket against exact fixture and optional Pleno evidence."""
         reconciliation_digest = _sha256(reconciliation_sha256, "reconciliation_sha256")
+        if pleno15_report is None:
+            if pleno15_sha256 is not None:
+                raise TicketLedgerError(
+                    "pleno15_sha256 requires a Pleno al 15 result report"
+                )
+            score_evidence_digest = reconciliation_digest
+            pleno15_digest = None
+        else:
+            if pleno15_sha256 is None:
+                raise TicketLedgerError(
+                    "pleno15_sha256 is required with a Pleno al 15 result report"
+                )
+            pleno15_digest = _sha256(pleno15_sha256, "pleno15_sha256")
+            score_evidence_digest = hashlib.sha256(
+                b"KINI-TICKET-SCORE-EVIDENCE-V1\\0"
+                + bytes.fromhex(reconciliation_digest)
+                + bytes.fromhex(pleno15_digest)
+            ).hexdigest()
         stored = self.get_ticket_record(ticket_id)
         if stored is None:
             raise TicketLedgerError(f"ticket {ticket_id!r} does not exist")
@@ -337,7 +357,10 @@ class TicketLedger:
             reconciliation_report,
             ticket_sha256=stored["ticket_sha256"],
             reconciliation_sha256=reconciliation_digest,
+            pleno15_report=pleno15_report,
+            pleno15_report_sha256=pleno15_digest,
         )
+        score["score_evidence_sha256"] = score_evidence_digest
         score_json = _canonical_json(score)
         score_sha256 = hashlib.sha256(score_json.encode("utf-8")).hexdigest()
         recorded_at = _utc_now()
@@ -349,19 +372,20 @@ class TicketLedger:
                 SELECT score_sha256, recorded_at_utc FROM ticket_scores
                 WHERE ticket_id = ? AND reconciliation_sha256 = ?
                 """,
-                (ticket_id, reconciliation_digest),
+                (ticket_id, score_evidence_digest),
             ).fetchone()
             if existing is not None:
                 if existing["score_sha256"] != score_sha256:
                     connection.rollback()
                     raise TicketLedgerConflict(
-                        "the same ticket/reconciliation pair produced different scores"
+                        "the same ticket/evidence bundle produced different scores"
                     )
                 connection.commit()
                 return {
                     "score": score,
                     "score_sha256": score_sha256,
                     "recorded_at_utc": existing["recorded_at_utc"],
+                    "score_evidence_sha256": score_evidence_digest,
                     "inserted": False,
                     "idempotent_replay": True,
                 }
@@ -375,7 +399,7 @@ class TicketLedger:
                 """,
                 (
                     ticket_id,
-                    reconciliation_digest,
+                    score_evidence_digest,
                     score_json,
                     score_sha256,
                     recorded_at,
@@ -387,6 +411,7 @@ class TicketLedger:
             "score": score,
             "score_sha256": score_sha256,
             "recorded_at_utc": recorded_at,
+            "score_evidence_sha256": score_evidence_digest,
             "inserted": True,
             "idempotent_replay": False,
         }
@@ -395,8 +420,10 @@ class TicketLedger:
         self,
         ticket_id: str,
         reconciliation_json: str | bytes,
+        *,
+        pleno15_json: str | bytes | None = None,
     ) -> dict[str, Any]:
-        """Hash exact reconciliation JSON bytes before scoring a stored ticket."""
+        """Hash exact fixture-reconciliation and optional Pleno JSON source bytes."""
         if isinstance(reconciliation_json, str):
             raw = reconciliation_json.encode("utf-8")
         elif isinstance(reconciliation_json, bytes):
@@ -411,11 +438,33 @@ class TicketLedger:
             ) from exc
         if not isinstance(report, dict):
             raise TicketLedgerError("reconciliation JSON root must be an object")
+
+        pleno_report = None
+        pleno_digest = None
+        if pleno15_json is not None:
+            if isinstance(pleno15_json, str):
+                pleno_raw = pleno15_json.encode("utf-8")
+            elif isinstance(pleno15_json, bytes):
+                pleno_raw = pleno15_json
+            else:
+                raise TypeError("pleno15_json must be UTF-8 text or bytes")
+            try:
+                pleno_report = json.loads(pleno_raw.decode("utf-8"))
+            except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+                raise TicketLedgerError(
+                    "Pleno al 15 JSON must contain a valid UTF-8 JSON document"
+                ) from exc
+            if not isinstance(pleno_report, dict):
+                raise TicketLedgerError("Pleno al 15 JSON root must be an object")
+            pleno_digest = hashlib.sha256(pleno_raw).hexdigest()
+
         digest = hashlib.sha256(raw).hexdigest()
         return self.score_ticket(
             ticket_id,
             report,
             reconciliation_sha256=digest,
+            pleno15_report=pleno_report,
+            pleno15_sha256=pleno_digest,
         )
 
     def list_ticket_scores(self, ticket_id: str) -> list[dict[str, Any]]:
@@ -451,6 +500,7 @@ class TicketLedger:
                     "score": score,
                     "score_sha256": digest,
                     "reconciliation_sha256": row["reconciliation_sha256"],
+                    "score_evidence_sha256": row["reconciliation_sha256"],
                     "recorded_at_utc": row["recorded_at_utc"],
                 }
             )
