@@ -127,6 +127,7 @@ def _ticket(report: dict[str, object]) -> dict[str, object]:
         "cost_eur": 1.5,
     }
 
+
 def _preclose_snapshot() -> dict[str, object]:
     return {
         "schema_version": 1,
@@ -694,7 +695,9 @@ def test_ticket_record_rejects_missing_probability_vectors() -> None:
         score_ticket_record(ticket, _reconciliation())
 
 
-def test_ticket_record_rejects_probability_source_that_conflicts_with_coupon_plan() -> None:
+def test_ticket_record_rejects_probability_source_that_conflicts_with_coupon_plan() -> (
+    None
+):
     ticket = _ticket(_reconciliation())
     ticket["probability_sources"][6] = {
         "position": 7,
