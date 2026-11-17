@@ -2865,3 +2865,23 @@ The prequential-calibration diagnostic had a larger 3,856-fixture common market 
 
 The next full historical run [43988937525](https://github.com/Baltas80/Kini-/actions/runs/43988937525) is still running on revision `4892fc6`; the newer current-head run [43990435803](https://github.com/Baltas80/Kini-/actions/runs/43990435803) is queued. Current PR head at this log update is `a83661f27a42da0f43b8d9c376e9e6a8da7f17ee`. PR #9 remains unmerged; `master` has not been modified.
 
+
+
+## 2026-11-17 — Inspección del artefacto de backtesting y suficiencia del benchmark
+
+La ejecución [43988937525](https://github.com/Baltas80/Kini-/actions/runs/43988937525) terminó correctamente sobre la revisión de código `4892fc622c98832f7cf990502be8d22c86f0db63`. Se descargó e inspeccionó el artefacto `historical-backtest` ID `14286994505` (SHA-256 `51c67b5870204aa9013ce0dbe4b76a8ec96cb5982aa4ac25f423cdee280c07cc`).
+
+- Dataset: 5.322 partidos; el manifiesto de la ejecución conserva el hash `7251b84acd803047746c0c55c6bdabb60d9499208cfd6c781f72080295346f44`.
+- Forecast ledger: 5.022 predicciones, del 2020-12-11 al 2026-11-16.
+- Dixon–Coles, ML, ensemble, DC/ML fijo y DC/ML adaptativo: **5.022 predicciones cada uno**, con **cero errores registrados**.
+- Mercado con filtro de calendario: 4.433 partidos; se excluyeron 588 filas ambiguas.
+- La comparación de corte temporal estricta actual solo contiene **111 partidos**. Mercado: Brier 0,595927 y Log Loss 1,001731. Dixon–Coles: Brier 0,627083 y Log Loss 1,045139. Ensemble principal: Brier 0,623886 y Log Loss 1,047315. ML: Brier 0,670224 y Log Loss 1,105? No se utiliza esta cifra en decisiones hasta confirmar el detalle completo del artefacto; el recuento y la muestra sí están verificados.
+- Motivos de exclusión en el filtro actual: 3.880 por corte de entrenamiento/refit posterior o igual al snapshot y 442 por fecha de snapshot no asignable.
+
+La inspección confirma una deficiencia en la puerta de aceptación: el workflow exige actualmente que el conjunto estricto sea no vacío, pero no aplica el umbral mínimo de 500 partidos acordado en el propio registro. Por tanto, un workflow verde con n=111 **no valida** la comparación temporal de mercado.
+
+Se realizó además un preflight sobre el CSV y el ledger del mismo artefacto: **3.991 fixtures** con mercado elegible, snapshot de martes/viernes asignable y al menos 300 resultados históricos anteriores a la fecha del snapshot, repartidos en 319 fechas de snapshot. Es un recuento de candidatos, no predicciones ni métricas. Indica que una evaluación realmente alineada —reentrenar/refitar en cada fecha de snapshot y predecir conjuntamente los partidos cubiertos por esa captura— puede superar el mínimo de 500 sin relajar el corte temporal.
+
+La siguiente unidad P0 queda definida: implementar el walk-forward por fecha de snapshot, mantener todos los partidos cubiertos por una misma captura con el mismo modelo y el mismo historial anterior al snapshot, y hacer fallar la aceptación si la muestra común resultante es inferior a 500. El filtro actual de predicciones ordinarias se conserva como diagnóstico histórico, no como benchmark temporal definitivo.
+
+La ejecución más reciente de histórico [43990598086](https://github.com/Baltas80/Kini-/actions/runs/43990598086) seguía en el paso de comparación cuando se inspeccionó; no se le atribuyen métricas nuevas. PR #9 continúa en borrador y sin fusionar. No se ha modificado `master`.
