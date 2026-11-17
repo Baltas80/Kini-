@@ -429,9 +429,7 @@ def test_jornada_25_official_snapshot_matches_reviewed_selae_results() -> None:
         "https://www.loteriasyapuestas.es/es/la-quiniela/resultados/"
         "la-quiniela-resultados-del-03-de-enero-de-2021"
     )
-    sources = {
-        item["role"]: item["url"] for item in snapshot["supporting_sources"]
-    }
+    sources = {item["role"]: item["url"] for item in snapshot["supporting_sources"]}
     assert sources["official_selae_result_page"] == snapshot["source_url"]
     assert sources["official_selae_press_release_pdf"] == (
         "https://www.loteriasyapuestas.es/f/loterias/documentos/Quiniela/Notas%20de%20prensa/"
