@@ -165,7 +165,10 @@ def validate_pleno15_report(
     if report.get("provider") != "SELAE":
         raise TicketOutcomeError("Pleno al 15 result provider must be SELAE")
     expected_date = _parse_draw_date(draw_date, "draw_date")
-    if _parse_draw_date(report.get("draw_date"), "Pleno result draw_date") != expected_date:
+    if (
+        _parse_draw_date(report.get("draw_date"), "Pleno result draw_date")
+        != expected_date
+    ):
         raise TicketOutcomeError("Pleno al 15 result draw date mismatch")
 
     source_url = _validate_official_selae_url(
@@ -177,9 +180,7 @@ def validate_pleno15_report(
     evidence_type = _required_text(report.get("evidence_type"), "evidence_type")
     if evidence_type not in {"raw_official_response", "normalized_official_extract"}:
         raise TicketOutcomeError("Pleno al 15 evidence_type is unsupported")
-    verified_at = _parse_utc_timestamp(
-        report.get("verified_at_utc"), "verified_at_utc"
-    )
+    verified_at = _parse_utc_timestamp(report.get("verified_at_utc"), "verified_at_utc")
     kickoff = kickoff_at.astimezone(UTC)
     if verified_at < kickoff:
         raise TicketOutcomeError(
@@ -191,10 +192,9 @@ def validate_pleno15_report(
 
     home = _required_text(report.get("home"), "Pleno al 15 home")
     away = _required_text(report.get("away"), "Pleno al 15 away")
-    if (
-        normalize_team_name(home) != normalize_team_name(expected_home)
-        or normalize_team_name(away) != normalize_team_name(expected_away)
-    ):
+    if normalize_team_name(home) != normalize_team_name(
+        expected_home
+    ) or normalize_team_name(away) != normalize_team_name(expected_away):
         raise TicketOutcomeError(
             "Pleno al 15 result team identity does not match the stored coupon plan"
         )
@@ -212,8 +212,11 @@ def validate_pleno15_report(
         raise TicketOutcomeError("Pleno al 15 goals must be non-negative integers")
     home_category = _pleno15_category(home_goals)
     away_category = _pleno15_category(away_goals)
-    if report.get("home_category") not in PLENO15_CATEGORIES or (
-        report.get("away_category") not in PLENO15_CATEGORIES
+    if (
+        not isinstance(report.get("home_category"), str)
+        or report.get("home_category") not in PLENO15_CATEGORIES
+        or not isinstance(report.get("away_category"), str)
+        or report.get("away_category") not in PLENO15_CATEGORIES
     ):
         raise TicketOutcomeError("Pleno al 15 categories must be 0, 1, 2 or M")
     if (
