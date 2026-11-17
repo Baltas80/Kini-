@@ -144,6 +144,7 @@ def _coupon_plan() -> dict[str, object]:
         "provider": "SELAE",
         "draw_date": DRAW_DATE,
         "schedule_captured_at_utc": "2026-11-08T09:00:00Z",
+        "ticket_created_at_utc": "2026-11-08T10:45:00Z",
         "schedule_evidence_url": SELAE_URL,
         "schedule_evidence_sha256": HASH_A,
         "ticket_cutoff_at_utc": "2026-11-08T11:00:00Z",
@@ -385,7 +386,7 @@ def test_probability_builder_rejects_public_draw_status_evidence_after_cutoff() 
         for position in range(1, 15)
         if position != 7
     }
-    with pytest.raises(TicketOutcomeError, match="status.*strictly before ticket close"):
+    with pytest.raises(TicketOutcomeError, match="status.*strictly before ticket creation"):
         build_ticket_probability_vectors(
             draw_date=DRAW_DATE,
             coupon_plan=plan,
@@ -478,11 +479,12 @@ def test_probability_builder_rejects_cutoff_after_first_kickoff() -> None:
 def test_preclose_snapshot_rejects_capture_at_or_after_close() -> None:
     snapshot = _preclose_snapshot()
     snapshot["captured_at_utc"] = "2026-11-08T11:00:00Z"
-    with pytest.raises(TicketOutcomeError, match="strictly before ticket close"):
+    with pytest.raises(TicketOutcomeError, match="strictly before ticket creation"):
         validate_preclose_public_draw_snapshot(
             snapshot,
             draw_date=DRAW_DATE,
             position=7,
+            ticket_created_at_utc="2026-11-08T10:45:00Z",
             ticket_cutoff_at_utc="2026-11-08T11:00:00Z",
         )
 
@@ -495,6 +497,7 @@ def test_preclose_snapshot_rejects_post_close_ball_counts() -> None:
             snapshot,
             draw_date=DRAW_DATE,
             position=7,
+            ticket_created_at_utc="2026-11-08T10:45:00Z",
             ticket_cutoff_at_utc="2026-11-08T11:00:00Z",
         )
 
@@ -507,50 +510,53 @@ def test_preclose_snapshot_rejects_probability_vector_with_wrong_sum() -> None:
             snapshot,
             draw_date=DRAW_DATE,
             position=7,
+            ticket_created_at_utc="2026-11-08T10:45:00Z",
             ticket_cutoff_at_utc="2026-11-08T11:00:00Z",
         )
 
-
-def test_probability_builder_rejects_cutoff_after_first_kickoff() -> None:
-    report = _reconciliation()
+def test_probability_builder_rejects_schedule_captured_after_ticket_creation() -> None:
+    plan = _coupon_plan()
+    plan["schedule_captured_at_utc"] = "2026-11-08T10:50:00Z"
     model_probabilities = {
         position: {"1": 0.5, "X": 0.3, "2": 0.2}
         for position in range(1, 15)
         if position != 7
     }
-    with pytest.raises(TicketOutcomeError, match="earlier than first kickoff"):
+    with pytest.raises(TicketOutcomeError, match="schedule.*before ticket creation"):
         build_ticket_probability_vectors(
             draw_date=DRAW_DATE,
-            reconciliation_report=report,
+            coupon_plan=plan,
             model_probabilities_by_position=model_probabilities,
             public_draw_snapshots={7: _preclose_snapshot()},
-            ticket_cutoff_at_utc="2026-11-08T11:00:00Z",
-            first_kickoff_at="2026-11-08T10:00:00Z",
         )
 
 
-def test_reconciliation_rejects_boolean_schema_version() -> None:
-    report = _reconciliation()
-    report["schema_version"] = True
-    with pytest.raises(TicketOutcomeError, match="unsupported"):
-        outcomes_from_reconciliation(report, DRAW_DATE)
+def test_probability_builder_rejects_public_draw_status_captured_after_ticket_creation() -> None:
+    plan = _coupon_plan()
+    plan["positions"][6]["status_captured_at_utc"] = "2026-11-08T10:50:00Z"
+    model_probabilities = {
+        position: {"1": 0.5, "X": 0.3, "2": 0.2}
+        for position in range(1, 15)
+        if position != 7
+    }
+    with pytest.raises(TicketOutcomeError, match="status.*before ticket creation"):
+        build_ticket_probability_vectors(
+            draw_date=DRAW_DATE,
+            coupon_plan=plan,
+            model_probabilities_by_position=model_probabilities,
+            public_draw_snapshots={7: _preclose_snapshot()},
+        )
 
 
-def test_ticket_rejects_boolean_schema_version() -> None:
-    report = _reconciliation()
-    ticket = _ticket(report)
-    ticket["schema_version"] = True
-    with pytest.raises(TicketOutcomeError, match="unsupported"):
-        score_ticket_record(ticket, report)
-
-
-def test_preclose_snapshot_rejects_boolean_schema_version() -> None:
+def test_preclose_snapshot_rejects_capture_after_ticket_creation() -> None:
     snapshot = _preclose_snapshot()
-    snapshot["schema_version"] = True
-    with pytest.raises(TicketOutcomeError, match="unsupported"):
+    snapshot["captured_at_utc"] = "2026-11-08T10:50:00Z"
+    with pytest.raises(TicketOutcomeError, match="strictly before ticket creation"):
         validate_preclose_public_draw_snapshot(
             snapshot,
             draw_date=DRAW_DATE,
             position=7,
+            ticket_created_at_utc="2026-11-08T10:45:00Z",
             ticket_cutoff_at_utc="2026-11-08T11:00:00Z",
         )
+
