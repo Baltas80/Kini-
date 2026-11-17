@@ -3502,3 +3502,14 @@ Expand the archive to multiple coupons only where each journey has independently
 ## Coupon backtest result schema version 3 — 2026-11-17
 
 The fitted training-window provenance added in the coupon backtest is a required result-contract change. To avoid silently changing the meaning of schema version 2, introduced `COUPON_BACKTEST_RESULT_SCHEMA_VERSION = 3` and use it in both the batch result writer and the fail-closed acceptance validator. The coupon archive itself remains `COUPON_SCHEMA_VERSION = 2`; the two version domains are deliberately separate. The regression suite now rejects legacy result schema version 2 and uses the shared version constant for current fixtures.
+
+
+## Schema-v3 end-to-end verification — 2026-11-17
+
+- Code commit: `7d1cd819e304907ed17e8157a6c765e184c63287`. Introduced `COUPON_BACKTEST_RESULT_SCHEMA_VERSION = 3` separately from coupon archive schema version 2; both writer and acceptance validator consume the shared constant. Legacy result schema v2 is rejected by a regression test.
+- CI [44091537439](https://github.com/Baltas80/Kini-/actions/runs/44091537439): **389 passed**, 25 third-party NumPy deprecation warnings; Actionlint, Ruff lint and Ruff format passed.
+- Historical data validation [44091537535](https://github.com/Baltas80/Kini-/actions/runs/44091537535): **5,322 completed fixtures**, integrity and canonical identity validation passed; 10,644/10,644 team references resolved, 56 canonical teams, zero ambiguous/unresolved references, zero duplicates/conflicts, zero invalid labels and zero score/result mismatches. It reused the validated PR-base dataset under the weekly snapshot policy.
+- Coupon pilot [44091537438](https://github.com/Baltas80/Kini-/actions/runs/44091537438): **success** with result schema version 3, artifact ID `14332240705`, code revision `7d1cd819e304907ed17e8157a6c765e184c63287`. One coupon, 303 training matches from `2020-09-12` through `2020-12-11`, 14 predictions for each of DC, ML and fixed ensemble. Results matched the prior pilot: DC 7 single/7 best-column hits, ML 5/6, ensemble 7/8; no 14/14, Pleno or full 15/15 coverage; €6 per candidate.
+- Historical model workflow [44091537384](https://github.com/Baltas80/Kini-/actions/runs/44091537384): model backtest job skipped because predictive model code was unchanged; not counted as a new model validation.
+
+The schema migration and one-coupon integration path are validated. The next substantive work remains multi-coupon official reconciliation and a separate prize-tier/payout evaluator; one coupon does not support performance or profitability claims.

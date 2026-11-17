@@ -295,3 +295,10 @@ All three candidates completed all 14 main-match predictions with no model failu
 The Dixon-Coles Pleno prediction was category pair `1–1`, with aggregated probability mass `0.13002176742050037`; the reconciled SELAE result was `M–0`. It did not hit.
 
 This is a single-coupon integration smoke test, not a performance sample. It does not justify selecting the ensemble, estimating long-run hit rates, or claiming profitability. The official result source is a manually reviewed normalized SELAE JSON extract, not raw official HTML. Prize tiers, realized payout and return on stake are not included. The secondary coupon archive supplies kickoff metadata; the model's historical match dataset has date-only timestamps, so the documented previous-local-calendar-day cutoff remains the conservative temporal boundary.
+
+
+## Schema-v3 verification run — 2026-11-17
+
+Run [44091537438](https://github.com/Baltas80/Kini-/actions/runs/44091537438), artifact ID `14332240705`, code revision `7d1cd819e304907ed17e8157a6c765e184c63287`. The emitted result declares `schema_version: 3`; the batch writer and fail-closed validator use the shared `COUPON_BACKTEST_RESULT_SCHEMA_VERSION` constant. The pilot passed all acceptance steps and reproduced the same one-coupon metrics above: 303 training matches, 14 predictions per model, 8 columns/€6 per candidate, no exact 14/14 coverage, no Pleno hit and no full 15/15 coverage. The fitted date range is `2020-09-12`–`2020-12-11`.
+
+This rerun verifies the result-contract migration, not a new performance sample.
