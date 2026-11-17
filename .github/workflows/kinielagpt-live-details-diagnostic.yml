@@ -29,7 +29,7 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
-      - name: Check changes since the last successful live inspection
+      - name: Check changes since the last completed live diagnostic attempt
         id: filter
         shell: bash
         env:
@@ -103,6 +103,8 @@ jobs:
       - name: Install adapter dependencies
         run: python -m pip install -e .
       - name: Inspect current jornada details and fixture crosswalk (read-only GET)
+        env:
+          KINIELAGPT_AUTHORIZATION: ${{ secrets.KINIELAGPT_AUTHORIZATION }}
         run: python scripts/diagnose_kinielagpt_details.py --output kinielagpt-details-diagnostic.json
       - name: Upload bounded schema and crosswalk evidence
         if: always()

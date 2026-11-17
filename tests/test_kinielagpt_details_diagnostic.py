@@ -1,4 +1,6 @@
 import scripts.diagnose_kinielagpt_details as diagnostic_module
+from kini_engine.sources import KinielaGPTAuthorizationRequired
+
 from scripts.diagnose_kinielagpt_details import (
     _http_error_evidence,
     reconcile_fixture_order,
@@ -263,15 +265,18 @@ def test_probability_payload_summary_exposes_parser_schema_mismatch():
 
 def test_http_error_evidence_is_bounded_and_does_not_expose_response_headers():
     class FakeResponse:
-        status_code = 400
-        headers = {
-            "content-type": "application/json",
-            "set-cookie": "sensitive-cookie-value",
-        }
-        text = '{"error":"invalid request"} ' + ("x" * 1000)
+        def __init__(self):
+            self.status_code = 400
+            self.headers = {
+                "content-type": "application/json",
+                "set-cookie": "sensitive-cookie-value",
+            }
+            self.text = '{"error":"invalid request"} ' + ("x" * 1000)
 
     class FakeHTTPError(Exception):
-        response = FakeResponse()
+        def __init__(self, message):
+            super().__init__(message)
+            self.response = FakeResponse()
 
     evidence = _http_error_evidence(FakeHTTPError("upstream rejected request"))
 
@@ -284,14 +289,19 @@ def test_http_error_evidence_is_bounded_and_does_not_expose_response_headers():
 
 def test_collect_live_diagnostic_preserves_jornada_on_http_error(monkeypatch):
     class FakeResponse:
-        status_code = 400
-        headers = {"content-type": "application/json"}
-        text = '{"error":"invalid jornada"}'
+        def __init__(self):
+            self.status_code = 400
+            self.headers = {"content-type": "application/json"}
+            self.text = '{"error":"invalid jornada"}'
 
     class FakeHTTPError(Exception):
-        response = FakeResponse()
+        def __init__(self, message):
+            super().__init__(message)
+            self.response = FakeResponse()
 
     class FakeSource:
+        authorization = "Bearer test-token"
+
         def __init__(self, timeout):
             self.timeout = timeout
 
@@ -309,3 +319,42 @@ def test_collect_live_diagnostic_preserves_jornada_on_http_error(monkeypatch):
     assert report["temporada"] == 2027
     assert report["http_status"] == 400
     assert report["response_body_preview"] == '{"error":"invalid jornada"}'
+
+
+def test_collect_live_diagnostic_continues_when_details_authorization_is_missing(
+    monkeypatch,
+):
+    class FakeSource:
+        authorization = None
+        LAE = "https://example.com/lae/{}/{}"
+        LAE_SOURCE = "test:lae"
+
+        def __init__(self, timeout):
+            self.timeout = timeout
+
+        def last(self):
+            return 23, 2027, []
+
+        def details_payload(self, jornada, temporada):
+            raise KinielaGPTAuthorizationRequired(
+                "configure KINIELAGPT_AUTHORIZATION"
+            )
+
+        def _xml_snapshot(self, url):
+            return {"quinielista": {"porcentajes": {"partido": []}}}, (
+                "2026-11-17T00:00:00+00:00"
+            )
+
+        def probabilities(self, jornada, temporada):
+            return []
+
+    monkeypatch.setattr(diagnostic_module, "KinielaGPTSource", FakeSource)
+    report = diagnostic_module.collect_live_diagnostic()
+
+    assert report["status"] == "blocked_missing_authorization"
+    assert report["authorization_configured"] is False
+    assert report["jornada"] == 23
+    assert report["temporada"] == 2027
+    assert report["details_status"] == "blocked_missing_authorization"
+    assert report["lae_probability_schema"]["record_count"] == 0
+    assert report["kickoff_attachment"]["rows_count"] == 0

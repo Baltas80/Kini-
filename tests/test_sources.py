@@ -3,9 +3,13 @@ from datetime import UTC, datetime
 
 import pytest
 
+import kini_engine.mcp_server as mcp_server
 import kini_engine.sources as source_module
 from kini_engine.core import SIGNS
-from kini_engine.sources import KinielaGPTSource
+from kini_engine.sources import (
+    KinielaGPTAuthorizationRequired,
+    KinielaGPTSource,
+)
 
 
 class FakeResponse:
@@ -146,7 +150,7 @@ def test_details_payload_preserves_provider_schema_and_receipt_timestamp(monkeyp
         ],
         "metadata": {"season": 2026},
     }
-    source = KinielaGPTSource()
+    source = KinielaGPTSource(authorization="Bearer test-token")
     fake_session = FakeDetailsSession(payload)
     source.session = fake_session
 
@@ -158,9 +162,10 @@ def test_details_payload_preserves_provider_schema_and_receipt_timestamp(monkeyp
     assert fake_session.details_call["params"]["temporada"] == 2026
     assert "uts" in fake_session.details_call["params"]
     assert fake_session.home_call["headers"] == KinielaGPTSource.DETAILS_HOME_HEADERS
-    assert fake_session.details_call["headers"] == (
-        KinielaGPTSource.DETAILS_REQUEST_HEADERS
-    )
+    assert fake_session.details_call["headers"] == {
+        **KinielaGPTSource.DETAILS_REQUEST_HEADERS,
+        "Authorization": "Bearer test-token",
+    }
     assert fake_session.details_call["headers"]["origin"] == (
         "https://www.eduardolosilla.es"
     )
@@ -171,7 +176,7 @@ def test_details_payload_preserves_provider_schema_and_receipt_timestamp(monkeyp
 
 def test_details_returns_provider_records_without_changing_the_schema():
     payload = {"detallePartidos": [{"idPartido": 123, "hora": "20:00"}]}
-    source = KinielaGPTSource()
+    source = KinielaGPTSource(authorization="Bearer test-token")
     source.session = FakeDetailsSession(payload)
 
     assert source.details(12, 2026) == payload["detallePartidos"]
@@ -186,7 +191,7 @@ def test_details_returns_provider_records_without_changing_the_schema():
     ],
 )
 def test_details_rejects_unknown_or_malformed_provider_schema(payload, error):
-    source = KinielaGPTSource()
+    source = KinielaGPTSource(authorization="Bearer test-token")
     source.session = FakeDetailsSession(payload)
 
     with pytest.raises(error, match="KinielaGPT"):
@@ -399,3 +404,64 @@ def test_curated_jornada_22_kickoff_crosswalk_loads_all_fifteen_verified_fixture
         "2026-11-19T18:45:00+01:00"
     )
     assert KinielaGPTSource._load_kickoff_crosswalk(21, 2027) == {}
+
+
+def test_details_payload_requires_authorization_before_network_request():
+    source = KinielaGPTSource()
+    fake_session = FakeDetailsSession({})
+    source.session = fake_session
+
+    with pytest.raises(
+        KinielaGPTAuthorizationRequired, match="KINIELAGPT_AUTHORIZATION"
+    ):
+        source.details_payload(12, 2026)
+
+    assert fake_session.home_call is None
+    assert fake_session.details_call is None
+
+
+def test_details_payload_reads_authorization_from_environment(monkeypatch):
+    monkeypatch.setenv("KINIELAGPT_AUTHORIZATION", "Bearer env-token")
+    source = KinielaGPTSource()
+    fake_session = FakeDetailsSession({"detallePartidos": []})
+    source.session = fake_session
+
+    source.details_payload(12, 2026)
+
+    assert fake_session.details_call["headers"]["Authorization"] == "Bearer env-token"
+
+
+def test_mcp_quiniela_keeps_public_probabilities_when_details_auth_is_missing(
+    monkeypatch,
+):
+    class FakeFastMCP:
+        def __init__(self, name):
+            self.name = name
+            self.tools = {}
+
+        def tool(self):
+            def register(function):
+                self.tools[function.__name__] = function
+                return function
+
+            return register
+
+    class FakeSource:
+        def probabilities(self, jornada, temporada):
+            return [{"id": 1, "local": "Home", "visitante": "Away"}]
+
+        def details(self, jornada, temporada):
+            raise KinielaGPTAuthorizationRequired(
+                "configure KINIELAGPT_AUTHORIZATION"
+            )
+
+    monkeypatch.setattr(mcp_server, "FastMCP", FakeFastMCP)
+    monkeypatch.setattr(mcp_server, "KinielaGPTSource", FakeSource)
+    server = mcp_server.create_server(engine=object())
+
+    result = server.tools["get_quiniela"](22, 2027)
+
+    assert result["matches"] == [{"id": 1, "local": "Home", "visitante": "Away"}]
+    assert result["details"] == []
+    assert result["details_status"] == "blocked_missing_authorization"
+    assert "KINIELAGPT_AUTHORIZATION" in result["details_error"]

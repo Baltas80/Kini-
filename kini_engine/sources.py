@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import math
+import os
 import time
 import unicodedata
 from datetime import UTC, date, datetime, timedelta
@@ -47,6 +48,10 @@ def _parse_aware_timestamp(value: Any) -> datetime | None:
     return parsed
 
 
+class KinielaGPTAuthorizationRequired(RuntimeError):
+    """Raised when the provider details API is used without its required auth header."""
+
+
 class KinielaGPTSource:
     """KinielaGPT-compatible source adapter for LAE/Quinielista percentages and details."""
 
@@ -84,7 +89,17 @@ class KinielaGPTSource:
         / "kinielagpt_fixture_kickoffs.json"
     )
 
-    def __init__(self, timeout: int = 15) -> None:
+    def __init__(
+        self,
+        timeout: int = 15,
+        authorization: str | None = None,
+    ) -> None:
+        configured_authorization = authorization or os.environ.get(
+            "KINIELAGPT_AUTHORIZATION"
+        )
+        self.authorization = (
+            configured_authorization.strip() if configured_authorization else None
+        ) or None
         self.session = requests.Session()
         retry = Retry(
             total=3,
@@ -447,11 +462,19 @@ class KinielaGPTSource:
         The timestamp is when this client received the HTTP response. It is not
         evidence of the provider's publication time or of a fixture's kickoff.
         """
+        if not self.authorization:
+            raise KinielaGPTAuthorizationRequired(
+                "KinielaGPT details API requires an Authorization header; configure "
+                "KINIELAGPT_AUTHORIZATION with the provider-issued header value."
+            )
+
         self.session.get(
             self.HOME,
             headers=self.DETAILS_HOME_HEADERS,
             timeout=self.timeout,
         ).raise_for_status()
+        details_headers = dict(self.DETAILS_REQUEST_HEADERS)
+        details_headers["Authorization"] = self.authorization
         response = self.session.get(
             self.DETAILS,
             params={
@@ -459,7 +482,7 @@ class KinielaGPTSource:
                 "temporada": temporada,
                 "uts": int(time.time() * 1000),
             },
-            headers=self.DETAILS_REQUEST_HEADERS,
+            headers=details_headers,
             timeout=self.timeout,
         )
         response.raise_for_status()

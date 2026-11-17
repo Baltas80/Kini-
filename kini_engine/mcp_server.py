@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from .core import KiniEngine, Match
-from .sources import KinielaGPTSource
+from .sources import KinielaGPTAuthorizationRequired, KinielaGPTSource
 
 try:
     from mcp.server.fastmcp import FastMCP
@@ -27,12 +27,21 @@ def create_server(engine: KiniEngine | None = None):
     @mcp.tool()
     def get_quiniela(jornada: int, temporada: int) -> dict[str, Any]:
         probabilities = source.probabilities(jornada, temporada)
-        details = source.details(jornada, temporada)
+        try:
+            details = source.details(jornada, temporada)
+            details_status = "ok"
+            details_error = None
+        except KinielaGPTAuthorizationRequired as exc:
+            details = []
+            details_status = "blocked_missing_authorization"
+            details_error = str(exc)
         return {
             "jornada": jornada,
             "temporada": temporada,
             "matches": probabilities,
             "details": details,
+            "details_status": details_status,
+            "details_error": details_error,
         }
 
     @mcp.tool()

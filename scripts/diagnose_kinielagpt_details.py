@@ -11,7 +11,10 @@ from pathlib import Path
 from typing import Any
 
 from kini_engine.core import LAE_KICKOFF_EVIDENCE_MAX_AGE
-from kini_engine.sources import KinielaGPTSource
+from kini_engine.sources import (
+    KinielaGPTAuthorizationRequired,
+    KinielaGPTSource,
+)
 
 _KEY_HINTS = (
     "id",
@@ -554,25 +557,41 @@ def collect_live_diagnostic() -> dict[str, Any]:
         "mutating_operations": False,
     }
     source = KinielaGPTSource(timeout=20)
+    report["authorization_configured"] = bool(source.authorization)
     jornada, temporada, percentage_matches = source.last()
     report["jornada"] = jornada
     report["temporada"] = temporada
+    details_blocked = False
     try:
         payload, captured_at = source.details_payload(jornada, temporada)
+    except KinielaGPTAuthorizationRequired as exc:
+        details_blocked = True
+        report["details_status"] = "blocked_missing_authorization"
+        report["details_error"] = str(exc)
+        report["schema"] = None
+        report["fixture_crosswalk"] = {
+            "status": "not_run",
+            "reason": "missing_authorization",
+        }
     except Exception as exc:  # noqa: BLE001 - retain the failed request context
         report.update(
             {
                 "status": "error",
+                "details_status": "error",
                 "error_type": type(exc).__name__,
                 "error": str(exc)[:300],
                 **_http_error_evidence(exc),
             }
         )
         return report
-    report["details_response_received_at"] = captured_at
-    report["schema"] = summarize_payload(payload)
-    details = payload.get("detallePartidos")
-    report["fixture_crosswalk"] = reconcile_fixture_order(details, percentage_matches)
+    else:
+        report["details_status"] = "ok"
+        report["details_response_received_at"] = captured_at
+        report["schema"] = summarize_payload(payload)
+        details = payload.get("detallePartidos")
+        report["fixture_crosswalk"] = reconcile_fixture_order(
+            details, percentage_matches
+        )
     lae_payload, lae_schema_received_at = source._xml_snapshot(
         source.LAE.format(jornada, temporada)
     )
@@ -584,13 +603,16 @@ def collect_live_diagnostic() -> dict[str, Any]:
     report["kickoff_attachment"] = summarize_kickoff_attachment(
         probability_rows, source.LAE_SOURCE
     )
-    report["status"] = (
-        "ok"
-        if report["schema"]["details_key_present"]
-        and report["schema"]["details_value_type"] == "list"
-        and report["schema"]["details_record_count"] > 0
-        else "empty_or_unrecognized_schema"
-    )
+    if details_blocked:
+        report["status"] = "blocked_missing_authorization"
+    else:
+        report["status"] = (
+            "ok"
+            if report["schema"]["details_key_present"]
+            and report["schema"]["details_value_type"] == "list"
+            and report["schema"]["details_record_count"] > 0
+            else "empty_or_unrecognized_schema"
+        )
     return report
 
 
@@ -611,6 +633,8 @@ def main() -> int:
             exit_code = 0
         elif report["status"] == "error":
             exit_code = 1
+        elif report["status"] == "blocked_missing_authorization":
+            exit_code = 3
         else:
             exit_code = 2
     except Exception as exc:  # noqa: BLE001 - preserve failure evidence in this diagnostic
