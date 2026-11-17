@@ -3216,3 +3216,31 @@ The CI workflow previously ran on both every feature-branch push and the corresp
 - Commit: `56d7a3f`.
 - The change is workflow-only; it does not alter application or model behavior.
 - The current PR-head CI must still complete after this trigger change. Actionlint is part of that validation.
+
+
+## Validación final de la corrección temporal — 2026-11-17
+
+La validación del head `4a3e982ba5da7c75501b1a86cc7b0095ac368be3` terminó correctamente:
+
+- CI `44043516883`: actionlint, Ruff lint, Ruff format y pytest correctos.
+- Pytest: **341 passed, 21 warnings, 2.91 s**.
+- Histórico/datos `44043516946`: validación completa del dataset y de las identidades canónicas correcta.
+- Backtest predictivo `44043516898`: job `backtest` omitido por el filtro de cambios; no se modificó código predictivo.
+- Piloto de cupones `44043516912`: job `pilot` omitido por el filtro; no se modificó el importador ni el modelo de cupones.
+- Descubrimiento de archivo SELAE `44043516945`: descubrimiento omitido correctamente; no cambió su implementación.
+
+Las dos primeras ejecuciones de CI de esta corrección no pasaron: una detectó una definición de test duplicada y otra detectó únicamente diferencias de formato Ruff. Ambas causas se corrigieron; el tercer CI completo es el resultado de aceptación válido.
+
+Se corrigió además la duplicación de ejecuciones push + pull_request en ramas de feature restringiendo el trigger push de CI a `master` (commit `56d7a3f`). La rama de feature se valida por el evento pull_request. No se modificó `master`.
+
+### Limitaciones abiertas de la integración
+
+`build_ticket_probability_vectors` ya separa correctamente el plan prepartido de la reconciliación postpartido, pero sigue siendo un helper independiente: todavía no está conectado a `KiniEngine.quiniela` ni al MCP `predict_quiniela`. La integración debe:
+1. No llamar al modelo futbolístico para posiciones `public_draw_expected`.
+2. Enviar los 14 vectores resultantes al `TicketOptimizer`.
+3. Persistir el plan, las fuentes, hashes y timestamps junto con las columnas.
+4. Verificar identidad y orden de los 14 partidos contra el plan.
+5. Incluir el kickoff del Pleno al 15 al validar el primer inicio del cupón completo; el plan actual solo verifica los kickoffs de las posiciones 1–14.
+6. Mantener separado el resultado oficial postpartido para puntuar el boleto.
+
+Próxima prioridad: integrar el plan en el flujo real de generación de boletos, extendiendo el esquema para validar también el kickoff del Pleno y probando que una posición de sorteo público nunca reciba una predicción futbolística. Después, construir un ledger histórico de boletos realmente emitidos; no se debe estimar rentabilidad a partir de columnas hipotéticas sin conservar fecha de creación, coste y evidencia de cierre.
