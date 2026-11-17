@@ -331,8 +331,6 @@ def test_ticket_scoring_evaluates_pleno15_from_official_pdf_vector() -> None:
     assert result["pleno15_hit"] is True
     assert result["covered_full_coupon"] is True
     assert result["pleno15_actual"] == {
-        "home_goals": None,
-        "away_goals": None,
         "home_category": "2",
         "away_category": "M",
     }
