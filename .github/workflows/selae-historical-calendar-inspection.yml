@@ -1,0 +1,35 @@
+name: selae-historical-calendar-inspection
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: selae-historical-calendar-inspection-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install inspection dependencies
+        run: python -m pip install -e ".[dev]"
+      - name: Download and inspect the official SELAE workbook
+        run: >-
+          python -m scripts.inspect_selae_historical_calendar
+          --output-dir artifacts/selae-historical-calendar
+      - name: Upload source workbook and schema report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: selae-historical-calendar-inspection
+          path: artifacts/selae-historical-calendar/
+          if-no-files-found: warn
+          retention-days: 30

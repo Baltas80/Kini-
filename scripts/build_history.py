@@ -7,10 +7,11 @@ import logging
 import os
 import tempfile
 import time
-from datetime import datetime, timezone
+from collections.abc import Iterable
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Iterable
 
+import numpy as np
 import pandas as pd
 import requests
 from requests.adapters import HTTPAdapter
@@ -61,10 +62,16 @@ def _parse_source_csv(
     df: pd.DataFrame | None = None
     for encoding in ("utf-8-sig", "cp1252", "latin-1"):
         try:
-            candidate = pd.read_csv(io.BytesIO(content), encoding=encoding, low_memory=False)
+            candidate = pd.read_csv(
+                io.BytesIO(content), encoding=encoding, low_memory=False
+            )
             df = candidate
             break
-        except (UnicodeDecodeError, pd.errors.ParserError, pd.errors.EmptyDataError) as exc:
+        except (
+            UnicodeDecodeError,
+            pd.errors.ParserError,
+            pd.errors.EmptyDataError,
+        ) as exc:
             errors.append(exc)
     if df is None:
         raise ValueError(f"{source}: no se pudo interpretar el CSV") from errors[-1]
@@ -96,10 +103,18 @@ def _parse_source_csv(
     bad_dates = has_teams & parsed_dates.isna()
     if bool(bad_dates.any()):
         sample = df.loc[bad_dates, "Date"].astype(str).head(3).tolist()
-        raise ValueError(f"{source}: fechas no interpretables en filas con equipos: {sample}")
+        raise ValueError(
+            f"{source}: fechas no interpretables en filas con equipos: {sample}"
+        )
 
     for column in ("FTHG", "FTAG"):
         raw = df[column]
+        boolean_values = raw.map(lambda value: isinstance(value, (bool, np.bool_)))
+        if bool(boolean_values.any()):
+            sample = raw.loc[boolean_values].astype(str).head(3).tolist()
+            raise ValueError(
+                f"{source}: valores booleanos no permitidos en {column}: {sample}"
+            )
         numeric = pd.to_numeric(raw, errors="coerce")
         malformed = raw.notna() & numeric.isna()
         if bool(malformed.any()):
@@ -130,7 +145,11 @@ def _atomic_write(path: Path, content: bytes) -> None:
     temp_name: str | None = None
     try:
         with tempfile.NamedTemporaryFile(
-            mode="wb", dir=path.parent, prefix=f".{path.name}.", suffix=".tmp", delete=False
+            mode="wb",
+            dir=path.parent,
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+            delete=False,
         ) as handle:
             temp_name = handle.name
             handle.write(content)
@@ -153,9 +172,12 @@ def fetch_csv(
     session: requests.Session | None = None,
     cache_ttl_hours: float = DEFAULT_CACHE_TTL_HOURS,
     refresh: bool = False,
+    offline: bool = False,
     expected_division: str | None = None,
 ) -> pd.DataFrame:
     """Read a validated cache or download the source, retrying and falling back safely."""
+    if offline and refresh:
+        raise ValueError("offline mode cannot be combined with refresh")
     path = Path(cache_path)
     cached_content: bytes | None = None
     cached_df: pd.DataFrame | None = None
@@ -172,6 +194,14 @@ def fetch_csv(
         except (OSError, ValueError, pd.errors.ParserError) as exc:
             log.warning("Ignorando caché inválida %s: %s", path, exc)
 
+    if offline:
+        if cached_df is not None:
+            log.info("Offline cache hit: %s", path)
+            return cached_df
+        raise RuntimeError(
+            f"No existe una caché válida para {url}; el modo offline impide descargar"
+        )
+
     client = session or make_session()
     try:
         response = client.get(url, timeout=(5, 30))
@@ -186,7 +216,11 @@ def fetch_csv(
         return downloaded
     except (requests.RequestException, ValueError, pd.errors.ParserError) as exc:
         if cached_df is not None and cached_content is not None:
-            log.warning("Fuente no disponible; usando caché válida aunque esté caducada (%s): %s", url, exc)
+            log.warning(
+                "Fuente no disponible; usando caché válida aunque esté caducada (%s): %s",
+                url,
+                exc,
+            )
             return cached_df
         raise RuntimeError(f"No se pudo obtener un CSV válido de {url}: {exc}") from exc
 
@@ -196,8 +230,13 @@ def _atomic_write_dataframe(frame: pd.DataFrame, target: Path) -> None:
     temp_name: str | None = None
     try:
         with tempfile.NamedTemporaryFile(
-            mode="w", encoding="utf-8", newline="", dir=target.parent,
-            prefix=f".{target.name}.", suffix=".tmp", delete=False
+            mode="w",
+            encoding="utf-8",
+            newline="",
+            dir=target.parent,
+            prefix=f".{target.name}.",
+            suffix=".tmp",
+            delete=False,
         ) as handle:
             temp_name = handle.name
             frame.to_csv(handle, index=False)
@@ -213,7 +252,6 @@ def _atomic_write_dataframe(frame: pd.DataFrame, target: Path) -> None:
                 pass
 
 
-
 def build_dataset_profile(
     raw_frame: pd.DataFrame,
     complete_frame: pd.DataFrame,
@@ -224,7 +262,7 @@ def build_dataset_profile(
     profile_generated_at: datetime | None = None,
 ) -> dict[str, object]:
     """Summarize provenance, coverage, missingness and integrity before modeling."""
-    profile_generated_at = profile_generated_at or datetime.now(timezone.utc)
+    profile_generated_at = profile_generated_at or datetime.now(UTC)
     dates = raw_frame.get("_ParsedDate")
     if dates is None:
         dates = pd.to_datetime(raw_frame["Date"], dayfirst=True, errors="coerce")
@@ -233,7 +271,9 @@ def build_dataset_profile(
     missingness = {
         str(column): {
             "count": int(source_columns[column].isna().sum()),
-            "fraction": float(source_columns[column].isna().mean()) if len(source_columns) else 0.0,
+            "fraction": float(source_columns[column].isna().mean())
+            if len(source_columns)
+            else 0.0,
         }
         for column in source_columns.columns
     }
@@ -283,7 +323,9 @@ def build_dataset_profile(
             if len(score_variants) > 1 or labels.nunique() > 1:
                 conflicting_duplicates += 1
 
-    result_values = raw_frame.get("FTR", pd.Series(index=raw_frame.index, dtype="object"))
+    result_values = raw_frame.get(
+        "FTR", pd.Series(index=raw_frame.index, dtype="object")
+    )
     normalized = result_values.astype("string").str.strip().str.upper()
     result_map = {"H": "1", "D": "X", "A": "2", "1": "1", "X": "X", "2": "2"}
     mapped = normalized.map(result_map)
@@ -313,20 +355,28 @@ def build_dataset_profile(
     if "SourceURL" in raw_frame.columns:
         source_counts = {
             str(source): int(count)
-            for source, count in raw_frame["SourceURL"].value_counts(dropna=False).items()
+            for source, count in raw_frame["SourceURL"]
+            .value_counts(dropna=False)
+            .items()
         }
 
     integrity_passed = not any(
-        (invalid_labels, mismatches, incomplete_scores, invalid_dates_with_teams, conflicting_duplicates)
+        (
+            invalid_labels,
+            mismatches,
+            incomplete_scores,
+            invalid_dates_with_teams,
+            conflicting_duplicates,
+        )
     )
     return {
-        "profile_generated_at_utc": profile_generated_at.astimezone(timezone.utc).isoformat(),
+        "profile_generated_at_utc": profile_generated_at.astimezone(UTC).isoformat(),
         "source_urls": sorted(set(source_urls)),
         "source_cache_metadata": source_metadata or [],
         "source_row_counts": source_counts,
-        "rows_before_filter": int(len(raw_frame)),
-        "rows_after_complete_score_filter": int(len(complete_frame)),
-        "rows_after_deduplication": int(len(final_frame)),
+        "rows_before_filter": len(raw_frame),
+        "rows_after_complete_score_filter": len(complete_frame),
+        "rows_after_deduplication": len(final_frame),
         "rows_missing_team_names": int((~team_mask).sum()),
         "rows_missing_final_scores": missing_scores,
         "rows_with_incomplete_scores": incomplete_scores,
@@ -354,6 +404,7 @@ def build_history(
     cache_dir: str | Path = DEFAULT_CACHE_DIR,
     cache_ttl_hours: float = DEFAULT_CACHE_TTL_HOURS,
     refresh: bool = False,
+    offline: bool = False,
     session: requests.Session | None = None,
 ) -> pd.DataFrame:
     """Build a validated, de-duplicated chronological history from cached/source CSVs."""
@@ -366,12 +417,14 @@ def build_history(
         raise ValueError("Debe especificarse al menos una temporada")
     if cache_ttl_hours < 0:
         raise ValueError("cache_ttl_hours no puede ser negativo")
+    if offline and refresh:
+        raise ValueError("offline mode cannot be combined with refresh")
 
     frames: list[pd.DataFrame] = []
     source_urls: list[str] = []
     source_metadata: list[dict[str, object]] = []
-    profile_generated_at = datetime.now(timezone.utc)
-    client = session or make_session()
+    profile_generated_at = datetime.now(UTC)
+    client = session if session is not None else (None if offline else make_session())
     cache_root = Path(cache_dir)
 
     for season in selected_seasons:
@@ -385,6 +438,7 @@ def build_history(
                 session=client,
                 cache_ttl_hours=cache_ttl_hours,
                 refresh=refresh,
+                offline=offline,
                 expected_division=code,
             )
             source_urls.append(url)
@@ -395,7 +449,7 @@ def build_history(
                         "source_url": url,
                         "cache_path": str(cache_path),
                         "cache_file_mtime_utc": datetime.fromtimestamp(
-                            cache_mtime, timezone.utc
+                            cache_mtime, UTC
                         ).isoformat(),
                         "cache_age_hours": round(
                             max(0.0, time.time() - cache_mtime) / 3600.0, 3
@@ -430,7 +484,9 @@ def build_history(
     out = combined.loc[complete].copy()
     complete_rows = out.copy()
     if out.empty:
-        raise ValueError("Las fuentes no contienen ningún partido con resultado completo")
+        raise ValueError(
+            "Las fuentes no contienen ningún partido con resultado completo"
+        )
 
     out["FTHG"] = out["FTHG"].astype(int)
     out["FTAG"] = out["FTAG"].astype(int)
@@ -473,24 +529,53 @@ def build_history(
     _atomic_write_dataframe(out, target)
     log.info(
         "Histórico escrito: %s; partidos=%d; duplicados eliminados=%d; temporadas=%d; ligas=%d; perfil=%s",
-        target, len(out), duplicates_removed, len(selected_seasons), len(selected_leagues), profile_target,
+        target,
+        len(out),
+        duplicates_removed,
+        len(selected_seasons),
+        len(selected_leagues),
+        profile_target,
     )
     return out
 
 
 def _parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Descarga y valida el histórico español de Football-Data.")
-    parser.add_argument("--output", type=Path, default=Path("data/historical_spain.csv"))
+    parser = argparse.ArgumentParser(
+        description="Descarga y valida el histórico español de Football-Data."
+    )
+    parser.add_argument(
+        "--output", type=Path, default=Path("data/historical_spain.csv")
+    )
     parser.add_argument("--cache-dir", type=Path, default=DEFAULT_CACHE_DIR)
-    parser.add_argument("--cache-ttl-hours", type=float, default=DEFAULT_CACHE_TTL_HOURS)
-    parser.add_argument("--refresh", action="store_true", help="Intentar renovar los CSV aunque la caché siga vigente.")
-    parser.add_argument("--seasons", nargs="+", default=list(SEASONS), help="Códigos de temporada, por ejemplo 2526 2627.")
-    parser.add_argument("--leagues", nargs="+", choices=tuple(LEAGUES), default=list(LEAGUES))
+    parser.add_argument(
+        "--cache-ttl-hours", type=float, default=DEFAULT_CACHE_TTL_HOURS
+    )
+    parser.add_argument(
+        "--refresh",
+        action="store_true",
+        help="Intentar renovar los CSV aunque la caché siga vigente.",
+    )
+    parser.add_argument(
+        "--offline",
+        action="store_true",
+        help="Usar exclusivamente caché local; no realizar peticiones HTTP.",
+    )
+    parser.add_argument(
+        "--seasons",
+        nargs="+",
+        default=list(SEASONS),
+        help="Códigos de temporada, por ejemplo 2526 2627.",
+    )
+    parser.add_argument(
+        "--leagues", nargs="+", choices=tuple(LEAGUES), default=list(LEAGUES)
+    )
     return parser.parse_args()
 
 
 def main() -> None:
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s"
+    )
     args = _parse_args()
     history = build_history(
         seasons=args.seasons,
@@ -499,6 +584,7 @@ def main() -> None:
         cache_dir=args.cache_dir,
         cache_ttl_hours=args.cache_ttl_hours,
         refresh=args.refresh,
+        offline=args.offline,
     )
     print(f"Wrote {len(history)} matches to {args.output}")
 

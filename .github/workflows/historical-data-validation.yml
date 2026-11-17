@@ -9,8 +9,15 @@ on:
       - "kini_engine/data/**"
       - "scripts/validate_team_identity_registry.py"
       - "data/**"
+      - "!data/selae_fixture_crosswalk.json"
+      - "!data/ligaf_fixture_evidence.json"
+      - "!data/ligaf_history.jsonl"
+      - "!data/ligaf_history.profile.json"
+      - "!data/ligaf_team_profile_crosswalk.json"
+      - "!kini_engine/data/ligaf_team_identity_registry.json"
       - "pyproject.toml"
       - "requirements*.txt"
+      - ".github/workflows/historical-data-validation.yml"
   pull_request:
     paths:
       - "scripts/build_history.py"
@@ -19,9 +26,22 @@ on:
       - "kini_engine/data/**"
       - "scripts/validate_team_identity_registry.py"
       - "data/**"
+      - "!data/selae_fixture_crosswalk.json"
+      - "!data/ligaf_fixture_evidence.json"
+      - "!data/ligaf_history.jsonl"
+      - "!data/ligaf_history.profile.json"
+      - "!data/ligaf_team_profile_crosswalk.json"
+      - "!kini_engine/data/ligaf_team_identity_registry.json"
       - "pyproject.toml"
       - "requirements*.txt"
+      - ".github/workflows/historical-data-validation.yml"
   workflow_dispatch:
+    inputs:
+      refresh_source:
+        description: "Refresh Football-Data only if still within the provider's weekly download allowance"
+        type: boolean
+        required: false
+        default: false
   schedule:
     - cron: "37 4 * * 1"
 
@@ -39,7 +59,8 @@ jobs:
           python-version: "3.12"
       - run: python -m pip install -e ".[dev]"
       - name: Restore Football-Data raw CSV cache
-        uses: actions/cache@v4
+        id: football_cache
+        uses: actions/cache/restore@v4
         with:
           path: .cache/football-data
           key: football-data-${{ runner.os }}-${{ github.ref_name }}-${{ github.run_id }}
@@ -47,7 +68,14 @@ jobs:
             football-data-${{ runner.os }}-${{ github.ref_name }}-
             football-data-${{ runner.os }}-
       - name: Build historical data and profile
-        run: python scripts/build_history.py
+        env:
+          REFRESH_SOURCE: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.refresh_source) }}
+        run: |
+          if [ "$REFRESH_SOURCE" = "true" ]; then
+            python scripts/build_history.py --refresh
+          else
+            python scripts/build_history.py --offline
+          fi
       - name: Validate canonical team identities
         run: |
           python -m scripts.validate_team_identity_registry --csv data/historical_spain.csv --output data/team_identity_validation.json
@@ -100,6 +128,12 @@ jobs:
           print(json.dumps(profile, indent=2, ensure_ascii=False))
           print(f"DATA_VALIDATION_OK: {len(dataset)} completed fixtures")
           PY
+      - name: Save refreshed Football-Data raw CSV cache
+        if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.refresh_source)
+        uses: actions/cache/save@v4
+        with:
+          path: .cache/football-data
+          key: ${{ steps.football_cache.outputs.cache-primary-key }}
       - name: Upload historical dataset and quality profile
         if: always()
         uses: actions/upload-artifact@v4

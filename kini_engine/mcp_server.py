@@ -2,12 +2,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from .core import KiniEngine, Match, SIGNS
-from .sources import KinielaGPTSource
+from .core import KiniEngine, Match
+from .sources import KinielaGPTAuthorizationRequired, KinielaGPTSource
 
 try:
     from mcp.server.fastmcp import FastMCP
-except Exception:
+except ImportError:
     FastMCP = None  # type: ignore[assignment]
 
 
@@ -22,17 +22,31 @@ def create_server(engine: KiniEngine | None = None):
     @mcp.tool()
     def get_last_quiniela() -> dict[str, Any]:
         jornada, temporada, matches = source.last()
-        return {"jornada": jornada, "temporada": temporada, "matches": matches}
+        return {
+            "jornada": jornada,
+            "temporada": temporada,
+            "matches": matches,
+            "round_resolution": source.last_round_resolution,
+        }
 
     @mcp.tool()
     def get_quiniela(jornada: int, temporada: int) -> dict[str, Any]:
         probabilities = source.probabilities(jornada, temporada)
-        details = source.details(jornada, temporada)
+        try:
+            details = source.details(jornada, temporada)
+            details_status = "ok"
+            details_error = None
+        except KinielaGPTAuthorizationRequired as exc:
+            details = []
+            details_status = "blocked_missing_authorization"
+            details_error = str(exc)
         return {
             "jornada": jornada,
             "temporada": temporada,
             "matches": probabilities,
             "details": details,
+            "details_status": details_status,
+            "details_error": details_error,
         }
 
     @mcp.tool()
@@ -79,25 +93,88 @@ def create_server(engine: KiniEngine | None = None):
     def detect_surprises(jornada: int, temporada: int) -> list[dict[str, Any]]:
         rows = source.probabilities(jornada, temporada)
         out = []
-        history = getattr(model, "history", [])
         for row in rows:
             home = row.get("local", "")
             away = row.get("visitante", "")
             if not home or not away:
                 continue
-            pred = model.predict(Match("", home, away, lae={s: float(row.get(s, 0.0)) for s in SIGNS}))
-            if pred.surprise:
-                out.append({
-                    "id": row.get("id"),
-                    "home": home,
-                    "away": away,
-                    "prediction": pred.__dict__,
-                })
+            lae = row.get("lae")
+            detail = {
+                "lae_source": row.get("lae_source"),
+                "lae_captured_at": row.get("lae_captured_at"),
+                "kickoff_at": row.get("kickoff_at"),
+                "kickoff_source": row.get("kickoff_source"),
+                "kickoff_evidence_url": row.get("kickoff_evidence_url"),
+                "kickoff_evidence_checked_at_utc": row.get(
+                    "kickoff_evidence_checked_at_utc"
+                ),
+                "kickoff_timezone": row.get("kickoff_timezone"),
+                "fixture_identity_status": row.get("fixture_identity_status"),
+            }
+            current = Match(
+                row.get("kickoff_at") or "",
+                home,
+                away,
+                lae=lae if isinstance(lae, dict) else None,
+                detail=detail,
+            )
+            prediction = model.predict(current)
+            if prediction.surprise:
+                out.append(
+                    {
+                        "id": row.get("id"),
+                        "home": home,
+                        "away": away,
+                        "prediction": prediction.__dict__,
+                    }
+                )
         return out
 
     @mcp.tool()
-    def predict_quiniela(fixtures: list[dict[str, str]], budget: int = 8) -> dict[str, Any]:
-        ms = [Match("", x["home"], x["away"]) for x in fixtures]
-        return model.quiniela(ms, budget)
+    def predict_quiniela(
+        fixtures: list[dict[str, Any]],
+        budget: int = 8,
+        coupon_plan: dict[str, Any] | None = None,
+        public_draw_snapshots: dict[str, dict[str, Any]] | None = None,
+        ticket_id: str | None = None,
+    ) -> dict[str, Any]:
+        ms = [
+            Match(
+                x.get("kickoff_at") or x.get("date") or "",
+                x["home"],
+                x["away"],
+            )
+            for x in fixtures
+        ]
+        normalized_snapshots = None
+        if public_draw_snapshots is not None:
+            normalized_snapshots = {}
+            for raw_position, snapshot in public_draw_snapshots.items():
+                if isinstance(raw_position, bool):
+                    raise TypeError(
+                        "public-draw snapshot keys must be integer positions"
+                    )
+                try:
+                    position = int(raw_position)
+                except (TypeError, ValueError) as exc:
+                    raise ValueError(
+                        "public-draw snapshot keys must be positions 1..14"
+                    ) from exc
+                if str(position) != str(raw_position) or not 1 <= position <= 14:
+                    raise ValueError(
+                        "public-draw snapshot keys must be canonical positions 1..14"
+                    )
+                if position in normalized_snapshots:
+                    raise ValueError(
+                        f"duplicate public-draw snapshot position {position}"
+                    )
+                normalized_snapshots[position] = snapshot
+        return model.quiniela(
+            ms,
+            budget,
+            coupon_plan=coupon_plan,
+            public_draw_snapshots=normalized_snapshots,
+            ticket_id=ticket_id,
+        )
 
     return mcp

@@ -2,9 +2,9 @@ from datetime import datetime, timedelta
 
 import numpy as np
 
-import kini_engine.backtest as backtest
+from kini_engine import backtest
 from kini_engine.backtest import multiclass_metrics
-from kini_engine.core import Match
+from kini_engine.core import LAE_SOURCE_ID, Match
 
 
 def test_metrics_are_bounded():
@@ -38,17 +38,14 @@ def test_walk_forward_keeps_same_day_fixtures_out_of_training(monkeypatch):
 
         def predict(self, match):
             prediction_training_sizes.append(len(self.history))
-            return type("Prediction", (), {
-                "probabilities": {"1": 0.5, "X": 0.3, "2": 0.2}
-            })()
+            return type(
+                "Prediction", (), {"probabilities": {"1": 0.5, "X": 0.3, "2": 0.2}}
+            )()
 
     monkeypatch.setattr(backtest, "KiniEngine", FakeEngine)
     day1 = datetime(2025, 1, 1)
     day2 = datetime(2025, 1, 2)
-    matches = [
-        Match(day1, f"H{i}", f"A{i}", 1, 0, "1")
-        for i in range(12)
-    ] + [
+    matches = [Match(day1, f"H{i}", f"A{i}", 1, 0, "1") for i in range(12)] + [
         Match(day2, "H12", "A12", 1, 0, "1"),
         Match(day2, "H13", "A13", 0, 0, "X"),
     ]
@@ -77,21 +74,36 @@ def test_walk_forward_refit_interval_counts_dates(monkeypatch):
             return self
 
         def predict(self, match):
-            return type("Prediction", (), {
-                "probabilities": {"1": 0.5, "X": 0.3, "2": 0.2}
-            })()
+            return type(
+                "Prediction", (), {"probabilities": {"1": 0.5, "X": 0.3, "2": 0.2}}
+            )()
 
     monkeypatch.setattr(backtest, "KiniEngine", FakeEngine)
     start = datetime(2025, 1, 1)
     matches = [Match(start, f"H{i}", f"A{i}", 1, 0, "1") for i in range(12)]
     for day in range(1, 4):
-        matches.append(Match(start + timedelta(days=day), f"H{day}", f"A{day}", 1, 0, "1"))
+        matches.append(
+            Match(start + timedelta(days=day), f"H{day}", f"A{day}", 1, 0, "1")
+        )
 
     backtest.walk_forward(matches, min_train=12, refit_every=2)
 
     # First forecast date fits, second reuses that fit, third refits.
     assert fitted_sizes == [12, 14]
 
+
+def test_football_data_snapshot_date_uses_documented_collection_days():
+    expected = {
+        "2025-01-06": None,
+        "2025-01-07": None,
+        "2025-01-08": "2025-01-07",
+        "2025-01-09": "2025-01-07",
+        "2025-01-10": None,
+        "2025-01-11": "2025-01-10",
+        "2025-01-12": "2025-01-10",
+    }
+    for fixture_date, snapshot_date in expected.items():
+        assert backtest._football_data_snapshot_date(fixture_date) == snapshot_date
 
 
 def test_market_baseline_uses_only_schedule_screened_rows():
@@ -130,6 +142,51 @@ def test_market_baseline_uses_only_schedule_screened_rows():
     assert baseline[1][0] == {"1": 0.20, "X": 0.30, "2": 0.50}
 
 
+def test_lae_baseline_uses_only_temporally_verified_source_vectors():
+    valid_lae = {"1": 0.20, "X": 0.30, "2": 0.50}
+    unverified_lae = {"1": 0.99, "X": 0.005, "2": 0.005}
+    invalid_lae = {"1": 0.40, "X": 0.30, "2": 0.20}
+    date = datetime(2025, 1, 3)
+    verified_detail = {
+        "lae_source": LAE_SOURCE_ID,
+        "fixture_identity_status": "verified",
+        "lae_captured_at": "2025-01-03T09:00:00+00:00",
+        "kickoff_evidence_checked_at_utc": "2025-01-03T08:30:00+00:00",
+        "kickoff_evidence_url": "https://www.uefa.com/test-schedule/",
+        "kickoff_at": "2025-01-03T20:00:00+00:00",
+    }
+    matches = [
+        Match(date, "Unverified", "A", 1, 0, "1", lae=unverified_lae),
+        Match(
+            date,
+            "Verified",
+            "B",
+            0,
+            1,
+            "2",
+            lae=valid_lae,
+            detail=verified_detail,
+        ),
+        Match(
+            date,
+            "Invalid",
+            "C",
+            0,
+            0,
+            "X",
+            lae=invalid_lae,
+            detail=verified_detail,
+        ),
+    ]
+
+    baseline = backtest.baseline_probabilities(matches, source="lae")
+
+    uniform = {"1": 1 / 3, "X": 1 / 3, "2": 1 / 3}
+    assert baseline[0][0] == uniform
+    assert baseline[1][0] == valid_lae
+    assert baseline[2][0] == uniform
+
+
 def test_compare_reports_market_metrics_on_same_fixture_sample(monkeypatch):
     class FakeEngine:
         def __init__(self, enable_ml=False):
@@ -141,19 +198,21 @@ def test_compare_reports_market_metrics_on_same_fixture_sample(monkeypatch):
             return self
 
         def predict(self, match, mode="ensemble", history=None):
-            return type("Prediction", (), {
-                "probabilities": {"1": 0.5, "X": 0.3, "2": 0.2}
-            })()
+            return type(
+                "Prediction", (), {"probabilities": {"1": 0.5, "X": 0.3, "2": 0.2}}
+            )()
 
     monkeypatch.setattr(backtest, "KiniEngine", FakeEngine)
     day1 = datetime(2025, 1, 1)
     day2 = datetime(2025, 1, 2)
-    matches = [
-        Match(day1, f"H{i}", f"A{i}", 1, 0, "1")
-        for i in range(12)
-    ] + [
+    matches = [Match(day1, f"H{i}", f"A{i}", 1, 0, "1") for i in range(12)] + [
         Match(
-            day2, "H12", "A12", 1, 0, "1",
+            day2,
+            "H12",
+            "A12",
+            1,
+            0,
+            "1",
             market={"1": 0.4, "X": 0.3, "2": 0.3},
             detail={
                 "market_temporal_status": "schedule_compatible",
@@ -215,10 +274,7 @@ def test_adaptive_weight_updates_only_after_complete_forecast_date(monkeypatch):
     day1 = datetime(2025, 1, 1)
     day2 = datetime(2025, 1, 2)
     day3 = datetime(2025, 1, 3)
-    matches = [
-        Match(day1, f"H{i}", f"A{i}", 1, 0, "1")
-        for i in range(12)
-    ] + [
+    matches = [Match(day1, f"H{i}", f"A{i}", 1, 0, "1") for i in range(12)] + [
         Match(day2, "H12", "A12", 1, 0, "1"),
         Match(day2, "H13", "A13", 2, 0, "1"),
         Match(day3, "H14", "A14", 1, 0, "1"),
@@ -288,34 +344,43 @@ def test_compare_reports_out_of_sample_classwise_calibration_by_season(monkeypat
             return self
 
         def predict(self, match, mode="ensemble", history=None):
-            return type("Prediction", (), {
-                "probabilities": {"1": 0.6, "X": 0.25, "2": 0.15}
-            })()
+            return type(
+                "Prediction", (), {"probabilities": {"1": 0.6, "X": 0.25, "2": 0.15}}
+            )()
 
     monkeypatch.setattr(backtest, "KiniEngine", FakeEngine)
     training_day = datetime(2024, 6, 30)
-    matches = [
-        Match(training_day, f"H{i}", f"A{i}", 1, 0, "1")
-        for i in range(12)
-    ]
-    matches.extend([
-        Match(
-            datetime(2024, 7, 1), "H12", "A12", 1, 0, "1",
-            market={"1": 0.5, "X": 0.3, "2": 0.2},
-            detail={
-                "market_temporal_status": "schedule_compatible",
-                "market_pre_match_eligible": True,
-            },
-        ),
-        Match(
-            datetime(2025, 7, 1), "H13", "A13", 0, 0, "X",
-            market={"1": 0.4, "X": 0.35, "2": 0.25},
-            detail={
-                "market_temporal_status": "schedule_compatible",
-                "market_pre_match_eligible": True,
-            },
-        ),
-    ])
+    matches = [Match(training_day, f"H{i}", f"A{i}", 1, 0, "1") for i in range(12)]
+    matches.extend(
+        [
+            Match(
+                datetime(2024, 7, 1),
+                "H12",
+                "A12",
+                1,
+                0,
+                "1",
+                market={"1": 0.5, "X": 0.3, "2": 0.2},
+                detail={
+                    "market_temporal_status": "schedule_compatible",
+                    "market_pre_match_eligible": True,
+                },
+            ),
+            Match(
+                datetime(2025, 7, 1),
+                "H13",
+                "A13",
+                0,
+                0,
+                "X",
+                market={"1": 0.4, "X": 0.35, "2": 0.25},
+                detail={
+                    "market_temporal_status": "schedule_compatible",
+                    "market_pre_match_eligible": True,
+                },
+            ),
+        ]
+    )
 
     result = backtest.compare_walk_forward(matches, min_train=12)
 
@@ -346,9 +411,9 @@ def test_multiclass_calibrator_is_identity_until_history_is_sufficient():
 
     assert calibrator["fitted"] is False
     assert calibrator["reason"] == "insufficient_history"
-    assert backtest.apply_multiclass_calibrator(
-        probabilities, calibrator
-    ) == probabilities
+    assert (
+        backtest.apply_multiclass_calibrator(probabilities, calibrator) == probabilities
+    )
 
 
 def test_prequential_multiclass_calibrator_improves_biased_holdout_logloss():
@@ -356,15 +421,12 @@ def test_prequential_multiclass_calibrator_improves_biased_holdout_logloss():
     n = 1200
     signs = ("1", "X", "2")
     true_probabilities = rng.dirichlet([4.0, 2.5, 2.5], size=n)
-    outcomes = np.asarray([
-        rng.choice(3, p=probability)
-        for probability in true_probabilities
-    ])
+    outcomes = np.asarray(
+        [rng.choice(3, p=probability) for probability in true_probabilities]
+    )
 
     # Simulate a stable class-prior and sharpness distortion.
-    logits = 1.15 * np.log(true_probabilities) + np.asarray(
-        [-0.18, 0.04, 0.14]
-    )
+    logits = 1.15 * np.log(true_probabilities) + np.asarray([-0.18, 0.04, 0.14])
     logits -= logits.max(axis=1, keepdims=True)
     raw_probabilities = np.exp(logits)
     raw_probabilities /= raw_probabilities.sum(axis=1, keepdims=True)
@@ -419,24 +481,23 @@ def test_compare_fits_calibrator_only_from_completed_prior_dates(monkeypatch):
             return self
 
         def predict(self, match, mode="ensemble", history=None):
-            return type("Prediction", (), {
-                "probabilities": {"1": 0.50, "X": 0.30, "2": 0.20}
-            })()
+            return type(
+                "Prediction", (), {"probabilities": {"1": 0.50, "X": 0.30, "2": 0.20}}
+            )()
 
     monkeypatch.setattr(backtest, "KiniEngine", FakeEngine)
     start = datetime(2025, 1, 1)
-    matches = [
-        Match(start, f"H{i}", f"A{i}", 1, 0, "1")
-        for i in range(12)
-    ]
-    matches.extend([
-        Match(datetime(2025, 1, 2), "H12", "A12", 1, 0, "1"),
-        Match(datetime(2025, 1, 2), "H13", "A13", 0, 0, "X"),
-        Match(datetime(2025, 1, 2), "H14", "A14", 0, 1, "2"),
-        Match(datetime(2025, 1, 3), "H15", "A15", 1, 0, "1"),
-        Match(datetime(2025, 1, 3), "H16", "A16", 0, 0, "X"),
-        Match(datetime(2025, 1, 4), "H17", "A17", 0, 1, "2"),
-    ])
+    matches = [Match(start, f"H{i}", f"A{i}", 1, 0, "1") for i in range(12)]
+    matches.extend(
+        [
+            Match(datetime(2025, 1, 2), "H12", "A12", 1, 0, "1"),
+            Match(datetime(2025, 1, 2), "H13", "A13", 0, 0, "X"),
+            Match(datetime(2025, 1, 2), "H14", "A14", 0, 1, "2"),
+            Match(datetime(2025, 1, 3), "H15", "A15", 1, 0, "1"),
+            Match(datetime(2025, 1, 3), "H16", "A16", 0, 0, "X"),
+            Match(datetime(2025, 1, 4), "H17", "A17", 0, 1, "2"),
+        ]
+    )
 
     result = backtest.compare_walk_forward(
         matches,
@@ -456,11 +517,14 @@ def test_compare_fits_calibrator_only_from_completed_prior_dates(monkeypatch):
     assert summary["last_fit"]["fit_date"] == "2025-01-04"
     assert summary["last_fit"]["n_train"] == 5
     assert summary["n"] == 3
-    assert result["prequential_calibration"]["same_calendar_day_outcomes_excluded"] is True
+    assert (
+        result["prequential_calibration"]["same_calendar_day_outcomes_excluded"] is True
+    )
 
 
-
-def test_compare_excludes_ambiguous_and_unknown_market_rows_from_strict_sample(monkeypatch):
+def test_compare_excludes_ambiguous_and_unknown_market_rows_from_strict_sample(
+    monkeypatch,
+):
     class FakeEngine:
         def __init__(self, enable_ml=False):
             self.dc = type("DC", (), {"decay": 0.995})()
@@ -469,21 +533,24 @@ def test_compare_excludes_ambiguous_and_unknown_market_rows_from_strict_sample(m
             return self
 
         def predict(self, match, mode="ensemble", history=None):
-            return type("Prediction", (), {
-                "probabilities": {"1": 0.5, "X": 0.3, "2": 0.2}
-            })()
+            return type(
+                "Prediction", (), {"probabilities": {"1": 0.5, "X": 0.3, "2": 0.2}}
+            )()
 
     monkeypatch.setattr(backtest, "KiniEngine", FakeEngine)
     training_day = datetime(2025, 1, 1)
     forecast_day = datetime(2025, 1, 2)
-    training = [
-        Match(training_day, f"H{i}", f"A{i}", 1, 0, "1")
-        for i in range(12)
-    ]
+    training = [Match(training_day, f"H{i}", f"A{i}", 1, 0, "1") for i in range(12)]
     market = {"1": 0.4, "X": 0.3, "2": 0.3}
     fixtures = [
         Match(
-            forecast_day, "Eligible", "A", 1, 0, "1", market=market,
+            forecast_day,
+            "Eligible",
+            "A",
+            1,
+            0,
+            "1",
+            market=market,
             detail={
                 "market_temporal_status": "schedule_compatible",
                 "market_pre_match_eligible": True,
@@ -491,7 +558,13 @@ def test_compare_excludes_ambiguous_and_unknown_market_rows_from_strict_sample(m
             },
         ),
         Match(
-            forecast_day, "Ambiguous", "B", 0, 0, "X", market=market,
+            forecast_day,
+            "Ambiguous",
+            "B",
+            0,
+            0,
+            "X",
+            market=market,
             detail={
                 "market_temporal_status": "ambiguous",
                 "market_pre_match_eligible": False,
@@ -499,7 +572,13 @@ def test_compare_excludes_ambiguous_and_unknown_market_rows_from_strict_sample(m
             },
         ),
         Match(
-            forecast_day, "Unknown", "C", 0, 1, "2", market=market,
+            forecast_day,
+            "Unknown",
+            "C",
+            0,
+            1,
+            "2",
+            market=market,
             detail={
                 "market_temporal_status": "unknown",
                 "market_pre_match_eligible": False,
@@ -520,3 +599,791 @@ def test_compare_excludes_ambiguous_and_unknown_market_rows_from_strict_sample(m
         "unknown": 1,
     }
     assert result["common_sample"]["dc"]["market"]["n"] == 1
+
+
+def test_compare_builds_a_conservative_common_information_time_market_sample(
+    monkeypatch,
+):
+    class FakeEngine:
+        def __init__(self, enable_ml=False):
+            self.dc = type("DC", (), {"decay": 0.995})()
+
+        def fit(self, history):
+            return self
+
+        def predict(self, match, mode="ensemble", history=None):
+            probabilities = {
+                "dc": {"1": 0.6, "X": 0.25, "2": 0.15},
+                "ml": {"1": 0.4, "X": 0.35, "2": 0.25},
+                "ensemble": {"1": 0.52, "X": 0.28, "2": 0.20},
+                "ensemble_dc_ml": {"1": 0.5, "X": 0.3, "2": 0.2},
+            }
+            return type("Prediction", (), {"probabilities": probabilities[mode]})()
+
+    monkeypatch.setattr(backtest, "KiniEngine", FakeEngine)
+    start = datetime(2025, 1, 1)
+    training = [Match(start, f"H{i}", f"A{i}", 1, 0, "1") for i in range(12)]
+    eligible = {
+        "market_temporal_status": "schedule_compatible",
+        "market_pre_match_eligible": True,
+    }
+    market = {"1": 0.45, "X": 0.30, "2": 0.25}
+    bet365 = {"1": 0.50, "X": 0.28, "2": 0.22}
+    matches = training + [
+        Match(datetime(2025, 1, 3), "Friday", "A", 1, 0, "1"),
+        Match(
+            datetime(2025, 1, 4),
+            "Saturday",
+            "A",
+            1,
+            0,
+            "1",
+            market=market,
+            detail={**eligible},
+        ),
+        Match(
+            datetime(2025, 1, 8),
+            "Wednesday",
+            "A",
+            0,
+            0,
+            "X",
+            market=market,
+            detail={
+                **eligible,
+                "market_bookmaker_probabilities": {"bet365": bet365},
+            },
+        ),
+        Match(
+            datetime(2025, 1, 9),
+            "Thursday",
+            "A",
+            0,
+            1,
+            "2",
+            market=market,
+            detail={
+                **eligible,
+                "market_bookmaker_probabilities": {"bet365": bet365},
+            },
+        ),
+    ]
+
+    result = backtest.compare_walk_forward(matches, min_train=12)
+    rows_by_home = {row["home"]: row for row in result["forecast_rows"]}
+    strict = result["strict_common_time_market"]
+    strict_bet365 = result["strict_common_time_bet365"]
+
+    assert rows_by_home["Saturday"]["market_snapshot_date"] == "2025-01-03"
+    assert rows_by_home["Saturday"]["strict_common_time_eligible"] is False
+    assert (
+        rows_by_home["Saturday"]["strict_common_time_exclusion_reason"]
+        == "training_cutoff_not_before_snapshot"
+    )
+    assert rows_by_home["Wednesday"]["market_snapshot_date"] == "2025-01-07"
+    assert rows_by_home["Wednesday"]["strict_common_time_eligible"] is True
+    assert rows_by_home["Wednesday"]["strict_common_time_exclusion_reason"] is None
+    assert rows_by_home["Thursday"]["market_snapshot_date"] == "2025-01-07"
+    assert rows_by_home["Thursday"]["strict_common_time_eligible"] is False
+    assert strict["n_schedule_eligible"] == 3
+    assert strict["n_common_time_eligible"] == 1
+    assert strict["n_excluded_from_common_time_sample"] == 2
+    assert strict["exclusion_reason_counts"] == {
+        "training_cutoff_not_before_snapshot": 2
+    }
+    assert strict["market"]["n"] == 1
+    for mode in (
+        "dc",
+        "ml",
+        "ensemble",
+        "ensemble_dc_ml",
+        "ensemble_dc_ml_adaptive",
+    ):
+        assert strict["common_sample"][mode]["n"] == 1
+        assert strict["common_sample"][mode]["model"]["n"] == 1
+        assert strict["common_sample"][mode]["market"]["n"] == 1
+
+    assert strict_bet365["n_schedule_eligible"] == 2
+    assert strict_bet365["n_common_time_eligible"] == 1
+    assert strict_bet365["metrics"]["n"] == 1
+    for mode in (
+        "dc",
+        "ml",
+        "ensemble",
+        "ensemble_dc_ml",
+        "ensemble_dc_ml_adaptive",
+    ):
+        sample = strict_bet365["common_sample"][mode]
+        assert sample["n"] == 1
+        assert sample["model"]["n"] == 1
+        assert sample["market_consensus"]["n"] == 1
+        assert sample["bet365"]["n"] == 1
+
+
+def test_compare_reports_unseen_team_cold_start_fallbacks_per_model(monkeypatch):
+    class FakeDC:
+        decay = 0.995
+
+        @staticmethod
+        def prediction_source(home, away):
+            return (
+                "unseen_team_fallback" if "New Club" in {home, away} else "dixon_coles"
+            )
+
+    class FakeEngine:
+        def __init__(self, enable_ml=False):
+            self.dc = FakeDC()
+            self.history = []
+
+        def fit(self, history):
+            self.history = list(history)
+            return self
+
+        def predict(self, match, mode="ensemble", history=None):
+            return type(
+                "Prediction", (), {"probabilities": {"1": 0.5, "X": 0.3, "2": 0.2}}
+            )()
+
+    monkeypatch.setattr(backtest, "KiniEngine", FakeEngine)
+    training_day = datetime(2025, 1, 1)
+    forecast_day = datetime(2025, 1, 2)
+    training = [Match(training_day, f"H{i}", f"A{i}", 1, 0, "1") for i in range(12)]
+    fixtures = [
+        Match(
+            forecast_day,
+            "New Club",
+            "A",
+            1,
+            0,
+            "1",
+            detail={"League": "la-liga", "Season": "2627"},
+        ),
+        Match(
+            forecast_day,
+            "Known Club",
+            "B",
+            0,
+            0,
+            "X",
+            detail={"League": "la-liga", "Season": "2627"},
+        ),
+        Match(
+            forecast_day,
+            "New Club",
+            "C",
+            1,
+            0,
+            "1",
+            detail={"League": "segunda", "Season": "2627"},
+        ),
+        Match(
+            forecast_day,
+            "Known Club",
+            "D",
+            0,
+            0,
+            "X",
+            detail={"League": "segunda", "Season": "2627"},
+        ),
+    ]
+
+    result = backtest.compare_walk_forward(
+        training + fixtures,
+        min_train=12,
+    )
+
+    summaries = result["cold_start_fallbacks"]["models"]
+    expected_seasons = [
+        {
+            "league": "la-liga",
+            "season_code": "2627",
+            "season_label": "2026/27",
+            "n_predictions": 2,
+            "count": 1,
+            "rate": 0.5,
+        },
+        {
+            "league": "segunda",
+            "season_code": "2627",
+            "season_label": "2026/27",
+            "n_predictions": 2,
+            "count": 1,
+            "rate": 0.5,
+        },
+    ]
+    expected_examples = [
+        {"date": "2025-01-02", "home": "New Club", "away": "A"},
+        {"date": "2025-01-02", "home": "New Club", "away": "C"},
+    ]
+
+    for mode in ("dc", "ensemble", "ensemble_dc_ml", "ensemble_dc_ml_adaptive"):
+        assert summaries[mode]["n_predictions"] == 4
+        assert summaries[mode]["count"] == 2
+        assert summaries[mode]["rate"] == 0.5
+        assert summaries[mode]["examples"] == expected_examples
+        assert summaries[mode]["by_season"] == expected_seasons
+
+    assert summaries["ml"]["n_predictions"] == 4
+    assert summaries["ml"]["count"] == 0
+    assert summaries["ml"]["rate"] == 0.0
+    assert summaries["ml"]["examples"] == []
+    assert summaries["ml"]["by_season"] == [
+        {**season, "count": 0, "rate": 0.0} for season in expected_seasons
+    ]
+
+
+def test_season_identity_uses_source_codes_and_keeps_missing_metadata_explicit():
+    match = Match(
+        datetime(2025, 1, 1),
+        "A",
+        "B",
+        detail={"League": "la-liga", "Season": "2021"},
+    )
+    assert backtest._season_identity(match) == ("la-liga", "2021", "2020/21")
+
+    unknown = Match(datetime(2025, 1, 1), "A", "B")
+    assert backtest._season_identity(unknown) == ("unknown", "unknown", "unknown")
+
+
+def test_compare_reports_bet365_on_its_exact_common_fixture_sample(monkeypatch):
+    class FakeEngine:
+        def __init__(self, enable_ml=False):
+            self.dc = type("DC", (), {"decay": 0.995})()
+
+        def fit(self, history):
+            return self
+
+        def predict(self, match, mode="ensemble", history=None):
+            return type(
+                "Prediction",
+                (),
+                {"probabilities": {"1": 0.5, "X": 0.3, "2": 0.2}},
+            )()
+
+    monkeypatch.setattr(backtest, "KiniEngine", FakeEngine)
+    training_day = datetime(2025, 1, 1)
+    forecast_day = datetime(2025, 1, 2)
+    training = [Match(training_day, f"H{i}", f"A{i}", 1, 0, "1") for i in range(12)]
+    consensus = {"1": 0.45, "X": 0.30, "2": 0.25}
+    bet365_a = {"1": 0.50, "X": 0.28, "2": 0.22}
+    bet365_b = {"1": 0.35, "X": 0.33, "2": 0.32}
+    eligible = {
+        "market_temporal_status": "schedule_compatible",
+        "market_pre_match_eligible": True,
+    }
+    matches = training + [
+        Match(
+            forecast_day,
+            "B365 One",
+            "A",
+            1,
+            0,
+            "1",
+            market=consensus,
+            detail={**eligible, "market_bookmaker_probabilities": {"bet365": bet365_a}},
+        ),
+        Match(
+            forecast_day,
+            "No B365",
+            "B",
+            0,
+            0,
+            "X",
+            market=consensus,
+            detail=eligible,
+        ),
+        Match(
+            forecast_day,
+            "B365 Ambiguous",
+            "C",
+            0,
+            1,
+            "2",
+            market=consensus,
+            detail={
+                "market_temporal_status": "ambiguous",
+                "market_pre_match_eligible": False,
+                "market_bookmaker_probabilities": {"bet365": bet365_b},
+            },
+        ),
+        Match(
+            forecast_day,
+            "B365 Two",
+            "D",
+            0,
+            0,
+            "X",
+            market=consensus,
+            detail={**eligible, "market_bookmaker_probabilities": {"bet365": bet365_b}},
+        ),
+        Match(
+            forecast_day,
+            "Malformed B365",
+            "E",
+            2,
+            0,
+            "1",
+            market=consensus,
+            detail={
+                **eligible,
+                "market_bookmaker_probabilities": {
+                    "bet365": {"1": 0.6, "X": 0.2, "2": 0.3}
+                },
+            },
+        ),
+    ]
+
+    result = backtest.compare_walk_forward(matches, min_train=12)
+    benchmark = result["bookmaker_benchmarks"]["bet365"]
+
+    assert benchmark["n_with_odds"] == 3
+    assert benchmark["n_schedule_eligible"] == 2
+    assert benchmark["n_excluded"] == 1
+    assert benchmark["status_counts"] == {
+        "ambiguous": 1,
+        "schedule_compatible": 2,
+    }
+    assert benchmark["metrics"]["n"] == 2
+    for mode in (
+        "dc",
+        "ml",
+        "ensemble",
+        "ensemble_dc_ml",
+        "ensemble_dc_ml_adaptive",
+    ):
+        sample = benchmark["common_sample"][mode]
+        assert sample["n"] == 2
+        assert sample["model"]["n"] == 2
+        assert sample["market_consensus"]["n"] == 2
+        assert sample["bet365"]["n"] == 2
+
+
+def test_compare_exports_fixture_level_forecast_rows(monkeypatch):
+    class FakeEngine:
+        def __init__(self, enable_ml=False):
+            self.dc = type("DC", (), {"decay": 0.995})()
+
+        def fit(self, history):
+            return self
+
+        def predict(self, match, mode="ensemble", history=None):
+            vectors = {
+                "dc": {"1": 0.6, "X": 0.25, "2": 0.15},
+                "ml": {"1": 0.4, "X": 0.35, "2": 0.25},
+                "ensemble": {"1": 0.52, "X": 0.28, "2": 0.20},
+                "ensemble_dc_ml": {"1": 0.5, "X": 0.3, "2": 0.2},
+            }
+            return type("Prediction", (), {"probabilities": vectors[mode]})()
+
+    monkeypatch.setattr(backtest, "KiniEngine", FakeEngine)
+    training_day = datetime(2025, 1, 1)
+    forecast_day = datetime(2025, 1, 2)
+    training = [
+        Match(
+            training_day,
+            f"Home {index}",
+            f"Away {index}",
+            1,
+            0,
+            "1",
+            detail={
+                "League": "la-liga",
+                "Season": "2526",
+                "Div": "SP1",
+                "SourceURL": "https://www.football-data.co.uk/mmz4281/2526/SP1.csv",
+            },
+        )
+        for index in range(12)
+    ]
+    eligible_market = {
+        "market_temporal_status": "schedule_compatible",
+        "market_pre_match_eligible": True,
+    }
+    market_vector = {"1": 0.45, "X": 0.3, "2": 0.25}
+    fixtures = [
+        Match(
+            forecast_day,
+            "Home A",
+            "Away A",
+            1,
+            0,
+            "1",
+            market=market_vector,
+            detail={
+                **eligible_market,
+                "League": "la-liga",
+                "Season": "2526",
+                "Div": "SP1",
+                "SourceURL": "https://www.football-data.co.uk/mmz4281/2526/SP1.csv",
+            },
+        ),
+        Match(
+            forecast_day,
+            "Home B",
+            "Away B",
+            0,
+            0,
+            "X",
+            detail={
+                "League": "la-liga",
+                "Season": "2526",
+                "Div": "SP1",
+                "SourceURL": "https://www.football-data.co.uk/mmz4281/2526/SP1.csv",
+            },
+        ),
+    ]
+
+    result = backtest.compare_walk_forward(training + fixtures, min_train=12)
+    rows = result["forecast_rows"]
+
+    assert result["n_total"] == 2
+    assert len(rows) == 2
+    assert len({row["fixture_id"] for row in rows}) == 2
+    assert [row["forecast_index"] for row in rows] == [1, 2]
+    for row, actual in zip(rows, ("1", "X")):
+        assert row["actual_result"] == actual
+        assert row["forecast_as_of_date"] == "2025-01-02"
+        assert row["training_cutoff_date"] == "2025-01-01"
+        assert row["model_fit_cutoff_date"] == "2025-01-01"
+        assert row["training_match_count"] == 12
+        assert row["model_fit_match_count"] == 12
+        assert set(row["model_probabilities"]) == {
+            "dc",
+            "ml",
+            "ensemble",
+            "ensemble_dc_ml",
+            "ensemble_dc_ml_adaptive",
+        }
+        for vector in row["model_probabilities"].values():
+            assert abs(sum(vector.values()) - 1.0) < 1e-9
+
+    assert rows[0]["market_eligible"] is True
+    assert rows[0]["market_probabilities"] == market_vector
+    assert rows[1]["market_eligible"] is False
+    assert rows[1]["market_probabilities"] is None
+
+
+def test_strict_common_time_excludes_lae_captured_on_snapshot_day(monkeypatch):
+    class FakeEngine:
+        def __init__(self, enable_ml=False):
+            self.dc = type("DC", (), {"decay": 0.995})()
+
+        def fit(self, history):
+            return self
+
+        def predict(self, match, mode="ensemble", history=None):
+            probabilities = {
+                "dc": {"1": 0.6, "X": 0.25, "2": 0.15},
+                "ml": {"1": 0.4, "X": 0.35, "2": 0.25},
+                "ensemble": {"1": 0.52, "X": 0.28, "2": 0.20},
+                "ensemble_dc_ml": {"1": 0.5, "X": 0.3, "2": 0.2},
+            }
+            return type("Prediction", (), {"probabilities": probabilities[mode]})()
+
+    monkeypatch.setattr(backtest, "KiniEngine", FakeEngine)
+    start = datetime(2025, 1, 1)
+    training = [Match(start, f"H{i}", f"A{i}", 1, 0, "1") for i in range(12)]
+    market = {"1": 0.45, "X": 0.30, "2": 0.25}
+    lae = {"1": 0.50, "X": 0.28, "2": 0.22}
+
+    def fixture(home, captured_at, evidence_checked_at):
+        return Match(
+            datetime(2025, 1, 8),
+            home,
+            "Away",
+            1,
+            0,
+            "1",
+            lae=lae,
+            market=market,
+            detail={
+                "market_temporal_status": "schedule_compatible",
+                "market_pre_match_eligible": True,
+                "lae_source": LAE_SOURCE_ID,
+                "fixture_identity_status": "verified",
+                "kickoff_evidence_url": "https://example.com/official-schedule",
+                "lae_captured_at": captured_at,
+                "kickoff_evidence_checked_at_utc": evidence_checked_at,
+                "kickoff_at": "2025-01-08T12:00:00+00:00",
+            },
+        )
+
+    matches = training + [
+        fixture(
+            "EarlyLAE",
+            "2025-01-06T18:00:00+00:00",
+            "2025-01-06T17:00:00+00:00",
+        ),
+        fixture(
+            "SameDayLAE",
+            "2025-01-07T18:00:00+00:00",
+            "2025-01-07T17:00:00+00:00",
+        ),
+    ]
+
+    result = backtest.compare_walk_forward(matches, min_train=12)
+    rows_by_home = {row["home"]: row for row in result["forecast_rows"]}
+    strict = result["strict_common_time_market"]
+
+    assert rows_by_home["EarlyLAE"]["lae_eligible"] is True
+    assert rows_by_home["EarlyLAE"]["strict_common_time_eligible"] is True
+    assert rows_by_home["SameDayLAE"]["lae_eligible"] is True
+    assert rows_by_home["SameDayLAE"]["strict_common_time_eligible"] is False
+    assert (
+        rows_by_home["SameDayLAE"]["strict_common_time_exclusion_reason"]
+        == "lae_capture_not_before_snapshot"
+    )
+    assert strict["n_schedule_eligible"] == 2
+    assert strict["n_common_time_eligible"] == 1
+    assert strict["exclusion_reason_counts"] == {"lae_capture_not_before_snapshot": 1}
+    for mode in (
+        "dc",
+        "ml",
+        "ensemble",
+        "ensemble_dc_ml",
+        "ensemble_dc_ml_adaptive",
+    ):
+        assert strict["common_sample"][mode]["n"] == 1
+        assert strict["common_sample"][mode]["model"]["n"] == 1
+        assert strict["common_sample"][mode]["market"]["n"] == 1
+
+
+def test_snapshot_aligned_backtest_refits_once_per_snapshot_and_excludes_snapshot_day(
+    monkeypatch,
+    tmp_path,
+):
+    fit_records = []
+    prediction_records = []
+
+    class FakeEngine:
+        def __init__(self, enable_ml=False):
+            self.dc = type("DC", (), {"decay": 0.995})()
+            self.history = []
+
+        def fit(self, history):
+            self.history = list(history)
+            fit_records.append(
+                {
+                    "training_count": len(self.history),
+                    "teams": {match.home for match in self.history},
+                }
+            )
+            return self
+
+        def predict(self, match, mode="ensemble", history=None):
+            prediction_records.append(
+                {
+                    "home": match.home,
+                    "mode": mode,
+                    "training_count": len(self.history),
+                    "lae_present": match.lae is not None,
+                }
+            )
+            probabilities = {
+                "dc": {"1": 0.90, "X": 0.05, "2": 0.05},
+                "ml": {"1": 0.05, "X": 0.90, "2": 0.05},
+                "ensemble": {"1": 0.55, "X": 0.30, "2": 0.15},
+                "ensemble_dc_ml": {"1": 0.55, "X": 0.30, "2": 0.15},
+            }[mode]
+            return type("Prediction", (), {"probabilities": probabilities})()
+
+    monkeypatch.setattr(backtest, "KiniEngine", FakeEngine)
+
+    start = datetime(2025, 1, 1)
+    training = [Match(start, f"Train{i}", f"Opponent{i}", 1, 0, "1") for i in range(12)]
+    same_first_snapshot_day = Match(
+        datetime(2025, 1, 7), "TuesdayResult", "OpponentT", 1, 0, "1"
+    )
+    same_second_snapshot_day = Match(
+        datetime(2025, 1, 10), "FridayResult", "OpponentF", 1, 0, "1"
+    )
+    market = {"1": 0.40, "X": 0.30, "2": 0.30}
+    lae = {"1": 0.45, "X": 0.30, "2": 0.25}
+
+    def fixture(home, fixture_date, captured_at=None):
+        detail = {
+            "market_temporal_status": "schedule_compatible",
+            "market_pre_match_eligible": True,
+        }
+        lae_values = None
+        if captured_at is not None:
+            lae_values = lae
+            captured = datetime.fromisoformat(captured_at)
+            checked = captured.replace(hour=captured.hour - 1)
+            detail.update(
+                {
+                    "lae_source": LAE_SOURCE_ID,
+                    "fixture_identity_status": "verified",
+                    "kickoff_evidence_url": "https://example.com/official-schedule",
+                    "lae_captured_at": captured.isoformat(),
+                    "kickoff_evidence_checked_at_utc": checked.isoformat(),
+                    "kickoff_at": fixture_date.date().isoformat() + "T20:00:00+00:00",
+                }
+            )
+        return Match(
+            fixture_date,
+            home,
+            "Away",
+            1,
+            0,
+            "1",
+            lae=lae_values,
+            market=market,
+            detail=detail,
+        )
+
+    first_snapshot_early_lae = fixture(
+        "WednesdayEarlyLAE",
+        datetime(2025, 1, 8),
+        "2025-01-06T18:00:00+00:00",
+    )
+    first_snapshot_same_day_lae = fixture(
+        "ThursdaySameDayLAE",
+        datetime(2025, 1, 9),
+        "2025-01-07T18:00:00+00:00",
+    )
+    second_snapshot_fixture = fixture(
+        "SaturdayFixture",
+        datetime(2025, 1, 11),
+    )
+
+    result = backtest.snapshot_aligned_market_backtest(
+        training
+        + [
+            same_first_snapshot_day,
+            first_snapshot_early_lae,
+            first_snapshot_same_day_lae,
+            same_second_snapshot_day,
+            second_snapshot_fixture,
+        ],
+        min_train=12,
+        adaptive_min_history=1,
+        adaptive_window=10,
+        adaptive_regularization=0.0,
+    )
+
+    assert result["n_snapshot_dates"] == 2
+    assert result["n_common_time_eligible"] == 3
+    assert result["model_fit_count"] == 2
+    assert result["n_skipped_insufficient_history_fixtures"] == 0
+    assert result["n_skipped_missing_actual_fixtures"] == 0
+    assert result["n_fixtures_with_prediction_errors"] == 0
+    assert fit_records[0]["training_count"] == 12
+    assert fit_records[0]["teams"] == {f"Train{i}" for i in range(12)}
+    assert fit_records[1]["training_count"] == 15
+    assert "TuesdayResult" in fit_records[1]["teams"]
+    assert "WednesdayEarlyLAE" in fit_records[1]["teams"]
+    assert "ThursdaySameDayLAE" in fit_records[1]["teams"]
+    assert "FridayResult" not in fit_records[1]["teams"]
+
+    snapshots = result["snapshots"]
+    assert snapshots[0]["snapshot_date"] == "2025-01-07"
+    assert snapshots[0]["fixture_count"] == 2
+    assert snapshots[0]["common_prediction_count"] == 2
+    assert snapshots[0]["training_cutoff_date"] == "2025-01-01"
+    assert snapshots[0]["prior_oof_predictions"] == 0
+    assert snapshots[1]["snapshot_date"] == "2025-01-10"
+    assert snapshots[1]["fixture_count"] == 1
+    assert snapshots[1]["common_prediction_count"] == 1
+    assert snapshots[1]["training_cutoff_date"] == "2025-01-09"
+    assert snapshots[1]["prior_oof_predictions"] == 2
+    assert snapshots[1]["dc_weight"] == 1.0
+
+    rows = {row["home"]: row for row in result["forecast_rows"]}
+    assert rows["WednesdayEarlyLAE"]["lae_eligible"] is True
+    assert rows["ThursdaySameDayLAE"]["lae_eligible"] is False
+    assert rows["ThursdaySameDayLAE"]["lae_probabilities"] is None
+    assert (
+        rows["WednesdayEarlyLAE"]["training_history_sha256"]
+        == (rows["ThursdaySameDayLAE"]["training_history_sha256"])
+    )
+    assert rows["WednesdayEarlyLAE"]["training_match_count"] == 12
+    assert rows["ThursdaySameDayLAE"]["training_match_count"] == 12
+    assert rows["SaturdayFixture"]["training_match_count"] == 15
+    assert rows["SaturdayFixture"]["training_cutoff_date"] < "2025-01-10"
+    assert rows["SaturdayFixture"]["fixture_date"] > "2025-01-10"
+
+    same_snapshot_calls = [
+        row
+        for row in prediction_records
+        if row["home"] in {"WednesdayEarlyLAE", "ThursdaySameDayLAE"}
+    ]
+    assert len(same_snapshot_calls) == 8
+    assert {row["training_count"] for row in same_snapshot_calls} == {12}
+    assert all(
+        row["lae_present"]
+        for row in same_snapshot_calls
+        if row["home"] == "WednesdayEarlyLAE"
+    )
+    assert not any(
+        row["lae_present"]
+        for row in same_snapshot_calls
+        if row["home"] == "ThursdaySameDayLAE"
+    )
+
+    for mode in (
+        "dc",
+        "ml",
+        "ensemble",
+        "ensemble_dc_ml",
+        "ensemble_dc_ml_adaptive",
+    ):
+        sample = result["common_sample"][mode]
+        assert sample["n"] == 3
+        assert sample["model"]["n"] == 3
+        assert sample["market"]["n"] == 3
+        assert sample["fixture_ids_sha256"] == result["fixture_ids_sha256"]
+        assert result["prediction_errors"][mode]["count"] == 0
+
+    from kini_engine.ledger import read_prediction_ledger, write_prediction_ledger
+
+    ledger_path = tmp_path / "snapshot-ledger.jsonl"
+    manifest = {
+        "schema_version": 1,
+        "code_revision": "test",
+        "generated_at_utc": "2025-01-01T00:00:00+00:00",
+        "dataset_sha256": "a" * 64,
+        "forecast_count": len(result["forecast_rows"]),
+        "model_modes": sorted(result["forecast_rows"][0]["model_probabilities"]),
+    }
+    write_prediction_ledger(ledger_path, manifest, result["forecast_rows"])
+    _, ledger_rows = read_prediction_ledger(ledger_path)
+    assert len(ledger_rows) == 3
+
+
+def test_snapshot_aligned_backtest_fails_closed_below_minimum_training_history(
+    monkeypatch,
+):
+    class UnexpectedEngine:
+        def __init__(self, enable_ml=False):
+            raise AssertionError("engine must not fit without minimum prior history")
+
+    monkeypatch.setattr(backtest, "KiniEngine", UnexpectedEngine)
+    training = [
+        Match(datetime(2025, 1, 1), f"H{i}", f"A{i}", 1, 0, "1") for i in range(11)
+    ]
+    fixture = Match(
+        datetime(2025, 1, 8),
+        "Future",
+        "Opponent",
+        1,
+        0,
+        "1",
+        market={"1": 0.4, "X": 0.3, "2": 0.3},
+        detail={
+            "market_temporal_status": "schedule_compatible",
+            "market_pre_match_eligible": True,
+        },
+    )
+
+    result = backtest.snapshot_aligned_market_backtest(
+        training + [fixture],
+        min_train=12,
+    )
+
+    assert result["n_snapshot_dates_seen"] == 1
+    assert result["n_snapshot_dates"] == 0
+    assert result["n_common_time_eligible"] == 0
+    assert result["n_skipped_insufficient_history_fixtures"] == 1
+    assert result["forecast_rows"] == []
+    assert all(item["count"] == 0 for item in result["prediction_errors"].values())

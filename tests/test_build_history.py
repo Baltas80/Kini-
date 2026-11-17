@@ -10,14 +10,13 @@ import requests
 
 from scripts.build_history import build_dataset_profile, build_history, fetch_csv
 
-
 VALID_CSV = (
-    "Div,Date,HomeTeam,AwayTeam,FTHG,FTAG,FTR\n"
-    "SP1,02/01/2022,B,C,1,0,H\n"
-    "SP1,01/01/2022,A,B,0,0,D\n"
-    "SP1,02/01/2022,B,C,1,0,H\n"
-    "SP1,05/01/2022,D,E,,,\n"
-).encode("utf-8")
+    b"Div,Date,HomeTeam,AwayTeam,FTHG,FTAG,FTR\n"
+    b"SP1,02/01/2022,B,C,1,0,H\n"
+    b"SP1,01/01/2022,A,B,0,0,D\n"
+    b"SP1,02/01/2022,B,C,1,0,H\n"
+    b"SP1,05/01/2022,D,E,,,\n"
+)
 
 
 class FakeResponse:
@@ -29,7 +28,9 @@ class FakeResponse:
 
 
 class FakeSession:
-    def __init__(self, *, content: bytes | None = None, error: Exception | None = None) -> None:
+    def __init__(
+        self, *, content: bytes | None = None, error: Exception | None = None
+    ) -> None:
         self.content = content
         self.error = error
         self.calls = 0
@@ -47,7 +48,9 @@ def test_fetch_csv_reuses_fresh_valid_cache(tmp_path: Path) -> None:
     cache.write_bytes(VALID_CSV)
     session = FakeSession(error=requests.ConnectionError("should not be called"))
 
-    df = fetch_csv("https://example.test/source.csv", cache, session=session, cache_ttl_hours=24)
+    df = fetch_csv(
+        "https://example.test/source.csv", cache, session=session, cache_ttl_hours=24
+    )
 
     assert len(df) == 4
     assert session.calls == 0
@@ -60,23 +63,69 @@ def test_fetch_csv_falls_back_to_valid_stale_cache(tmp_path: Path) -> None:
     os.utime(cache, (old, old))
     session = FakeSession(error=requests.Timeout("provider timed out"))
 
-    df = fetch_csv("https://example.test/source.csv", cache, session=session, cache_ttl_hours=24)
+    df = fetch_csv(
+        "https://example.test/source.csv", cache, session=session, cache_ttl_hours=24
+    )
 
     assert len(df) == 4
     assert session.calls == 1
+
+
+def test_fetch_csv_offline_uses_stale_valid_cache_without_network(
+    tmp_path: Path,
+) -> None:
+    cache = tmp_path / "2122_SP1.csv"
+    cache.write_bytes(VALID_CSV)
+    old = time.time() - 48 * 3600
+    os.utime(cache, (old, old))
+    session = FakeSession(
+        error=requests.ConnectionError("offline must not call network")
+    )
+
+    df = fetch_csv(
+        "https://example.test/source.csv",
+        cache,
+        session=session,
+        cache_ttl_hours=24,
+        offline=True,
+    )
+
+    assert len(df) == 4
+    assert session.calls == 0
+
+
+def test_fetch_csv_offline_fails_closed_without_valid_cache(tmp_path: Path) -> None:
+    session = FakeSession(content=VALID_CSV)
+
+    with pytest.raises(RuntimeError, match="modo offline impide descargar"):
+        fetch_csv(
+            "https://example.test/source.csv",
+            tmp_path / "missing.csv",
+            session=session,
+            offline=True,
+        )
+
+    assert session.calls == 0
 
 
 def test_fetch_csv_rejects_non_csv_provider_response(tmp_path: Path) -> None:
     session = FakeSession(content=b"<html><body>service unavailable</body></html>")
 
     with pytest.raises(RuntimeError, match="CSV inv"):
-        fetch_csv("https://example.test/source.csv", tmp_path / "source.csv", session=session)
+        fetch_csv(
+            "https://example.test/source.csv",
+            tmp_path / "source.csv",
+            session=session,
+        )
 
 
 def test_build_history_sorts_deduplicates_and_drops_unplayed(tmp_path: Path) -> None:
     cache_dir = tmp_path / "cache"
     cache_dir.mkdir()
-    (cache_dir / "2122_SP1.csv").write_bytes(VALID_CSV)
+    cache_path = cache_dir / "2122_SP1.csv"
+    cache_path.write_bytes(VALID_CSV)
+    old = time.time() - 48 * 3600
+    os.utime(cache_path, (old, old))
     output = tmp_path / "data" / "historical.csv"
     session = FakeSession(error=requests.ConnectionError("fresh cache expected"))
 
@@ -86,6 +135,7 @@ def test_build_history_sorts_deduplicates_and_drops_unplayed(tmp_path: Path) -> 
         output=output,
         cache_dir=cache_dir,
         cache_ttl_hours=24,
+        offline=True,
         session=session,
     )
 
@@ -107,12 +157,47 @@ def test_build_history_sorts_deduplicates_and_drops_unplayed(tmp_path: Path) -> 
     assert profile["integrity_passed"] is True
 
 
-def test_dataset_profile_detects_conflicting_result_and_duplicate(tmp_path: Path) -> None:
+def test_dataset_profile_detects_conflicting_result_and_duplicate(
+    tmp_path: Path,
+) -> None:
     raw = pd.DataFrame(
         [
-            {"Date": "01/01/2025", "HomeTeam": "A", "AwayTeam": "B", "FTHG": 1, "FTAG": 0, "FTR": "H", "Div": "SP1", "League": "la-liga", "Season": "2425", "SourceURL": "https://example.test/SP1.csv"},
-            {"Date": "01/01/2025", "HomeTeam": "A", "AwayTeam": "B", "FTHG": 1, "FTAG": 0, "FTR": "H", "Div": "SP1", "League": "la-liga", "Season": "2425", "SourceURL": "https://example.test/SP1.csv"},
-            {"Date": "02/01/2025", "HomeTeam": "C", "AwayTeam": "D", "FTHG": 0, "FTAG": 2, "FTR": "H", "Div": "SP1", "League": "la-liga", "Season": "2425", "SourceURL": "https://example.test/SP1.csv"},
+            {
+                "Date": "01/01/2025",
+                "HomeTeam": "A",
+                "AwayTeam": "B",
+                "FTHG": 1,
+                "FTAG": 0,
+                "FTR": "H",
+                "Div": "SP1",
+                "League": "la-liga",
+                "Season": "2425",
+                "SourceURL": "https://example.test/SP1.csv",
+            },
+            {
+                "Date": "01/01/2025",
+                "HomeTeam": "A",
+                "AwayTeam": "B",
+                "FTHG": 1,
+                "FTAG": 0,
+                "FTR": "H",
+                "Div": "SP1",
+                "League": "la-liga",
+                "Season": "2425",
+                "SourceURL": "https://example.test/SP1.csv",
+            },
+            {
+                "Date": "02/01/2025",
+                "HomeTeam": "C",
+                "AwayTeam": "D",
+                "FTHG": 0,
+                "FTAG": 2,
+                "FTR": "H",
+                "Div": "SP1",
+                "League": "la-liga",
+                "Season": "2425",
+                "SourceURL": "https://example.test/SP1.csv",
+            },
         ]
     )
     raw["_ParsedDate"] = pd.to_datetime(raw["Date"], dayfirst=True)
@@ -143,3 +228,33 @@ def test_fetch_csv_rejects_wrong_league_redirect(tmp_path: Path) -> None:
             session=session,
             expected_division="SP2",
         )
+
+
+@pytest.mark.parametrize(
+    ("home_goals", "away_goals", "invalid_column"),
+    [
+        ("True", "False", "FTHG"),
+        ("1", "False", "FTAG"),
+    ],
+)
+def test_fetch_csv_rejects_boolean_scores_before_caching(
+    tmp_path: Path,
+    home_goals: str,
+    away_goals: str,
+    invalid_column: str,
+) -> None:
+    content = (
+        "Div,Date,HomeTeam,AwayTeam,FTHG,FTAG,FTR\n"
+        f"SP1,02/01/2022,A,B,{home_goals},{away_goals},H\n"
+    ).encode()
+    cache = tmp_path / "boolean_scores.csv"
+
+    with pytest.raises(RuntimeError, match=f"booleanos.*{invalid_column}"):
+        fetch_csv(
+            "https://example.test/boolean_scores.csv",
+            cache,
+            session=FakeSession(content=content),
+            expected_division="SP1",
+        )
+
+    assert not cache.exists()

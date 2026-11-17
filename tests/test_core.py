@@ -1,12 +1,13 @@
-from datetime import datetime, timedelta
-from itertools import combinations
 import sys
+from datetime import datetime, timedelta
+from itertools import combinations, product
 from types import SimpleNamespace
 
 import numpy as np
 import pytest
 
 from kini_engine.core import (
+    LAE_SOURCE_ID,
     DixonColes,
     FeatureModel,
     KiniEngine,
@@ -15,7 +16,9 @@ from kini_engine.core import (
     _date_num,
     context_adjust,
     score_grid,
+    surprise_signal,
 )
+from kini_engine.ticket_outcomes import TicketOutcomeError
 
 
 def sample():
@@ -30,6 +33,20 @@ def sample():
     return out
 
 
+def verified_lae_detail(**overrides):
+    detail = {
+        "lae_source": LAE_SOURCE_ID,
+        "fixture_identity_status": "verified",
+        "lae_captured_at": "2025-04-01T09:00:00+02:00",
+        "kickoff_evidence_checked_at_utc": "2025-04-01T06:30:00+00:00",
+        "kickoff_evidence_url": "https://www.uefa.com/test-schedule/",
+        "kickoff_source": "UEFA test schedule",
+        "kickoff_at": "2025-04-01T20:00:00+02:00",
+    }
+    detail.update(overrides)
+    return detail
+
+
 def test_fit_predict():
     e = KiniEngine().fit(sample())
     p = e.predict(Match(datetime(2025, 4, 1), "A", "D"))
@@ -37,6 +54,151 @@ def test_fit_predict():
     assert p.sign in {"1", "X", "2"}
     dc = e.predict(Match(datetime(2025, 4, 1), "A", "D"), mode="dc")
     assert abs(sum(dc.probabilities.values()) - 1.0) < 1e-9
+
+
+def test_dixon_coles_fit_status_and_explicit_untrained_fallback():
+    model = DixonColes().fit(sample()[:11])
+
+    assert model.fitted is False
+    assert model.fit_status == "insufficient_history"
+    assert model.n_training_matches == 11
+    with pytest.raises(ValueError, match="Dixon-Coles model is not fitted"):
+        model.predict("A", "B")
+
+    fallback, _ = model.predict(
+        "A", "B", allow_untrained_fallback=True
+    )
+    assert abs(sum(fallback.values()) - 1.0) < 1e-9
+    assert model.fitted is False
+
+
+def test_engine_does_not_mark_insufficient_dixon_coles_as_fitted():
+    engine = KiniEngine().fit(sample()[:11])
+
+    assert engine.fitted is False
+    assert engine.model_diagnostics()["dixon_coles"]["status"] == "insufficient_history"
+    with pytest.raises(ValueError, match="Dixon-Coles model is not available"):
+        engine.predict(
+            Match(datetime(2025, 4, 1), "A", "B"),
+            mode="dc",
+        )
+
+
+def test_dixon_coles_unseen_team_fallback_is_reported():
+    engine = KiniEngine().fit(sample())
+    prediction = engine.predict(
+        Match(datetime(2025, 4, 1), "New Club", "A"),
+        mode="dc",
+    )
+
+    assert any("cold-start fallback" in reason for reason in prediction.reasons)
+
+
+def test_market_mode_is_independent_of_dixon_coles_fit():
+    engine = KiniEngine().fit(sample()[:11])
+    fixture = Match(
+        datetime(2025, 4, 1),
+        "A",
+        "D",
+        market={"1": 0.50, "X": 0.25, "2": 0.25},
+        detail={
+            "market_temporal_status": "schedule_compatible",
+            "market_pre_match_eligible": True,
+        },
+    )
+
+    prediction = engine.predict(fixture, mode="market")
+
+    assert prediction.probabilities == fixture.market
+    assert engine.fitted is False
+
+
+def test_dixon_coles_optimizer_failure_does_not_block_independent_ml(monkeypatch):
+    from penaltyblog.models import DixonColesGoalModel
+
+    def fail_fit(self, *args, **kwargs):
+        raise ValueError("forced optimizer failure")
+
+    monkeypatch.setattr(DixonColesGoalModel, "fit", fail_fit)
+    engine = KiniEngine(enable_ml=True).fit(sample())
+
+    assert engine.fitted is False
+    assert engine.dc.fit_status == "fit_failed"
+    assert "forced optimizer failure" in engine.dc.fit_error
+
+    monkeypatch.setattr(
+        engine.ml,
+        "fit_predict_proba",
+        lambda training, current, feature_history=None: np.asarray(
+            [0.40, 0.35, 0.25], dtype=float
+        ),
+    )
+    prediction = engine.predict(
+        Match(datetime(2025, 4, 1), "A", "D"),
+        mode="ml",
+    )
+    assert prediction.probabilities == {"1": 0.40, "X": 0.35, "2": 0.25}
+
+    with pytest.raises(ValueError, match="Dixon-Coles model is not available"):
+        engine.predict(
+            Match(datetime(2025, 4, 1), "A", "D"),
+            mode="dc",
+        )
+
+
+def test_dixon_coles_fit_rejects_unset_library_fitted_flag(monkeypatch):
+    from penaltyblog.models import DixonColesGoalModel
+
+    monkeypatch.setattr(
+        DixonColesGoalModel,
+        "fit",
+        lambda self, *args, **kwargs: None,
+    )
+    engine = KiniEngine().fit(sample())
+
+    assert engine.dc.fitted is False
+    assert engine.dc.fit_status == "fit_failed"
+    assert "model.fitted=True" in engine.dc.fit_error
+    with pytest.raises(ValueError, match="Dixon-Coles model is not available"):
+        engine.predict(
+            Match(datetime(2025, 4, 1), "A", "D"),
+            mode="dc",
+        )
+
+
+@pytest.mark.parametrize("forecast_index", [78, 79])
+def test_engine_rejects_same_day_or_future_dixon_coles_training_results(forecast_index):
+    history = sample()
+    engine = KiniEngine().fit(history)
+    current = Match(history[forecast_index].date, "A", "D")
+
+    with pytest.raises(
+        ValueError,
+        match="Dixon-Coles training history.*strictly before forecast date",
+    ):
+        engine.predict(current, mode="dc")
+
+
+def test_feature_model_rejects_same_day_or_future_training_labels():
+    history = sample()
+    current = Match(history[-1].date, "A", "D")
+
+    with pytest.raises(
+        ValueError,
+        match="ML training history.*strictly before forecast date",
+    ):
+        FeatureModel().fit_predict_proba(history, current)
+
+
+def test_engine_allows_unplayed_same_day_rows_in_training_snapshot():
+    history = sample()
+    forecast_day = history[-1].date
+    training = history[:-1] + [Match(forecast_day, "C", "D")]
+    engine = KiniEngine().fit(training)
+
+    prediction = engine.predict(Match(forecast_day, "A", "B"), mode="dc")
+
+    assert abs(sum(prediction.probabilities.values()) - 1.0) < 1e-9
 
 
 def test_optimizer_budget():
@@ -69,6 +231,55 @@ def test_date_num_accepts_football_data_format():
     assert _date_num("01/02/2021") < _date_num("02/02/2021")
 
 
+def test_dixon_coles_decay_uses_source_calendar_dates_not_host_timezone(monkeypatch):
+    import penaltyblog.models
+
+    captured_dates = []
+
+    def capture_weights(dates, xi):
+        captured_dates.extend(dates)
+        return np.ones(len(dates), dtype=float)
+
+    class FakeDixonColesGoalModel:
+        def __init__(self, **kwargs):
+            self.teams = sorted(
+                set(kwargs["teams_home"]) | set(kwargs["teams_away"])
+            )
+            self.fitted = False
+
+        def fit(self, **kwargs):
+            self.fitted = True
+            self.loglikelihood = -1.0
+            self.aic = 2.0
+
+        def predict(self, home, away, **kwargs):
+            return SimpleNamespace(
+                grid=np.full((2, 2), 0.25, dtype=float),
+                home_draw_away=np.asarray([0.25, 0.50, 0.25], dtype=float),
+            )
+
+    monkeypatch.setattr(
+        penaltyblog.models, "DixonColesGoalModel", FakeDixonColesGoalModel
+    )
+    monkeypatch.setattr(penaltyblog.models, "dixon_coles_weights", capture_weights)
+
+    start = datetime.fromisoformat("2025-03-30T00:30:00+02:00")
+    history = [
+        Match(start + timedelta(days=index), f"H{index}", f"A{index}", 1, 0, "1")
+        for index in range(12)
+    ]
+
+    fitted = DixonColes().fit(history)
+
+    expected_dates = [
+        datetime.fromisoformat((start.date() + timedelta(days=index)).isoformat())
+        for index in range(12)
+    ]
+    assert fitted.fitted is True
+    assert captured_dates == expected_dates
+    assert all(value.tzinfo is None and value.hour == 0 for value in captured_dates)
+
+
 
 def test_h2h_counts_current_home_team_wins_regardless_of_historical_venue():
     current = Match(datetime(2025, 4, 1), "A", "B")
@@ -83,12 +294,109 @@ def test_h2h_counts_current_home_team_wins_regardless_of_historical_venue():
 
 
 
+def test_context_and_surprise_signals_ignore_same_day_and_future_results():
+    current = Match(datetime(2025, 4, 1), "A", "B")
+    prior = [
+        Match(datetime(2025, 3, 1) + timedelta(days=index), "A", "B", 2, 0, "1")
+        for index in range(5)
+    ]
+    contaminated = prior + [
+        Match(datetime(2025, 4, 1), "A", "B", 0, 8, "2"),
+        Match(datetime(2025, 4, 2), "B", "A", 8, 0, "1"),
+        Match(datetime(2025, 4, 3), "C", "A", 8, 0, "1"),
+    ]
+    base = {"1": 1 / 3, "X": 1 / 3, "2": 1 / 3}
+    model = {"1": 0.90, "X": 0.05, "2": 0.05}
+    lae = {"1": 0.05, "X": 0.05, "2": 0.90}
+
+    baseline_adjusted = context_adjust(base, current, prior)
+    contaminated_adjusted = context_adjust(base, current, contaminated)
+    assert contaminated_adjusted == baseline_adjusted
+
+    baseline_signal = surprise_signal(model, lae, None, current, prior)
+    contaminated_signal = surprise_signal(model, lae, None, current, contaminated)
+    assert contaminated_signal == baseline_signal
+
+
+def test_surprise_signal_rejects_unverified_external_reference_vectors():
+    current = Match(datetime(2025, 4, 1), "A", "B")
+    model = {"1": 0.80, "X": 0.10, "2": 0.10}
+    opposing_reference = {"1": 0.05, "X": 0.05, "2": 0.90}
+
+    assert surprise_signal(model, opposing_reference, opposing_reference, current, []) is None
+
+
+def test_surprise_signal_uses_verified_match_lae_not_external_override():
+    model = {"1": 0.80, "X": 0.10, "2": 0.10}
+    verified_lae = {"1": 0.05, "X": 0.05, "2": 0.90}
+    fixture = Match(
+        datetime(2025, 4, 1),
+        "A",
+        "B",
+        lae=verified_lae,
+        detail=verified_lae_detail(),
+    )
+
+    signal = surprise_signal(model, model, None, fixture, [])
+
+    assert signal is not None
+    assert signal["reference"] == "LAE"
+    assert signal["score"] == pytest.approx(1.0)
+
+
+def test_market_surprise_requires_valid_match_attached_probabilities():
+    model = {"1": 0.80, "X": 0.10, "2": 0.10}
+    opposing_reference = {"1": 0.05, "X": 0.05, "2": 0.90}
+    unverified = Match(
+        datetime(2025, 4, 1),
+        "A",
+        "B",
+        market=opposing_reference,
+    )
+    assert unverified.has_temporally_eligible_market is False
+    assert surprise_signal(model, None, opposing_reference, unverified, []) is None
+
+    invalid = Match(
+        datetime(2025, 4, 1),
+        "A",
+        "B",
+        market={"1": 0.80, "X": 0.10, "2": 0.05},
+        detail={
+            "market_temporal_status": "schedule_compatible",
+            "market_pre_match_eligible": True,
+        },
+    )
+    assert invalid.has_temporally_eligible_market is False
+    assert surprise_signal(model, None, opposing_reference, invalid, []) is None
+
+
+def test_surprise_signal_uses_verified_match_market_not_external_override():
+    model = {"1": 0.80, "X": 0.10, "2": 0.10}
+    verified_market = {"1": 0.05, "X": 0.05, "2": 0.90}
+    fixture = Match(
+        datetime(2025, 4, 1),
+        "A",
+        "B",
+        market=verified_market,
+        detail={
+            "market_temporal_status": "schedule_compatible",
+            "market_pre_match_eligible": True,
+        },
+    )
+
+    signal = surprise_signal(model, None, model, fixture, [])
+
+    assert signal is not None
+    assert signal["reference"] == "mercado"
+    assert signal["score"] == pytest.approx(1.0)
+
+
 def test_dc_forecast_does_not_train_optional_ml_model():
     class ExplodingML:
         def fit_predict_proba(self, history, current):
             raise AssertionError("ML must not run for a DC-only forecast")
 
-    engine = KiniEngine(enable_ml=True)
+    engine = KiniEngine(enable_ml=True).fit(sample())
     engine.ml = ExplodingML()
     prediction = engine.predict(Match(datetime(2025, 4, 1), "A", "D"), mode="dc")
 
@@ -97,13 +405,114 @@ def test_dc_forecast_does_not_train_optional_ml_model():
 
 
 
+def test_ensemble_ignores_lae_without_capture_provenance():
+    engine = KiniEngine().fit(sample())
+    engine.dc.predict = lambda home, away, **kwargs: (
+        {"1": 0.80, "X": 0.10, "2": 0.10},
+        [],
+    )
+    unverified = Match(
+        datetime(2025, 4, 1),
+        "A",
+        "B",
+        lae={"1": 0.05, "X": 0.05, "2": 0.90},
+    )
+    without_lae = Match(datetime(2025, 4, 1), "A", "B")
+
+    prediction = engine.predict(unverified, mode="ensemble")
+    baseline = engine.predict(without_lae, mode="ensemble")
+
+    assert prediction.probabilities == pytest.approx(baseline.probabilities)
+    assert prediction.surprise is None
+    assert unverified.has_temporally_eligible_lae is False
+
+
+def test_lae_mode_and_ensemble_accept_timezone_verified_pre_match_input():
+    engine = KiniEngine().fit(sample())
+    engine.dc.predict = lambda home, away, **kwargs: (
+        {"1": 0.80, "X": 0.10, "2": 0.10},
+        [],
+    )
+    lae = {"1": 0.05, "X": 0.05, "2": 0.90}
+    fixture = Match(
+        datetime(2025, 4, 1),
+        "A",
+        "B",
+        lae=lae,
+        detail=verified_lae_detail(kickoff_at="2025-04-01T09:00:00+01:00"),
+    )
+
+    assert fixture.has_temporally_eligible_lae is True
+    direct = engine.predict(fixture, mode="lae")
+    ensemble = engine.predict(fixture, mode="ensemble")
+
+    assert direct.probabilities == pytest.approx(lae)
+    assert ensemble.probabilities != pytest.approx(
+        engine.predict(Match(datetime(2025, 4, 1), "A", "B")).probabilities
+    )
+    assert ensemble.surprise is not None
+    assert ensemble.surprise["reference"] == "LAE"
+
+
+@pytest.mark.parametrize(
+    "detail",
+    [
+        {},
+        verified_lae_detail(lae_captured_at="2025-04-01T09:00:00"),
+        verified_lae_detail(lae_captured_at="2025-04-01T21:00:00+02:00"),
+        verified_lae_detail(lae_captured_at="2025-04-01T20:00:00+02:00"),
+        verified_lae_detail(kickoff_evidence_checked_at_utc=None),
+        verified_lae_detail(
+            kickoff_evidence_checked_at_utc="2025-03-31T06:00:00+00:00"
+        ),
+        verified_lae_detail(fixture_identity_status="unverified"),
+        verified_lae_detail(lae_source="untrusted-source"),
+        verified_lae_detail(kickoff_evidence_url="http://www.uefa.com/test-schedule/"),
+    ],
+)
+def test_lae_requires_fresh_verified_schedule_evidence_and_timezone_aware_capture_before_kickoff(
+    detail,
+):
+    fixture = Match(
+        datetime(2025, 4, 1),
+        "A",
+        "B",
+        lae={"1": 0.4, "X": 0.3, "2": 0.3},
+        detail=detail,
+    )
+    assert fixture.has_temporally_eligible_lae is False
+
+
+def test_lae_rejects_invalid_probability_contract():
+    fixture = Match(
+        datetime(2025, 4, 1),
+        "A",
+        "B",
+        lae={"1": 0.4, "X": 0.3, "2": 0.2},
+        detail=verified_lae_detail(),
+    )
+    assert fixture.has_temporally_eligible_lae is False
+
+
+def test_lae_mode_rejects_unverified_input():
+    engine = KiniEngine()
+    fixture = Match(
+        datetime(2025, 4, 1),
+        "A",
+        "B",
+        lae={"1": 0.4, "X": 0.3, "2": 0.3},
+    )
+    with pytest.raises(ValueError, match="not temporally verified"):
+        engine.predict(fixture, mode="lae")
+
+
 def test_model_only_ensemble_excludes_market_and_lae():
     class FakeML:
         def fit_predict_proba(self, training_history, current, feature_history=None):
             return np.asarray([0.60, 0.20, 0.20])
 
-    engine = KiniEngine(enable_ml=True)
-    engine.dc.predict = lambda home, away: (
+    engine = KiniEngine(enable_ml=True).fit(sample())
+    engine.dc.predict = lambda home, away, **kwargs: (
         {"1": 0.80, "X": 0.10, "2": 0.10},
         [],
     )
@@ -129,8 +538,8 @@ def test_model_only_ensemble_excludes_market_and_lae():
 
 
 def test_ensemble_ignores_temporally_ineligible_market_and_surprise_reference():
-    engine = KiniEngine()
-    engine.dc.predict = lambda home, away: (
+    engine = KiniEngine().fit(sample())
+    engine.dc.predict = lambda home, away, **kwargs: (
         {"1": 0.80, "X": 0.10, "2": 0.10},
         [],
     )
@@ -173,8 +582,8 @@ def test_market_mode_rejects_temporally_ineligible_odds():
 
 
 def test_ensemble_uses_schedule_screened_market():
-    engine = KiniEngine()
-    engine.dc.predict = lambda home, away: (
+    engine = KiniEngine().fit(sample())
+    engine.dc.predict = lambda home, away, **kwargs: (
         {"1": 0.80, "X": 0.10, "2": 0.10},
         [],
     )
@@ -197,6 +606,55 @@ def test_ensemble_uses_schedule_screened_market():
     assert eligible.has_temporally_eligible_market is True
 
 
+def test_feature_model_ignores_same_day_future_and_unverified_standings():
+    history = sample()
+    current = Match(
+        datetime(2025, 4, 1),
+        "A",
+        "D",
+        detail={
+            "clasificacion_local_pos": 1,
+            "clasificacion_visitante_pos": 20,
+        },
+    )
+    model = FeatureModel()
+    baseline = model._features(history, current)
+
+    contaminated_history = history + [
+        Match(datetime(2025, 4, 1), "A", "D", 9, 0, "1"),
+        Match(datetime(2025, 4, 2), "A", "D", 0, 9, "2"),
+    ]
+    observed = model._features(contaminated_history, current)
+
+    assert baseline.shape == (12,)
+    assert np.array_equal(observed, baseline)
+
+
+def test_feature_model_incremental_training_rows_match_reference_builder():
+    history = sample()
+    history[1] = Match(
+        history[0].date,
+        history[1].home,
+        history[1].away,
+        history[1].home_goals,
+        history[1].away_goals,
+        history[1].result,
+    )
+    shuffled = history[::2] + history[1::2]
+    model = FeatureModel()
+
+    rows, outcomes = model._training_rows(shuffled)
+    ordered = sorted(
+        shuffled,
+        key=lambda match: (match.date.date().isoformat(), _date_num(match.date)),
+    )
+    expected_rows = [model._features(shuffled, match) for match in ordered]
+    expected_outcomes = [match.outcome() for match in ordered]
+
+    assert np.vstack(rows) == pytest.approx(np.vstack(expected_rows))
+    assert outcomes == expected_outcomes
+
+
 def test_feature_model_uses_2d_inference_and_caches_fit_per_history(monkeypatch):
     class FakeXGBClassifier:
         fit_calls = 0
@@ -206,14 +664,14 @@ def test_feature_model_uses_2d_inference_and_caches_fit_per_history(monkeypatch)
 
         def fit(self, features, labels):
             assert features.ndim == 2
-            assert features.shape == (80, 15)
+            assert features.shape == (80, 12)
             assert labels.shape == (80,)
             type(self).fit_calls += 1
             return self
 
         def predict_proba(self, features):
             assert features.ndim == 2
-            assert features.shape == (1, 15)
+            assert features.shape == (1, 12)
             return np.array([[0.55, 0.25, 0.20]])
 
     monkeypatch.setitem(sys.modules, "xgboost", SimpleNamespace(XGBClassifier=FakeXGBClassifier))
@@ -240,11 +698,11 @@ def test_feature_model_training_rows_exclude_same_calendar_day_results(monkeypat
             self.classes_ = np.array([0, 1, 2])
 
         def fit(self, features, labels):
-            assert features.shape == (80, 15)
+            assert features.shape == (80, 12)
             return self
 
         def predict_proba(self, features):
-            assert features.shape == (1, 15)
+            assert features.shape == (1, 12)
             return np.array([[0.4, 0.35, 0.25]])
 
     monkeypatch.setitem(sys.modules, "xgboost", SimpleNamespace(XGBClassifier=FakeXGBClassifier))
@@ -252,19 +710,19 @@ def test_feature_model_training_rows_exclude_same_calendar_day_results(monkeypat
     first = history[0]
     second = history[1]
     history[1] = Match(first.date, second.home, second.away, second.home_goals, second.away_goals, second.result)
-    captured = {}
     model = FeatureModel()
+    rows, outcomes = model._training_rows(history)
+    expected = model._features(history, history[1])
 
-    def capture_features(past, current):
-        if current is history[1]:
-            captured["past"] = list(past)
-        return np.zeros(15, dtype=float)
-
-    monkeypatch.setattr(model, "_features", capture_features)
-    probabilities = model.fit_predict_proba(history, Match(datetime(2025, 4, 1), "A", "D"))
-
-    assert probabilities is not None
-    assert first not in captured["past"]
+    assert len(rows) == len(outcomes) == 80
+    assert np.array_equal(rows[1], expected)
+    assert first not in [
+        match
+        for match in history
+        if match.home_goals is not None
+        and match.away_goals is not None
+        and _date_num(match.date) < _date_num(history[1].date)
+    ]
 
 
 def test_feature_model_uses_latest_feature_history_without_refitting(monkeypatch):
@@ -290,7 +748,7 @@ def test_feature_model_uses_latest_feature_history_without_refitting(monkeypatch
     monkeypatch.setattr(
         model,
         "_features",
-        lambda past, current: np.full(15, len(past), dtype=float),
+        lambda past, current: np.full(12, len(past), dtype=float),
     )
 
     model.fit_predict_proba(training_history, Match(datetime(2025, 4, 2), "A", "D"), feature_history)
@@ -327,6 +785,16 @@ def test_optimizer_rejects_invalid_probability_distributions():
     with pytest.raises(ValueError, match="finite and in"):
         TicketOptimizer().optimize(predictions, budget=8)
 
+    predictions = [valid.copy() for _ in range(14)]
+    predictions[0]["1"] = True
+    with pytest.raises(TypeError, match="invalid probability"):
+        TicketOptimizer().optimize(predictions, budget=8)
+
+    predictions = [valid.copy() for _ in range(14)]
+    predictions[0] = None
+    with pytest.raises(TypeError, match="probabilities must be a mapping"):
+        TicketOptimizer().optimize(predictions, budget=8)
+
 
 def test_optimizer_enforces_selae_direct_double_triple_table():
     predictions = [{"1": 1 / 3, "X": 1 / 3, "2": 1 / 3} for _ in range(14)]
@@ -342,6 +810,161 @@ def test_optimizer_enforces_selae_direct_double_triple_table():
     assert result["maximum_authorized_columns"] == 31_104
     assert result["pleno15_multiplier"] == 1
     assert result["cost_eur"] == 23_328.0
+
+
+def test_optimizer_dp_matches_exhaustive_legal_assignment_search():
+    signs = ("1", "X", "2")
+    rng = np.random.default_rng(20261117)
+    predictions = []
+    for _ in range(14):
+        values = rng.uniform(0.05, 1.0, size=3)
+        values /= values.sum()
+        predictions.append(
+            {sign: float(values[index]) for index, sign in enumerate(signs)}
+        )
+
+    budget = 8
+    result = TicketOptimizer().optimize(predictions, budget=budget)
+    best_coverage = 0.0
+
+    # Independent exhaustive reference: enumerate every legal placement of
+    # doubles/triples, using the highest-probability signs for each width.
+    for double_count in range(15):
+        for triple_count in range(15 - double_count):
+            column_count = (2**double_count) * (3**triple_count)
+            if (
+                column_count > budget
+                or column_count < 2
+                or triple_count > TicketOptimizer.MAX_TRIPLES_BY_DOUBLES[double_count]
+                or column_count > TicketOptimizer.MAX_AUTHORIZED_TOTAL_BETS
+            ):
+                continue
+
+            for triple_positions in combinations(range(14), triple_count):
+                triple_set = set(triple_positions)
+                remaining = [
+                    index for index in range(14) if index not in triple_set
+                ]
+                for double_positions in combinations(remaining, double_count):
+                    double_set = set(double_positions)
+                    coverage = 1.0
+                    for index, probabilities in enumerate(predictions):
+                        width = (
+                            3
+                            if index in triple_set
+                            else 2
+                            if index in double_set
+                            else 1
+                        )
+                        ordered = sorted(
+                            signs,
+                            key=probabilities.__getitem__,
+                            reverse=True,
+                        )
+                        coverage *= sum(
+                            probabilities[sign] for sign in ordered[:width]
+                        )
+                    best_coverage = max(best_coverage, coverage)
+
+    assert result["independent_coverage_estimate"] == pytest.approx(
+        best_coverage, abs=1e-12
+    )
+
+    columns = [tuple(column) for column in result["columns"]]
+    selected_by_fixture = [
+        {column[index] for column in columns} for index in range(14)
+    ]
+    expected_by_fixture = []
+    for index, probabilities in enumerate(predictions):
+        ordered = sorted(
+            signs,
+            key=probabilities.__getitem__,
+            reverse=True,
+        )
+        expected = tuple(ordered[: len(selected_by_fixture[index])])
+        expected_by_fixture.append(expected)
+        assert selected_by_fixture[index] == set(expected)
+
+    assert set(columns) == set(product(*expected_by_fixture))
+
+
+def test_optimizer_applies_pleno_multiplier_to_the_total_bet_cap():
+    predictions = [{"1": 1 / 3, "X": 1 / 3, "2": 1 / 3} for _ in range(14)]
+    categories = ("0", "1", "2", "M")
+
+    result = TicketOptimizer().optimize(
+        predictions,
+        budget=TicketOptimizer.MAX_AUTHORIZED_TOTAL_BETS,
+        pleno15_home_categories=categories,
+        pleno15_away_categories=categories,
+    )
+
+    assert result["pleno15_multiplier"] == 16
+    assert result["pleno15_home_categories"] == list(categories)
+    assert result["pleno15_away_categories"] == list(categories)
+    assert len(result["pleno15_combinations"]) == 16
+    assert result["total_bets"] == 31_104
+    assert result["column_count"] * result["pleno15_multiplier"] == 31_104
+    assert result["maximum_authorized_columns"] == 1_944
+    assert result["maximum_authorized_14_match_columns"] == 1_944
+    assert result["cost_eur"] == 23_328.0
+
+
+def test_optimizer_allows_one_14_match_column_when_pleno_meets_minimum_bets():
+    predictions = [{"1": 0.5, "X": 0.3, "2": 0.2} for _ in range(14)]
+
+    result = TicketOptimizer().optimize(
+        predictions,
+        budget=1,
+        pleno15_home_categories=("0", "1"),
+        pleno15_away_categories=("M",),
+    )
+
+    assert result["column_count"] == 1
+    assert result["pleno15_multiplier"] == 2
+    assert result["total_bets"] == 2
+    assert result["cost_eur"] == 1.50
+
+
+def test_optimizer_rejects_invalid_or_partial_pleno_category_sets():
+    predictions = [{"1": 0.5, "X": 0.3, "2": 0.2} for _ in range(14)]
+
+    with pytest.raises(ValueError, match="supplied together"):
+        TicketOptimizer().optimize(
+            predictions,
+            pleno15_home_categories=("0",),
+        )
+    with pytest.raises(ValueError, match="invalid Pleno category"):
+        TicketOptimizer().optimize(
+            predictions,
+            pleno15_home_categories=("0", "3"),
+            pleno15_away_categories=("M",),
+        )
+    with pytest.raises(ValueError, match="duplicate"):
+        TicketOptimizer().optimize(
+            predictions,
+            pleno15_home_categories=("0", "0"),
+            pleno15_away_categories=("M",),
+        )
+
+
+def test_optimizer_double_triple_table_matches_official_bet_cap():
+    for doubles, maximum_triples in TicketOptimizer.MAX_TRIPLES_BY_DOUBLES.items():
+        allowed = [
+            triples
+            for triples in range(15 - doubles + 1)
+            if (2**doubles) * (3**triples) <= TicketOptimizer.MAX_AUTHORIZED_COLUMNS
+        ]
+        assert maximum_triples == max(allowed)
+        assert (
+            (2**doubles) * (3**maximum_triples)
+            <= TicketOptimizer.MAX_AUTHORIZED_COLUMNS
+        )
+        if maximum_triples < 14 - doubles:
+            assert (
+                (2**doubles) * (3 ** (maximum_triples + 1))
+                > TicketOptimizer.MAX_AUTHORIZED_COLUMNS
+            )
 
 
 def test_optimizer_rejects_budget_above_selae_direct_maximum():
@@ -360,7 +983,7 @@ def test_optimizer_rejects_minimum_below_selae_minimum():
 
 def test_optimizer_rejects_boolean_budget():
     predictions = [{"1": 0.5, "X": 0.3, "2": 0.2} for _ in range(14)]
-    with pytest.raises(ValueError, match="positive integer"):
+    with pytest.raises(TypeError, match="positive integer"):
         TicketOptimizer().optimize(predictions, budget=True)
 
 
@@ -381,7 +1004,7 @@ def test_optimizer_enforces_minimum_stake_and_price():
 
 def test_pleno15_aggregates_official_goal_categories():
     model = DixonColes()
-    distribution = model.pleno15_probs("A", "B")
+    distribution = model.pleno15_probs("A", "B", allow_untrained_fallback=True)
 
     assert len(distribution) == 16
     assert {row["home_goals"] for row in distribution} == {"0", "1", "2", "M"}
@@ -400,21 +1023,50 @@ def test_pleno15_aggregates_official_goal_categories():
 
 def test_quiniela_returns_16_pleno15_categories():
     fixtures = [
-        Match(datetime(2025, 1, 1), f"Home{i}", f"Away{i}")
+        Match(datetime(2025, 4, 1), f"Home{i}", f"Away{i}")
         for i in range(15)
     ]
-    result = KiniEngine(enable_ml=False).quiniela(fixtures, budget=2)
+    result = KiniEngine(enable_ml=False).fit(sample()).quiniela(fixtures, budget=2)
     assert len(result["pleno_al_15"]) == 16
     assert sum(row["probability"] for row in result["pleno_al_15"]) == pytest.approx(1.0)
     assert result["pleno_al_15_best"] == result["pleno_al_15"][0]
     assert result["full_coupon_coverage_assumption"] == (
-        "independent_all_14_matches_and_pleno15"
+        "independent_all_14_matches_and_selected_pleno15_categories"
     )
     assert result["estimated_full_coupon_coverage_independent"] == pytest.approx(
         result["ticket"]["joint_coverage"]
         * result["pleno_al_15_best"]["probability"]
     )
     assert 0.0 <= result["estimated_full_coupon_coverage_independent"] <= 1.0
+
+
+def test_quiniela_applies_multiple_pleno_categories_to_cost_and_coverage():
+    fixtures = [
+        Match(datetime(2025, 4, 1), f"Home{i}", f"Away{i}")
+        for i in range(15)
+    ]
+    result = KiniEngine(enable_ml=False).fit(sample()).quiniela(
+        fixtures,
+        budget=8,
+        pleno15_home_categories=("0", "1"),
+        pleno15_away_categories=("2", "M"),
+    )
+
+    ticket = result["ticket"]
+    assert ticket["pleno15_multiplier"] == 4
+    assert ticket["total_bets"] == ticket["column_count"] * 4
+    assert ticket["total_bets"] <= TicketOptimizer.MAX_AUTHORIZED_TOTAL_BETS
+    assert len(result["pleno_al_15_selected"]) == 4
+    assert result["pleno_al_15_selected_probability"] == pytest.approx(
+        sum(item["probability"] for item in result["pleno_al_15_selected"])
+    )
+    assert result["estimated_full_coupon_coverage_independent"] == pytest.approx(
+        ticket["independent_coverage_estimate"]
+        * result["pleno_al_15_selected_probability"]
+    )
+    assert result["full_coupon_coverage_assumption"] == (
+        "independent_all_14_matches_and_selected_pleno15_categories"
+    )
 
 
 def test_optimizer_matches_exhaustive_search_for_small_budget():
@@ -455,3 +1107,318 @@ def test_optimizer_matches_exhaustive_search_for_small_budget():
     assert result["joint_coverage"] == pytest.approx(expected)
     assert len(result["columns"]) == result["column_count"]
     assert result["coverage_assumption"] == "independent_matches"
+
+def test_optimizer_exposes_independence_estimate_without_renaming_legacy_field():
+    predictions = [{"1": 0.5, "X": 0.3, "2": 0.2} for _ in range(14)]
+    result = TicketOptimizer().optimize(predictions, budget=2)
+
+    assert result["coverage_assumption"] == "independent_matches"
+    assert result["coverage_method"] == "product_of_marginal_selected_sign_masses"
+    assert result["independent_coverage_estimate"] == pytest.approx(
+        result["joint_coverage"]
+    )
+
+
+def test_joint_scenario_coverage_checks_complete_columns_exactly():
+    columns = [["1"] * 14, ["2"] * 14]
+    scenarios = [["1"] * 14, ["2"] * 14, ["1"] * 13 + ["2"]]
+
+    result = TicketOptimizer.evaluate_joint_scenario_coverage(columns, scenarios)
+
+    assert result["scenario_count"] == 3
+    assert result["covered_scenarios"] == 2
+    assert result["uncovered_scenarios"] == 1
+    assert result["scenario_joint_coverage"] == pytest.approx(2 / 3)
+    assert result["coverage_basis"] == "caller_supplied_joint_scenarios"
+    assert result["scope"] == "14_main_matches_only"
+
+
+def test_joint_scenario_coverage_supports_explicit_weights_and_effective_sample_size():
+    columns = [["1"] * 14, ["2"] * 14]
+    scenarios = [["1"] * 14, ["X"] * 14, ["2"] * 14]
+
+    result = TicketOptimizer.evaluate_joint_scenario_coverage(
+        columns,
+        scenarios,
+        weights=[7, 2, 1],
+    )
+
+    assert result["scenario_weighting"] == "explicit"
+    assert result["scenario_joint_coverage"] == pytest.approx(0.8)
+    assert result["scenario_weight_sum"] == pytest.approx(10.0)
+    assert result["covered_scenario_weight"] == pytest.approx(8.0)
+    assert result["effective_sample_size"] == pytest.approx(100 / 54)
+
+
+def test_joint_scenario_coverage_rejects_malformed_columns_and_scenarios():
+    with pytest.raises(ValueError, match="exactly 14 signs"):
+        TicketOptimizer.evaluate_joint_scenario_coverage(
+            [["1"] * 13],
+            [["1"] * 14],
+        )
+
+    with pytest.raises(ValueError, match="invalid 1/X/2 sign"):
+        TicketOptimizer.evaluate_joint_scenario_coverage(
+            [["1"] * 13 + ["A"]],
+            [["1"] * 14],
+        )
+
+    with pytest.raises(ValueError, match="exactly 14 signs"):
+        TicketOptimizer.evaluate_joint_scenario_coverage(
+            [["1"] * 14],
+            [["1"] * 13],
+        )
+
+    with pytest.raises(ValueError, match="invalid 1/X/2 sign"):
+        TicketOptimizer.evaluate_joint_scenario_coverage(
+            [["1"] * 14],
+            [["1"] * 13 + ["A"]],
+        )
+
+
+def test_joint_scenario_coverage_rejects_invalid_weights():
+    columns = [["1"] * 14]
+    scenarios = [["1"] * 14, ["2"] * 14]
+
+    with pytest.raises(ValueError, match="weights length"):
+        TicketOptimizer.evaluate_joint_scenario_coverage(
+            columns,
+            scenarios,
+            weights=[1],
+        )
+
+    with pytest.raises(ValueError, match="finite and non-negative"):
+        TicketOptimizer.evaluate_joint_scenario_coverage(
+            columns,
+            scenarios,
+            weights=[1, -1],
+        )
+
+    with pytest.raises(ValueError, match="finite and non-negative"):
+        TicketOptimizer.evaluate_joint_scenario_coverage(
+            columns,
+            scenarios,
+            weights=[1, float("nan")],
+        )
+
+    with pytest.raises(TypeError, match="finite non-negative number"):
+        TicketOptimizer.evaluate_joint_scenario_coverage(
+            columns,
+            scenarios,
+            weights=[1, True],
+        )
+
+    with pytest.raises(ValueError, match="positive total"):
+        TicketOptimizer.evaluate_joint_scenario_coverage(
+            columns,
+            scenarios,
+            weights=[0, 0],
+        )
+
+
+def test_joint_scenario_coverage_deduplicates_columns_but_keeps_scenario_frequency():
+    column = ["1"] * 14
+    result = TicketOptimizer.evaluate_joint_scenario_coverage(
+        [column, column],
+        [column, column, ["2"] * 14],
+    )
+
+    assert result["ticket_column_count"] == 2
+    assert result["unique_ticket_column_count"] == 1
+    assert result["duplicate_ticket_columns"] == 1
+    assert result["scenario_count"] == 3
+    assert result["unique_scenario_count"] == 2
+    assert result["covered_scenarios"] == 2
+    assert result["scenario_joint_coverage"] == pytest.approx(2 / 3)
+
+def test_joint_scenario_coverage_scales_extreme_finite_weights_safely():
+    columns = [["1"] * 14]
+    scenarios = [["1"] * 14, ["2"] * 14]
+
+    for weights in ([1e-300, 1e-300], [1e200, 1e200]):
+        result = TicketOptimizer.evaluate_joint_scenario_coverage(
+            columns,
+            scenarios,
+            weights=weights,
+        )
+        assert result["scenario_joint_coverage"] == pytest.approx(0.5)
+        assert result["effective_sample_size"] == pytest.approx(2.0)
+
+    with pytest.raises(ValueError, match="finite positive total"):
+        TicketOptimizer.evaluate_joint_scenario_coverage(
+            columns,
+            scenarios,
+            weights=[1e308, 1e308],
+        )
+
+
+def test_joint_scenario_coverage_rejects_non_string_outcomes():
+    with pytest.raises(ValueError, match="invalid 1/X/2 sign"):
+        TicketOptimizer.evaluate_joint_scenario_coverage(
+            [[1] * 14],
+            [["1"] * 14],
+        )
+
+    with pytest.raises(ValueError, match="invalid 1/X/2 sign"):
+        TicketOptimizer.evaluate_joint_scenario_coverage(
+            [["1"] * 14],
+            [["1"] * 13 + [2]],
+        )
+
+
+
+
+def _planned_coupon_with_public_draw():
+    draw_date = "2026-11-08"
+    selae_url = (
+        "https://www.loteriasyapuestas.es/es/la-quiniela/escrutinios/"
+        "la-quiniela-premios-y-ganadores-del-08-de-noviembre-de-2026"
+    )
+    schedule_hash = "a" * 64
+    cutoff_hash = "b" * 64
+    status_hash = "c" * 64
+    positions = []
+    fixtures = []
+    for position in range(1, 15):
+        home = f"Home{position}"
+        away = f"Away{position}"
+        kickoff = (
+            "2026-11-08T12:00:00+01:00"
+            if position == 7
+            else "2026-11-08T14:00:00+01:00"
+        )
+        if position == 7:
+            positions.append(
+                {
+                    "position": position,
+                    "fixture_status": "public_draw_expected",
+                    "home": home,
+                    "away": away,
+                    "kickoff_at": kickoff,
+                    "status_evidence_url": selae_url,
+                    "status_evidence_sha256": status_hash,
+                    "status_captured_at_utc": "2026-11-08T10:15:00Z",
+                }
+            )
+        else:
+            positions.append(
+                {
+                    "position": position,
+                    "fixture_status": "scheduled",
+                    "home": home,
+                    "away": away,
+                    "kickoff_at": kickoff,
+                }
+            )
+        fixtures.append(Match(kickoff, home, away))
+
+    pleno_kickoff = "2026-11-08T15:00:00+01:00"
+    fixtures.append(Match(pleno_kickoff, "PlenoHome", "PlenoAway"))
+    plan = {
+        "schema_version": 1,
+        "provider": "SELAE",
+        "draw_date": draw_date,
+        "schedule_captured_at_utc": "2026-11-08T09:00:00Z",
+        "ticket_created_at_utc": "2026-11-08T10:45:00Z",
+        "schedule_evidence_url": selae_url,
+        "schedule_evidence_sha256": schedule_hash,
+        "ticket_cutoff_at_utc": "2026-11-08T11:00:00Z",
+        "cutoff_evidence_url": selae_url,
+        "cutoff_evidence_sha256": cutoff_hash,
+        "cutoff_evidence_captured_at_utc": "2026-11-08T09:15:00Z",
+        "first_kickoff_at": "2026-11-08T14:00:00+01:00",
+        "pleno15_home": "PlenoHome",
+        "pleno15_away": "PlenoAway",
+        "pleno15_kickoff_at": pleno_kickoff,
+        "positions": positions,
+    }
+    snapshot = {
+        "schema_version": 1,
+        "provider": "SELAE",
+        "source_id": "participant-forecast-capture-001",
+        "draw_date": draw_date,
+        "position": 7,
+        "captured_at_utc": "2026-11-08T10:30:00Z",
+        "ticket_cutoff_at_utc": "2026-11-08T11:00:00Z",
+        "source_url": selae_url,
+        "source_sha256": cutoff_hash,
+        "probabilities": {"1": 0.12, "X": 0.16, "2": 0.72},
+    }
+    return plan, fixtures, {7: snapshot}
+
+
+def test_quiniela_integrates_pre_ticket_plan_without_predicting_public_draw_fixture():
+    plan, fixtures, snapshots = _planned_coupon_with_public_draw()
+    engine = KiniEngine(enable_ml=False).fit(sample())
+    observed_predictions = []
+    original_predict_one = engine._predict_one
+
+    def record_prediction(match, history, mode="ensemble", model_history=None):
+        observed_predictions.append(match.home)
+        return original_predict_one(
+            match,
+            history,
+            mode=mode,
+            model_history=model_history,
+        )
+
+    engine._predict_one = record_prediction
+    result = engine.quiniela(
+        fixtures,
+        budget=2,
+        coupon_plan=plan,
+        public_draw_snapshots=snapshots,
+    )
+
+    assert "Home7" not in observed_predictions
+    assert "PlenoHome" in observed_predictions
+    assert len(observed_predictions) == 14
+    assert len(result["predictions"]) == 15
+    assert result["predictions"][6] is None
+    assert result["ticket_record"]["columns"] == result["ticket"]["columns"]
+    assert result["ticket_record"]["coupon_plan"] == plan
+    assert result["ticket_record"]["probability_vectors"][6] == snapshots[7]["probabilities"]
+    assert result["ticket_record"]["probability_sources"][6]["source"] == (
+        "preclose_participant_forecast"
+    )
+    assert result["ticket_record"]["probability_sources"][0]["model_mode"] == "ensemble"
+    assert result["ticket_record"]["pleno15_kickoff_at"] == (
+        "2026-11-08T15:00:00+01:00"
+    )
+    assert result["ticket_record"]["first_kickoff_at"] == (
+        "2026-11-08T14:00:00+01:00"
+    )
+    assert result["ticket_id"] == result["ticket_record"]["ticket_id"]
+    assert len(result["ticket_record_sha256"]) == 64
+
+
+def test_quiniela_pre_ticket_plan_rejects_fixture_identity_or_order_mismatch():
+    plan, fixtures, snapshots = _planned_coupon_with_public_draw()
+    fixtures[0] = Match(fixtures[0].date, "WrongHome", fixtures[0].away)
+
+    engine = KiniEngine(enable_ml=False).fit(sample())
+    with pytest.raises(TicketOutcomeError, match="identity or coupon order"):
+        engine.quiniela(
+            fixtures,
+            budget=2,
+            coupon_plan=plan,
+            public_draw_snapshots=snapshots,
+        )
+
+
+def test_quiniela_pre_ticket_plan_validates_pleno15_kickoff_against_fixture():
+    plan, fixtures, snapshots = _planned_coupon_with_public_draw()
+    fixtures[14] = Match(
+        "2026-11-08T16:00:00+01:00",
+        "PlenoHome",
+        "PlenoAway",
+    )
+
+    engine = KiniEngine(enable_ml=False).fit(sample())
+    with pytest.raises(TicketOutcomeError, match="Pleno al 15 kickoff does not match"):
+        engine.quiniela(
+            fixtures,
+            budget=2,
+            coupon_plan=plan,
+            public_draw_snapshots=snapshots,
+        )

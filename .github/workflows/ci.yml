@@ -1,7 +1,11 @@
 name: ci
 
 on:
+  # Feature branches are validated by pull_request. Restrict push CI to master
+  # so a PR branch does not launch duplicate push + pull_request runs that
+  # compete for the same concurrency group.
   push:
+    branches: [master]
     paths:
       - "kini_engine/**"
       - "scripts/**"
@@ -29,8 +33,100 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Validate GitHub Actions workflows
+        uses: raven-actions/actionlint@v2
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       - run: python -m pip install -e ".[dev]"
+      - name: Lint predictive core, historical data pipeline, fixture reconciliation and Liga F history
+        run: >-
+          ruff check
+          kini_engine/fixture_reconciliation.py
+          scripts/reconcile_selae_fixtures.py
+          scripts/inspect_selae_historical_calendar.py
+          scripts/discover_selae_result_archive.py
+          scripts/import_selae_press_release.py
+          tests/test_fixture_reconciliation.py
+          tests/test_selae_historical_calendar.py
+          tests/test_selae_result_archive.py
+          tests/test_selae_press_release.py
+          kini_engine/ligaf_evidence.py
+          tests/test_ligaf_evidence.py
+          kini_engine/ligaf_history.py
+          scripts/import_ligaf_history.py
+          tests/test_ligaf_history.py
+          kini_engine/ligaf_team_profiles.py
+          scripts/build_ligaf_team_profiles.py
+          tests/test_ligaf_team_profiles.py
+          kini_engine/core.py
+          tests/test_core.py
+          kini_engine/dataio.py
+          tests/test_dataio.py
+          kini_engine/sources.py
+          kini_engine/mcp_server.py
+          scripts/diagnose_kinielagpt_details.py
+          tests/test_sources.py
+          tests/test_kinielagpt_details_diagnostic.py
+          kini_engine/backtest.py
+          kini_engine/cli.py
+          kini_engine/ledger.py
+          kini_engine/diagnostics.py
+          scripts/analyze_prediction_ledger.py
+          tests/test_backtest.py
+          tests/test_ledger.py
+          tests/test_prediction_diagnostics.py
+          kini_engine/coupons.py
+          kini_engine/coupon_identity.py
+          kini_engine/coupon_snapshot.py
+          tests/test_coupon_snapshot.py
+          scripts/import_historical_coupons.py
+          scripts/backtest_coupons.py
+          scripts/build_history.py
+          tests/test_build_history.py
+          tests/test_coupon_backtest.py
+          tests/test_coupon_identity.py
+          kini_engine/ticket_outcomes.py
+          scripts/score_selae_ticket.py
+          tests/test_ticket_outcomes.py
+      - name: Verify formatting for predictive core, Liga F and SELAE evidence code
+        run: >-
+          ruff format --check
+          scripts/inspect_selae_historical_calendar.py
+          scripts/discover_selae_result_archive.py
+          scripts/import_selae_press_release.py
+          tests/test_selae_historical_calendar.py
+          tests/test_selae_result_archive.py
+          tests/test_selae_press_release.py
+          kini_engine/ligaf_evidence.py
+          tests/test_ligaf_evidence.py
+          kini_engine/ligaf_team_profiles.py
+          scripts/build_ligaf_team_profiles.py
+          tests/test_ligaf_team_profiles.py
+          kini_engine/sources.py
+          kini_engine/mcp_server.py
+          scripts/diagnose_kinielagpt_details.py
+          tests/test_sources.py
+          tests/test_kinielagpt_details_diagnostic.py
+          kini_engine/backtest.py
+          kini_engine/cli.py
+          kini_engine/ledger.py
+          kini_engine/diagnostics.py
+          scripts/analyze_prediction_ledger.py
+          tests/test_backtest.py
+          tests/test_ledger.py
+          tests/test_prediction_diagnostics.py
+          kini_engine/coupons.py
+          kini_engine/coupon_identity.py
+          kini_engine/coupon_snapshot.py
+          tests/test_coupon_snapshot.py
+          scripts/import_historical_coupons.py
+          scripts/backtest_coupons.py
+          scripts/build_history.py
+          tests/test_build_history.py
+          tests/test_coupon_backtest.py
+          tests/test_coupon_identity.py
+          kini_engine/ticket_outcomes.py
+          scripts/score_selae_ticket.py
+          tests/test_ticket_outcomes.py
       - run: pytest -q

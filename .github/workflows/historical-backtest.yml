@@ -1,28 +1,128 @@
 name: historical-backtest
 
+permissions:
+  actions: read
+  contents: read
+
 on:
+  # Run after a model/data change is pushed to master. Feature branches are
+  # validated by the PR event below, avoiding duplicate push + PR backtests.
   push:
-    # The full walk-forward run is expensive. Documentation-only and workflow-only
-    # commits are covered by CI; run this benchmark when its inputs or code change.
+    branches: [master]
     paths:
       - "kini_engine/**"
       - "!kini_engine/team_identity.py"
+      - "!kini_engine/coupons.py"
+      - "!kini_engine/coupon_identity.py"
+      - "!kini_engine/coupon_snapshot.py"
+      - "!kini_engine/fixture_reconciliation.py"
+      - "!kini_engine/sources.py"
+      - "!kini_engine/mcp_server.py"
+      - "!kini_engine/ligaf_evidence.py"
+      - "!kini_engine/ligaf_history.py"
+      - "!kini_engine/ligaf_team_profiles.py"
       - "!kini_engine/data/**"
       - "scripts/build_history.py"
       - "scripts/diagnose_ml.py"
+      - "scripts/analyze_prediction_ledger.py"
       - "data/**"
+      - "!data/selae_fixture_crosswalk.json"
+      - "!data/ligaf_fixture_evidence.json"
+      - "!data/ligaf_history.jsonl"
+      - "!data/ligaf_history.profile.json"
+      - "!data/ligaf_team_profile_crosswalk.json"
       - "pyproject.toml"
       - "requirements*.txt"
+  pull_request:
+    types: [opened, reopened, synchronize]
   workflow_dispatch:
   schedule:
-    - cron: "17 4 * * 1"
+    - cron: "57 4 * * 1"
 
+# Do not cancel an expensive walk-forward run merely because a documentation
+# or evidence-only commit arrived. GitHub keeps one pending run per group.
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
+  changes:
+    if: github.event_name != 'push' || github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    outputs:
+      run_backtest: ${{ steps.filter.outputs.run_backtest }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - id: filter
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha || '' }}
+          PR_BRANCH: ${{ github.head_ref || '' }}
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" != "pull_request" ]]; then
+            echo "run_backtest=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Compare with the latest successful backtest for this PR branch,
+          # not merely the latest commit. Documentation-only commits arriving
+          # while a run is queued therefore cannot hide an unvalidated code change.
+          # The Actions API status filter accepts lifecycle states such as
+          # completed, not conclusions such as success. Select completed successful
+          # runs, then require the actual backtest job to have passed; a workflow
+          # whose backtest was skipped is not a validation baseline.
+          last_success=""
+          runs_json="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/historical-backtest.yml/runs?branch=$PR_BRANCH&event=pull_request&status=completed&per_page=100" 2>/dev/null || printf '{"workflow_runs":[]}')"
+          while read -r run_id head_sha; do
+            [[ -n "$run_id" && -n "$head_sha" ]] || continue
+            jobs_json="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/jobs?per_page=100" 2>/dev/null || printf '{"jobs":[]}')"
+            if jq -e '[.jobs[]? | select(.name == "backtest" and .conclusion == "success")] | length > 0' <<<"$jobs_json" >/dev/null; then
+              last_success="$head_sha"
+              break
+            fi
+          done < <(
+            jq -r '.workflow_runs[]? | select(.conclusion == "success") | [.id, .head_sha] | @tsv' <<<"$runs_json"
+          )
+          echo "Last successful backtest head: ${last_success:-none}"
+          if [[ -n "$last_success" ]] && git fetch --no-tags origin "$last_success"; then
+            if git merge-base --is-ancestor "$last_success" HEAD; then
+              changed_files="$(git diff --name-only "$last_success" HEAD)"
+            else
+              git fetch --no-tags --depth=1 origin "$PR_BASE_SHA"
+              changed_files="$(git diff --name-only "$PR_BASE_SHA" HEAD)"
+            fi
+          else
+            git fetch --no-tags --depth=1 origin "$PR_BASE_SHA"
+            changed_files="$(git diff --name-only "$PR_BASE_SHA" HEAD)"
+          fi
+
+          run_backtest=false
+          while IFS= read -r path; do
+            case "$path" in
+              AUDIT_PHASE1.md|docs/COUPON_BACKTEST.md|tests/*|.github/workflows/*|kini_engine/ticket_outcomes.py|scripts/score_selae_ticket.py)
+                ;;
+              kini_engine/team_identity.py|kini_engine/coupons.py|kini_engine/coupon_identity.py|kini_engine/coupon_snapshot.py|kini_engine/fixture_reconciliation.py|kini_engine/ligaf_evidence.py|kini_engine/ligaf_history.py|kini_engine/ligaf_team_profiles.py|kini_engine/sources.py|kini_engine/mcp_server.py|kini_engine/data/*)
+                ;;
+              data/selae_fixture_crosswalk.json|data/kinielagpt_fixture_kickoffs.json|data/ligaf_fixture_evidence.json|data/ligaf_history.jsonl|data/ligaf_history.profile.json|data/ligaf_team_profile_crosswalk.json)
+                ;;
+              kini_engine/*|scripts/build_history.py|scripts/diagnose_ml.py|scripts/analyze_prediction_ledger.py|data/*|pyproject.toml|requirements*.txt)
+                run_backtest=true
+                ;;
+            esac
+          done <<< "$changed_files"
+
+          echo "Changed files in latest PR commit:"
+          printf '%s\n' "$changed_files"
+          echo "run_backtest=$run_backtest" >> "$GITHUB_OUTPUT"
+          echo "Historical backtest required: $run_backtest"
+
   backtest:
+    needs: changes
+    if: needs.changes.outputs.run_backtest == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -30,12 +130,22 @@ jobs:
         with:
           python-version: "3.12"
       - run: python -m pip install -e ".[ml]"
-      - run: python scripts/build_history.py
+      - name: Restore Football-Data raw CSV cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .cache/football-data
+          key: football-data-${{ runner.os }}-${{ github.ref_name }}-${{ github.run_id }}
+          restore-keys: |
+            football-data-${{ runner.os }}-${{ github.ref_name }}-
+            football-data-${{ runner.os }}-
+      - run: python scripts/build_history.py --offline
       - name: Diagnose first ML forecast
         run: python scripts/diagnose_ml.py data/historical_spain.csv --min-train 300
       - name: Run historical comparison
+        env:
+          KINI_CODE_REVISION: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
-          python -m kini_engine.cli compare data/historical_spain.csv --min-train 300 --refit-every 30 > backtest-results.json
+          python -m kini_engine.cli compare data/historical_spain.csv --min-train 300 --refit-every 30 --ledger-jsonl prediction-ledger.jsonl > backtest-results.json
           cat backtest-results.json
       - name: Enforce non-empty model backtests
         run: |
@@ -59,6 +169,183 @@ jobs:
                       f"{error_count} prediction errors; first_error={errors.get('first_error')}"
                   )
           print(f"BACKTEST_ACCEPTANCE_OK: {total} fixtures for {', '.join(required)}")
+          PY
+
+      - name: Enforce per-fixture forecast ledger acceptance
+        run: |
+          python - <<'PY'
+          import json
+          import math
+          from datetime import date
+          from pathlib import Path
+
+          result = json.loads(Path("backtest-results.json").read_text())
+          ledger_path = Path("prediction-ledger.jsonl")
+          if not ledger_path.is_file() or ledger_path.stat().st_size == 0:
+              raise SystemExit("Per-fixture prediction ledger is missing or empty")
+
+          records = [
+              json.loads(line)
+              for line in ledger_path.read_text(encoding="utf-8").splitlines()
+              if line.strip()
+          ]
+          total = int(result.get("n_total", 0))
+          if len(records) != total + 1:
+              raise SystemExit(
+                  f"Ledger has {len(records) - 1} forecasts; expected {total}"
+              )
+          manifest, forecasts = records[0], records[1:]
+          if manifest.get("record_type") != "run_manifest":
+              raise SystemExit("Ledger does not start with a run manifest")
+          if manifest.get("schema_version") != 1:
+              raise SystemExit("Unsupported forecast ledger schema")
+          if manifest.get("forecast_count") != total:
+              raise SystemExit("Ledger manifest forecast count is inconsistent")
+          dataset_hash = manifest.get("dataset_sha256", "")
+          if len(dataset_hash) != 64 or any(
+              character not in "0123456789abcdef" for character in dataset_hash
+          ):
+              raise SystemExit("Ledger dataset SHA-256 is invalid")
+
+          required = (
+              "dc", "ml", "ensemble", "ensemble_dc_ml",
+              "ensemble_dc_ml_adaptive",
+          )
+          fixture_ids = set()
+          for index, row in enumerate(forecasts, start=1):
+              if row.get("record_type") != "forecast":
+                  raise SystemExit(f"Ledger row {index} is not a forecast")
+              fixture_id = row.get("fixture_id")
+              if not isinstance(fixture_id, str) or len(fixture_id) != 64:
+                  raise SystemExit(f"Ledger row {index} has an invalid fixture ID")
+              if fixture_id in fixture_ids:
+                  raise SystemExit(f"Duplicate fixture ID: {fixture_id}")
+              fixture_ids.add(fixture_id)
+
+              if row.get("actual_result") not in ("1", "X", "2"):
+                  raise SystemExit(f"Ledger row {index} has an invalid actual result")
+              try:
+                  forecast_date = date.fromisoformat(row["forecast_as_of_date"])
+                  training_cutoff = date.fromisoformat(row["training_cutoff_date"])
+                  model_fit_cutoff = date.fromisoformat(row["model_fit_cutoff_date"])
+              except (KeyError, TypeError, ValueError) as exc:
+                  raise SystemExit(f"Ledger row {index} has invalid date metadata: {exc}")
+              if training_cutoff >= forecast_date or model_fit_cutoff >= forecast_date:
+                  raise SystemExit(f"Ledger row {index} contains a non-prior training cutoff")
+
+              probabilities = row.get("model_probabilities", {})
+              if not set(required).issubset(probabilities):
+                  raise SystemExit(f"Ledger row {index} is missing model forecasts")
+              for mode in required:
+                  vector = probabilities[mode]
+                  if set(vector) != {"1", "X", "2"}:
+                      raise SystemExit(f"Ledger row {index} has malformed {mode} probabilities")
+                  values = [float(vector[sign]) for sign in ("1", "X", "2")]
+                  if (
+                      any(not math.isfinite(value) or not 0.0 <= value <= 1.0 for value in values)
+                      or not math.isclose(sum(values), 1.0, rel_tol=0.0, abs_tol=1e-6)
+                  ):
+                      raise SystemExit(f"Ledger row {index} has invalid {mode} probabilities")
+
+              if row.get("market_eligible") != (row.get("market_probabilities") is not None):
+                  raise SystemExit(f"Ledger row {index} violates market eligibility")
+              if row.get("lae_eligible") != (row.get("lae_probabilities") is not None):
+                  raise SystemExit(f"Ledger row {index} violates LAE eligibility")
+
+          print(
+              f"FORECAST_LEDGER_ACCEPTANCE_OK: {len(forecasts)} unique fixtures; "
+              "five model probability vectors per fixture; prior-date cutoffs"
+          )
+          PY
+
+      - name: Enforce cold-start fallback diagnostics
+        run: |
+          python - <<'PY'
+          import json
+          import math
+          from pathlib import Path
+
+          result = json.loads(Path("backtest-results.json").read_text())
+          report = result.get("cold_start_fallbacks", {})
+          models = report.get("models", {})
+          required = ("dc", "ml", "ensemble", "ensemble_dc_ml", "ensemble_dc_ml_adaptive")
+
+          if not report.get("source") or not isinstance(models, dict):
+              raise SystemExit("Cold-start fallback diagnostics are missing")
+          counts = {}
+          season_counts = {}
+          for name in required:
+              summary = models.get(name, {})
+              n_predictions = int(summary.get("n_predictions", 0))
+              count = int(summary.get("count", -1))
+              examples = summary.get("examples", [])
+              rate = summary.get("rate")
+              expected_n = int(result.get(name, {}).get("n", 0))
+              if n_predictions != expected_n or expected_n != int(result.get("n_total", 0)):
+                  raise SystemExit(
+                      f"{name} cold-start denominator {n_predictions} does not match "
+                      f"successful forecasts {expected_n}"
+                  )
+              if count < 0 or count > n_predictions:
+                  raise SystemExit(f"{name} has invalid cold-start count {count}/{n_predictions}")
+              if not math.isclose(float(rate), count / n_predictions, rel_tol=0.0, abs_tol=1e-12):
+                  raise SystemExit(f"{name} cold-start rate disagrees with its count")
+              if not isinstance(examples, list) or len(examples) != min(count, 20):
+                  raise SystemExit(f"{name} cold-start examples are incomplete")
+              counts[name] = count
+
+              season_rows = summary.get("by_season")
+              if not isinstance(season_rows, list) or not season_rows:
+                  raise SystemExit(f"{name} has no per-season cold-start diagnostics")
+              season_counts[name] = {}
+              season_prediction_total = 0
+              season_fallback_total = 0
+              for season in season_rows:
+                  if not isinstance(season, dict):
+                      raise SystemExit(f"{name} has a malformed season diagnostic")
+                  league = str(season.get("league", "")).strip()
+                  season_code = str(season.get("season_code", "")).strip()
+                  season_label = str(season.get("season_label", "")).strip()
+                  key = (league, season_code)
+                  if not league or not season_code or not season_label:
+                      raise SystemExit(f"{name} has incomplete season identity: {season}")
+                  if key in season_counts[name]:
+                      raise SystemExit(f"{name} has duplicate season bucket: {key}")
+                  season_n = int(season.get("n_predictions", 0))
+                  season_count = int(season.get("count", -1))
+                  if season_n <= 0 or season_count < 0 or season_count > season_n:
+                      raise SystemExit(f"{name} has invalid season cold-start counts: {season}")
+                  try:
+                      season_rate = float(season.get("rate"))
+                  except (TypeError, ValueError):
+                      raise SystemExit(f"{name} has invalid season cold-start rate: {season}")
+                  if not math.isfinite(season_rate) or not math.isclose(
+                      season_rate, season_count / season_n, rel_tol=0.0, abs_tol=1e-12
+                  ):
+                      raise SystemExit(f"{name} season cold-start rate disagrees with its count")
+                  season_prediction_total += season_n
+                  season_fallback_total += season_count
+                  season_counts[name][key] = season_count
+
+              if season_prediction_total != n_predictions or season_fallback_total != count:
+                  raise SystemExit(
+                      f"{name} season totals disagree with aggregate counts: "
+                      f"predictions={season_prediction_total}/{n_predictions}, "
+                      f"fallbacks={season_fallback_total}/{count}"
+                  )
+
+          if counts["ml"] != 0:
+              raise SystemExit("ML-only forecasts must not report Dixon-Coles cold-start use")
+          dc_dependent = ("ensemble", "ensemble_dc_ml", "ensemble_dc_ml_adaptive")
+          if any(counts[name] != counts["dc"] for name in dc_dependent):
+              raise SystemExit(f"DC-dependent streams disagree on fallback use: {counts}")
+          if any(season_counts[name] != season_counts["dc"] for name in dc_dependent):
+              raise SystemExit("DC-dependent streams disagree on per-season cold-start counts")
+
+          print(
+              f"COLD_START_DIAGNOSTICS_OK: {counts}; "
+              f"season groups={len(season_counts['dc'])}"
+          )
           PY
 
       - name: Enforce schedule-screened market sample acceptance
@@ -112,6 +399,364 @@ jobs:
               "MARKET_TEMPORAL_ACCEPTANCE_OK: "
               f"{n_eligible}/{n_with_odds} schedule-screened odds; "
               "all model/market comparisons use identical fixtures"
+          )
+          PY
+
+      - name: Enforce common-information-time market comparison
+        run: |
+          python - <<'PY'
+          import json
+          from datetime import date
+          from pathlib import Path
+
+          result = json.loads(Path("backtest-results.json").read_text())
+          strict = result.get("strict_common_time_market", {})
+          n_schedule = int(strict.get("n_schedule_eligible", 0))
+          n_common = int(strict.get("n_common_time_eligible", 0))
+          n_excluded = int(strict.get("n_excluded_from_common_time_sample", -1))
+          market = strict.get("market", {})
+          if n_schedule <= 0 or n_common <= 0 or n_common > n_schedule:
+              raise SystemExit(
+                  f"Common-information-time market sample is invalid: "
+                  f"eligible={n_common}, schedule_eligible={n_schedule}"
+              )
+          if n_excluded != n_schedule - n_common or int(market.get("n", 0)) != n_common:
+              raise SystemExit("Common-time market counts are inconsistent")
+          expected_rule = (
+              "training_cutoff_date < market_snapshot_date and "
+              "model_fit_cutoff_date < market_snapshot_date"
+          )
+          if strict.get("cutoff_rule") != expected_rule:
+              raise SystemExit("Common-time cutoff rule is missing or changed")
+          required = (
+              "dc", "ml", "ensemble", "ensemble_dc_ml",
+              "ensemble_dc_ml_adaptive",
+          )
+          common = strict.get("common_sample", {})
+          for name in required:
+              sample = common.get(name, {})
+              model_n = int(sample.get("model", {}).get("n", 0))
+              market_n = int(sample.get("market", {}).get("n", 0))
+              if (
+                  int(sample.get("n", 0)) != n_common
+                  or model_n != n_common
+                  or market_n != n_common
+              ):
+                  raise SystemExit(
+                      f"{name} does not share the common-information-time fixtures: "
+                      f"sample={sample.get('n')}, model={model_n}, market={market_n}, "
+                      f"expected={n_common}"
+                  )
+
+          records = [
+              json.loads(line)
+              for line in Path("prediction-ledger.jsonl")
+              .read_text(encoding="utf-8")
+              .splitlines()
+              if line.strip()
+          ]
+          forecasts = records[1:]
+          eligible_count = 0
+          for index, row in enumerate(forecasts, start=1):
+              if not isinstance(row.get("strict_common_time_eligible"), bool):
+                  raise SystemExit(f"Ledger row {index} has no strict common-time status")
+              if row.get("market_eligible"):
+                  snapshot_raw = row.get("market_snapshot_date")
+                  if not isinstance(snapshot_raw, str):
+                      if row["strict_common_time_eligible"]:
+                          raise SystemExit(f"Ledger row {index} lacks its snapshot date")
+                      continue
+                  snapshot = date.fromisoformat(snapshot_raw)
+                  training_cutoff = date.fromisoformat(row["training_cutoff_date"])
+                  model_fit_cutoff = date.fromisoformat(row["model_fit_cutoff_date"])
+                  should_be_eligible = (
+                      training_cutoff < snapshot and model_fit_cutoff < snapshot
+                  )
+                  if row["strict_common_time_eligible"] != should_be_eligible:
+                      raise SystemExit(
+                          f"Ledger row {index} strict eligibility conflicts with cutoffs"
+                      )
+                  if should_be_eligible:
+                      eligible_count += 1
+              elif row["strict_common_time_eligible"]:
+                  raise SystemExit(f"Ledger row {index} uses an ineligible market row")
+
+          if eligible_count != n_common:
+              raise SystemExit(
+                  f"Ledger strict eligible count {eligible_count} != result count {n_common}"
+              )
+
+          strict_bet365 = result.get("strict_common_time_bet365", {})
+          b365_schedule = int(strict_bet365.get("n_schedule_eligible", 0))
+          b365_common = int(strict_bet365.get("n_common_time_eligible", 0))
+          b365_metrics_n = int(strict_bet365.get("metrics", {}).get("n", 0))
+          b365_excluded = int(
+              strict_bet365.get("n_excluded_from_common_time_sample", -1)
+          )
+          if (
+              b365_schedule <= 0
+              or b365_common <= 0
+              or b365_common > b365_schedule
+              or b365_excluded != b365_schedule - b365_common
+              or b365_metrics_n != b365_common
+          ):
+              raise SystemExit("Strict common-time Bet365 sample is invalid")
+          if strict_bet365.get("source_columns") != ["B365H", "B365D", "B365A"]:
+              raise SystemExit("Strict common-time Bet365 source columns are not explicit")
+          for name in required:
+              sample = strict_bet365.get("common_sample", {}).get(name, {})
+              component_sizes = {
+                  component: int(sample.get(component, {}).get("n", 0))
+                  for component in ("model", "market_consensus", "bet365")
+              }
+              if int(sample.get("n", 0)) != b365_common or any(
+                  count != b365_common for count in component_sizes.values()
+              ):
+                  raise SystemExit(
+                      f"{name} does not share the strict common-time Bet365 fixtures: "
+                      f"sample={sample.get('n')}, components={component_sizes}, "
+                      f"expected={b365_common}"
+                  )
+
+          print(
+              "COMMON_INFORMATION_TIME_ACCEPTANCE_OK: "
+              f"consensus={n_common}/{n_schedule}; "
+              f"Bet365={b365_common}/{b365_schedule}; "
+              "all model streams share their exact pre-snapshot fixture samples"
+          )
+          PY
+
+      - name: Enforce snapshot-aligned common-time market benchmark
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          import re
+          from datetime import date
+          from pathlib import Path
+
+          from kini_engine.ledger import read_prediction_ledger
+
+          result = json.loads(Path("backtest-results.json").read_text())
+          snapshot = result.get("snapshot_aligned_market")
+          if not isinstance(snapshot, dict):
+              raise SystemExit(
+                  "Snapshot-aligned benchmark is missing; the existing-cutoff "
+                  "filter is not a substitute for refitting at the market snapshot"
+              )
+
+          minimum = 500
+          n_common = int(snapshot.get("n_common_time_eligible", 0))
+          n_snapshots = int(snapshot.get("n_snapshot_dates", 0))
+          if n_snapshots <= 0 or n_common < minimum:
+              raise SystemExit(
+                  f"Snapshot-aligned sample is insufficient: n={n_common}, "
+                  f"snapshot_dates={n_snapshots}, required_n>={minimum}"
+              )
+
+          expected_rule = (
+              "completed_result_date < market_snapshot_date; "
+              "refit once per snapshot date"
+          )
+          if snapshot.get("training_rule") != expected_rule:
+              raise SystemExit("Snapshot-aligned training rule is missing or changed")
+
+          required = (
+              "dc", "ml", "ensemble", "ensemble_dc_ml",
+              "ensemble_dc_ml_adaptive",
+          )
+          common = snapshot.get("common_sample", {})
+          errors = snapshot.get("prediction_errors", {})
+          fixture_ids_sha256 = snapshot.get("fixture_ids_sha256")
+          if not isinstance(fixture_ids_sha256, str) or not re.fullmatch(
+              r"[0-9a-f]{64}", fixture_ids_sha256
+          ):
+              raise SystemExit("Snapshot-aligned fixture-set SHA-256 is invalid")
+
+          for name in required:
+              sample = common.get(name, {})
+              sample_n = int(sample.get("n", 0))
+              model_n = int(sample.get("model", {}).get("n", 0))
+              market_n = int(sample.get("market", {}).get("n", 0))
+              error_count = int(errors.get(name, {}).get("count", -1))
+              if (
+                  sample_n < minimum
+                  or model_n != sample_n
+                  or market_n != sample_n
+                  or error_count != 0
+                  or sample.get("fixture_ids_sha256") != fixture_ids_sha256
+              ):
+                  raise SystemExit(
+                      f"{name} failed snapshot-aligned acceptance: "
+                      f"sample={sample_n}, model={model_n}, market={market_n}, "
+                      f"errors={error_count}, fixture_hash="
+                      f"{sample.get('fixture_ids_sha256')}, required_n>={minimum}"
+                  )
+
+          snapshots = snapshot.get("snapshots")
+          if not isinstance(snapshots, list) or len(snapshots) != n_snapshots:
+              raise SystemExit("Snapshot fit audit is missing or inconsistent")
+          if int(snapshot.get("model_fit_count", -1)) != n_snapshots:
+              raise SystemExit("There must be exactly one model fit per snapshot date")
+
+          snapshots_by_date = {}
+          for item in snapshots:
+              if not isinstance(item, dict):
+                  raise SystemExit("Snapshot fit audit contains a malformed entry")
+              snapshot_date = date.fromisoformat(item["snapshot_date"])
+              training_cutoff = date.fromisoformat(item["training_cutoff_date"])
+              history_hash = item.get("training_history_sha256")
+              if training_cutoff >= snapshot_date:
+                  raise SystemExit(
+                      f"Snapshot {snapshot_date} includes same-day or future training data"
+                  )
+              if (
+                  not isinstance(history_hash, str)
+                  or not re.fullmatch(r"[0-9a-f]{64}", history_hash)
+                  or int(item.get("model_fit_count", 0)) != 1
+              ):
+                  raise SystemExit(f"Snapshot {snapshot_date} has invalid fit provenance")
+              if int(item.get("common_prediction_count", -1)) != int(
+                  item.get("fixture_count", 0)
+              ):
+                  raise SystemExit(
+                      f"Snapshot {snapshot_date} did not predict every eligible fixture"
+                  )
+              if snapshot_date.isoformat() in snapshots_by_date:
+                  raise SystemExit(f"Duplicate snapshot date: {snapshot_date}")
+              snapshots_by_date[snapshot_date.isoformat()] = item
+
+          ledger_meta = snapshot.get("forecast_ledger", {})
+          ledger_path = Path(ledger_meta.get("path", ""))
+          ledger_hash = ledger_meta.get("sha256")
+          if (
+              not ledger_path.is_file()
+              or not isinstance(ledger_hash, str)
+              or not re.fullmatch(r"[0-9a-f]{64}", ledger_hash)
+          ):
+              raise SystemExit("Snapshot-aligned forecast ledger is missing")
+          manifest, forecasts = read_prediction_ledger(
+              ledger_path,
+              expected_sha256=ledger_hash,
+          )
+          if (
+              len(forecasts) != n_common
+              or int(manifest.get("forecast_count", 0)) != n_common
+              or not set(required).issubset(manifest.get("model_modes", []))
+          ):
+              raise SystemExit("Snapshot-aligned ledger count or model contract is invalid")
+
+          ledger_counts = {}
+          fixture_ids = []
+          for row in forecasts:
+              snapshot_date = row.get("market_snapshot_date")
+              if snapshot_date not in snapshots_by_date:
+                  raise SystemExit("Ledger row references an unknown market snapshot")
+              audit = snapshots_by_date[snapshot_date]
+              fixture_date = date.fromisoformat(row["fixture_date"])
+              cutoff = date.fromisoformat(row["training_cutoff_date"])
+              if (
+                  row.get("forecast_as_of_date") != snapshot_date
+                  or date.fromisoformat(snapshot_date) >= fixture_date
+                  or cutoff >= date.fromisoformat(snapshot_date)
+                  or row.get("model_fit_cutoff_date") != row["training_cutoff_date"]
+                  or row.get("training_history_sha256")
+                  != audit.get("training_history_sha256")
+                  or int(row.get("training_match_count", 0))
+                  != int(audit.get("training_match_count", -1))
+                  or int(row.get("model_fit_match_count", 0))
+                  != int(audit.get("training_match_count", -1))
+                  or row.get("market_eligible") is not True
+              ):
+                  raise SystemExit(
+                      f"Snapshot ledger row {row.get('forecast_index')} violates "
+                      "its snapshot training contract"
+                  )
+              if int(row.get("model_fit_count_for_snapshot", 0)) != 1:
+                  raise SystemExit("A fixture does not reference exactly one snapshot fit")
+              ledger_counts[snapshot_date] = ledger_counts.get(snapshot_date, 0) + 1
+              fixture_ids.append(row["fixture_id"])
+
+          for snapshot_date, audit in snapshots_by_date.items():
+              if ledger_counts.get(snapshot_date, 0) != int(
+                  audit.get("common_prediction_count", 0)
+              ):
+                  raise SystemExit(
+                      f"Snapshot ledger count disagrees for {snapshot_date}"
+                  )
+
+          calculated_hash = hashlib.sha256(
+              "\n".join(sorted(fixture_ids)).encode("utf-8")
+          ).hexdigest()
+          if calculated_hash != fixture_ids_sha256:
+              raise SystemExit("Snapshot ledger fixture IDs disagree with benchmark metrics")
+
+          print(
+              "SNAPSHOT_ALIGNED_MARKET_ACCEPTANCE_OK: "
+              f"{n_common} common fixtures across {n_snapshots} snapshot dates; "
+              "one fit per snapshot, strictly prior training history, identical "
+              "model/market fixtures and a validated immutable forecast ledger"
+          )
+          PY
+
+      - name: Enforce fixed-book Bet365 benchmark acceptance
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          result = json.loads(Path("backtest-results.json").read_text())
+          benchmark = result.get("bookmaker_benchmarks", {}).get("bet365", {})
+          n_with_odds = int(benchmark.get("n_with_odds", 0))
+          n_eligible = int(benchmark.get("n_schedule_eligible", 0))
+          n_excluded = int(benchmark.get("n_excluded", -1))
+          metrics_n = int(benchmark.get("metrics", {}).get("n", 0))
+          status_counts = {
+              str(status): int(count)
+              for status, count in benchmark.get("status_counts", {}).items()
+          }
+
+          if n_with_odds <= 0 or n_eligible <= 0:
+              raise SystemExit("Fixed-book Bet365 benchmark is empty")
+          if n_eligible > n_with_odds or n_excluded != n_with_odds - n_eligible:
+              raise SystemExit("Bet365 eligible/excluded counts are inconsistent")
+          if metrics_n != n_eligible or sum(status_counts.values()) != n_with_odds:
+              raise SystemExit("Bet365 metrics or temporal status counts are inconsistent")
+          if sum(
+              count for status, count in status_counts.items()
+              if status != "schedule_compatible"
+          ) != n_excluded:
+              raise SystemExit("Bet365 excluded count disagrees with temporal statuses")
+
+          required = (
+              "dc", "ml", "ensemble", "ensemble_dc_ml",
+              "ensemble_dc_ml_adaptive",
+          )
+          common = benchmark.get("common_sample", {})
+          for name in required:
+              sample = common.get(name, {})
+              sample_n = int(sample.get("n", 0))
+              component_sizes = {
+                  component: int(sample.get(component, {}).get("n", 0))
+                  for component in ("model", "market_consensus", "bet365")
+              }
+              if sample_n != n_eligible or any(
+                  count != n_eligible for count in component_sizes.values()
+              ):
+                  raise SystemExit(
+                      f"{name} is not compared on the exact Bet365 common sample: "
+                      f"expected={n_eligible}, sample={sample_n}, "
+                      f"components={component_sizes}"
+                  )
+
+          if benchmark.get("source_columns") != ["B365H", "B365D", "B365A"]:
+              raise SystemExit("Bet365 source columns are not explicit")
+          if not benchmark.get("limitation"):
+              raise SystemExit("Bet365 capture-time limitation is undocumented")
+          print(
+              "BET365_BENCHMARK_ACCEPTANCE_OK: "
+              f"{n_eligible}/{n_with_odds} schedule-screened odds; "
+              "all five model streams and consensus share the exact sample"
           )
           PY
 
@@ -183,9 +828,19 @@ jobs:
           )
           PY
 
+      - name: Analyze archived prediction errors and verify dataset snapshot
+        run: |
+          python scripts/analyze_prediction_ledger.py prediction-ledger.jsonl --results-json backtest-results.json --dataset-csv data/historical_spain.csv --dataset-profile data/historical_spain.profile.json --output prediction-diagnostics.json --min-segment-n 100
+
       - name: Upload backtest results
         uses: actions/upload-artifact@v4
         with:
           name: historical-backtest
-          path: backtest-results.json
-          retention-days: 30
+          path: |
+            backtest-results.json
+            prediction-ledger.jsonl
+            prediction-diagnostics.json
+            snapshot-aligned-prediction-ledger.jsonl
+            data/historical_spain.csv
+            data/historical_spain.profile.json
+          retention-days: 90

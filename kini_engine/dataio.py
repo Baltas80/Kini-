@@ -1,13 +1,14 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+import unicodedata
+from datetime import UTC, datetime
 from math import isfinite
 from pathlib import Path
-import unicodedata
 
+import numpy as np
 import pandas as pd
 
-from .core import Match, SIGNS
+from .core import SIGNS, Match
 
 
 def _parse_match_date(value: datetime | str) -> datetime:
@@ -15,7 +16,7 @@ def _parse_match_date(value: datetime | str) -> datetime:
         return value
     raw = str(value).strip()
     try:
-        return datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        return datetime.fromisoformat(raw)
     except ValueError:
         pass
     for fmt in ("%d/%m/%Y", "%d/%m/%y", "%Y/%m/%d", "%m/%d/%Y"):
@@ -78,6 +79,10 @@ def _market_temporal_status(
 
 
 def _optional_goal(value: object, row_number: int, column: str) -> int | None:
+    if isinstance(value, (bool, np.bool_)):
+        raise TypeError(
+            f"CSV row {row_number}: {column} must be a non-negative integer"
+        )
     if pd.isna(value):
         return None
     try:
@@ -89,46 +94,75 @@ def _optional_goal(value: object, row_number: int, column: str) -> int | None:
     return int(numeric)
 
 
-def _market_from_row(
+BOOKMAKER_ODDS_COLUMNS = {
+    "bet365": ("B365H", "B365D", "B365A"),
+    "william_hill": ("WHH", "WHD", "WHA"),
+    "vc": ("VCH", "VCD", "VCA"),
+    "pinnacle": ("PSH", "PSD", "PSA"),
+}
+
+
+def _bookmaker_probabilities_from_row(
     row: pd.Series,
     match_date: datetime | str | None = None,
-) -> dict[str, float] | None:
-    books = (
-        ("B365H", "B365D", "B365A"),
-        ("WHH", "WHD", "WHA"),
-        ("VCH", "VCD", "VCA"),
-        ("PSH", "PSD", "PSA"),
-    )
-    # Football-Data warns that Pinnacle's public odds feed has been stale
-    # since 2025-07-23. Do not blend PSH/PSD/PSA into later market features.
+) -> dict[str, dict[str, float]]:
+    """Return each bookmaker's no-vig 1/X/2 vector from pre-closing odds.
+
+    Football-Data warns that Pinnacle's public odds feed has been stale since
+    2025-07-23. Its values are excluded from that date onward.
+    """
+    books = dict(BOOKMAKER_ODDS_COLUMNS)
     if match_date is not None:
         try:
             odds_date = _parse_match_date(match_date).date()
         except (TypeError, ValueError):
             odds_date = None
         if odds_date is not None and odds_date >= datetime(2025, 7, 23).date():
-            books = tuple(book for book in books if book[0] != "PSH")
+            books.pop("pinnacle", None)
 
-    estimates: list[dict[str, float]] = []
-    for h_col, d_col, a_col in books:
-        if not all(col in row.index for col in (h_col, d_col, a_col)):
+    estimates: dict[str, dict[str, float]] = {}
+    for bookmaker, columns in books.items():
+        if not all(column in row.index for column in columns):
             continue
         try:
-            odds = [float(row[h_col]), float(row[d_col]), float(row[a_col])]
+            odds = [float(row[column]) for column in columns]
         except (TypeError, ValueError):
             continue
         if any(not isfinite(value) or value <= 1.0 for value in odds):
             continue
-        inv = [1.0 / value for value in odds]
-        total = sum(inv)
-        if total > 0:
-            estimates.append(dict(zip(SIGNS, (value / total for value in inv))))
-    if not estimates:
+
+        implied = [1.0 / value for value in odds]
+        overround = sum(implied)
+        if overround > 0.0:
+            estimates[bookmaker] = {
+                sign: float(probability / overround)
+                for sign, probability in zip(SIGNS, implied)
+            }
+    return estimates
+
+
+def _market_from_bookmaker_probabilities(
+    bookmaker_probabilities: dict[str, dict[str, float]],
+) -> dict[str, float] | None:
+    """Build the existing equal-weight consensus from available bookmaker vectors."""
+    if not bookmaker_probabilities:
         return None
     return {
-        sign: float(sum(item[sign] for item in estimates) / len(estimates))
+        sign: float(
+            sum(vector[sign] for vector in bookmaker_probabilities.values())
+            / len(bookmaker_probabilities)
+        )
         for sign in SIGNS
     }
+
+
+def _market_from_row(
+    row: pd.Series,
+    match_date: datetime | str | None = None,
+) -> dict[str, float] | None:
+    """Return the equal-weight no-vig bookmaker consensus."""
+    bookmaker_probabilities = _bookmaker_probabilities_from_row(row, match_date)
+    return _market_from_bookmaker_probabilities(bookmaker_probabilities)
 
 
 RESULT_MAP = {"H": "1", "D": "X", "A": "2", "1": "1", "X": "X", "2": "2"}
@@ -174,7 +208,11 @@ def load_matches_csv(path: str | Path) -> list[Match]:
         detail["kickoff_time"] = kickoff_time
         detail["kickoff_time_timezone"] = "unspecified" if kickoff_time else None
 
-        market = _market_from_row(row, row["Date"])
+        bookmaker_probabilities = _bookmaker_probabilities_from_row(
+            row, row["Date"]
+        )
+        market = _market_from_bookmaker_probabilities(bookmaker_probabilities)
+        detail["market_bookmaker_probabilities"] = bookmaker_probabilities
         temporal_status = _market_temporal_status(
             row["Date"], kickoff_time, market_available=market is not None
         )
@@ -261,9 +299,12 @@ def build_dataset_profile(
     retrieved_at: datetime | None = None,
 ) -> dict[str, object]:
     """Build a reproducible quality/coverage profile for a downloaded dataset."""
-    retrieved_at = retrieved_at or datetime.now(timezone.utc)
+    retrieved_at = retrieved_at or datetime.now(UTC)
+    date_values = (
+        raw_frame["Date"].tolist() if "Date" in raw_frame else [None] * len(raw_frame)
+    )
     parsed_dates: list[datetime | None] = []
-    for value in raw_frame.get("Date", pd.Series(dtype=object)).tolist():
+    for value in date_values:
         try:
             parsed_dates.append(_parse_match_date(value) if pd.notna(value) else None)
         except (TypeError, ValueError):
@@ -278,8 +319,8 @@ def build_dataset_profile(
     }
 
     duplicate_keys: list[tuple[str, str, str, str]] = []
-    for idx, row in raw_frame.iterrows():
-        date_value = parsed_dates[idx] if idx < len(parsed_dates) else None
+    for position, (_, row) in enumerate(raw_frame.iterrows()):
+        date_value = parsed_dates[position]
         if date_value is None or pd.isna(row.get("HomeTeam")) or pd.isna(row.get("AwayTeam")):
             continue
         league = str(row.get("Div", row.get("League", ""))).strip().casefold()
@@ -320,10 +361,10 @@ def build_dataset_profile(
         counts = {f"{league}/{season}": int(count) for (league, season), count in grouped.items()}
 
     return {
-        "retrieved_at_utc": retrieved_at.astimezone(timezone.utc).isoformat(),
+        "retrieved_at_utc": retrieved_at.astimezone(UTC).isoformat(),
         "source_urls": sorted(set(source_urls)),
-        "rows_before_filter": int(len(raw_frame)),
-        "rows_after_filter": int(len(final_frame)),
+        "rows_before_filter": len(raw_frame),
+        "rows_after_filter": len(final_frame),
         "date_coverage": {
             "start": min(value.date().isoformat() for value in valid_dates) if valid_dates else None,
             "end": max(value.date().isoformat() for value in valid_dates) if valid_dates else None,
