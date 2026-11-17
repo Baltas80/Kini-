@@ -365,3 +365,35 @@ HistoricalQuiniela reports the first Jornada 22 kickoff on 19 December 2020 at 1
 
 
 The first three-coupon execution confirmed the official result/Pleno extracts and exact Football-Data reconciliation for all 15 Jornada 22 fixtures, but stopped before modelling because the strict alias crosswalk lacked the source label `Cartagena`. The crosswalk now maps it explicitly to the canonical Football-Data identity `team:es:cartagena`, and a regression test verifies the mapping. The failed run is retained as evidence of the missing-alias defect; it is not counted as a successful pilot. A new run on the corrected branch must pass the full import, common-cutoff model evaluation and acceptance gate.
+
+
+## Three-coupon pilot — validated 2026-11-17
+
+The corrected pilot passed in [GitHub Actions run 44135127064](https://github.com/Baltas80/Kini-/actions/runs/44135127064), on functional code revision `e71cd2319682f8c50748090a5f76084756a0bf69`. The later HEAD `1c6447957bf39d0fb2055f118ff62491130b8b40` contains only test-formatting and documentation changes; its CI passed separately.
+
+Acceptance evidence:
+- Three official SELAE snapshots: Jornadas 19, 21 and 22.
+- 45/45 fixtures reconciled in order to Football-Data (14 main fixtures plus Pleno per coupon).
+- All three official result/Pleno snapshots verified; the exact normalized JSON bytes are hashed into the archive.
+- Nine successful model/coupon evaluations: DC, ML and fixed DC/ML ensemble on each of three coupons.
+- Fourteen 1/X/2 predictions per model/coupon (126 forecasts total), no model errors or empty prediction sets.
+- Training histories are strictly pre-first-kickoff: 277 matches through 2020-12-04; 303 through 2020-12-11; 325 through 2020-12-18.
+- Each ticket uses eight direct columns, three doubles, zero triples, eight payable bets and €6.00 cost per coupon.
+
+| Coupon | First kickoff (Europe/Madrid) | Training cutoff | Training matches | DC single/best | ML single/best | Ensemble single/best |
+|---|---|---|---:|---:|---:|---:|
+| 2020-2021:19 | 2020-12-05 14:00 | 2020-12-04 | 277 | 5 / 6 | 6 / 7 | 4 / 7 |
+| 2020-2021:21 | 2020-12-12 14:00 | 2020-12-11 | 303 | 7 / 7 | 5 / 6 | 7 / 8 |
+| 2020-2021:22 | 2020-12-19 14:00 | 2020-12-18 | 325 | 6 / 7 | 7 / 7 | 6 / 7 |
+
+`single/best` means correct signs in the model's single-sign forecast / maximum hits among the eight generated columns. Mean best-column hits were 6.67 (DC), 6.67 (ML) and 7.33 (ensemble); mean single-sign hits were 6.00, 6.00 and 5.67 respectively. None of the nine evaluations covered all 14 main signs, none hit the selected Pleno pair, and none covered the complete 15-match coupon.
+
+The selected Pleno pairs were 0–1 for Jornada 19 (actual 0–0), 1–1 for Jornada 21 (actual M–0), and 0–1 for Jornada 22 (actual 1–M). This is a separate Dixon–Coles category-pair forecast; it is not an ML Pleno prediction.
+
+The model candidates each cost €6 per coupon, or €18 over the three coupons. This is ticket cost only. The official prize table in the Jornada 22 snapshot is not applied as actual payout: no sales receipt/official participation is evidenced, and hypothetical extra entries could change pari-mutuel winner counts. `payout_evaluated` and `profitability_evaluated` remain false.
+
+The three draws are a small, temporally adjacent pipeline sample. They are not sufficient for model selection, calibrated-performance claims, hit-rate estimation, or profitability claims. This coupon workflow does not calculate Brier Score or Log Loss; the full fixture-level historical model workflow was skipped by its change filter in this run.
+
+Artifact: [quiniela-coupon-pilot, ID 14350339610](https://github.com/Baltas80/Kini-/actions/runs/44135127064/artifacts/14350339610), ZIP SHA-256 `281741eab1469ed978952154a732cd605d8784746bac3138c26042496bd5d894`.
+
+Jornada 22 normalized snapshot SHA-256: `71f0577f4c8deb6e0560a29169d858fb0eac4a37ab7333f32e5f5126c11b2f8c`. The raw SELAE PDF bytes were not captured, so this is not a PDF hash.
