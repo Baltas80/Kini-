@@ -11,7 +11,7 @@
 - **Ticket ledger:** append time is now checked against ticket creation and cutoff; four regression tests and an engine integration-clock fixture were added. The host clock is not a trusted timestamp.
 - **Still open:** Pleno al 15 scoring in the persistent ledger, coupon-level backtesting, official payout/expected-return evaluation, and exact per-fixture market capture timestamps.
 - **No PR has been merged and master has not been modified.**
-- **Latest branch head:** 5bb724017d698888fd5de43e841d559d147b06e9 (timestamp-guard code/tests). Audit-document follow-up commits do not change model code. Historical workflow [run 44083169443](https://github.com/Baltas80/Kini-/actions/runs/44083169443) completed with the backtest job skipped because only ledger/docs/tests changed; coupon pilot [run 44083168674](https://github.com/Baltas80/Kini-/actions/runs/44083168674) was also skipped and is not a coupon validation.
+- **Latest code/test head:** 5bb724017d698888fd5de43e841d559d147b06e9; current branch head c9135327d531d3dcb8de4213a9614697305b2c98 adds only audit documentation after that. Historical workflow [run 44083169443](https://github.com/Baltas80/Kini-/actions/runs/44083169443) completed with the backtest job skipped because only ledger/docs/tests changed; coupon pilot [run 44083168674](https://github.com/Baltas80/Kini-/actions/runs/44083168674) was also skipped and is not a coupon validation.
 
 Date: 2026-11-15  
 Repository: Baltas80/Kini-  
