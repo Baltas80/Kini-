@@ -969,6 +969,7 @@ def _validate_ticket_record(ticket: dict[str, Any]) -> dict[str, Any]:
         "cost_eur": float(cost),
     }
 
+
 def validate_ticket_record(ticket: dict[str, Any]) -> dict[str, Any]:
     """Public structural validator for an immutable direct-ticket record."""
     return _validate_ticket_record(ticket)
