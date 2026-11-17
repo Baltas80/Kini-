@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import hashlib
+import json
 from copy import deepcopy
+from datetime import datetime, timezone
+from pathlib import Path
 
 import pytest
 
@@ -9,6 +13,7 @@ from kini_engine.ticket_outcomes import (
     build_ticket_probability_vectors,
     outcomes_from_reconciliation,
     score_ticket_record,
+    validate_pleno15_report,
     validate_preclose_public_draw_snapshot,
 )
 
@@ -247,6 +252,52 @@ def _pleno15_report() -> dict[str, object]:
         "home_category": "2",
         "away_category": "M",
     }
+
+
+def test_pleno15_validator_accepts_committed_official_selae_extract() -> None:
+    snapshot_path = (
+        Path(__file__).parents[1]
+        / "kini_engine"
+        / "data"
+        / "selae_official_coupon_results"
+        / "2020-2021-21.json"
+    )
+    raw = snapshot_path.read_bytes()
+    snapshot = json.loads(raw)
+    pleno = snapshot["pleno"]
+    report = {
+        "schema_version": 1,
+        "provider": "SELAE",
+        "draw_date": snapshot["draw_date"],
+        "source_url": snapshot["source_url"],
+        "source_sha256": hashlib.sha256(raw).hexdigest(),
+        "evidence_type": "normalized_official_extract",
+        # Test-only timestamp; the committed historical snapshot stores a date,
+        # not a trusted time-of-day attestation.
+        "verified_at_utc": "2026-11-17T12:00:00Z",
+        "verification_method": "Unit test of the committed normalized SELAE extract.",
+        "home": pleno["home"],
+        "away": pleno["away"],
+        "home_goals": pleno["home_goals"],
+        "away_goals": pleno["away_goals"],
+        "home_category": pleno["home_category"],
+        "away_category": pleno["away_category"],
+    }
+
+    validated = validate_pleno15_report(
+        report,
+        draw_date=snapshot["draw_date"],
+        expected_home=pleno["home"],
+        expected_away=pleno["away"],
+        # Only a lower bound for temporal validation in this unit test.
+        kickoff_at=datetime(2020, 12, 13, tzinfo=timezone.utc),
+    )
+
+    assert validated["home_goals"] == 4
+    assert validated["away_goals"] == 0
+    assert validated["home_category"] == "M"
+    assert validated["away_category"] == "0"
+    assert validated["source_sha256"] == hashlib.sha256(raw).hexdigest()
 
 
 def test_ticket_scoring_evaluates_official_pleno15_categories() -> None:
