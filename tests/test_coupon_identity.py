@@ -118,6 +118,7 @@ def test_jornada_19_aliases_resolve_through_canonical_team_registry() -> None:
         "Osasuna": "Osasuna",
         "Lugo": "Lugo",
         "Málaga": "Malaga",
+        "Málaga": "Malaga",
         "Rayo Vallecano": "Vallecano",
         "Sabadell": "Sabadell",
         "R. Oviedo": "Oviedo",
@@ -221,6 +222,7 @@ def test_2021_2022_coupon_aliases_resolve_through_canonical_team_registry() -> N
         "Sevilla": "Sevilla",
         "Sporting": "Sp Gijon",
         "Tenerife": "Tenerife",
+        "Valencia": "Valencia",
         "Valladolid": "Valladolid",
         "Villarreal": "Villarreal",
     }
