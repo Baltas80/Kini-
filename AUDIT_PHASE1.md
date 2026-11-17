@@ -3624,3 +3624,20 @@ PR #10 remains draft and targets the existing feature branch. No merge and no ch
 - Historical-model workflow: [44123083164](https://github.com/Baltas80/Kini-/actions/runs/44123083164) — workflow succeeded, but the predictive-model backtest job was skipped by the change filter. No new model metrics are claimed.
 - Final code head before this documentation update: `2aa2351b2d52445882446af254c0362fd4c8c6f4`. PR #10 remains open/draft, stacked on PR #9. No merge and no changes to `master`.
 - Next P6 candidate identified but not yet imported: 2020/21 Jornada 22 (draw 2020-12-20). Official SELAE result page and press-release PDF publish the 14 ordered results, Pleno and prize distribution; HistoricalQuiniela supplies fixture-level kickoff times. Before adding the snapshot, reconcile every fixture to the exact SP1/SP2 Football-Data row and season-scoped alias, then run the existing coupon acceptance workflow. Sources: [SELAE results](https://www.loteriasyapuestas.es/es/la-quiniela/resultados/la-quiniela-resultados-del-20-de-diciembre-de-2020), [SELAE press-release PDF](https://www.loteriasyapuestas.es/f/loterias/documentos/Quiniela/Notas%20de%20prensa/NOTA_DE_PRENSA_DE_LA_QUINIELA_DE_FECHA_20_12_20.pdf), [HistoricalQuiniela Jornada 22](https://www.historicoquiniela.com/historico/2020-2021/22).
+
+
+## Prize-evidence chronology validation — 2026-11-17
+
+A structural provenance gap was found in the official prize-snapshot validator: it parsed `verified_at` as a date but did not require it to be on or after the draw date. That allowed an internally inconsistent extract to claim verification before the result existed.
+
+- Commit: [`48a44fc`](https://github.com/Baltas80/Kini-/commit/48a44fcbb4a4c6aa594c2e0b521f6c75e11d085c).
+- `kini_engine/prize_scoring.py` now rejects `verified_at < draw_date`; a regression test covers the Jornada 19 draw date (2020-12-06) with an impossible verification date (2020-12-05). Same-day and later verification remain valid.
+- Updated `docs/TICKET_LEDGER.md` to state the chronology contract.
+- CI [44145763700](https://github.com/Baltas80/Kini-/actions/runs/44145763700): Actionlint, Ruff lint/format passed; **407 tests passed**, 25 upstream penaltyblog/NumPy deprecation warnings.
+- Historical data validation [44145763667](https://github.com/Baltas80/Kini-/actions/runs/44145763667): **5,322 completed fixtures**, 56 canonical team IDs, 10,644/10,644 resolved team references, zero unresolved/ambiguous references, zero duplicates/conflicts, and all 14 source files within the 168-hour weekly snapshot window. The validated PR-base dataset was reused; source CSVs were not rebuilt.
+- Coupon workflow [44145763637](https://github.com/Baltas80/Kini-/actions/runs/44145763637) succeeded with the pilot skipped by its change filter. No new coupon evaluation is claimed.
+- Historical model workflow [44145763743](https://github.com/Baltas80/Kini-/actions/runs/44145763743) succeeded with the expensive backtest job skipped by its change filter. No new predictive metric or market comparison is claimed.
+
+This is a provenance-validation fix only; it does not change forecasts, optimizer behavior or historical model metrics. PR #10 remains open/draft and targets `feat/selae-fixture-reconciliation`. No PR was merged and `master` was not modified.
+
+**Next priority:** expand the independently verified SELAE coupon/prize archive beyond Jornadas 19, 21 and 22, retaining exact raw-PDF byte digests whenever the source bytes can be retrieved. Keep the three-coupon pilot classified as a pipeline smoke test, not evidence for model ranking or profitability.
