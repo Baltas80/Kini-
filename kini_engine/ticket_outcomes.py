@@ -260,6 +260,7 @@ def validate_pleno15_report(
         "team_identity_source": team_identity_source,
     }
 
+
 def outcomes_from_reconciliation(
     report: dict[str, Any],
     draw_date: str,
