@@ -193,7 +193,17 @@ def test_jornada_19_official_snapshot_matches_reviewed_selae_results() -> None:
     assert snapshot["draw_date"] == "2020-12-06"
     assert snapshot["source_url"] == (
         "https://www.loteriasyapuestas.es/es/la-quiniela/resultados/"
-        "la-quiniela-resultados-del-06-de-diciembre-de-2020"
+        "la-quiniela-resultados-del-6-de-diciembre-de-2020"
+    )
+    supporting_sources = {
+        item["role"]: item["url"] for item in snapshot["supporting_sources"]
+    }
+    assert supporting_sources["official_selae_result_page"] == snapshot["source_url"]
+    assert supporting_sources["football_data_sp1_crosscheck"] == (
+        "https://www.football-data.co.uk/mmz4281/2021/SP1.csv"
+    )
+    assert supporting_sources["football_data_sp2_crosscheck"] == (
+        "https://www.football-data.co.uk/mmz4281/2021/SP2.csv"
     )
     assert actual == expected
     assert snapshot["pleno"] == {

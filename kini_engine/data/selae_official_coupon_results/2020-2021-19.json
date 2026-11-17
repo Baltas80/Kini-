@@ -2,14 +2,14 @@
   "schema_version": 1,
   "source": "SELAE",
   "draw_date": "2020-12-06",
-  "source_url": "https://www.loteriasyapuestas.es/es/la-quiniela/resultados/la-quiniela-resultados-del-06-de-diciembre-de-2020",
+  "source_url": "https://www.loteriasyapuestas.es/es/la-quiniela/resultados/la-quiniela-resultados-del-6-de-diciembre-de-2020",
   "verified_at": "2026-11-17",
   "verification_method": "Manual review of the official SELAE result page and official SELAE press-release PDF. The 14 ordered fixtures, team labels, scores, signs and Pleno al 15 were cross-checked against HistoricalQuiniela Jornada 19 and the Football-Data SP1/SP2 historical dataset. Prize distribution is transcribed from the linked official PDF and is stored as source evidence only; the engine does not yet calculate payouts.",
   "snapshot_type": "normalized_json_extract_not_raw_html",
   "supporting_sources": [
     {
       "role": "official_selae_result_page",
-      "url": "https://www.loteriasyapuestas.es/es/la-quiniela/resultados/la-quiniela-resultados-del-06-de-diciembre-de-2020"
+      "url": "https://www.loteriasyapuestas.es/es/la-quiniela/resultados/la-quiniela-resultados-del-6-de-diciembre-de-2020"
     },
     {
       "role": "official_selae_press_release_pdf",
