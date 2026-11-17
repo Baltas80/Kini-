@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
 from datetime import UTC, date, datetime, timedelta
 from math import isfinite
-from collections.abc import Mapping
 from typing import Any
 from urllib.parse import urlsplit
 
