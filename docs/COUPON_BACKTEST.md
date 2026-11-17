@@ -268,7 +268,7 @@ The timestamps and hashes remain declared metadata: structural validation does n
 
 ## Operational immutable ticket history
 
-Generated pre-ticket records can be persisted in the SQLite ledger described in [TICKET_LEDGER.md](TICKET_LEDGER.md). The ledger stores the exact generated columns and probability/source provenance, rejects conflicting reuse of ticket IDs, and can append reproducible 14-match scoring results against hashed SELAE reconciliation reports. It does not calculate prizes or profitability, and the configured database must reside on persistent storage in deployment.
+Generated pre-ticket records can be persisted in the SQLite ledger described in [TICKET_LEDGER.md](TICKET_LEDGER.md). The ledger stores the exact generated columns and probability/source provenance, rejects conflicting reuse of ticket IDs, and can append reproducible 14-match and official prize-tier scoring results against hashed SELAE evidence. The separate prize-scoring module exposes conditional published-unit-prize references only; actual payout, expected value and profitability remain unevaluated. The configured database must reside on persistent storage in deployment.
 
 
 ## Training-window provenance
@@ -408,3 +408,50 @@ The final documentation HEAD `6c396e3ddb7f11faecc8e9e0405abcf8ba404d43` was reva
 - Historical model workflow [44135733492](https://github.com/Baltas80/Kini-/actions/runs/44135733492): model backtest skipped by its change filter; no new full model comparison is claimed.
 
 The accepted three-coupon evidence remains run 44135127064 on functional code revision `e71cd2319682f8c50748090a5f76084756a0bf69`. No model or coupon implementation changed after that revision; later commits only corrected test formatting and updated documentation.
+
+
+## Jornada 25 and four-coupon pilot — validated 2026-11-17
+
+This section supersedes the earlier three-coupon pilot totals and the historical note that official prize-schema validation had not yet been implemented.
+
+### Jornada 25 source reconciliation
+
+Jornada 25 (draw date 2021-01-03) was added from the official SELAE result page and press-release PDF. Its 14 ordered main fixtures and Valencia–Cádiz Pleno al 15 (1–1) were checked against the HistoricalQuiniela Jornada 25 schedule and kickoff timestamps and the validated Football-Data 2020/2021 SP1/SP2 dataset. HistoricalQuiniela supplies the Europe/Madrid kickoff times; Football-Data is used for date/team/score reconciliation only. All 15 fixture rows matched exactly. The only new season-scoped alias was Ponferradina → Ponferradina, now covered by a canonical-registry regression test.
+
+Sources:
+- [Official SELAE result page](https://www.loteriasyapuestas.es/es/la-quiniela/resultados/la-quiniela-resultados-del-03-de-enero-de-2021)
+- [Official SELAE press-release PDF](https://www.loteriasyapuestas.es/f/loterias/documentos/Quiniela/Notas%20de%20prensa/NOTA_DE_PRENSA_DE_LA_QUINIELA_DE_FECHA_3_1_21.pdf)
+- [HistoricalQuiniela Jornada 25 schedule and kickoff times](https://www.historicoquiniela.com/historico/2020-2021/25)
+- Football-Data 2020/2021 [SP1](https://www.football-data.co.uk/mmz4281/2021/SP1.csv) and [SP2](https://www.football-data.co.uk/mmz4281/2021/SP2.csv)
+
+The official press release reports €2,669,930.25 Quiniela revenue; Pleno al 15: 1 winner at €200,244.77; 14: 14 winners at €30,513.49; 13: 275 at €728.16; 12: 3,660 at €54.71; 11: 30,768 at €6.51; 10: 143,371 at €1.68. The published combined P15 + first-category amount is €230,758.26, equal to the Pleno and 14 unit amounts combined. Elige8 reports €73,222.50 revenue, 286 winners and €140.81 per winner. These figures are stored in the normalized snapshot and validated by the prize-scoring tests.
+
+The PDF was available as official parsed source text, but its original bytes were not retrievable in this run. No raw-PDF SHA-256 is claimed. The snapshot digest covers only the normalized JSON bytes.
+
+### Four-coupon model/optimizer smoke test
+
+Final pilot: [GitHub Actions run 44147170147](https://github.com/Baltas80/Kini-/actions/runs/44147170147), artifact ID 14356852772, ZIP SHA-256 aa924ae1dcc73f06732b39a6091c5fa15278735dd25943cb4b737992e50bd1ef. The validated historical dataset contained 5,322 fixtures, SHA-256 7251b84acd803047746c0c55c6bdabb60d9499208cfd6c781f72080295346f44.
+
+Acceptance evidence: four official SELAE snapshots; 60/60 ordered fixtures reconciled to Football-Data; 12 successful model/coupon evaluations (DC, ML and fixed DC/ML ensemble for each coupon); 14 forecasts per evaluation (168 forecasts total); zero failed models or empty prediction sets. Every candidate used eight direct columns, three doubles, zero triples, eight payable bets and €6.00 per coupon (€24.00 per model across the four draws).
+
+| Coupon | First kickoff (Europe/Madrid) | Training cutoff | Training matches | DC single/best | ML single/best | Ensemble single/best |
+|---|---|---|---:|---:|---:|---:|
+| 2020-2021:19 | 2020-12-05 14:00 | 2020-12-04 | 277 | 5 / 6 | 6 / 7 | 4 / 7 |
+| 2020-2021:21 | 2020-12-12 14:00 | 2020-12-11 | 303 | 7 / 7 | 5 / 6 | 7 / 8 |
+| 2020-2021:22 | 2020-12-19 14:00 | 2020-12-18 | 325 | 6 / 7 | 7 / 7 | 6 / 7 |
+| 2020-2021:25 | 2021-01-02 14:00 | 2021-01-01 | 364 | 8 / 9 | 7 / 8 | 8 / 8 |
+
+Mean single-sign/best-column hits were 6.50 / 7.25 (DC), 6.25 / 7.00 (ML) and 6.25 / 7.50 (ensemble). The Jornada 25 cutoff is strictly before the first kickoff; its latest training match was 2020-12-31. The dataset profile and importer therefore preserve the declared temporal boundary for this coupon.
+
+No candidate covered 14/14 main signs, no complete 15/15 coupon was covered, and none of the four Dixon–Coles Pleno pair predictions matched the official pair. The four draws are temporally close with overlapping training histories; these are descriptive pipeline-smoke-test outputs, not an independent or sufficiently large performance sample. They do not justify model ranking, long-run hit-rate estimates or profitability claims. This coupon workflow does not calculate Brier Score, Log Loss or a market comparison.
+
+The separate prize_scoring layer now validates official prize distributions, classifies each expanded direct bet and exposes conditional published-unit-prize references. It does not establish that a stored pre-ticket was actually purchased/entered, and it does not estimate a counterfactual pari-mutuel payout or ROI. Actual payout and profitability remain unevaluated.
+
+Validation on the final code/test head:
+- CI [44147170232](https://github.com/Baltas80/Kini-/actions/runs/44147170232): Actionlint, Ruff lint/format passed; **410 tests passed**, 25 upstream NumPy/penaltyblog deprecation warnings.
+- Historical data validation [44147170149](https://github.com/Baltas80/Kini-/actions/runs/44147170149): **5,322 completed fixtures**, 56 canonical team IDs, 10,644/10,644 resolved team references, zero unresolved/ambiguous references, zero duplicate/conflicting fixtures, and 14 source files within the 168-hour snapshot window.
+- Historical model workflow [44147170145](https://github.com/Baltas80/Kini-/actions/runs/44147170145): the workflow succeeded but its model-backtest job was skipped by the change filter because no predictive-model code changed. No new full historical model metrics are claimed.
+
+PR #10 remains open/draft on feat/immutable-ticket-ledger, stacked on the existing feature branch. No merge and no changes to master.
+
+**Next priority:** expand the official coupon/prize archive across additional draws and seasons only where every ordered fixture can be independently reconciled. Preserve raw PDF byte digests whenever source bytes are actually retrievable; do not infer them from normalized JSON hashes.

@@ -3641,3 +3641,26 @@ A structural provenance gap was found in the official prize-snapshot validator: 
 This is a provenance-validation fix only; it does not change forecasts, optimizer behavior or historical model metrics. PR #10 remains open/draft and targets `feat/selae-fixture-reconciliation`. No PR was merged and `master` was not modified.
 
 **Next priority:** expand the independently verified SELAE coupon/prize archive beyond Jornadas 19, 21 and 22, retaining exact raw-PDF byte digests whenever the source bytes can be retrieved. Keep the three-coupon pilot classified as a pipeline smoke test, not evidence for model ranking or profitability.
+
+
+## Jornada 25 and four-coupon pilot — validated 2026-11-17
+
+- Commit 2ebcc2a52c1ba20ca7ca0d9d8b1883f16865047e adds the normalized SELAE Jornada 25 snapshot, the explicit Ponferradina alias, fixture/prize regression tests and four-coupon workflow acceptance. Commit 9df6ac76fddd570b06e59b14dcb8c345ce8f2b2b is the formatting-only correction required by Ruff.
+- Official evidence: [SELAE result page](https://www.loteriasyapuestas.es/es/la-quiniela/resultados/la-quiniela-resultados-del-03-de-enero-de-2021), [SELAE press-release PDF](https://www.loteriasyapuestas.es/f/loterias/documentos/Quiniela/Notas%20de%20prensa/NOTA_DE_PRENSA_DE_LA_QUINIELA_DE_FECHA_3_1_21.pdf), and [HistoricalQuiniela Jornada 25 kickoff schedule](https://www.historicoquiniela.com/historico/2020-2021/25). All 14 ordered main fixtures and Valencia–Cádiz Pleno 1–1 reconcile to the validated 2020/2021 Football-Data SP1/SP2 dataset; all 15 fixture reconciliations passed in the coupon workflow.
+- The normalized extract records the official prize distribution: €2,669,930.25 Quiniela revenue; Pleno 1 winner/€200,244.77; 14: 14/€30,513.49; 13: 275/€728.16; 12: 3,660/€54.71; 11: 30,768/€6.51; 10: 143,371/€1.68; Elige8 286/€140.81 on €73,222.50 revenue. The published combined P15 + first-category amount €230,758.26 matches the sum of the two unit amounts. The PDF bytes were not retrievable; no raw-PDF hash is claimed.
+- The latest validated historical dataset had 5,322 rows and SHA-256 7251b84acd803047746c0c55c6bdabb60d9499208cfd6c781f72080295346f44. The Jornada 25 first kickoff is 2021-01-02 14:00 Europe/Madrid; cutoff 2021-01-01; 364 training matches through 2020-12-31.
+- Final four-coupon pilot [44147170147](https://github.com/Baltas80/Kini-/actions/runs/44147170147), artifact ID 14356852772, ZIP SHA-256 aa924ae1dcc73f06732b39a6091c5fa15278735dd25943cb4b737992e50bd1ef: 4 official coupons; 60/60 fixtures reconciled; 12 successful model/coupon evaluations; 14 forecasts per model/coupon (168 total); zero model failures or empty prediction sets. Each candidate used 8 columns, 3 doubles, no triples, 8 payable bets and €6.00 per coupon.
+
+| Coupon | Training cutoff | Matches | DC single/best | ML single/best | Ensemble single/best |
+|---|---|---:|---:|---:|---:|
+| 2020-2021:19 | 2020-12-04 | 277 | 5 / 6 | 6 / 7 | 4 / 7 |
+| 2020-2021:21 | 2020-12-11 | 303 | 7 / 7 | 5 / 6 | 7 / 8 |
+| 2020-2021:22 | 2020-12-18 | 325 | 6 / 7 | 7 / 7 | 6 / 7 |
+| 2020-2021:25 | 2021-01-01 | 364 | 8 / 9 | 7 / 8 | 8 / 8 |
+
+- Mean single-sign/best-column hits: DC 6.50/7.25; ML 6.25/7.00; fixed ensemble 6.25/7.50. No 14/14, no 15/15, and no Pleno pair hit. The sample is temporally close and overlapping; no model ranking, hit-rate, Brier/Log Loss, market comparison or profitability conclusion is justified.
+- CI [44147170232](https://github.com/Baltas80/Kini-/actions/runs/44147170232): **410 passed**, 25 upstream deprecation warnings; Actionlint, Ruff lint and format passed. Historical data validation [44147170149](https://github.com/Baltas80/Kini-/actions/runs/44147170149): 5,322 fixtures, 10,644 resolved team references, 56 canonical IDs, zero unresolved/ambiguous identities and zero duplicates/conflicts. Historical model workflow [44147170145](https://github.com/Baltas80/Kini-/actions/runs/44147170145): backtest job skipped by change filter; no new full model metrics.
+- The earlier statement that prize-tier validation/scoring was not implemented is superseded: kini_engine/prize_scoring.py now validates official prize tables and classifies each expanded direct bet, exposing conditional published-unit-prize references only. It still does not prove ticket participation or infer actual payout, expected value or profitability.
+- PR #10 remains open/draft and stacked; no merge and no modification of master.
+
+**Next action:** continue the P6 archive expansion across more dates/seasons with strict official-source and fixture reconciliation, retaining raw PDF bytes/hashes only when retrievable.
