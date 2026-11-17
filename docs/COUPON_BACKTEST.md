@@ -397,3 +397,14 @@ The three draws are a small, temporally adjacent pipeline sample. They are not s
 Artifact: [quiniela-coupon-pilot, ID 14350339610](https://github.com/Baltas80/Kini-/actions/runs/44135127064/artifacts/14350339610), ZIP SHA-256 `281741eab1469ed978952154a732cd605d8784746bac3138c26042496bd5d894`.
 
 Jornada 22 normalized snapshot SHA-256: `71f0577f4c8deb6e0560a29169d858fb0eac4a37ab7333f32e5f5126c11b2f8c`. The raw SELAE PDF bytes were not captured, so this is not a PDF hash.
+
+
+## Latest HEAD revalidation — 2026-11-17
+
+The final documentation HEAD `6c396e3ddb7f11faecc8e9e0405abcf8ba404d43` was revalidated:
+- CI [44135733444](https://github.com/Baltas80/Kini-/actions/runs/44135733444): Actionlint, Ruff lint/format and **406 tests passed**, 25 upstream deprecation warnings.
+- Historical data [44135733521](https://github.com/Baltas80/Kini-/actions/runs/44135733521): 5,322 completed fixtures; 56 canonical team IDs; 10,644 resolved team references; zero unresolved teams and zero score/result mismatches; all 14 source files were within 168 hours.
+- Coupon workflow [44135733610](https://github.com/Baltas80/Kini-/actions/runs/44135733610): change filter correctly skipped the pilot because the last successful three-coupon functional run remains valid and intervening changes were tests/documentation only.
+- Historical model workflow [44135733492](https://github.com/Baltas80/Kini-/actions/runs/44135733492): model backtest skipped by its change filter; no new full model comparison is claimed.
+
+The accepted three-coupon evidence remains run 44135127064 on functional code revision `e71cd2319682f8c50748090a5f76084756a0bf69`. No model or coupon implementation changed after that revision; later commits only corrected test formatting and updated documentation.
