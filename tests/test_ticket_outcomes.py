@@ -83,20 +83,49 @@ def _ticket(report: dict[str, object]) -> dict[str, object]:
     outcomes = outcomes_from_reconciliation(report, DRAW_DATE)
     actual = [item["sign"] for item in outcomes]
     second = ["1" if sign != "1" else "2" for sign in actual]
+    plan = _coupon_plan()
+    model_probabilities = {
+        position: {"1": 0.5, "X": 0.3, "2": 0.2}
+        for position in range(1, 15)
+        if position != 7
+    }
+    vectors = build_ticket_probability_vectors(
+        draw_date=DRAW_DATE,
+        coupon_plan=plan,
+        model_probabilities_by_position=model_probabilities,
+        public_draw_snapshots={7: _preclose_snapshot()},
+    )
+    sources = []
+    for source in vectors["probability_sources"]:
+        if source["source"] == "football_model":
+            sources.append({**source, "model_mode": "ensemble"})
+        else:
+            sources.append(source)
     return {
         "schema_version": 1,
         "ticket_id": "test-ticket-2026-11-08",
         "draw_date": DRAW_DATE,
-        "ticket_created_at_utc": "2026-11-08T09:30:00Z",
-        "ticket_cutoff_at_utc": "2026-11-08T11:00:00Z",
-        "first_kickoff_at": "2026-11-08T14:00:00+01:00",
-        "cutoff_evidence_url": SELAE_URL,
-        "cutoff_evidence_sha256": HASH_B,
-        "schedule_evidence_url": "https://www.malagacf.com/fixture-schedule",
-        "schedule_evidence_sha256": HASH_C,
+        "ticket_created_at_utc": vectors["ticket_created_at_utc"],
+        "ticket_cutoff_at_utc": vectors["ticket_cutoff_at_utc"],
+        "first_kickoff_at": vectors["first_kickoff_at"],
+        "cutoff_evidence_url": plan["cutoff_evidence_url"],
+        "cutoff_evidence_sha256": plan["cutoff_evidence_sha256"],
+        "cutoff_evidence_captured_at_utc": plan["cutoff_evidence_captured_at_utc"],
+        "schedule_evidence_url": plan["schedule_evidence_url"],
+        "schedule_evidence_sha256": plan["schedule_evidence_sha256"],
+        "schedule_evidence_captured_at_utc": plan["schedule_captured_at_utc"],
+        "pleno15_home": plan["pleno15_home"],
+        "pleno15_away": plan["pleno15_away"],
+        "pleno15_kickoff_at": vectors["pleno15_kickoff_at"],
+        "coupon_plan": deepcopy(plan),
+        "probability_vectors": vectors["probabilities"],
+        "probability_sources": sources,
+        "public_draw_positions": vectors["public_draw_positions"],
         "columns": [actual, second],
+        "pleno15_combinations": [{"home_goals": "0", "away_goals": "0"}],
+        "budget": 8,
+        "cost_eur": 1.5,
     }
-
 
 def _preclose_snapshot() -> dict[str, object]:
     return {
@@ -656,3 +685,47 @@ def test_coupon_plan_rejects_cutoff_evidence_captured_after_ticket_creation() ->
             model_probabilities_by_position=model_probabilities,
             public_draw_snapshots={7: _preclose_snapshot()},
         )
+
+
+def test_ticket_record_rejects_missing_probability_vectors() -> None:
+    ticket = _ticket(_reconciliation())
+    ticket["probability_vectors"].pop()
+    with pytest.raises(TicketOutcomeError, match="14 1/X/2 probability vectors"):
+        score_ticket_record(ticket, _reconciliation())
+
+
+def test_ticket_record_rejects_probability_source_that_conflicts_with_coupon_plan() -> None:
+    ticket = _ticket(_reconciliation())
+    ticket["probability_sources"][6] = {
+        "position": 7,
+        "source": "football_model",
+        "model_mode": "ensemble",
+    }
+    with pytest.raises(TicketOutcomeError, match="pre-close public-draw provenance"):
+        score_ticket_record(ticket, _reconciliation())
+
+
+def test_ticket_record_rejects_pleno_identity_mismatch() -> None:
+    ticket = _ticket(_reconciliation())
+    ticket["pleno15_home"] = "Different team"
+    with pytest.raises(TicketOutcomeError, match="Pleno al 15 identity/kickoff"):
+        score_ticket_record(ticket, _reconciliation())
+
+
+def test_ticket_record_rejects_invalid_pleno_category_pair() -> None:
+    ticket = _ticket(_reconciliation())
+    ticket["pleno15_combinations"][0]["home_goals"] = "3"
+    with pytest.raises(TicketOutcomeError, match="invalid categories"):
+        score_ticket_record(ticket, _reconciliation())
+
+
+def test_ticket_record_rejects_budget_or_cost_inconsistency() -> None:
+    ticket = _ticket(_reconciliation())
+    ticket["budget"] = 1
+    with pytest.raises(TicketOutcomeError, match="exceeds its declared budget"):
+        score_ticket_record(ticket, _reconciliation())
+
+    ticket = _ticket(_reconciliation())
+    ticket["cost_eur"] = 2.0
+    with pytest.raises(TicketOutcomeError, match="cost does not match"):
+        score_ticket_record(ticket, _reconciliation())
