@@ -1515,7 +1515,7 @@ def _snapshot_probability_mapping(
     for sign in SIGNS:
         raw = probabilities[sign]
         if isinstance(raw, (bool, np.bool_)):
-            raise ValueError(f"{label} contains a boolean probability")
+            raise TypeError(f"{label} contains a boolean probability")
         try:
             value = float(raw)
         except (TypeError, ValueError) as exc:
@@ -1669,8 +1669,10 @@ def snapshot_aligned_market_backtest(
         fit_error: str | None = None
         try:
             engine.fit(training)
-        except Exception as exc:
+        # Candidate failures are isolated, recorded, and rejected by the CI gate.
+        except Exception as exc:  # noqa: BLE001
             fit_error = f"{type(exc).__name__}: {exc}"[:1000]
+            n_fixtures_with_prediction_errors += len(ordered_group)
             for mode in all_modes:
                 record_error(mode, exc, count=len(ordered_group))
 
@@ -1717,7 +1719,8 @@ def snapshot_aligned_market_backtest(
                             raw,
                             f"{mode} forecast for {match.home} vs {match.away}",
                         )
-                    except Exception as exc:
+                    # Preserve independent model streams while recording every failure.
+                    except Exception as exc:  # noqa: BLE001
                         record_error(mode, exc)
 
                 if "dc" in predictions and "ml" in predictions:
@@ -1735,7 +1738,8 @@ def snapshot_aligned_market_backtest(
                             predictions["ml"],
                             dc_weight,
                         )
-                    except Exception as exc:
+                    # Adaptive blending is isolated and its failure remains CI-visible.
+                    except Exception as exc:  # noqa: BLE001
                         record_error("ensemble_dc_ml_adaptive", exc)
                 else:
                     record_error(
