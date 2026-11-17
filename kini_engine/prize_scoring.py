@@ -153,7 +153,9 @@ def _validate_prize_distribution(
         away_goals = _nonnegative_int(
             fixture.get("away_goals"), f"fixture {position} away_goals"
         )
-        expected_sign = "1" if home_goals > away_goals else "2" if away_goals > home_goals else "X"
+        expected_sign = (
+            "1" if home_goals > away_goals else "2" if away_goals > home_goals else "X"
+        )
         if fixture.get("result") != expected_sign:
             raise PrizeScoringError(
                 f"official fixture {position} result conflicts with its score"
