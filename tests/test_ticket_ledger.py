@@ -198,9 +198,7 @@ def _pleno15_report() -> dict[str, object]:
 def test_ticket_ledger_scores_and_persists_pleno15_evidence_idempotently(tmp_path):
     ledger = TicketLedger(tmp_path / "tickets.sqlite3")
     ticket = _ticket()
-    ticket["pleno15_combinations"] = [
-        {"home_goals": "2", "away_goals": "M"}
-    ]
+    ticket["pleno15_combinations"] = [{"home_goals": "2", "away_goals": "M"}]
     ledger.append_ticket(ticket)
     reconciliation_json = json.dumps(
         _reconciliation(), ensure_ascii=False, separators=(",", ":")
@@ -231,9 +229,10 @@ def test_ticket_ledger_scores_and_persists_pleno15_evidence_idempotently(tmp_pat
     assert first["score"]["score_evidence_sha256"] == first["score_evidence_sha256"]
     listed = ledger.list_ticket_scores(str(ticket["ticket_id"]))
     assert len(listed) == 1
-    assert listed[0]["reconciliation_sha256"] == hashlib.sha256(
-        reconciliation_json.encode("utf-8")
-    ).hexdigest()
+    assert (
+        listed[0]["reconciliation_sha256"]
+        == hashlib.sha256(reconciliation_json.encode("utf-8")).hexdigest()
+    )
     assert listed[0]["score_evidence_sha256"] == first["score_evidence_sha256"]
 
 
