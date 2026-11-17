@@ -581,9 +581,7 @@ def test_jornada_1_2021_2022_official_snapshot_matches_reviewed_selae_results() 
     assert digest == hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def test_jornada_1_2022_2023_official_snapshot_matches_reviewed_selae_results() -> (
-    None
-):
+def test_jornada_1_2022_2023_official_snapshot_matches_reviewed_selae_results() -> None:
     path = (
         Path(__file__).resolve().parents[1]
         / "kini_engine"
