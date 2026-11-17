@@ -1389,6 +1389,7 @@ def test_snapshot_aligned_backtest_fails_closed_below_minimum_training_history(
     assert result["forecast_rows"] == []
     assert all(item["count"] == 0 for item in result["prediction_errors"].values())
 
+
 @pytest.mark.parametrize(
     "probabilities",
     [
