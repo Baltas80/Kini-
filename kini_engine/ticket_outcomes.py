@@ -7,7 +7,10 @@ from math import isfinite
 from typing import Any
 from urllib.parse import urlsplit
 
+from .team_identity import normalize_team_name
+
 SIGNS = ("1", "X", "2")
+PLENO15_CATEGORIES = frozenset({"0", "1", "2", "M"})
 POSITIONS = tuple(range(1, 15))
 SELAE_HOSTS = {"loteriasyapuestas.es", "www.loteriasyapuestas.es"}
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
@@ -118,6 +121,123 @@ def _position(value: object, field: str) -> int:
     if isinstance(value, bool) or not isinstance(value, int) or value not in POSITIONS:
         raise TicketOutcomeError(f"{field} must be an integer from 1 to 14")
     return value
+
+
+def _pleno15_category(goals: int) -> str:
+    return str(goals) if goals <= 2 else "M"
+
+
+def validate_pleno15_report(
+    report: dict[str, Any],
+    *,
+    draw_date: str,
+    expected_home: str,
+    expected_away: str,
+    kickoff_at: datetime,
+) -> dict[str, Any]:
+    """Validate an official SELAE Pleno al 15 result and its 0/1/2/M categories."""
+    if not isinstance(report, dict):
+        raise TicketOutcomeError("Pleno al 15 result report must be an object")
+    _require_schema_v1(report, "SELAE Pleno al 15 result")
+    allowed_fields = {
+        "schema_version",
+        "provider",
+        "draw_date",
+        "source_url",
+        "source_sha256",
+        "evidence_type",
+        "verified_at_utc",
+        "verification_method",
+        "home",
+        "away",
+        "home_goals",
+        "away_goals",
+        "home_category",
+        "away_category",
+    }
+    if set(report) != allowed_fields:
+        missing = sorted(allowed_fields - set(report))
+        unexpected = sorted(set(report) - allowed_fields)
+        raise TicketOutcomeError(
+            f"Pleno al 15 result fields mismatch; missing={missing}, "
+            f"unexpected={unexpected}"
+        )
+    if report.get("provider") != "SELAE":
+        raise TicketOutcomeError("Pleno al 15 result provider must be SELAE")
+    expected_date = _parse_draw_date(draw_date, "draw_date")
+    if _parse_draw_date(report.get("draw_date"), "Pleno result draw_date") != expected_date:
+        raise TicketOutcomeError("Pleno al 15 result draw date mismatch")
+
+    source_url = _validate_official_selae_url(
+        report.get("source_url"), "Pleno al 15 source_url"
+    )
+    source_sha256 = _validate_sha256(
+        report.get("source_sha256"), "Pleno al 15 source_sha256"
+    )
+    evidence_type = _required_text(report.get("evidence_type"), "evidence_type")
+    if evidence_type not in {"raw_official_response", "normalized_official_extract"}:
+        raise TicketOutcomeError("Pleno al 15 evidence_type is unsupported")
+    verified_at = _parse_utc_timestamp(
+        report.get("verified_at_utc"), "verified_at_utc"
+    )
+    kickoff = kickoff_at.astimezone(UTC)
+    if verified_at < kickoff:
+        raise TicketOutcomeError(
+            "Pleno al 15 result verification must not precede its kickoff"
+        )
+    verification_method = _required_text(
+        report.get("verification_method"), "verification_method"
+    )
+
+    home = _required_text(report.get("home"), "Pleno al 15 home")
+    away = _required_text(report.get("away"), "Pleno al 15 away")
+    if (
+        normalize_team_name(home) != normalize_team_name(expected_home)
+        or normalize_team_name(away) != normalize_team_name(expected_away)
+    ):
+        raise TicketOutcomeError(
+            "Pleno al 15 result team identity does not match the stored coupon plan"
+        )
+
+    home_goals = report.get("home_goals")
+    away_goals = report.get("away_goals")
+    if (
+        isinstance(home_goals, bool)
+        or isinstance(away_goals, bool)
+        or not isinstance(home_goals, int)
+        or not isinstance(away_goals, int)
+        or home_goals < 0
+        or away_goals < 0
+    ):
+        raise TicketOutcomeError("Pleno al 15 goals must be non-negative integers")
+    home_category = _pleno15_category(home_goals)
+    away_category = _pleno15_category(away_goals)
+    if report.get("home_category") not in PLENO15_CATEGORIES or (
+        report.get("away_category") not in PLENO15_CATEGORIES
+    ):
+        raise TicketOutcomeError("Pleno al 15 categories must be 0, 1, 2 or M")
+    if (
+        report.get("home_category") != home_category
+        or report.get("away_category") != away_category
+    ):
+        raise TicketOutcomeError(
+            "Pleno al 15 categories conflict with the official goal counts"
+        )
+
+    return {
+        "draw_date": expected_date,
+        "source_url": source_url,
+        "source_sha256": source_sha256,
+        "evidence_type": evidence_type,
+        "verified_at_utc": verified_at.isoformat().replace("+00:00", "Z"),
+        "verification_method": verification_method,
+        "home": home,
+        "away": away,
+        "home_goals": home_goals,
+        "away_goals": away_goals,
+        "home_category": home_category,
+        "away_category": away_category,
+    }
 
 
 def outcomes_from_reconciliation(
@@ -959,6 +1079,9 @@ def _validate_ticket_record(ticket: dict[str, Any]) -> dict[str, Any]:
         "ticket_created_at_utc": created_at,
         "ticket_cutoff_at_utc": cutoff,
         "first_kickoff_at": first_kickoff,
+        "pleno15_home": pleno_home,
+        "pleno15_away": pleno_away,
+        "pleno15_kickoff_at": pleno_kickoff,
         "columns": columns,
         "probability_vectors": probability_vectors,
         "probability_sources": probability_sources,
@@ -981,15 +1104,32 @@ def score_ticket_record(
     *,
     ticket_sha256: str | None = None,
     reconciliation_sha256: str | None = None,
+    pleno15_report: dict[str, Any] | None = None,
+    pleno15_report_sha256: str | None = None,
 ) -> dict[str, Any]:
-    """Score persisted 14-match columns against official played/public-draw outcomes.
-
-    This function calculates hit and coverage results only. It does not infer prizes,
-    payout, expected value or profitability.
-    """
+    """Score 14 signs and, when supplied, official Pleno al 15 categories."""
     validated = _validate_ticket_record(ticket)
     outcomes = outcomes_from_reconciliation(
         reconciliation_report, validated["draw_date"]
+    )
+    if pleno15_report is None:
+        if pleno15_report_sha256 is not None:
+            raise TicketOutcomeError(
+                "pleno15_report_sha256 requires a Pleno al 15 result report"
+            )
+        validated_pleno15 = None
+    else:
+        validated_pleno15 = validate_pleno15_report(
+            pleno15_report,
+            draw_date=validated["draw_date"],
+            expected_home=validated["pleno15_home"],
+            expected_away=validated["pleno15_away"],
+            kickoff_at=validated["pleno15_kickoff_at"],
+        )
+    pleno15_digest = (
+        _validate_sha256(pleno15_report_sha256, "pleno15_report_sha256")
+        if pleno15_report_sha256 is not None
+        else None
     )
     actual = tuple(item["sign"] for item in outcomes)
     columns = validated["columns"]
@@ -1029,6 +1169,11 @@ def score_ticket_record(
         "best_columns_1_based": best_columns,
         "covered_14": actual in set(columns),
         "outcome_provenance": outcomes,
+        "pleno15_evaluated": validated_pleno15 is not None,
+        "pleno15_actual": None,
+        "pleno15_hit": None,
+        "covered_full_coupon": None,
+        "pleno15_outcome_provenance": None,
         "payout_evaluated": False,
         "profitability_evaluated": False,
     }
@@ -1038,4 +1183,29 @@ def score_ticket_record(
         result["reconciliation_sha256"] = _validate_sha256(
             reconciliation_sha256, "reconciliation_sha256"
         )
+    if validated_pleno15 is not None:
+        actual_pleno_pair = (
+            validated_pleno15["home_category"],
+            validated_pleno15["away_category"],
+        )
+        selected_pleno_pairs = {
+            (pair["home_goals"], pair["away_goals"])
+            for pair in validated["pleno15_combinations"]
+        }
+        pleno15_hit = actual_pleno_pair in selected_pleno_pairs
+        result.update(
+            {
+                "pleno15_actual": {
+                    "home_goals": validated_pleno15["home_goals"],
+                    "away_goals": validated_pleno15["away_goals"],
+                    "home_category": actual_pleno_pair[0],
+                    "away_category": actual_pleno_pair[1],
+                },
+                "pleno15_hit": pleno15_hit,
+                "covered_full_coupon": (actual in set(columns)) and pleno15_hit,
+                "pleno15_outcome_provenance": validated_pleno15,
+            }
+        )
+        if pleno15_digest is not None:
+            result["pleno15_report_sha256"] = pleno15_digest
     return result
