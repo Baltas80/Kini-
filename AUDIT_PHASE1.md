@@ -2885,3 +2885,40 @@ Se realizó además un preflight sobre el CSV y el ledger del mismo artefacto: *
 La siguiente unidad P0 queda definida: implementar el walk-forward por fecha de snapshot, mantener todos los partidos cubiertos por una misma captura con el mismo modelo y el mismo historial anterior al snapshot, y hacer fallar la aceptación si la muestra común resultante es inferior a 500. El filtro actual de predicciones ordinarias se conserva como diagnóstico histórico, no como benchmark temporal definitivo.
 
 La ejecución más reciente de histórico [43990598086](https://github.com/Baltas80/Kini-/actions/runs/43990598086) seguía en el paso de comparación cuando se inspeccionó; no se le atribuyen métricas nuevas. PR #9 continúa en borrador y sin fusionar. No se ha modificado `master`.
+
+
+## 2026-11-17 — Walk-forward completado y aceptación temporal reforzada
+
+La ejecución [43990598086](https://github.com/Baltas80/Kini-/actions/runs/43990598086) terminó correctamente antes de incorporar la nueva puerta de aceptación. Su artefacto es [14288932539](https://github.com/Baltas80/Kini-/actions/runs/43990598086/artifacts/14288932539), digest SHA-256 `44ec2d6c90d6f8a68861f0f2f206620749da9f2ef3ac5fdd162153c05dd64e3f`.
+
+- Periodo de test: 2020-12-11 a 2026-11-16; entrenamiento inicial: 300; refit ordinario cada 30 fechas de pronóstico.
+- Los cinco streams generaron **5.022/5.022 predicciones** y registraron **cero errores**.
+- Mercado schedule-screened: 4.433 partidos. La comparación amplia usa los mismos fixtures para cada modelo, pero no acredita igualdad del instante informativo.
+
+| Stream | n | Accuracy | Brier | Log Loss |
+|---|---:|---:|---:|---:|
+| Dixon–Coles | 5.022 | 48,19% | 0,616650 | 1,027756 |
+| ML | 5.022 | 44,17% | 0,645490 | 1,071314 |
+| Ensemble principal | 5.022 | 47,95% | 0,613610 | 1,022979 |
+| DC/ML fijo | 5.022 | 47,59% | 0,615849 | 1,026356 |
+| DC/ML adaptativo | 5.022 | 47,73% | 0,616060 | 1,026662 |
+| Mercado | 4.433 | **50,73%** | **0,597459** | **0,999371** |
+
+En el filtro temporal estricto heredado solo quedan **111/4.433** fixtures. Los cinco modelos y el mercado se comparan sobre esos mismos 111 partidos, pero esta muestra no es suficiente para seleccionar modelos. Brier/Log Loss del mercado son 0,595927/1,001731; Dixon–Coles 0,627083/1,045139; ML 0,670224/1,106471; ensemble principal 0,623886/1,038656; DC/ML fijo 0,627702/1,043891; DC/ML adaptativo 0,629634/1,047315. Las exclusiones del filtro actual son 3.880 por corte de entrenamiento/refit no anterior al snapshot y 442 por snapshot no asignable.
+
+### Puerta de aceptación para la siguiente validación
+
+El commit [c53c143](https://github.com/Baltas80/Kini-/commit/c53c143a94cf043973fe3f31dbaff1685fff2955) añade al workflow una aceptación separada para `snapshot_aligned_market`. Exige:
+
+- Al menos **500 fixtures comunes**.
+- Refit por fecha de snapshot, usando resultados completados estrictamente anteriores a esa fecha.
+- Las cinco configuraciones con el mismo conjunto de fixtures que el mercado.
+- Cero errores de predicción por configuración.
+
+El filtro anterior de 111 filas queda como diagnóstico, no como sustituto. El nuevo gate todavía no ha sido ejercitado por un backtest completo: el workflow de la nueva revisión [43994090734](https://github.com/Baltas80/Kini-/actions/runs/43994090734) omitió el job pesado porque el cambio era únicamente de documentación/workflow. CI [43994090719](https://github.com/Baltas80/Kini-/actions/runs/43994090719) sí validó actionlint, Ruff, formato y **308 tests pasados** (21 warnings upstream de penaltyblog/NumPy 2.5). La validación de datos [43994090764](https://github.com/Baltas80/Kini-/actions/runs/43994090764) pasó con **5.322 fixtures**, `integrity_passed=true`, cero duplicados, cero conflictos, cero identidades no resueltas y cero ambiguas.
+
+El preflight ya realizado sobre el CSV y ledger del artefacto anterior identificó **3.991 fixtures candidatos** con mercado elegible, fecha de snapshot asignable y al menos 300 resultados previos; se distribuyen en **319 fechas de snapshot**. Es un recuento de candidatos, no un backtest ni una métrica predictiva. La próxima implementación debe generar las predicciones de nuevo en cada fecha de snapshot y conservar una misma información de entrenamiento para todos los partidos cubiertos por esa captura.
+
+PR #9 sigue abierto y en borrador, con base en `feat/canonical-team-identity-registry`. No se ha fusionado ninguna PR ni se ha modificado `master`.
+
+**Siguiente acción P0:** implementar el motor walk-forward alineado a snapshot y ejecutar el benchmark completo contra la nueva puerta de aceptación. Mantener la limitación de fecha (no timestamp) explícita; no afirmar que las cuotas históricas tienen hora exacta de captura.
