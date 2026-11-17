@@ -8,7 +8,12 @@ from urllib.parse import urlsplit
 
 from .team_identity import normalize_team_name
 
-SELAE_HOSTS = {"loteriasyapuestas.es", "www.loteriasyapuestas.es"}
+SELAE_HOSTS = {
+    "loteriasyapuestas.es",
+    "www.loteriasyapuestas.es",
+    "selae.es",
+    "www.selae.es",
+}
 PRIZE_CATEGORIES = ("pleno_al_15", "14", "13", "12", "11", "10")
 CENT = Decimal("0.01")
 
