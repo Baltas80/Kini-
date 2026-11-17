@@ -18,8 +18,8 @@ from kini_engine.core import (
     score_grid,
     surprise_signal,
 )
-from kini_engine.ticket_outcomes import TicketOutcomeError
 from kini_engine.ticket_ledger import TicketLedger
+from kini_engine.ticket_outcomes import TicketOutcomeError
 
 
 def sample():
