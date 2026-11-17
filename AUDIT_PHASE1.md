@@ -3463,3 +3463,37 @@ Validation:
 
 The importer that produces this Pleno evidence for every historical/current draw remains to be implemented. Until that exists, the ledger can score Pleno only when a separately verified report is supplied. The engine does not calculate prize tiers, payouts, expected value or profitability.
 
+
+
+## Coupon training-window provenance and first end-to-end pilot — 2026-11-17
+
+### Implementation
+
+- Commit `101b92ab7629bebe55d2aae361da1c0b0cf3e79e` records `training_history_min_date` and `training_history_max_date` from the exact filtered rows passed to the coupon model fit.
+- The acceptance validator now rejects missing or malformed date ranges, reversed ranges, maximum dates after the declared common cutoff, and any maximum date on/after first kickoff.
+- Added regression tests for the recorded training window and for post-cutoff/reversed ranges.
+- Commit `70a8288bb28d9a8199636c35ff57e918a43484e1` fixed Ruff formatting and duplicate documentation numbering.
+- Commit `2d3ee2fd626b502497126a73e6c952237ab3c16e` fixed the final blank-line formatting issue in Pleno outcome validation.
+
+### Validation
+
+- CI [44090941259](https://github.com/Baltas80/Kini-/actions/runs/44090941259): **388 passed**, 25 third-party NumPy deprecation warnings; Actionlint passed for 8 workflows; Ruff lint and format passed.
+- Historical-data validation [44090941634](https://github.com/Baltas80/Kini-/actions/runs/44090941634): **5,322 completed fixtures**, integrity passed, zero duplicates/conflicts, zero invalid result labels and zero score/result mismatches. Team identity: 10,644/10,644 references resolved across 56 canonical teams; zero ambiguous or unresolved references. The job reused the validated PR-base artifact under the weekly snapshot policy; it did not perform a new source download.
+- Coupon pilot [44090714917](https://github.com/Baltas80/Kini-/actions/runs/44090714917): **success**; all 15 fixture outcomes were reconciled, 15 canonical fixtures matched, and DC, ML and fixed ensemble each emitted 14 valid predictions. Acceptance passed for the 8-column budget and SELAE ticket bounds. Artifact: `14332295130`.
+- Historical model workflow [44090941270](https://github.com/Baltas80/Kini-/actions/runs/44090941270): backtest job skipped because predictive model code was unchanged. This is not counted as a new model validation.
+
+### Pilot result
+
+Coupon `2020-2021:21`, first kickoff `2020-12-12T14:00:00+01:00`, cutoff `2020-12-11`, training history 303 matches (`2020-09-12` to `2020-12-11`), full dataset 5,322 rows, SHA-256 `7251b84acd803047746c0c55c6bdabb60d9499208cfd6c781f72080295346f44`.
+
+| Model | Single hits | Best column | 14/14 | Pleno | 15/15 |
+|---|---:|---:|---|---|---|
+| Dixon-Coles | 7 | 7 | No | No | No |
+| ML | 5 | 6 | No | No | No |
+| Fixed DC/ML ensemble | 7 | 8 | No | No | No |
+
+All candidates used 8 columns, 3 doubles, no triples and €6.00 cost. Dixon-Coles selected Pleno pair `1–1` (mass 0.1300218); official result was `M–0`. One coupon is only an end-to-end smoke test; it is not a statistically sufficient performance sample and provides no profitability evidence. The official SELAE result is a manually reviewed normalized extract, not raw HTML; prize tiers/payouts remain unimplemented.
+
+### Next action
+
+Expand the archive to multiple coupons only where each journey has independently reviewed official SELAE evidence. Then implement a separate payout layer using official per-bet prize tiers and exact persisted direct columns. Do not infer expected value or profitability from the current single-coupon pilot. Keep market comparisons limited to odds with verifiable pre-kickoff capture timestamps.

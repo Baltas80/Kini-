@@ -276,3 +276,22 @@ Generated pre-ticket records can be persisted in the SQLite ledger described in 
 Each coupon result now records `training_history_min_date` and `training_history_max_date` from the exact rows passed to the model fit. The batch acceptance validator rejects missing, reversed or post-cutoff ranges and requires the latest training source date to precede the first kickoff. This makes the actual date window visible in the artifact instead of recording only a row count and a declared cutoff.
 
 The date-range fields are audit metadata derived from the filtered input dataset. They do not independently authenticate match completion timestamps; the dataset's date-only limitation and previous-local-calendar-day cutoff remain in force.
+
+
+## First end-to-end coupon pilot result — 2026-11-17
+
+Run [44090714917](https://github.com/Baltas80/Kini-/actions/runs/44090714917), artifact ID `14332295130`, code revision `70a8288bb28d9a8199636c35ff57e918a43484e1`.
+
+The single pilot coupon was `2020-2021:21` (Jornada 21), with first kickoff `2020-12-12T14:00:00+01:00`. The common training cutoff was `2020-12-11`; the fitted history contained 303 matches from `2020-09-12` through `2020-12-11`. The full historical dataset contained 5,322 rows and had SHA-256 `7251b84acd803047746c0c55c6bdabb60d9499208cfd6c781f72080295346f44`.
+
+All three candidates completed all 14 main-match predictions with no model failures. Each generated an 8-column ticket (3 doubles, 0 triples), 8 payable bets and a cost of €6.00 at €0.75 per bet.
+
+| Candidate | Single-sign hits | Best direct column | Exact 14/14 coverage | Pleno hit | Full 15/15 coverage |
+|---|---:|---:|---|---|---|
+| Dixon-Coles | 7/14 | 7/14 | No | No | No |
+| ML | 5/14 | 6/14 | No | No | No |
+| Fixed DC/ML ensemble | 7/14 | 8/14 | No | No | No |
+
+The Dixon-Coles Pleno prediction was category pair `1–1`, with aggregated probability mass `0.13002176742050037`; the reconciled SELAE result was `M–0`. It did not hit.
+
+This is a single-coupon integration smoke test, not a performance sample. It does not justify selecting the ensemble, estimating long-run hit rates, or claiming profitability. The official result source is a manually reviewed normalized SELAE JSON extract, not raw official HTML. Prize tiers, realized payout and return on stake are not included. The secondary coupon archive supplies kickoff metadata; the model's historical match dataset has date-only timestamps, so the documented previous-local-calendar-day cutoff remains the conservative temporal boundary.
