@@ -557,7 +557,18 @@ def collect_live_diagnostic() -> dict[str, Any]:
     jornada, temporada, percentage_matches = source.last()
     report["jornada"] = jornada
     report["temporada"] = temporada
-    payload, captured_at = source.details_payload(jornada, temporada)
+    try:
+        payload, captured_at = source.details_payload(jornada, temporada)
+    except Exception as exc:  # noqa: BLE001 - retain the failed request context
+        report.update(
+            {
+                "status": "error",
+                "error_type": type(exc).__name__,
+                "error": str(exc)[:300],
+                **_http_error_evidence(exc),
+            }
+        )
+        return report
     report["details_response_received_at"] = captured_at
     report["schema"] = summarize_payload(payload)
     details = payload.get("detallePartidos")
@@ -596,7 +607,12 @@ def main() -> int:
 
     try:
         report = collect_live_diagnostic()
-        exit_code = 0 if report["status"] == "ok" else 2
+        if report["status"] == "ok":
+            exit_code = 0
+        elif report["status"] == "error":
+            exit_code = 1
+        else:
+            exit_code = 2
     except Exception as exc:  # noqa: BLE001 - preserve failure evidence in this diagnostic
         report = {
             "diagnostic": "kinielagpt_detalle_partido_schema",

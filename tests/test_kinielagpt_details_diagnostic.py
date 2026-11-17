@@ -1,3 +1,4 @@
+import scripts.diagnose_kinielagpt_details as diagnostic_module
 from scripts.diagnose_kinielagpt_details import (
     _http_error_evidence,
     reconcile_fixture_order,
@@ -279,3 +280,33 @@ def test_http_error_evidence_is_bounded_and_does_not_expose_response_headers():
     assert len(evidence["response_body_preview"]) == 400
     assert "sensitive-cookie-value" not in str(evidence)
     assert "set-cookie" not in evidence
+
+
+def test_collect_live_diagnostic_preserves_jornada_on_http_error(monkeypatch):
+    class FakeResponse:
+        status_code = 400
+        headers = {"content-type": "application/json"}
+        text = '{"error":"invalid jornada"}'
+
+    class FakeHTTPError(Exception):
+        response = FakeResponse()
+
+    class FakeSource:
+        def __init__(self, timeout):
+            self.timeout = timeout
+
+        def last(self):
+            return 23, 2027, []
+
+        def details_payload(self, jornada, temporada):
+            raise FakeHTTPError("400 Client Error: Bad Request")
+
+    monkeypatch.setattr(diagnostic_module, "KinielaGPTSource", FakeSource)
+    report = diagnostic_module.collect_live_diagnostic()
+
+    assert report["status"] == "error"
+    assert report["jornada"] == 23
+    assert report["temporada"] == 2027
+    assert report["http_status"] == 400
+    assert report["response_body_preview"] == '{"error":"invalid jornada"}'
+
