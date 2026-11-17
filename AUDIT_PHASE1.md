@@ -3330,9 +3330,9 @@ The defect was not that every PR should download Football-Data again. That would
 
 - `scripts/build_history.py` now exposes `--require-fresh`. When a forced refresh fails, it raises instead of silently falling back to a previously cached CSV.
 - Added regression tests for stale-cache rejection and the incompatible offline/require-fresh combination.
-- Both `.github/workflows/historical-backtest.yml` and `.github/workflows/historical-data-validation.yml` now restore the default `master` cache prefix for PR validation, instead of preferring a branch-local cache.
+- Both `.github/workflows/historical-backtest.yml` and `.github/workflows/historical-data-validation.yml` now restore the immediate PR base-branch cache first (with `master` as fallback), never the current feature branch's cache. This is required for the stacked PR chain and avoids an older child-branch cache shadowing the newer upstream snapshot.
 - The weekly scheduled data-validation run (and an explicitly requested refresh) uses `--refresh --require-fresh`; it cannot silently publish a stale fallback.
-- PR backtests remain offline to respect the source download allowance. They validate that all 14 source files belong to one hourly snapshot and are no more than seven days old. A scheduled/manual refresh must produce source files no more than one hour old before the cache is saved.
+- PR backtests remain offline to respect the source download allowance. They use the upstream/base-branch cache and validate that all 14 source files belong to one hourly snapshot and are no more than seven days old. A scheduled/manual refresh must produce source files no more than one hour old before the cache is saved.
 - The script change remains in the historical-backtest change filter, so the next PR run should execute the historical comparison.
 
 The data-validation run 44072041469 was created before the cache-selection correction and still used the old branch-local cache (49.96 hours old, 5,311 rows). It is diagnostic evidence of the defect, not the accepted source snapshot. The intermediate historical run 44071883972 also began before the workflow correction and must not be used to validate the new cache policy.
