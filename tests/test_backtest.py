@@ -1146,4 +1146,3 @@ def test_strict_common_time_excludes_lae_captured_on_snapshot_day(monkeypatch):
         assert strict["common_sample"][mode]["n"] == 1
         assert strict["common_sample"][mode]["model"]["n"] == 1
         assert strict["common_sample"][mode]["market"]["n"] == 1
-
