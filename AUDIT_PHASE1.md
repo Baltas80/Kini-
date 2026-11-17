@@ -3271,3 +3271,19 @@ La integración que figuraba como pendiente queda implementada en el head de có
 El motor devuelve el registro, pero no lo escribe automáticamente en disco ni puede garantizar que un cliente MCP lo conserve. El consumidor debe persistir el JSON y los artefactos originales sin alterarlos. Las fechas y hashes son evidencia declarada y validada estructuralmente; no hay sellado temporal independiente ni autenticación criptográfica de la captura local. Sigue sin existir una muestra histórica suficiente de snapshots de participantes para evaluar probabilidades de sorteo público. El scorer actual tampoco calcula premios ni rentabilidad.
 
 Siguiente prioridad: construir un ledger append-only de boletos realmente generados, con persistencia del registro completo, hash verificable, fecha de creación, coste, cutoff y evidencias; después conectar ese ledger a la puntuación postpartido. No estimar rentabilidad con boletos hipotéticos.
+
+## Immutable ticket ledger — 2026-11-17
+
+**Implemented on `feat/immutable-ticket-ledger`; CI validation pending.**
+
+- Added `kini_engine/ticket_ledger.py`, a local SQLite append-only ledger for generated direct-ticket records and derived score records.
+- `KiniEngine` accepts an optional ledger and persists the complete ticket record when a strict pre-ticket coupon plan is used. Persistence errors fail the generation call instead of returning an unpersisted success.
+- The MCP server configures `KINI_TICKET_LEDGER_PATH` (default `data/kini-tickets.sqlite3`) and exposes retrieval, listing and score-persistence tools.
+- Ticket IDs are unique and content-addressed. Identical replays are idempotent; reuse with different canonical JSON is rejected.
+- Ticket and score rows reject UPDATE/DELETE through SQLite triggers. Reads recompute SHA-256 and revalidate records.
+- Scoring is computed by the existing `score_ticket_record` function from a stored ticket and a caller-supplied reconciliation report with its exact source-byte SHA-256. Score rows are keyed by ticket ID plus reconciliation digest.
+- Added tests for persistence, idempotency, conflicting IDs, digest mismatch, append-only enforcement, SELAE scoring, listing and engine integration.
+
+Limitations remain explicit: SHA-256 is not a signature or trusted timestamp; SQLite triggers do not protect against a database owner replacing the file; a persistent volume is required in deployment; multi-host replicas need shared transactional storage; prize/payout/profitability modelling is not included.
+
+Next validation: run Ruff, formatting and pytest on the new branch, then inspect the active historical walk-forward run independently. Do not merge PR #9 or change `master`.
