@@ -1543,7 +1543,11 @@ class KiniEngine:
                 draw_date=draw_date,
                 coupon_plan=coupon_plan,
                 model_probabilities_by_position=model_probabilities_by_position,
-                public_draw_snapshots=public_draw_snapshots or {},
+                public_draw_snapshots=(
+                    public_draw_snapshots
+                    if public_draw_snapshots is not None
+                    else {}
+                ),
             )
             for source in probability_vectors["probability_sources"]:
                 if source["source"] == "football_model":
