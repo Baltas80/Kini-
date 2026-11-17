@@ -173,3 +173,53 @@ A pre-close snapshot accepted by the construction helper has this shape:
 
 The construction helper also requires the first scheduled kickoff and rejects a cutoff at or after it. The snapshot timestamp, cutoff and first kickoff are validated as declared timestamps; the corresponding evidence URLs and digests still require independent review.
 
+
+
+## Pre-ticket schedule plan: strict separation from realized outcomes
+
+The probability builder must run before the first kickoff. It therefore consumes a **schedule-only coupon plan**, never the post-match fixture-reconciliation report used by `score_ticket_record`.
+
+The plan is schema version 1 and contains exactly these root fields:
+
+- `provider`: `SELAE`;
+- `draw_date`;
+- `schedule_captured_at_utc`;
+- `schedule_evidence_url` and `schedule_evidence_sha256`;
+- `ticket_cutoff_at_utc`;
+- `first_kickoff_at`;
+- `positions`: exactly one record for each position 1–14.
+
+A scheduled position contains only `position`, `fixture_status="scheduled"`, `home`, `away` and timezone-aware `kickoff_at`. Its kickoff must be after ticket close. A position already known to be resolved by public draw before ticket close uses `fixture_status="public_draw_expected"` and must additionally carry an official SELAE status-evidence URL, SHA-256 and timezone-aware capture timestamp strictly before ticket close. The declared first kickoff must equal the earliest kickoff among scheduled positions.
+
+Example (abbreviated to one public-draw position; the actual plan must contain all 14):
+
+```json
+{
+  "schema_version": 1,
+  "provider": "SELAE",
+  "draw_date": "2026-11-08",
+  "schedule_captured_at_utc": "2026-11-08T09:00:00Z",
+  "schedule_evidence_url": "https://www.loteriasyapuestas.es/example-schedule",
+  "schedule_evidence_sha256": "<64 lowercase hex characters>",
+  "ticket_cutoff_at_utc": "2026-11-08T11:00:00Z",
+  "first_kickoff_at": "2026-11-08T14:00:00+01:00",
+  "positions": [
+    {
+      "position": 7,
+      "fixture_status": "public_draw_expected",
+      "home": "Postponed Home",
+      "away": "Postponed Away",
+      "kickoff_at": "2026-11-08T12:00:00+01:00",
+      "status_evidence_url": "https://www.loteriasyapuestas.es/example-postponement-notice.pdf",
+      "status_evidence_sha256": "<64 lowercase hex characters>",
+      "status_captured_at_utc": "2026-11-08T10:15:00Z"
+    }
+  ]
+}
+```
+
+The strict validator rejects unknown fields, including any actual score, result sign, target label or post-match reconciliation collection. Football-model vectors must cover scheduled positions only. Every public-draw-expected position must have exactly one official SELAE participant-forecast snapshot captured strictly before the same ticket cutoff. Final ball counts remain post-close metadata and are not accepted as pre-ticket probabilities.
+
+The post-match path remains separate: `score_ticket_record` consumes the fully reconciled official outcomes, including the realized public-draw sign, to score already persisted ticket columns. This separation prevents realized results from determining which forecasts are generated.
+
+The schedule/status timestamps and hashes are still declared evidence metadata; the code verifies structure, hashes and ordering but does not independently timestamp or authenticate local captures. No historical pre-close public-draw forecast sample is currently available, so this change closes a code-path leakage risk but does not create new historical public-draw probabilities or performance metrics.
