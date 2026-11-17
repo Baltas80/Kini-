@@ -345,7 +345,7 @@ class TicketLedger:
                 )
             pleno15_digest = _sha256(pleno15_sha256, "pleno15_sha256")
             score_evidence_digest = hashlib.sha256(
-                b"KINI-TICKET-SCORE-EVIDENCE-V1\\0"
+                b"KINI-TICKET-SCORE-EVIDENCE-V1\x00"
                 + bytes.fromhex(reconciliation_digest)
                 + bytes.fromhex(pleno15_digest)
             ).hexdigest()
@@ -500,8 +500,12 @@ class TicketLedger:
                 {
                     "score": score,
                     "score_sha256": digest,
-                    "reconciliation_sha256": row["reconciliation_sha256"],
-                    "score_evidence_sha256": row["reconciliation_sha256"],
+                    "reconciliation_sha256": score.get(
+                        "reconciliation_sha256", row["reconciliation_sha256"]
+                    ),
+                    "score_evidence_sha256": score.get(
+                        "score_evidence_sha256", row["reconciliation_sha256"]
+                    ),
                     "recorded_at_utc": row["recorded_at_utc"],
                 }
             )
