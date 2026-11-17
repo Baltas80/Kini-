@@ -579,8 +579,10 @@ def test_jornada_1_2021_2022_official_snapshot_matches_reviewed_selae_results() 
     assert verified["official_main_matches_verified"] is True
     assert verified["official_pleno_verified"] is True
     assert digest == hashlib.sha256(path.read_bytes()).hexdigest()
- 
-def test_jornada_1_2022_2023_official_snapshot_matches_reviewed_selae_results() -> None:
+
+def test_jornada_1_2022_2023_official_snapshot_matches_reviewed_selae_results() -> (
+    None
+):
     path = (
         Path(__file__).resolve().parents[1]
         / "kini_engine"
@@ -647,12 +649,42 @@ def test_jornada_1_2022_2023_official_snapshot_matches_reviewed_selae_results() 
     prize = snapshot["prize_distribution"]
     assert prize["revenue_eur"] == 2_633_274.00
     assert prize["categories"] == [
-        {"category": "pleno_al_15", "winner_count": 0, "unit_prize_eur": None, "status": "rollover"},
-        {"category": "14", "winner_count": 0, "unit_prize_eur": None, "status": "rollover"},
-        {"category": "13", "winner_count": 90, "unit_prize_eur": 2194.40, "status": "awarded"},
-        {"category": "12", "winner_count": 1591, "unit_prize_eur": 124.13, "status": "awarded"},
-        {"category": "11", "winner_count": 14042, "unit_prize_eur": 14.06, "status": "awarded"},
-        {"category": "10", "winner_count": 71640, "unit_prize_eur": 3.31, "status": "awarded"},
+        {
+            "category": "pleno_al_15",
+            "winner_count": 0,
+            "unit_prize_eur": None,
+            "status": "rollover",
+        },
+        {
+            "category": "14",
+            "winner_count": 0,
+            "unit_prize_eur": None,
+            "status": "rollover",
+        },
+        {
+            "category": "13",
+            "winner_count": 90,
+            "unit_prize_eur": 2194.40,
+            "status": "awarded",
+        },
+        {
+            "category": "12",
+            "winner_count": 1591,
+            "unit_prize_eur": 124.13,
+            "status": "awarded",
+        },
+        {
+            "category": "11",
+            "winner_count": 14042,
+            "unit_prize_eur": 14.06,
+            "status": "awarded",
+        },
+        {
+            "category": "10",
+            "winner_count": 71640,
+            "unit_prize_eur": 3.31,
+            "status": "awarded",
+        },
     ]
     assert prize["elige8"] == {
         "revenue_eur": 68_687.50,
@@ -682,4 +714,3 @@ def test_jornada_1_2022_2023_official_snapshot_matches_reviewed_selae_results() 
     assert verified["official_main_matches_verified"] is True
     assert verified["official_pleno_verified"] is True
     assert digest == hashlib.sha256(path.read_bytes()).hexdigest()
-
