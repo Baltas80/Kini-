@@ -55,7 +55,7 @@ def _validate_recorded_at(value: object, validated: dict[str, Any]) -> str:
             "recorded_at_utc must be a non-empty ISO-8601 timestamp"
         )
     try:
-        parsed = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(value.strip())
     except ValueError as exc:
         raise TicketLedgerError(
             "recorded_at_utc must be an ISO-8601 timestamp"
