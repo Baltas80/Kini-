@@ -113,7 +113,9 @@ def _preclose_snapshot() -> dict[str, object]:
     }
 
 
-def test_reconciliation_builds_complete_outcome_vector_and_preserves_public_draw() -> None:
+def test_reconciliation_builds_complete_outcome_vector_and_preserves_public_draw() -> (
+    None
+):
     outcomes = outcomes_from_reconciliation(_reconciliation(), DRAW_DATE)
 
     assert len(outcomes) == 14
@@ -232,11 +234,12 @@ def test_ticket_requires_cutoff_and_schedule_provenance() -> None:
         score_ticket_record(ticket, report)
 
 
-def test_build_probability_vectors_uses_preclose_snapshot_for_public_draw_only() -> None:
+def test_build_probability_vectors_uses_preclose_snapshot_for_public_draw_only() -> (
+    None
+):
     report = _reconciliation()
     model_probabilities = {
-        position: {"1": 0.5, "X": 0.3, "2": 0.2}
-        for position in range(1, 15)
+        position: {"1": 0.5, "X": 0.3, "2": 0.2} for position in range(1, 15)
         if position != 7
     }
     result = build_ticket_probability_vectors(
@@ -271,7 +274,9 @@ def test_probability_builder_requires_snapshot_for_every_public_draw_position() 
         )
 
 
-def test_probability_builder_rejects_model_probability_for_public_draw_position() -> None:
+def test_probability_builder_rejects_model_probability_for_public_draw_position() -> (
+    None
+):
     report = _reconciliation()
     model_probabilities = {
         position: {"1": 0.5, "X": 0.3, "2": 0.2}

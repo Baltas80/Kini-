@@ -136,9 +136,13 @@ def outcomes_from_reconciliation(
     collections: dict[str, list[dict[str, Any]]] = {}
     for name in collection_names:
         value = report.get(name)
-        if not isinstance(value, list) or any(not isinstance(item, dict) for item in value):
+        if not isinstance(value, list) or any(
+            not isinstance(item, dict) for item in value
+        ):
             raise TicketOutcomeError(f"reconciliation {name} must be a list of objects")
-        collections[name] = [item for item in value if item.get("draw_date") == expected_date]
+        collections[name] = [
+            item for item in value if item.get("draw_date") == expected_date
+        ]
 
     if collections["unresolved_fixtures"]:
         raise TicketOutcomeError(
@@ -153,7 +157,9 @@ def outcomes_from_reconciliation(
     for item in collections["resolved_fixtures"]:
         position = _position(item.get("coupon_position"), "resolved coupon_position")
         if position in outcomes:
-            raise TicketOutcomeError(f"{expected_date}: duplicate outcome at position {position}")
+            raise TicketOutcomeError(
+                f"{expected_date}: duplicate outcome at position {position}"
+            )
         if item.get("training_label_eligible") is not True:
             raise TicketOutcomeError(
                 f"{expected_date} position {position}: played fixture must be training-eligible"
@@ -280,7 +286,10 @@ def validate_preclose_public_draw_snapshot(
         raise TicketOutcomeError("unsupported pre-close forecast snapshot schema")
     if snapshot.get("provider") != "SELAE":
         raise TicketOutcomeError("pre-close forecast provider must be SELAE")
-    if _parse_draw_date(snapshot.get("draw_date"), "snapshot.draw_date") != expected_date:
+    if (
+        _parse_draw_date(snapshot.get("draw_date"), "snapshot.draw_date")
+        != expected_date
+    ):
         raise TicketOutcomeError("pre-close forecast draw date mismatch")
     if _position(snapshot.get("position"), "snapshot.position") != expected_position:
         raise TicketOutcomeError("pre-close forecast coupon position mismatch")
@@ -385,7 +394,9 @@ def build_ticket_probability_vectors(
         "draw_date": _parse_draw_date(draw_date, "draw_date"),
         "ticket_cutoff_at_utc": _parse_utc_timestamp(
             ticket_cutoff_at_utc, "ticket_cutoff_at_utc"
-        ).isoformat().replace("+00:00", "Z"),
+        )
+        .isoformat()
+        .replace("+00:00", "Z"),
         "probabilities": probabilities,
         "probability_sources": sources,
         "public_draw_positions": sorted(public_positions),
@@ -415,16 +426,22 @@ def _validate_ticket_record(ticket: dict[str, Any]) -> dict[str, Any]:
 
     raw_columns = ticket.get("columns")
     if not isinstance(raw_columns, list) or not 1 <= len(raw_columns) <= 31_104:
-        raise TicketOutcomeError("ticket columns must contain between 1 and 31,104 columns")
+        raise TicketOutcomeError(
+            "ticket columns must contain between 1 and 31,104 columns"
+        )
     columns: list[tuple[str, ...]] = []
     seen: set[tuple[str, ...]] = set()
     for index, raw_column in enumerate(raw_columns, start=1):
         if (
             not isinstance(raw_column, list)
             or len(raw_column) != 14
-            or any(not isinstance(sign, str) or sign not in SIGNS for sign in raw_column)
+            or any(
+                not isinstance(sign, str) or sign not in SIGNS for sign in raw_column
+            )
         ):
-            raise TicketOutcomeError(f"ticket column {index} must contain 14 valid signs")
+            raise TicketOutcomeError(
+                f"ticket column {index} must contain 14 valid signs"
+            )
         column = tuple(raw_column)
         if column in seen:
             raise TicketOutcomeError(f"ticket contains duplicate direct column {index}")
@@ -483,7 +500,9 @@ def score_ticket_record(
         "actual_main_results": list(actual),
         "outcome_types": [item["outcome_type"] for item in outcomes],
         "public_draw_positions": [
-            item["position"] for item in outcomes if item["outcome_type"] == "public_draw"
+            item["position"]
+            for item in outcomes
+            if item["outcome_type"] == "public_draw"
         ],
         "played_positions": [
             item["position"] for item in outcomes if item["outcome_type"] == "played"
