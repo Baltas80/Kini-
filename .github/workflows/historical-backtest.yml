@@ -130,22 +130,60 @@ jobs:
         with:
           python-version: "3.12"
       - run: python -m pip install -e ".[ml]"
-      - name: Restore latest default-branch Football-Data cache
+      - name: Find latest validated dataset on PR base branch
+        if: github.event_name == 'pull_request'
+        id: source_dataset
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASE_BRANCH: ${{ github.event.pull_request.base.ref }}
+        run: |
+          runs_json="$(gh api --method GET "repos/$GITHUB_REPOSITORY/actions/workflows/historical-data-validation.yml/runs" -f "branch=$BASE_BRANCH" -f status=completed -F per_page=100)"
+          dataset_run_id=""
+          while read -r run_id; do
+            [[ -n "$run_id" ]] || continue
+            artifacts_json="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/artifacts?per_page=100")"
+            if jq -e '[.artifacts[]? | select(.name == "kini-historical-data" and .expired == false)] | length > 0' <<<"$artifacts_json" >/dev/null; then
+              dataset_run_id="$run_id"
+              break
+            fi
+          done < <(
+            jq -r '.workflow_runs[]? | select(.conclusion == "success") | .id' <<<"$runs_json"
+          )
+          if [[ -z "$dataset_run_id" ]]; then
+            echo "No successful, unexpired kini-historical-data artifact exists on base branch $BASE_BRANCH" >&2
+            exit 1
+          fi
+          echo "Using validated historical dataset from run $dataset_run_id on $BASE_BRANCH"
+          echo "run_id=$dataset_run_id" >> "$GITHUB_OUTPUT"
+      - name: Download validated dataset from PR base branch
+        if: github.event_name == 'pull_request'
+        uses: actions/download-artifact@v4
+        with:
+          name: kini-historical-data
+          run-id: ${{ steps.source_dataset.outputs.run_id }}
+          repository: ${{ github.repository }}
+          github-token: ${{ github.token }}
+          path: data
+      - name: Restore Football-Data raw CSV cache
+        if: github.event_name != 'pull_request'
         uses: actions/cache/restore@v4
         with:
           path: .cache/football-data
           key: football-data-${{ runner.os }}-${{ github.ref_name }}-${{ github.run_id }}
           restore-keys: |
-            football-data-${{ runner.os }}-${{ github.event.pull_request.base.ref || github.ref_name }}-
             football-data-${{ runner.os }}-master-
-      - run: python scripts/build_history.py --offline
-      - name: Enforce weekly Football-Data cache snapshot
+      - name: Build history from cached source data
+        if: github.event_name != 'pull_request'
+        run: python scripts/build_history.py --offline
+      - name: Enforce validated historical dataset snapshot
         run: |
           python - <<'PY'
           import json
           import math
           from datetime import datetime, timezone
           from pathlib import Path
+
+          import pandas as pd
 
           profile = json.loads(
               Path("data/historical_spain.profile.json").read_text(encoding="utf-8")
@@ -158,38 +196,36 @@ jobs:
           if not isinstance(sources, list) or len(sources) != 14:
               raise SystemExit("Expected exactly 14 cached Football-Data source files")
 
+          now = datetime.now(timezone.utc)
           stale = []
           mtimes = []
           for source in sources:
-              age = source.get("cache_age_hours")
               modified = source.get("cache_file_mtime_utc")
-              if (
-                  not isinstance(age, (int, float))
-                  or isinstance(age, bool)
-                  or not math.isfinite(float(age))
-                  or float(age) > 168.0
-                  or not isinstance(modified, str)
-              ):
-                  stale.append(
-                      (source.get("source_url"), source.get("cache_age_hours"))
-                  )
+              if not isinstance(modified, str):
+                  stale.append((source.get("source_url"), "missing cache mtime"))
                   continue
               timestamp = datetime.fromisoformat(modified)
               if timestamp.tzinfo is None or timestamp.utcoffset() is None:
                   stale.append((source.get("source_url"), "timezone-naive mtime"))
                   continue
-              mtimes.append(timestamp.astimezone(timezone.utc))
+              timestamp = timestamp.astimezone(timezone.utc)
+              age_hours = (now - timestamp).total_seconds() / 3600.0
+              if not math.isfinite(age_hours) or age_hours < 0 or age_hours > 168.0:
+                  stale.append((source.get("source_url"), age_hours))
+                  continue
+              mtimes.append(timestamp)
           if stale:
-              raise SystemExit(f"Football-Data cache is missing or older than seven days: {stale}")
+              raise SystemExit(f"Validated source snapshot is missing or older than seven days: {stale}")
           if len(mtimes) != 14 or (max(mtimes) - min(mtimes)).total_seconds() > 3600:
               raise SystemExit("Football-Data source files do not belong to one hourly snapshot")
 
           rows = int(profile.get("rows_after_deduplication", 0))
-          if rows <= 0:
-              raise SystemExit("Historical dataset contains no completed fixtures")
+          dataset = pd.read_csv("data/historical_spain.csv")
+          if rows <= 0 or len(dataset) != rows:
+              raise SystemExit("Historical CSV row count does not match its validated profile")
           print(
-              "WEEKLY_HISTORY_SOURCE_ACCEPTANCE_OK: "
-              f"{rows} completed fixtures from one validated 14-file snapshot"
+              "VALIDATED_HISTORY_SNAPSHOT_OK: "
+              f"{rows} completed fixtures from one immutable 14-file source snapshot"
           )
           PY
       - name: Diagnose first ML forecast
