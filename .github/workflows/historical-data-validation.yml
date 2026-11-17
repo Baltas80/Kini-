@@ -65,17 +65,72 @@ jobs:
           path: .cache/football-data
           key: football-data-${{ runner.os }}-${{ github.ref_name }}-${{ github.run_id }}
           restore-keys: |
-            football-data-${{ runner.os }}-${{ github.ref_name }}-
-            football-data-${{ runner.os }}-
+            football-data-${{ runner.os }}-master-
       - name: Build historical data and profile
         env:
           REFRESH_SOURCE: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.refresh_source) }}
         run: |
           if [ "$REFRESH_SOURCE" = "true" ]; then
-            python scripts/build_history.py --refresh
+            python scripts/build_history.py --refresh --require-fresh
           else
             python scripts/build_history.py --offline
           fi
+      - name: Enforce weekly Football-Data cache snapshot
+        env:
+          REFRESH_SOURCE: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.refresh_source) }}
+        run: |
+          python - <<'PY'
+          import json
+          import math
+          import os
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          profile = json.loads(
+              Path("data/historical_spain.profile.json").read_text(encoding="utf-8")
+          )
+          sources = profile.get("source_cache_metadata")
+          if not profile.get("integrity_passed"):
+              raise SystemExit("Historical dataset profile reports failed integrity")
+          if len(profile.get("source_urls", [])) != 14:
+              raise SystemExit("Expected exactly 14 Football-Data source URLs")
+          if not isinstance(sources, list) or len(sources) != 14:
+              raise SystemExit("Expected exactly 14 cached Football-Data source files")
+
+          max_age_hours = 1.0 if os.environ.get("REFRESH_SOURCE") == "true" else 168.0
+          stale = []
+          mtimes = []
+          for source in sources:
+              age = source.get("cache_age_hours")
+              modified = source.get("cache_file_mtime_utc")
+              if (
+                  not isinstance(age, (int, float))
+                  or isinstance(age, bool)
+                  or not math.isfinite(float(age))
+                  or float(age) > max_age_hours
+                  or not isinstance(modified, str)
+              ):
+                  stale.append(
+                      (source.get("source_url"), source.get("cache_age_hours"))
+                  )
+                  continue
+              timestamp = datetime.fromisoformat(modified)
+              if timestamp.tzinfo is None or timestamp.utcoffset() is None:
+                  stale.append((source.get("source_url"), "timezone-naive mtime"))
+                  continue
+              mtimes.append(timestamp.astimezone(timezone.utc))
+          if stale:
+              raise SystemExit(
+                  f"Football-Data cache exceeds the {max_age_hours:g}-hour freshness limit: {stale}"
+              )
+          if len(mtimes) != 14 or (max(mtimes) - min(mtimes)).total_seconds() > 3600:
+              raise SystemExit("Football-Data source files do not belong to one hourly snapshot")
+
+          print(
+              "WEEKLY_HISTORY_SOURCE_ACCEPTANCE_OK: "
+              f"{len(sources)} source files; maximum age {max_age_hours:g} hours"
+          )
+          PY
       - name: Validate canonical team identities
         run: |
           python -m scripts.validate_team_identity_registry --csv data/historical_spain.csv --output data/team_identity_validation.json
