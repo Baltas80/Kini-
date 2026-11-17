@@ -224,17 +224,11 @@ def test_ticket_ledger_lists_by_draw_date_and_enforces_limit(tmp_path):
     ledger = TicketLedger(tmp_path / "tickets.sqlite3")
     first = _ticket()
     ledger.append_ticket(first)
-    second = {
-        **_ticket(),
-        "ticket_id": "quiniela-2026-11-09-001",
-        "draw_date": "2026-11-09",
-        "ticket_created_at_utc": "2026-11-09T09:30:00Z",
-        "ticket_cutoff_at_utc": "2026-11-09T11:00:00Z",
-        "first_kickoff_at": "2026-11-09T14:00:00+01:00",
-    }
+    second = {**_ticket(), "ticket_id": "quiniela-2026-11-08-002"}
     ledger.append_ticket(second)
 
-    assert len(ledger.list_ticket_records(draw_date=DRAW_DATE)) == 1
+    assert len(ledger.list_ticket_records(draw_date=DRAW_DATE)) == 2
+    assert ledger.list_ticket_records(draw_date="2026-11-09") == []
     assert len(ledger.list_ticket_records(limit=1)) == 1
     with pytest.raises(ValueError, match="limit"):
         ledger.list_ticket_records(limit=True)
