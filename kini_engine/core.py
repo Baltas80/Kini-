@@ -1,12 +1,21 @@
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
+import hashlib
+import json
 from typing import Any, ClassVar
 
 import numpy as np
 from scipy.stats import poisson
+
+from .team_identity import normalize_team_name
+from .ticket_outcomes import (
+    TicketOutcomeError,
+    build_ticket_probability_vectors,
+    validate_coupon_plan,
+)
 
 SIGNS = ("1", "X", "2")
 LAE_SOURCE_ID = "quinielista.es:porcentajes_lae.asp"
@@ -148,6 +157,24 @@ def _parse_aware_datetime(value: Any) -> datetime | None:
 
     if parsed.tzinfo is None or parsed.utcoffset() is None:
         return None
+    return parsed.astimezone(UTC)
+
+
+def _match_kickoff_utc(value: datetime | str, field: str) -> datetime:
+    """Parse a fixture kickoff only when its timezone is explicit."""
+    if isinstance(value, datetime):
+        parsed = value
+    elif isinstance(value, str):
+        raw = value.strip().replace("Z", "+00:00")
+        try:
+            parsed = datetime.fromisoformat(raw)
+        except ValueError as exc:
+            raise TicketOutcomeError(f"{field} must be an ISO-8601 kickoff") from exc
+    else:
+        raise TicketOutcomeError(f"{field} must be a timezone-aware kickoff")
+
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        raise TicketOutcomeError(f"{field} must include a timezone offset")
     return parsed.astimezone(UTC)
 
 
@@ -1424,10 +1451,105 @@ class KiniEngine:
         *,
         pleno15_home_categories: Iterable[str] | None = None,
         pleno15_away_categories: Iterable[str] | None = None,
+        coupon_plan: dict[str, Any] | None = None,
+        public_draw_snapshots: Mapping[int, dict[str, Any]] | None = None,
+        ticket_id: str | None = None,
     ) -> dict[str, Any]:
+        """Generate a coupon with optional strict pre-ticket evidence validation.
+
+        With a coupon plan, the first 14 fixtures are matched by exact normalized
+        team labels and timezone-aware kickoffs. Football forecasts are generated
+        only for scheduled positions. Public-draw positions require their own
+        pre-ticket SELAE participant snapshot and never enter the football model.
+        The Pleno al 15 kickoff is independently checked.
+        """
         if len(fixtures) != 15:
             raise ValueError("Quiniela needs 15 fixtures")
-        preds = [self._predict_one(m, self.history) for m in fixtures]
+
+        probability_vectors: dict[str, Any] | None = None
+        normalized_plan: dict[str, Any] | None = None
+        preds: list[Prediction | None] = []
+
+        if coupon_plan is None:
+            if public_draw_snapshots is not None or ticket_id is not None:
+                raise TicketOutcomeError(
+                    "public-draw snapshots and ticket_id require a pre-ticket coupon plan"
+                )
+            preds = [self._predict_one(match, self.history) for match in fixtures]
+            optimizer_probabilities = [
+                prediction.probabilities
+                for prediction in preds[:14]
+                if prediction is not None
+            ]
+        else:
+            if not isinstance(coupon_plan, dict) or not isinstance(
+                coupon_plan.get("draw_date"), str
+            ):
+                raise TicketOutcomeError(
+                    "pre-ticket coupon plan must contain an ISO draw_date"
+                )
+            draw_date = coupon_plan["draw_date"]
+            normalized_plan = validate_coupon_plan(coupon_plan, draw_date)
+
+            for position, match in enumerate(fixtures[:14], start=1):
+                planned = normalized_plan["positions"][position]
+                if (
+                    normalize_team_name(match.home)
+                    != normalize_team_name(planned["home"])
+                    or normalize_team_name(match.away)
+                    != normalize_team_name(planned["away"])
+                ):
+                    raise TicketOutcomeError(
+                        f"fixture {position} home/away identity or coupon order "
+                        "does not match the pre-ticket plan"
+                    )
+                actual_kickoff = _match_kickoff_utc(
+                    match.date, f"fixture {position}.kickoff"
+                )
+                if actual_kickoff != planned["kickoff_at"].astimezone(UTC):
+                    raise TicketOutcomeError(
+                        f"fixture {position} kickoff does not match the pre-ticket plan"
+                    )
+
+            pleno_fixture = fixtures[14]
+            if (
+                normalize_team_name(pleno_fixture.home)
+                != normalize_team_name(normalized_plan["pleno15_home"])
+                or normalize_team_name(pleno_fixture.away)
+                != normalize_team_name(normalized_plan["pleno15_away"])
+            ):
+                raise TicketOutcomeError(
+                    "Pleno al 15 home/away identity does not match the pre-ticket plan"
+                )
+            if _match_kickoff_utc(
+                pleno_fixture.date, "Pleno al 15 kickoff"
+            ) != normalized_plan["pleno15_kickoff_at"].astimezone(UTC):
+                raise TicketOutcomeError(
+                    "Pleno al 15 kickoff does not match the pre-ticket plan"
+                )
+
+            model_probabilities_by_position: dict[int, dict[str, float]] = {}
+            for position, match in enumerate(fixtures[:14], start=1):
+                if position in normalized_plan["public_draw_positions"]:
+                    preds.append(None)
+                    continue
+                prediction = self._predict_one(match, self.history)
+                preds.append(prediction)
+                model_probabilities_by_position[position] = prediction.probabilities
+
+            # Fixture 15 is the separate Pleno al 15 football match.
+            preds.append(self._predict_one(pleno_fixture, self.history))
+            probability_vectors = build_ticket_probability_vectors(
+                draw_date=draw_date,
+                coupon_plan=coupon_plan,
+                model_probabilities_by_position=model_probabilities_by_position,
+                public_draw_snapshots=public_draw_snapshots or {},
+            )
+            for source in probability_vectors["probability_sources"]:
+                if source["source"] == "football_model":
+                    source["model_mode"] = "ensemble"
+            optimizer_probabilities = probability_vectors["probabilities"]
+
         pleno_source = self.dc.prediction_source(
             fixtures[14].home,
             fixtures[14].away,
@@ -1444,7 +1566,7 @@ class KiniEngine:
             pleno15_away_categories = (str(pleno_best["away_goals"]),)
 
         ticket = self.optimizer.optimize(
-            [prediction.probabilities for prediction in preds[:14]],
+            optimizer_probabilities,
             budget=budget,
             pleno15_home_categories=pleno15_home_categories,
             pleno15_away_categories=pleno15_away_categories,
@@ -1465,8 +1587,11 @@ class KiniEngine:
             raise RuntimeError("selected Pleno categories have invalid probability mass")
 
         coverage_14 = float(ticket["joint_coverage"])
-        return {
-            "predictions": [prediction.__dict__ for prediction in preds],
+        result: dict[str, Any] = {
+            "predictions": [
+                None if prediction is None else prediction.__dict__
+                for prediction in preds
+            ],
             "ticket": ticket,
             "pleno_al_15": pleno_distribution,
             "pleno_al_15_best": pleno_best,
@@ -1484,3 +1609,71 @@ class KiniEngine:
                 "independent_all_14_matches_and_selected_pleno15_categories"
             ),
         }
+
+        if probability_vectors is not None and normalized_plan is not None:
+            ticket_payload: dict[str, Any] = {
+                "schema_version": 1,
+                "draw_date": probability_vectors["draw_date"],
+                "ticket_created_at_utc": probability_vectors["ticket_created_at_utc"],
+                "ticket_cutoff_at_utc": probability_vectors["ticket_cutoff_at_utc"],
+                "first_kickoff_at": probability_vectors["first_kickoff_at"],
+                "cutoff_evidence_url": normalized_plan["cutoff_evidence_url"],
+                "cutoff_evidence_sha256": normalized_plan["cutoff_evidence_sha256"],
+                "cutoff_evidence_captured_at_utc": (
+                    normalized_plan["cutoff_evidence_captured_at_utc"]
+                    .isoformat()
+                    .replace("+00:00", "Z")
+                ),
+                "schedule_evidence_url": normalized_plan["schedule_evidence_url"],
+                "schedule_evidence_sha256": normalized_plan["schedule_evidence_sha256"],
+                "schedule_evidence_captured_at_utc": (
+                    normalized_plan["schedule_captured_at_utc"]
+                    .isoformat()
+                    .replace("+00:00", "Z")
+                ),
+                "pleno15_home": normalized_plan["pleno15_home"],
+                "pleno15_away": normalized_plan["pleno15_away"],
+                "pleno15_kickoff_at": probability_vectors["pleno15_kickoff_at"],
+                "coupon_plan": coupon_plan,
+                "probability_vectors": probability_vectors["probabilities"],
+                "probability_sources": probability_vectors["probability_sources"],
+                "public_draw_positions": probability_vectors["public_draw_positions"],
+                "columns": ticket["columns"],
+                "pleno15_combinations": ticket["pleno15_combinations"],
+                "budget": ticket["budget"],
+                "cost_eur": ticket["cost_eur"],
+            }
+            identity_payload = json.dumps(
+                ticket_payload,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+            identity_hash = hashlib.sha256(identity_payload.encode("utf-8")).hexdigest()
+            if ticket_id is None:
+                ticket_id = f"{probability_vectors['draw_date']}:{identity_hash[:16]}"
+            elif not isinstance(ticket_id, str) or not ticket_id.strip():
+                raise TicketOutcomeError("ticket_id must be a non-empty string")
+            ticket_payload["ticket_id"] = ticket_id.strip()
+            ticket_record_json = json.dumps(
+                ticket_payload,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+            ticket_record_sha256 = hashlib.sha256(
+                ticket_record_json.encode("utf-8")
+            ).hexdigest()
+            result.update(
+                {
+                    "ticket_id": ticket_payload["ticket_id"],
+                    "ticket_record": ticket_payload,
+                    "ticket_record_sha256": ticket_record_sha256,
+                    "ticket_probability_vectors": probability_vectors["probabilities"],
+                    "ticket_probability_sources": probability_vectors["probability_sources"],
+                    "public_draw_positions": probability_vectors["public_draw_positions"],
+                    "coupon_plan": coupon_plan,
+                }
+            )
+
+        return result
