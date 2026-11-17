@@ -3148,3 +3148,18 @@ A deterministic regression test now compares the dynamic-programming result for 
 The rules document now states the optimization objective and explicitly distinguishes the legacy `joint_coverage` field from a true dependence-aware joint probability. No predictive model or historical backtest metric was changed.
 
 **Next action:** integrate public-draw outcome/provenance records into coupon-level ticket evaluation without using post-close ball counts as pre-close probabilities; then expand historical coupon coverage only where each journey has independently verified SELAE evidence.
+
+
+## Validation of optimizer regression — 2026-11-17
+
+Code revision: [`b5b157d`](https://github.com/Baltas80/Kini-/commit/b5b157d6abda00f52df2de8b34e67b1be6e43d58).
+
+- PR CI [44030534304](https://github.com/Baltas80/Kini-/actions/runs/44030534304): actionlint, Ruff lint and formatting passed; **311 tests passed** in 2.80 seconds. The 21 warnings are upstream `penaltyblog`/NumPy 2.5 deprecations. The new exhaustive optimizer test passed.
+- Historical-data validation [44030534491](https://github.com/Baltas80/Kini-/actions/runs/44030534491): **5,322 completed fixtures**, `integrity_passed=true`; artifact ID 14305270912, ZIP SHA-256 `3684519743fb3c11a5751daa903b700bcc7bad252fd21cf72a6bf8374a53c595`.
+- Historical walk-forward [44030534315](https://github.com/Baltas80/Kini-/actions/runs/44030534315) skipped its backtest job because this revision changes tests and documentation only; it is not reported as a new predictive validation.
+- Coupon pilot [44030534267](https://github.com/Baltas80/Kini-/actions/runs/44030534267) skipped its pilot because coupon model/importer code and its evidence inputs did not change. The previous one-coupon pilot remains a software integration check, not a performance sample.
+- SELAE archive discovery [44030534275](https://github.com/Baltas80/Kini-/actions/runs/44030534275) skipped the live fetch because the discovery script was unchanged; no new archive inventory was produced.
+
+No changes were made to `master`, no PR was merged, and no new predictive metric or profitability claim is made.
+
+**Next action:** implement a fail-closed bridge from SELAE public-draw outcome records into coupon-level ticket evaluation. Keep the realized public-draw sign available for scoring, exclude the fixture from football training and match-probability calibration, and require a timestamped pre-close participant-forecast snapshot before using any public-draw probability in ticket construction. Expand the coupon archive only after each jornada has its own reviewed official SELAE evidence.
