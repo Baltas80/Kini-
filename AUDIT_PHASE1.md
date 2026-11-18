@@ -3958,3 +3958,15 @@ Reviewed `kini_engine/core.py` and the corresponding regression coverage in `tes
 **Code-level conclusion:** no leakage path was found in the audited rolling-feature, training-row or context/H2H functions. This is not a full point-in-time certification: the historical source is date-level, not timestamp-level. Exact kickoff/publication times and odds-capture times remain unavailable, so the model can be audited only against a conservative calendar-day boundary. Same-day fixtures/results are intentionally excluded.
 
 **P2 status:** code-level leakage controls and regression tests are validated; source timestamp availability and independent point-in-time reconstruction remain open. Continue with source provenance and odds-coverage evidence rather than re-running the same code audit.
+
+
+## 2026-11-18 — Odds coverage probe fixture-time guard
+
+A static review of the read-only coverage probe found that it matched provider events by exact normalized home/away names but did not enforce the provider kickoff against the independently verified crosswalk kickoff. A participant match within the broad ±12-hour event search window could therefore be reported as coverage despite a materially different scheduled time; a requested 1-hour snapshot could also be after the provider's scheduled kickoff while still being counted as coverage.
+
+- Added a strict 90-minute kickoff matching tolerance. Participant matches outside the tolerance are reported as `kickoff_mismatch` and do not trigger a markets request.
+- Added a pre-kickoff guard: if the requested snapshot is at or after the provider's scheduled kickoff, it is reported as `snapshot_not_pre_kickoff` and the markets endpoint is not called.
+- The workflow aggregate now counts kickoff mismatches and post-kickoff snapshots separately.
+- Added regression tests for both cases. Validation is pending the GitHub CI triggered by this change; no live API request, price download or dataset modification is performed.
+
+**Next action:** validate the change through CI, then keep the coverage probe read-only and pending the API key. Do not use this coverage metadata as model input or market benchmark evidence.
