@@ -60,3 +60,15 @@ python -m scripts.probe_the_odds_api_coverage --lead-hours 6,1
 ## Test coverage
 
 `tests/test_odds_api_coverage.py` uses mocked HTTP responses. It verifies strict timezone handling, exact team matching, snapshot ordering, response hashes, bookmaker/market extraction, request authentication via header, and that no odds endpoint is called.
+
+## GitHub Actions execution (prepared)
+
+The repository includes a manual workflow, `.github/workflows/odds-api-coverage-probe.yml`, for running the bounded coverage check without exposing the raw provider response.
+
+1. Add a repository Actions secret named `THE_ODDS_API_KEY` under **Settings → Secrets and variables → Actions**. Never put the key in a workflow input, command argument, commit or log.
+2. Once this workflow is present on the repository's default branch, open **Actions → The Odds API coverage probe → Run workflow**.
+3. Keep the default `eu` region and `24,6,1` hour horizons for the first run.
+
+The workflow serializes runs, accepts only one region, caps the verified crosswalk at 10 fixtures and three horizons (maximum 60 coverage requests/credits), and calls only the historical events and event-markets endpoints. It does **not** call the paid historical-odds endpoint. It writes aggregate counts to the Actions job summary, does not upload an artifact containing event IDs or bookmaker-level records, and removes the raw local report after summarization.
+
+GitHub only exposes `workflow_dispatch` after the workflow file reaches the default branch. This change is currently prepared on the open PR branch; it has not been merged. No live request was sent in this implementation run because no API key was supplied. The local PowerShell command above remains available for a manual run from a machine with the key.

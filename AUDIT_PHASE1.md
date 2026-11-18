@@ -3806,3 +3806,13 @@ No API key, paid subscription, provider data or new bookmaker probabilities were
 - Added operator documentation at `docs/ODDS_API_COVERAGE_PROBE.md`. CI's Ruff lint/format file lists include the new script and tests. The first CI attempt found style/type-exception issues; these were corrected in commit `32dc129`. The final CI run for that commit is still pending at this checkpoint. Historical-data validation passed; expensive historical-model and coupon jobs correctly skipped because no model/coupon behavior changed.
 
 **Not yet executed live:** no `THE_ODDS_API_KEY` was supplied to this run, so no provider requests were sent and no bookmaker/event coverage result is claimed. The ten-fixture crosswalk is a current-season sample, not a full multi-season census. Coverage metadata is not price evidence, not a market benchmark and not eligible model input. The next action is to run the probe with a valid key, review exact team reconciliation and h2h availability, then decide whether a bounded paid price pilot and licensing review are justified. Football-Data's conservative market eligibility rule remains unchanged.
+
+## 2026-11-18 — Bounded Actions entrypoint for historical-odds coverage
+
+- Prepared `.github/workflows/odds-api-coverage-probe.yml` as a manual, serialized, read-only GitHub Actions workflow.
+- It requires the repository secret `THE_ODDS_API_KEY`, uses the existing verified SELAE crosswalk, and enforces a hard cap of 10 fixtures × 3 horizons × 2 discovery endpoints = **60 maximum requests/credits**.
+- It calls only historical event and event-market coverage discovery. The paid historical-odds endpoint is not called; no prices enter the dataset or models.
+- The job summary contains aggregate match and `h2h` availability counts by competition/horizon only. It does not upload raw responses, event IDs or bookmaker-level records, and deletes the local raw report after summarization.
+- The workflow is on the PR branch only; GitHub manual dispatch becomes available after it reaches the default branch. It has not been merged.
+- No API key was supplied to this run, so no provider request was sent and no live coverage claim is made.
+- **Next action:** after authorized integration, add `THE_ODDS_API_KEY` as a repository Actions secret and run the default 10-fixture probe. Review the aggregate result before expanding the crosswalk or considering any paid price pilot.
