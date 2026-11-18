@@ -429,14 +429,12 @@ def probe_coverage(
             exact_matches = [
                 event
                 for event in participant_matches
-                if abs(int(event["kickoff_delta_seconds"]))
-                <= MAX_KICKOFF_DELTA_SECONDS
+                if abs(int(event["kickoff_delta_seconds"])) <= MAX_KICKOFF_DELTA_SECONDS
             ]
             kickoff_mismatches = [
                 event
                 for event in participant_matches
-                if abs(int(event["kickoff_delta_seconds"]))
-                > MAX_KICKOFF_DELTA_SECONDS
+                if abs(int(event["kickoff_delta_seconds"])) > MAX_KICKOFF_DELTA_SECONDS
             ]
 
             row: dict[str, Any] = {
