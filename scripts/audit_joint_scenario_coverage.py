@@ -43,7 +43,9 @@ def _validate_scenario(scenario: Any, name: str) -> tuple[str, ...]:
 def _validate_direct_system(columns: Any) -> list[tuple[str, ...]]:
     if not isinstance(columns, list) or not columns:
         raise ValueError("direct columns must be a non-empty list")
-    parsed = [_validate_scenario(column, f"column {i}") for i, column in enumerate(columns, 1)]
+    parsed = [
+        _validate_scenario(column, f"column {i}") for i, column in enumerate(columns, 1)
+    ]
     if len(set(parsed)) != len(parsed):
         raise ValueError("direct system contains duplicate columns")
     selected = [{column[i] for column in parsed} for i in range(14)]
