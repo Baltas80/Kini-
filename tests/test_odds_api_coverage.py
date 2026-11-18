@@ -59,6 +59,7 @@ def event_payload(
     timestamp="2026-11-07T06:55:00Z",
     home="Malaga",
     away="Santander",
+    commence_time="2026-11-07T13:00:00Z",
 ):
     return {
         "timestamp": timestamp,
@@ -70,7 +71,7 @@ def event_payload(
                 "sport_key": "soccer_spain_la_liga",
                 "home_team": home,
                 "away_team": away,
-                "commence_time": "2026-11-07T13:00:00Z",
+                "commence_time": commence_time,
             }
         ],
     }
@@ -211,6 +212,7 @@ def test_probe_records_exact_match_snapshot_hashes_and_h2h_bookmakers():
 
     row = report["results"][0]
     assert row["match_status"] == "exact"
+    assert row["snapshot_is_pre_kickoff"] is True
     assert row["coverage_status"] == "h2h_available"
     assert row["event_id"] == "event-123"
     assert row["events_snapshot_timestamp"] == "2026-11-07T06:55:00Z"
@@ -246,6 +248,43 @@ def test_probe_does_not_fuzzy_match_team_aliases_or_query_market_endpoint():
     assert row["coverage_status"] == "no_exact_event_match"
     assert row["event_id"] is None
     assert row["candidate_events"][0]["home_team"] == "Málaga"
+    assert len(session.calls) == 1
+
+
+
+
+def test_probe_rejects_participant_match_with_kickoff_delta_over_tolerance():
+    session = FakeSession(
+        [FakeResponse(event_payload(commence_time="2026-11-07T16:00:00Z"))]
+    )
+    client = TheOddsApiCoverageClient("test-api-key", session=session)
+
+    report = probe_coverage([fixture()], (6.0,), client)
+
+    row = report["results"][0]
+    assert row["participant_match_count"] == 1
+    assert row["kickoff_mismatch_count"] == 1
+    assert row["match_status"] == "kickoff_mismatch"
+    assert row["coverage_status"] == "kickoff_mismatch"
+    assert row["event_id"] is None
+    assert len(session.calls) == 1
+
+
+def test_probe_skips_market_lookup_when_snapshot_is_after_provider_kickoff():
+    session = FakeSession(
+        [FakeResponse(event_payload(commence_time="2026-11-07T11:30:00Z"))]
+    )
+    client = TheOddsApiCoverageClient("test-api-key", session=session)
+
+    report = probe_coverage([fixture()], (1.0,), client)
+
+    row = report["results"][0]
+    assert row["match_status"] == "exact"
+    assert row["kickoff_delta_seconds"] == -5400
+    assert row["snapshot_is_pre_kickoff"] is False
+    assert row["coverage_status"] == "snapshot_not_pre_kickoff"
+    assert row["h2h_market_available"] is False
+    assert row["event_id"] == "event-123"
     assert len(session.calls) == 1
 
 
