@@ -105,8 +105,7 @@ def _validate_ticket_index_metadata(
     for column, expected in expected_metadata.items():
         if row[column] != expected:
             raise TicketLedgerError(
-                f"stored ticket {row['ticket_id']!r} has inconsistent "
-                f"{column} metadata"
+                f"stored ticket {row['ticket_id']!r} has inconsistent {column} metadata"
             )
 
 
