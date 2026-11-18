@@ -1,4 +1,4 @@
-from scripts.summarize_odds_api_coverage import aggregate_report, render_summary
+from scripts.summarize_odds_api_coverage import aggregate_report, main, render_summary
 
 
 def test_aggregate_report_counts_all_statuses_without_missing_counter_keys():
@@ -100,3 +100,21 @@ def test_render_summary_includes_all_aggregate_columns():
         "Raw provider responses, event IDs and bookmaker-level records are not uploaded."
         in summary
     )
+
+
+def test_main_writes_summary_and_removes_report(tmp_path, monkeypatch):
+    artifacts = tmp_path / "artifacts"
+    artifacts.mkdir()
+    report_path = artifacts / "the_odds_api_coverage.json"
+    report_path.write_text('{"results": []}', encoding="utf-8")
+    summary_path = tmp_path / "step_summary.md"
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary_path))
+
+    assert main() == 0
+    assert summary_path.read_text(encoding="utf-8").startswith(
+        "# The Odds API — aggregate coverage probe"
+    )
+    assert not report_path.exists()
+    assert not artifacts.exists()

@@ -102,7 +102,7 @@ def main() -> int:
         print(summary, end="")
         return 0
 
-    summary_path = pathlib.Path(summary_path_value)
+    summary_path = Path(summary_path_value)
     summary_path.parent.mkdir(parents=True, exist_ok=True)
     with summary_path.open("a", encoding="utf-8") as handle:
         handle.write(summary)
