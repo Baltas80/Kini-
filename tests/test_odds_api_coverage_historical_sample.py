@@ -99,7 +99,9 @@ def test_checked_in_bundle_has_six_historical_and_ten_current_fixtures():
     assert len({fixture.fixture_id for fixture in fixtures}) == 16
     assert {fixture.competition_id for fixture in fixtures} == {"SP1", "SP2"}
     assert len([fixture for fixture in fixtures if fixture.sample_id is not None]) == 6
-    assert {fixture.season for fixture in fixtures if fixture.sample_id is not None} == {
+    assert {
+        fixture.season for fixture in fixtures if fixture.sample_id is not None
+    } == {
         "2021",
         "2122",
         "2223",

@@ -184,11 +184,16 @@ def load_historical_sample_fixtures(
     try:
         payload = json.loads(raw_bytes)
     except json.JSONDecodeError as exc:
-        raise ValueError(f"Invalid historical coverage sample JSON: {source_path}") from exc
+        raise ValueError(
+            f"Invalid historical coverage sample JSON: {source_path}"
+        ) from exc
 
     if not isinstance(payload, dict):
         raise TypeError("Historical coverage sample must be a JSON object")
-    if payload.get("schema_version") != 1 or payload.get("provider") != "verified_schedule_sample":
+    if (
+        payload.get("schema_version") != 1
+        or payload.get("provider") != "verified_schedule_sample"
+    ):
         raise ValueError("Unsupported historical coverage sample schema/provider")
     entries = payload.get("entries")
     if not isinstance(entries, list):
@@ -232,16 +237,24 @@ def load_historical_sample_fixtures(
                 f"Historical sample entry {index} must be a men's SP1/SP2 fixture"
             )
         if not isinstance(home, str) or not home.strip():
-            raise ValueError(f"Historical sample entry {index} has no canonical home name")
+            raise ValueError(
+                f"Historical sample entry {index} has no canonical home name"
+            )
         if not isinstance(away, str) or not away.strip():
-            raise ValueError(f"Historical sample entry {index} has no canonical away name")
+            raise ValueError(
+                f"Historical sample entry {index} has no canonical away name"
+            )
         if not isinstance(schedule_source, str) or not schedule_source.strip():
             raise ValueError(f"Historical sample entry {index} has no schedule source")
         if not isinstance(evidence_url, str) or not evidence_url.startswith("https://"):
-            raise ValueError(f"Historical sample entry {index} has no HTTPS evidence URL")
+            raise ValueError(
+                f"Historical sample entry {index} has no HTTPS evidence URL"
+            )
 
         if not isinstance(kickoff_raw, str):
-            raise TypeError(f"Historical sample entry {index} kickoff_at must be a string")
+            raise TypeError(
+                f"Historical sample entry {index} kickoff_at must be a string"
+            )
         try:
             kickoff_local = datetime.fromisoformat(kickoff_raw)
         except ValueError as exc:
