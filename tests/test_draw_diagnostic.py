@@ -94,7 +94,7 @@ def test_snapshot_alignment_accepts_only_pre_snapshot_training(tmp_path):
 )
 def test_snapshot_alignment_rejects_temporal_leakage(tmp_path, field, value, message):
     row = _fixture_row(1, "2026-01-09")
-    manifest, path = _ledger(tmp_path, [row])
+    _manifest, path = _ledger(tmp_path, [row])
     from kini_engine.ledger import read_prediction_ledger
 
     loaded_manifest, loaded_rows = read_prediction_ledger(path)
@@ -109,7 +109,7 @@ def test_paired_market_benchmark_uses_same_snapshot_fixture_rows(tmp_path):
         _fixture_row(3, "2026-02-06", "X"),
         _fixture_row(4, "2026-02-06", "2"),
     ]
-    manifest, path = _ledger(tmp_path, rows)
+    _manifest, path = _ledger(tmp_path, rows)
     from kini_engine.ledger import read_prediction_ledger
 
     loaded_manifest, loaded_rows = read_prediction_ledger(path)
