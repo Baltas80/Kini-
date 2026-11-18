@@ -1403,6 +1403,7 @@ def test_metrics_reject_invalid_probability_vectors(probabilities):
     with pytest.raises(ValueError):
         multiclass_metrics([(probabilities, "1")])
 
+
 @pytest.mark.parametrize(
     "probabilities",
     [
