@@ -94,6 +94,7 @@ jobs:
           scripts/backup_ticket_ledger.py
           scripts/probe_the_odds_api_coverage.py
           tests/test_odds_api_coverage.py
+          tests/test_odds_api_coverage_historical_sample.py
           scripts/summarize_odds_api_coverage.py
           tests/test_odds_api_coverage_summary.py
           scripts/audit_joint_scenario_coverage.py
@@ -145,6 +146,7 @@ jobs:
           scripts/backup_ticket_ledger.py
           scripts/probe_the_odds_api_coverage.py
           tests/test_odds_api_coverage.py
+          tests/test_odds_api_coverage_historical_sample.py
           scripts/summarize_odds_api_coverage.py
           tests/test_odds_api_coverage_summary.py
           scripts/audit_joint_scenario_coverage.py
