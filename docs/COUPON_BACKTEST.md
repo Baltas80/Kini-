@@ -1,3 +1,18 @@
+## Optimizer probability-vector contract — validated 2026-11-18
+
+The direct-multiple optimizer now enforces the same strict source-vector contract as the predictive and market paths:
+
+- Exactly the three keys `1`, `X` and `2`; missing and extra keys are rejected.
+- Values must be finite numeric scalars in [0,1]. Numeric strings and Python/NumPy booleans are rejected; NumPy integer/floating scalars are accepted.
+- The existing 1e-6 sum tolerance is validation only. Source values are not silently renormalized before selecting signs or computing independent-match coverage.
+- The DP uses the selected marginal mass directly and treats zero selected mass as an invariant failure.
+
+Regression tests and full CI passed on 2026-11-18: [CI run 44250465424](https://github.com/Baltas80/Kini-/actions/runs/44250465424), **452 passed**, 25 upstream NumPy/penaltyblog deprecation warnings. The historical-data validation also passed on the same head: [run 44250465417](https://github.com/Baltas80/Kini-/actions/runs/44250465417), 5,322 fixtures and 10,644/10,644 canonical team references resolved.
+
+The coupon pilot was skipped by its change gate because coupon/model evaluation behavior did not change. The historical-model workflow remains pending; no new model or coupon performance metric is claimed.
+
+---
+
 # Coupon-level walk-forward backtest
 
 ## Purpose
