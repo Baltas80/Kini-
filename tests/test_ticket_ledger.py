@@ -523,3 +523,78 @@ def test_ticket_ledger_scores_official_prize_snapshot_idempotently(tmp_path):
     assert first["score"]["conditional_published_prize_reference_eur"] == "120.00"
     assert first["score"]["payout_evaluated"] is False
     assert len(ledger.list_ticket_scores(str(ticket["ticket_id"]))) == 1
+
+
+
+def test_ticket_ledger_verify_integrity_checks_ticket_and_score_rows(tmp_path):
+    ledger = TicketLedger(tmp_path / "tickets.sqlite3")
+    ticket = _ticket()
+    ledger.append_ticket(ticket)
+    reconciliation_json = json.dumps(
+        _reconciliation(), ensure_ascii=False, separators=(",", ":")
+    )
+    ledger.score_ticket_json(str(ticket["ticket_id"]), reconciliation_json)
+
+    assert ledger.verify_integrity() == {
+        "integrity": "ok",
+        "ticket_count": 1,
+        "score_count": 1,
+    }
+
+
+def test_ticket_ledger_backup_is_consistent_and_reopenable(tmp_path):
+    source_path = tmp_path / "source" / "tickets.sqlite3"
+    backup_path = tmp_path / "backups" / "tickets-verified.sqlite3"
+    ledger = TicketLedger(source_path)
+    ticket = _ticket()
+    ledger.append_ticket(ticket)
+    reconciliation_json = json.dumps(
+        _reconciliation(), ensure_ascii=False, separators=(",", ":")
+    )
+    ledger.score_ticket_json(str(ticket["ticket_id"]), reconciliation_json)
+
+    result = ledger.backup_to(backup_path)
+
+    assert result["ticket_count"] == 1
+    assert result["score_count"] == 1
+    assert result["path"] == str(backup_path.resolve())
+    assert result["sha256"] == hashlib.sha256(backup_path.read_bytes()).hexdigest()
+
+    restored = TicketLedger(backup_path)
+    stored = restored.get_ticket_record(str(ticket["ticket_id"]))
+    assert stored is not None
+    assert stored["ticket_record"] == ticket
+    assert len(restored.list_ticket_scores(str(ticket["ticket_id"]))) == 1
+    assert restored.verify_integrity()["integrity"] == "ok"
+
+
+def test_ticket_ledger_backup_refuses_source_alias_and_existing_destination(tmp_path):
+    source_path = tmp_path / "tickets.sqlite3"
+    ledger = TicketLedger(source_path)
+    with pytest.raises(TicketLedgerError, match="must differ"):
+        ledger.backup_to(source_path.resolve())
+
+    destination = tmp_path / "existing.sqlite3"
+    destination.write_bytes(b"keep-existing-backup")
+    with pytest.raises(FileExistsError, match="refusing to overwrite"):
+        ledger.backup_to(destination)
+    assert destination.read_bytes() == b"keep-existing-backup"
+
+
+def test_ticket_ledger_backup_fails_closed_on_corrupt_ticket(tmp_path):
+    source_path = tmp_path / "tickets.sqlite3"
+    destination = tmp_path / "backup.sqlite3"
+    ledger = TicketLedger(source_path)
+    ticket = _ticket()
+    ledger.append_ticket(ticket)
+
+    with sqlite3.connect(source_path) as connection:
+        connection.execute("DROP TRIGGER tickets_no_update")
+        connection.execute(
+            "UPDATE tickets SET payload_json = '{}' WHERE ticket_id = ?",
+            (ticket["ticket_id"],),
+        )
+
+    with pytest.raises(TicketLedgerError, match="SHA-256 integrity check"):
+        ledger.backup_to(destination)
+    assert not destination.exists()

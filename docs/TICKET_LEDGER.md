@@ -96,3 +96,27 @@ For every expanded direct bet (14-match column × selected Pleno category pair),
 
 
 The command-line scorer exposes the same optional evidence path with `--official-result-snapshot`; it must be supplied together with `--pleno15`. The CLI hashes the exact snapshot bytes before invoking the scoring contract and writes the result without overwriting an existing output file.
+
+
+
+## Consistent backup and integrity verification
+
+Use the SQLite online-backup API through the supplied utility:
+
+```powershell
+python -m scripts.backup_ticket_ledger --destination backups/kini-tickets-2026-11-18.sqlite3
+```
+
+The source defaults to `KINI_TICKET_LEDGER_PATH` or `data/kini-tickets.sqlite3`; pass `--source` to select another database. The command:
+
+- verifies SQLite integrity, foreign keys, every ticket payload hash and ticket schema, and every score payload hash and ticket/evidence binding before backup;
+- uses SQLite's online backup API, so committed WAL content is included consistently while the source remains available;
+- verifies the standalone backup before publishing it;
+- refuses to overwrite an existing destination and publishes the completed file without a partial-copy window;
+- prints the absolute backup path, SHA-256 digest, and ticket/score counts.
+
+The destination filesystem must support hard links for atomic no-overwrite publication. Choose a new filename for each backup. Restore by stopping all ledger writers, copying the verified backup to the configured ledger path, and restarting the service; retain the backup unchanged.
+
+Python callers can use `TicketLedger(path).verify_integrity()` for a full logical check or `TicketLedger(path).backup_to(destination)` for the same verified backup operation. The returned SHA-256 identifies the exact published SQLite backup file.
+
+This protects against accidental corruption and incomplete file-copy procedures; it is not a digital signature, independent timestamp, off-site backup, or protection against a privileged database owner replacing both the database and its backups. Store copies on separate durable storage according to an operational retention policy.

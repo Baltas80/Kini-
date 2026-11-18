@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import sqlite3
+import tempfile
 from contextlib import closing
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
@@ -149,6 +151,194 @@ class TicketLedger:
                 END;
                 """
             )
+
+    @staticmethod
+    def _verify_connection(connection: sqlite3.Connection) -> dict[str, int]:
+        """Verify SQLite structure and every stored ticket/score payload."""
+        integrity_rows = connection.execute("PRAGMA integrity_check").fetchall()
+        if (
+            len(integrity_rows) != 1
+            or str(integrity_rows[0][0]).lower() != "ok"
+        ):
+            details = "; ".join(str(row[0]) for row in integrity_rows[:5])
+            raise TicketLedgerError(
+                f"SQLite integrity check failed: {details or 'no result returned'}"
+            )
+
+        foreign_key_errors = connection.execute(
+            "PRAGMA foreign_key_check"
+        ).fetchall()
+        if foreign_key_errors:
+            raise TicketLedgerError(
+                f"SQLite foreign-key check failed: {len(foreign_key_errors)} violation(s)"
+            )
+
+        ticket_hashes: dict[str, str] = {}
+        ticket_count = 0
+        ticket_rows = connection.execute(
+            """
+            SELECT ticket_id, payload_json, payload_sha256, recorded_at_utc
+            FROM tickets ORDER BY ticket_id
+            """
+        )
+        for row in ticket_rows:
+            ticket_id = row["ticket_id"]
+            payload_json = row["payload_json"]
+            digest = hashlib.sha256(payload_json.encode("utf-8")).hexdigest()
+            if digest != row["payload_sha256"]:
+                raise TicketLedgerError(
+                    f"stored ticket {ticket_id!r} failed its SHA-256 integrity check"
+                )
+            try:
+                ticket = json.loads(payload_json)
+            except json.JSONDecodeError as exc:
+                raise TicketLedgerError(
+                    f"stored ticket {ticket_id!r} is not valid JSON"
+                ) from exc
+            if not isinstance(ticket, dict) or ticket.get("ticket_id") != ticket_id:
+                raise TicketLedgerError(
+                    f"stored ticket {ticket_id!r} has an inconsistent identity"
+                )
+            try:
+                validated = validate_ticket_record(ticket)
+                _validate_recorded_at(row["recorded_at_utc"], validated)
+            except (KeyError, TypeError, ValueError) as exc:
+                raise TicketLedgerError(
+                    f"stored ticket {ticket_id!r} failed structural validation"
+                ) from exc
+            ticket_hashes[ticket_id] = digest
+            ticket_count += 1
+
+        score_count = 0
+        score_rows = connection.execute(
+            """
+            SELECT ticket_id, reconciliation_sha256, score_json, score_sha256
+            FROM ticket_scores ORDER BY ticket_id, reconciliation_sha256
+            """
+        )
+        for row in score_rows:
+            ticket_id = row["ticket_id"]
+            if ticket_id not in ticket_hashes:
+                raise TicketLedgerError(
+                    f"stored score references missing ticket {ticket_id!r}"
+                )
+            score_json = row["score_json"]
+            digest = hashlib.sha256(score_json.encode("utf-8")).hexdigest()
+            if digest != row["score_sha256"]:
+                raise TicketLedgerError(
+                    f"stored score for ticket {ticket_id!r} failed its SHA-256 integrity check"
+                )
+            try:
+                score = json.loads(score_json)
+            except json.JSONDecodeError as exc:
+                raise TicketLedgerError(
+                    f"stored score for ticket {ticket_id!r} is not valid JSON"
+                ) from exc
+            if (
+                not isinstance(score, dict)
+                or score.get("ticket_id") != ticket_id
+                or score.get("ticket_sha256") != ticket_hashes[ticket_id]
+            ):
+                raise TicketLedgerError(
+                    f"stored score for ticket {ticket_id!r} has inconsistent ticket binding"
+                )
+            evidence_digest = score.get(
+                "score_evidence_sha256", row["reconciliation_sha256"]
+            )
+            try:
+                evidence_digest = _sha256(
+                    evidence_digest, "stored score evidence digest"
+                )
+            except TicketLedgerError as exc:
+                raise TicketLedgerError(
+                    f"stored score for ticket {ticket_id!r} has an invalid evidence digest"
+                ) from exc
+            if evidence_digest != row["reconciliation_sha256"]:
+                raise TicketLedgerError(
+                    f"stored score for ticket {ticket_id!r} has an inconsistent evidence key"
+                )
+            score_count += 1
+
+        return {"ticket_count": ticket_count, "score_count": score_count}
+
+    def verify_integrity(self) -> dict[str, Any]:
+        """Validate SQLite structure and all ticket/score content hashes."""
+        with closing(self._connect()) as connection:
+            counts = self._verify_connection(connection)
+        return {"integrity": "ok", **counts}
+
+    def backup_to(self, destination: str | Path) -> dict[str, Any]:
+        """Create a consistent, verified SQLite backup without overwriting a file."""
+        target_path = Path(destination)
+        if target_path.resolve() == self.path.resolve():
+            raise TicketLedgerError("backup destination must differ from the source database")
+        if target_path.exists():
+            raise FileExistsError(f"refusing to overwrite existing backup: {target_path}")
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+
+        descriptor, temporary_name = tempfile.mkstemp(
+            prefix=f".{target_path.name}.",
+            suffix=".tmp",
+            dir=target_path.parent,
+        )
+        os.close(descriptor)
+        temporary_path = Path(temporary_name)
+
+        try:
+            with closing(self._connect()) as source:
+                source_counts = self._verify_connection(source)
+                with closing(
+                    sqlite3.connect(
+                        temporary_path,
+                        timeout=30.0,
+                        isolation_level=None,
+                    )
+                ) as target:
+                    target.row_factory = sqlite3.Row
+                    source.backup(target)
+                    journal_mode = target.execute(
+                        "PRAGMA journal_mode = DELETE"
+                    ).fetchone()
+                    if (
+                        journal_mode is None
+                        or str(journal_mode[0]).lower() != "delete"
+                    ):
+                        raise TicketLedgerError(
+                            "backup could not be finalized as a standalone SQLite file"
+                        )
+                    backup_counts = self._verify_connection(target)
+
+            if backup_counts != source_counts:
+                raise TicketLedgerError(
+                    "backup verification counts differ from the source ledger"
+                )
+
+            with temporary_path.open("rb+") as handle:
+                os.fsync(handle.fileno())
+
+            try:
+                os.link(temporary_path, target_path)
+            except FileExistsError:
+                raise
+            except OSError as exc:
+                raise TicketLedgerError(
+                    "backup could not be published atomically without overwriting "
+                    "an existing destination; use a filesystem that supports hard links"
+                ) from exc
+            temporary_path.unlink()
+
+            digest = hashlib.sha256()
+            with target_path.open("rb") as handle:
+                for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                    digest.update(chunk)
+
+            return {
+                "path": str(target_path.resolve()),
+                "sha256": digest.hexdigest(),
+                **backup_counts,
+            }
+        finally:
+            temporary_path.unlink(missing_ok=True)
 
     def append_ticket(
         self,

@@ -91,6 +91,7 @@ jobs:
           kini_engine/ticket_ledger.py
           tests/test_ticket_ledger.py
           scripts/score_selae_ticket.py
+          scripts/backup_ticket_ledger.py
           scripts/probe_the_odds_api_coverage.py
           tests/test_odds_api_coverage.py
           tests/test_ticket_outcomes.py
@@ -137,6 +138,7 @@ jobs:
           kini_engine/ticket_ledger.py
           tests/test_ticket_ledger.py
           scripts/score_selae_ticket.py
+          scripts/backup_ticket_ledger.py
           scripts/probe_the_odds_api_coverage.py
           tests/test_odds_api_coverage.py
           tests/test_ticket_outcomes.py
