@@ -251,8 +251,6 @@ def test_probe_does_not_fuzzy_match_team_aliases_or_query_market_endpoint():
     assert len(session.calls) == 1
 
 
-
-
 def test_probe_rejects_participant_match_with_kickoff_delta_over_tolerance():
     session = FakeSession(
         [FakeResponse(event_payload(commence_time="2026-11-07T16:00:00Z"))]
