@@ -24,11 +24,14 @@ For each probability mode, the report includes:
 - fixed-width P(X) calibration bins;
 - league and season segmentation, only if these fields exist in the ledger.
 
-Eligible market rows are reported separately. The market row count is not forced to
-match the full model sample; users must interpret sample eligibility carefully.
-This version does not compute xG/strength/disagreement segments, block-bootstrap
-intervals, paired statistical significance or payout/ROI. It does not infer missing
-features from outcomes or probabilities.
+The report also calculates descriptive paired differences in binary P(X) Brier and
+log loss against the eligible market consensus, restricted to identical fixture IDs.
+Eligible market rows are also reported separately; the market row count is not forced
+to match the full model sample.
+
+This version does not compute xG/strength/disagreement segments, temporal block-bootstrap
+intervals or paired significance tests. It does not infer missing features from outcomes
+or probabilities, and it makes no payout/ROI claim.
 
 The script checks ledger structure, duplicate fixture IDs, probability-vector validity
 and manifest row count, but the project's canonical ledger reader should still be
