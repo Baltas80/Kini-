@@ -25,9 +25,7 @@ def sample_report():
             {
                 "coupon_id": "sample",
                 "actual_main_results": actual,
-                "models": {
-                    mode: model for mode in ("dc", "ml", "ensemble_dc_ml")
-                },
+                "models": {mode: model for mode in ("dc", "ml", "ensemble_dc_ml")},
             }
         ],
     }, mass

@@ -1,4 +1,5 @@
 """Audit realized 14-match joint scenarios against direct Quiniela systems."""
+
 from __future__ import annotations
 
 import argparse
@@ -26,9 +27,7 @@ def _validate_probability_vector(vector: Any, index: int) -> dict[str, float]:
             raise ValueError(f"match {index}: probability for {sign} is invalid")
         values[sign] = value
     total = math.fsum(values.values())
-    if not math.isclose(
-        total, 1.0, rel_tol=0.0, abs_tol=PROBABILITY_SUM_TOLERANCE
-    ):
+    if not math.isclose(total, 1.0, rel_tol=0.0, abs_tol=PROBABILITY_SUM_TOLERANCE):
         raise ValueError(f"match {index}: probability vector sum is {total:.8g}")
     return values
 
@@ -44,10 +43,7 @@ def _validate_scenario(scenario: Any, name: str) -> tuple[str, ...]:
 def _validate_direct_system(columns: Any) -> list[tuple[str, ...]]:
     if not isinstance(columns, list) or not columns:
         raise ValueError("direct columns must be a non-empty list")
-    parsed = [
-        _validate_scenario(column, f"column {i}")
-        for i, column in enumerate(columns, 1)
-    ]
+    parsed = [_validate_scenario(column, f"column {i}") for i, column in enumerate(columns, 1)]
     if len(set(parsed)) != len(parsed):
         raise ValueError("direct system contains duplicate columns")
     selected = [{column[i] for column in parsed} for i in range(14)]
