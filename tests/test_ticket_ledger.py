@@ -569,6 +569,23 @@ def test_ticket_ledger_integrity_rejects_tampered_ticket_index_metadata(
         ledger.verify_integrity()
 
 
+def test_ticket_ledger_reads_reject_tampered_draw_date_index_metadata(tmp_path):
+    path = tmp_path / "tickets.sqlite3"
+    ledger = TicketLedger(path)
+    ticket = _ticket()
+    ledger.append_ticket(ticket)
+
+    with sqlite3.connect(path) as connection:
+        connection.execute("DROP TRIGGER tickets_no_update")
+        connection.execute(
+            "UPDATE tickets SET draw_date = ? WHERE ticket_id = ?",
+            ("2026-11-09", ticket["ticket_id"]),
+        )
+
+    with pytest.raises(TicketLedgerError, match="inconsistent draw_date metadata"):
+        ledger.list_ticket_records(draw_date="2026-11-09")
+
+
 def test_ticket_ledger_integrity_rejects_non_utc_score_timestamp(tmp_path):
     path = tmp_path / "tickets.sqlite3"
     ledger = TicketLedger(path)

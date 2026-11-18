@@ -88,6 +88,28 @@ def _validate_utc_timestamp(value: object, field: str) -> str:
     return parsed.astimezone(UTC).isoformat().replace("+00:00", "Z")
 
 
+def _validate_ticket_index_metadata(
+    row: sqlite3.Row, validated: dict[str, Any]
+) -> None:
+    """Ensure queryable ticket columns agree with the canonical ticket payload."""
+    expected_metadata = {
+        "draw_date": validated["draw_date"],
+        "ticket_created_at_utc": validated["ticket_created_at_utc"]
+        .isoformat()
+        .replace("+00:00", "Z"),
+        "ticket_cutoff_at_utc": validated["ticket_cutoff_at_utc"]
+        .isoformat()
+        .replace("+00:00", "Z"),
+        "first_kickoff_at": validated["first_kickoff_at"].isoformat(),
+    }
+    for column, expected in expected_metadata.items():
+        if row[column] != expected:
+            raise TicketLedgerError(
+                f"stored ticket {row['ticket_id']!r} has inconsistent "
+                f"{column} metadata"
+            )
+
+
 class TicketLedger:
     """SQLite-backed append-only ledger for generated Quiniela tickets and scores.
 
@@ -214,22 +236,7 @@ class TicketLedger:
                 )
             try:
                 validated = validate_ticket_record(ticket)
-                expected_metadata = {
-                    "draw_date": validated["draw_date"],
-                    "ticket_created_at_utc": validated["ticket_created_at_utc"]
-                    .isoformat()
-                    .replace("+00:00", "Z"),
-                    "ticket_cutoff_at_utc": validated["ticket_cutoff_at_utc"]
-                    .isoformat()
-                    .replace("+00:00", "Z"),
-                    "first_kickoff_at": validated["first_kickoff_at"].isoformat(),
-                }
-                for column, expected in expected_metadata.items():
-                    if row[column] != expected:
-                        raise TicketLedgerError(
-                            f"stored ticket {ticket_id!r} has inconsistent "
-                            f"{column} metadata"
-                        )
+                _validate_ticket_index_metadata(row, validated)
                 _validate_recorded_at(row["recorded_at_utc"], validated)
             except TicketLedgerError:
                 raise
@@ -470,7 +477,10 @@ class TicketLedger:
         with closing(self._connect()) as connection:
             row = connection.execute(
                 """
-                SELECT ticket_id, payload_json, payload_sha256, recorded_at_utc
+                SELECT
+                    ticket_id, draw_date, ticket_created_at_utc,
+                    ticket_cutoff_at_utc, first_kickoff_at, payload_json,
+                    payload_sha256, recorded_at_utc
                 FROM tickets WHERE ticket_id = ?
                 """,
                 (ticket_id.strip(),),
@@ -495,6 +505,7 @@ class TicketLedger:
                 f"stored ticket {ticket_id!r} has an inconsistent identity"
             )
         validated = validate_ticket_record(ticket)
+        _validate_ticket_index_metadata(row, validated)
         _validate_recorded_at(row["recorded_at_utc"], validated)
         return {
             "ticket_record": ticket,
