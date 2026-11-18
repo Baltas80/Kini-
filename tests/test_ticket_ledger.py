@@ -525,7 +525,6 @@ def test_ticket_ledger_scores_official_prize_snapshot_idempotently(tmp_path):
     assert len(ledger.list_ticket_scores(str(ticket["ticket_id"]))) == 1
 
 
-
 def test_ticket_ledger_verify_integrity_checks_ticket_and_score_rows(tmp_path):
     ledger = TicketLedger(tmp_path / "tickets.sqlite3")
     ticket = _ticket()

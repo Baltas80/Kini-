@@ -156,18 +156,13 @@ class TicketLedger:
     def _verify_connection(connection: sqlite3.Connection) -> dict[str, int]:
         """Verify SQLite structure and every stored ticket/score payload."""
         integrity_rows = connection.execute("PRAGMA integrity_check").fetchall()
-        if (
-            len(integrity_rows) != 1
-            or str(integrity_rows[0][0]).lower() != "ok"
-        ):
+        if len(integrity_rows) != 1 or str(integrity_rows[0][0]).lower() != "ok":
             details = "; ".join(str(row[0]) for row in integrity_rows[:5])
             raise TicketLedgerError(
                 f"SQLite integrity check failed: {details or 'no result returned'}"
             )
 
-        foreign_key_errors = connection.execute(
-            "PRAGMA foreign_key_check"
-        ).fetchall()
+        foreign_key_errors = connection.execute("PRAGMA foreign_key_check").fetchall()
         if foreign_key_errors:
             raise TicketLedgerError(
                 f"SQLite foreign-key check failed: {len(foreign_key_errors)} violation(s)"
@@ -271,9 +266,13 @@ class TicketLedger:
         """Create a consistent, verified SQLite backup without overwriting a file."""
         target_path = Path(destination)
         if target_path.resolve() == self.path.resolve():
-            raise TicketLedgerError("backup destination must differ from the source database")
+            raise TicketLedgerError(
+                "backup destination must differ from the source database"
+            )
         if target_path.exists():
-            raise FileExistsError(f"refusing to overwrite existing backup: {target_path}")
+            raise FileExistsError(
+                f"refusing to overwrite existing backup: {target_path}"
+            )
         target_path.parent.mkdir(parents=True, exist_ok=True)
 
         descriptor, temporary_name = tempfile.mkstemp(
@@ -299,10 +298,7 @@ class TicketLedger:
                     journal_mode = target.execute(
                         "PRAGMA journal_mode = DELETE"
                     ).fetchone()
-                    if (
-                        journal_mode is None
-                        or str(journal_mode[0]).lower() != "delete"
-                    ):
+                    if journal_mode is None or str(journal_mode[0]).lower() != "delete":
                         raise TicketLedgerError(
                             "backup could not be finalized as a standalone SQLite file"
                         )
