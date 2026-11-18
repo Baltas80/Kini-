@@ -12,7 +12,7 @@
 - **Final CI:** [run 44189932245](https://github.com/Baltas80/Kini-/actions/runs/44189932245) passed Actionlint, Ruff lint, Ruff format and **419 pytest tests** (25 non-blocking NumPy/penaltyblog deprecation warnings). The earlier strict prize test exposed that the official PDF host `www.selae.es` was missing from the allowlist; `selae.es` and `www.selae.es` are now accepted by exact hostname, and a lookalike-host regression rejects `www.selae.es.evil.example`.
 - **Interpretation limits:** this is pipeline and ticket-construction evidence, not a representative probability benchmark. It does not provide Brier Score, Log Loss, reliability curves, a same-match market comparison, actual purchased-ticket evidence, payouts, ROI or profitability. Keep the ensemble unpromoted.
 - **P4 probability contract:** strict 1/X/2 validation now applies consistently to model metrics, calibration, ensembles, live market/LAE eligibility and per-bookmaker backtest inputs. It rejects extra/missing keys, strings, booleans, non-finite/out-of-range values and non-unit sums; no coercion or silent repair. Implementation 564e205 passed the full historical backtest; current-head CI passed 430 tests.
-- **Next priority:** investigate whether a historically timestamped, legally usable pre-match odds source can replace or complement Football-Data's schedule-only snapshot. Keep Friday/Tuesday and otherwise unverified captures out of strict parity claims. The audited 12 ML features and walk-forward feature construction use only results dated before the forecast/snapshot; exact historical result-publication timestamps remain unavailable. Do not promote any ensemble: the market remains stronger on the 3,991-fixture snapshot-aligned sample. Keep PR #10 draft; do not merge.
+- **Next priority:** use The Odds API's free coverage-discovery endpoints to check Spanish LaLiga/Segunda 1X2 historical coverage, bookmaker availability and timestamp density before considering a paid month. Historical odds access is paid; do not incur spend or relax the current market eligibility rule without verified coverage and licensing. Keep the Betfair Basic archive as a secondary exchange-data option, subject to its personal-use-only terms. Do not promote any ensemble.
 
 Date: 2026-11-15  
 Repository: Baltas80/Kini-  
@@ -3756,3 +3756,29 @@ This audit found no leakage path in the current 12 ML features or the date-level
 Football-Data provides no per-fixture odds-capture timestamp and does not document the timezone of its CSV Time field. Friday/Tuesday fixtures remain excluded by the conservative schedule screen; other schedule-compatible rows are not exact timestamp verification or proof of executable prices. Next, investigate a historically timestamped odds provider with documented licensing and cost, then integrate it only if the captured-at timestamp can be tied to each fixture. Do not relax the current fail-closed eligibility rule to increase sample size.
 
 The current PR head is a4992d9; its changes after the tested functional commit are documentation/formatting only. PR #10 remains open/draft and stacked on feat/selae-fixture-reconciliation. master remains untouched; no PR was merged.
+
+## 2026-11-18 — Historical odds provider reconnaissance
+
+The exact per-fixture Football-Data capture timestamp cannot be reconstructed from the current CSVs. A targeted provider review identified two credible alternatives, but neither is yet approved for ingestion.
+
+### Candidate A — The Odds API
+
+- Historical featured markets include 1X2 and begin on 2020-06-06. Snapshots are every 10 minutes through 2022-09 and every 5 minutes thereafter.
+- A historical query returns the snapshot timestamp actually selected: the closest snapshot equal to or earlier than the requested ISO-8601 timestamp. This supports a reproducible pre-kickoff cutoff rather than inferring capture time from a weekly schedule.
+- Historical data requires a paid plan. Current published entry plans: $30/month for 20,000 credits, $59/month for 100,000, $119/month for 5 million and $249/month for 15 million. The free plan has 500 credits but excludes historical odds; historical coverage discovery is available on the free plan.
+- Historical featured-market usage is 10 credits per region per market per snapshot. One region and one 1X2 market therefore cost 10 credits per requested snapshot. This makes a targeted sample feasible on the 20,000-credit plan, but a full multi-season, multi-snapshot archive must be budgeted before extraction.
+- Coverage for Spanish LaLiga and Segunda, European bookmaker depth, historical bookmaker continuity and event-ID matching has not yet been verified. Do not assume those competitions or preferred Spanish books are available for every season.
+- Sources: [historical data and timestamp semantics](https://the-odds-api.com/historical-odds-data/), [API snapshot frequency and quota](https://the-odds-api.com/liveapi/guides/v4/index.html), [published plans](https://the-odds-api.com/).
+
+### Candidate B — Betfair Historical Data
+
+- Time-stamped Exchange data is available from May 2015. The published soccer tiers list Basic as free with one-minute frequency, Advanced at GBP 69 with one-second frequency and Pro at GBP 230 with tick data.
+- Data is released five days after settlement. This is historical exchange liquidity/price evidence, not a bookmaker consensus and not interchangeable with the Football-Data bookmaker benchmark.
+- The provider states that the data is for personal/internal use only; commercial use requires a separate licence, and redistribution is prohibited without written permission. This restriction is material for any public or commercial Quiniela Predictor product.
+- Sources: [official archive and soccer pricing](https://historicdata.betfair.com/ExchangeHistoricalStore/), [data access and download](https://support.developer.betfair.com/hc/en-us/articles/360000402211-How-do-I-download-and-view-Betfair-Historical-Data), [commercial-use and access terms](https://historicdata.betfair.com/).
+
+### Decision and next technical step
+
+The Odds API is the first candidate to coverage-probe because its historical snapshot response exposes an explicit timestamp and its published plans permit a bounded one-month test. The free plan can inspect coverage without buying historical odds. The next implementation unit is a read-only coverage probe for the Spanish LaLiga and Segunda 1X2 market, recording requested time, returned snapshot timestamp, bookmaker keys, event IDs, teams, commence time and response hash. It must not write market rows into the production dataset until exact fixture reconciliation and licensing review pass.
+
+No API key, paid subscription, provider data or new bookmaker probabilities were available in this run. No external data was ingested and no new predictive metric is claimed. The current Football-Data benchmark remains unchanged and must retain its schedule/timestamp limitations.
