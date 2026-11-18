@@ -49,9 +49,10 @@ python -m scripts.probe_the_odds_api_coverage --lead-hours 6,1
 ## Interpretation and safeguards
 
 - The events endpoint returns the closest snapshot at or before the requested timestamp. The report records both timestamps and the staleness in seconds.
-- The event-markets endpoint is queried only after exactly one normalized, case-insensitive home/away name match. Unicode normalization and whitespace normalization are allowed; accents and substantive name differences are not erased. There is no fuzzy matching.
+- The event-markets endpoint is queried only after exactly one normalized, case-insensitive home/away name match with the provider kickoff within **90 minutes** of the independently verified official kickoff. Participant matches outside this tolerance are reported as `kickoff_mismatch`; no markets request is sent. Unicode normalization and whitespace normalization are allowed; accents and substantive name differences are not erased. There is no fuzzy matching.
+- A snapshot requested at or after the provider's scheduled kickoff is not counted as pre-kickoff coverage. The report marks it `snapshot_not_pre_kickoff` and skips the event-markets request.
 - Unmatched and ambiguous candidates are retained in the report for manual alias review; they are not joined to the model dataset.
-- The report records event and market response SHA-256 digests, API quota headers, bookmaker keys and the `h2h` availability by bookmaker.
+- The report records event and market response SHA-256 digests, API quota headers, bookmaker keys and the `h2h` availability by bookmaker, plus the kickoff delta, matching tolerance and whether the snapshot is strictly pre-kickoff.
 - The maximum credit estimate is one credit per request. Empty historical-events responses may be free; actual per-request quota headers are retained where supplied.
 - A sample of ten current-season fixtures is not proof of full historical coverage, bookmaker continuity or usable odds density across 2020/21–2026/27.
 - Coverage metadata is not odds evidence. A later paid-data pilot would still need exact fixture reconciliation, snapshot-time validation, per-bookmaker price checks, point-in-time safeguards and a licensing review before any market benchmark or model input is changed.
