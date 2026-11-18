@@ -1,163 +1,427 @@
 #!/usr/bin/env python3
-"""Analyze out-of-sample draw (X) forecasts from a Kini prediction-ledger JSONL.
-
-This is a diagnostic-only tool: it never modifies forecasts or model parameters.
-"""
+"""Reproducible OOS draw diagnostics for snapshot-aligned prediction ledgers."""
 from __future__ import annotations
 
 import argparse
 import json
 import math
 from collections import defaultdict
+from datetime import date
 from pathlib import Path
 from typing import Any
+
+import numpy as np
+
+from kini_engine.ledger import read_prediction_ledger
 
 SIGNS = ("1", "X", "2")
 
 
-def read_ledger(path: Path) -> tuple[dict[str, Any], list[dict[str, Any]]]:
-    records = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
-    if not records or records[0].get("record_type") != "run_manifest":
-        raise ValueError("JSONL must begin with a run_manifest")
-    manifest = {k: v for k, v in records[0].items() if k != "record_type"}
-    rows = []
-    seen = set()
-    for rec in records[1:]:
-        if rec.get("record_type") != "forecast":
-            raise ValueError("unexpected record type in ledger")
-        row = {k: v for k, v in rec.items() if k != "record_type"}
-        if row.get("fixture_id") in seen:
-            raise ValueError("duplicate fixture_id")
-        seen.add(row.get("fixture_id"))
-        if row.get("actual_result") not in SIGNS:
-            raise ValueError("invalid actual_result")
-        for mode, probs in row.get("model_probabilities", {}).items():
-            _validate_vector(probs, f"{mode} fixture")
-        rows.append(row)
-    if len(rows) != manifest.get("forecast_count"):
-        raise ValueError("manifest forecast_count mismatch")
-    return manifest, rows
-
-
-def _validate_vector(p: dict[str, Any], context: str) -> None:
-    if not isinstance(p, dict) or set(p) != set(SIGNS):
-        raise ValueError(f"{context}: probability vector must contain 1/X/2")
-    vals = [p[s] for s in SIGNS]
-    if any(isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v) or v < 0 or v > 1 for v in vals):
-        raise ValueError(f"{context}: invalid probabilities")
-    if abs(sum(vals)-1) > 1e-6:
-        raise ValueError(f"{context}: probabilities do not sum to one")
-
-
-def wilson(k: int, n: int, z: float = 1.959963984540054) -> list[float] | None:
-    if n == 0:
-        return None
-    p = k/n
-    den = 1 + z*z/n
-    center = (p + z*z/(2*n))/den
-    radius = z*math.sqrt(p*(1-p)/n + z*z/(4*n*n))/den
-    return [max(0, center-radius), min(1, center+radius)]
-
-
-def metric_rows(rows: list[dict[str, Any]], mode: str, bins: int) -> dict[str, Any]:
-    usable = [r for r in rows if mode in r.get("model_probabilities", {})]
-    if not usable:
-        return {"n": 0}
-    actual_draws = sum(r["actual_result"] == "X" for r in usable)
-    selected = [r for r in usable if max(r["model_probabilities"][mode], key=r["model_probabilities"][mode].get) == "X"]
-    hits = sum(r["actual_result"] == "X" for r in selected)
-    top2 = [r for r in usable if "X" in sorted(SIGNS, key=lambda s: r["model_probabilities"][mode][s], reverse=True)[:2]]
-    top2_hits = sum(r["actual_result"] == "X" for r in top2)
-    px = [r["model_probabilities"][mode]["X"] for r in usable]
-    obs = [int(r["actual_result"] == "X") for r in usable]
-    brier = sum((p-y)**2 for p,y in zip(px,obs))/len(px)
-    logloss = -sum(y*math.log(max(p,1e-15))+(1-y)*math.log(max(1-p,1e-15)) for p,y in zip(px,obs))/len(px)
-    # fixed-width bins over [0,1], last bin includes 1
-    calibration=[]
-    for i in range(bins):
-        lo,hi=i/bins,(i+1)/bins
-        grp=[(p,y) for p,y in zip(px,obs) if (lo<=p<hi) or (i==bins-1 and p==1)]
-        if grp:
-            calibration.append({"bin":f"[{lo:.2f},{hi:.2f}{']' if i==bins-1 else ')'}","n":len(grp),"mean_predicted":sum(p for p,_ in grp)/len(grp),"observed_rate":sum(y for _,y in grp)/len(grp)})
+def validate_snapshot_alignment(
+    manifest: dict[str, Any], rows: list[dict[str, Any]]
+) -> dict[str, Any]:
+    """Reject ordinary daily ledgers and enforce the snapshot training contract."""
+    required_modes = set(manifest["model_modes"])
+    if not rows:
+        raise ValueError("snapshot-aligned ledger contains no forecast rows")
+    seen_snapshots: dict[str, str] = {}
+    seen_fixtures: set[str] = set()
+    months: set[str] = set()
+    for index, row in enumerate(rows, start=1):
+        fixture_id = row["fixture_id"]
+        if fixture_id in seen_fixtures:
+            raise ValueError(f"duplicate fixture_id at forecast row {index}")
+        seen_fixtures.add(fixture_id)
+        snapshot_raw = row.get("market_snapshot_date")
+        fixture_raw = row.get("fixture_date")
+        if not isinstance(snapshot_raw, str) or not isinstance(fixture_raw, str):
+            raise ValueError(
+                f"forecast row {index} is not snapshot-aligned: "
+                "market_snapshot_date and fixture_date are required"
+            )
+        snapshot = date.fromisoformat(snapshot_raw)
+        fixture = date.fromisoformat(fixture_raw)
+        forecast_as_of = date.fromisoformat(row["forecast_as_of_date"])
+        training_cutoff = date.fromisoformat(row["training_cutoff_date"])
+        fit_cutoff = date.fromisoformat(row["model_fit_cutoff_date"])
+        if not (snapshot == forecast_as_of < fixture):
+            raise ValueError(
+                f"forecast row {index} violates forecast/snapshot/fixture date order"
+            )
+        if training_cutoff >= snapshot or fit_cutoff >= snapshot:
+            raise ValueError(
+                f"forecast row {index} includes same-day or future training data"
+            )
+        if row.get("market_eligible") is not True:
+            raise ValueError(
+                f"forecast row {index} is not market-eligible in snapshot sample"
+            )
+        if not isinstance(row.get("market_probabilities"), dict):
+            raise ValueError(f"forecast row {index} has no market probability vector")
+        if not required_modes.issubset(row["model_probabilities"]):
+            raise ValueError(f"forecast row {index} is missing a manifest model mode")
+        if row.get("model_fit_count_for_snapshot") != 1:
+            raise ValueError(f"forecast row {index} does not reference one snapshot fit")
+        if row.get("training_history_sha256") is None:
+            raise ValueError(f"forecast row {index} has no training-history fingerprint")
+        fingerprint = str(row["training_history_sha256"])
+        previous = seen_snapshots.setdefault(snapshot_raw, fingerprint)
+        if previous != fingerprint:
+            raise ValueError(
+                f"snapshot {snapshot_raw} contains inconsistent training fingerprints"
+            )
+        months.add(snapshot_raw[:7])
     return {
-        "n":len(usable),"draw_rate":actual_draws/len(usable),
-        "x_top1_n":len(selected),"x_top1_hits":hits,"x_top1_precision":hits/len(selected) if selected else None,"x_top1_precision_wilson":wilson(hits,len(selected)),
-        "draw_recall_when_x_top1":hits/actual_draws if actual_draws else None,"draw_recall_wilson":wilson(hits,actual_draws),
-        "x_in_top2_n":len(top2),"x_in_top2_hits":top2_hits,"x_top2_recall":top2_hits/actual_draws if actual_draws else None,"x_top2_precision":top2_hits/len(top2) if top2 else None,
-        "mean_p_x":sum(px)/len(px),"brier_x_binary":brier,"logloss_x_binary":logloss,"calibration_bins":calibration,
+        "n": len(rows),
+        "snapshot_dates": len(seen_snapshots),
+        "months": sorted(months),
+        "fixture_ids": seen_fixtures,
     }
 
 
-def group_metrics(rows: list[dict[str, Any]], mode: str, field: str, bins: int) -> dict[str, Any]:
-    groups=defaultdict(list)
-    for row in rows:
-        if field in row and row[field] is not None:
-            groups[str(row[field])].append(row)
-    return {key:metric_rows(value,mode,bins) for key,value in sorted(groups.items())}
+def wilson(successes: int, trials: int, z: float = 1.959963984540054) -> list[float] | None:
+    if trials == 0:
+        return None
+    p = successes / trials
+    denominator = 1.0 + z * z / trials
+    center = (p + z * z / (2.0 * trials)) / denominator
+    radius = z * math.sqrt(
+        p * (1.0 - p) / trials + z * z / (4.0 * trials * trials)
+    ) / denominator
+    return [max(0.0, center - radius), min(1.0, center + radius)]
 
 
-def run(path: Path, output_dir: Path, bins: int) -> dict[str, Any]:
-    manifest, rows=read_ledger(path)
-    modes=sorted(set().union(*(r.get("model_probabilities",{}).keys() for r in rows)))
-    results={}
+def _ranked_signs(probabilities: dict[str, float]) -> list[str]:
+    # Stable tie-break is explicit and shared by models and market.
+    return sorted(SIGNS, key=lambda sign: (-probabilities[sign], SIGNS.index(sign)))
+
+
+def _binary_scores(probabilities: np.ndarray, outcomes: np.ndarray) -> tuple[float, float]:
+    clipped = np.clip(probabilities, 1e-15, 1.0 - 1e-15)
+    brier = float(np.mean((clipped - outcomes) ** 2))
+    logloss = float(
+        -np.mean(
+            outcomes * np.log(clipped)
+            + (1.0 - outcomes) * np.log1p(-clipped)
+        )
+    )
+    return brier, logloss
+
+
+def _selection_metrics(
+    vectors: list[dict[str, float]], outcomes: np.ndarray, top_k: int
+) -> dict[str, Any]:
+    selected = np.asarray(
+        ["X" in _ranked_signs(vector)[:top_k] for vector in vectors], dtype=bool
+    )
+    actual_draws = outcomes.astype(bool)
+    hits = int(np.sum(selected & actual_draws))
+    n_selected = int(selected.sum())
+    n_draws = int(actual_draws.sum())
+    return {
+        "selected": n_selected,
+        "hits": hits,
+        "precision": hits / n_selected if n_selected else None,
+        "precision_wilson95": wilson(hits, n_selected),
+        "recall": hits / n_draws if n_draws else None,
+        "recall_wilson95": wilson(hits, n_draws),
+    }
+
+
+def _calibration_bins(
+    probabilities: np.ndarray, outcomes: np.ndarray, bins: int
+) -> list[dict[str, Any]]:
+    edges = np.linspace(0.0, 1.0, bins + 1)
+    result = []
+    for index, (lower, upper) in enumerate(zip(edges[:-1], edges[1:])):
+        mask = (probabilities >= lower) & (
+            (probabilities < upper) | ((index == bins - 1) & (probabilities <= upper))
+        )
+        count = int(mask.sum())
+        if count:
+            result.append(
+                {
+                    "lower": float(lower),
+                    "upper": float(upper),
+                    "n": count,
+                    "mean_p_x": float(probabilities[mask].mean()),
+                    "observed_x": float(outcomes[mask].mean()),
+                }
+            )
+    return result
+
+
+def _metrics(
+    vectors: list[dict[str, float]], outcomes: np.ndarray, bins: int
+) -> dict[str, Any]:
+    px = np.asarray([vector["X"] for vector in vectors], dtype=float)
+    brier, logloss = _binary_scores(px, outcomes)
+    return {
+        "n": len(outcomes),
+        "draw_rate": float(outcomes.mean()),
+        "mean_p_x": float(px.mean()),
+        "brier_x": brier,
+        "logloss_x": logloss,
+        "top1": _selection_metrics(vectors, outcomes, 1),
+        "top2": _selection_metrics(vectors, outcomes, 2),
+        "calibration_bins": _calibration_bins(px, outcomes, bins),
+    }
+
+
+def paired_block_bootstrap(
+    model_probabilities: np.ndarray,
+    market_probabilities: np.ndarray,
+    outcomes: np.ndarray,
+    month_labels: np.ndarray,
+    samples: int = 5000,
+    seed: int = 20261118,
+) -> dict[str, Any]:
+    """Paired bootstrap of complete calendar-month blocks."""
+    if samples < 100:
+        raise ValueError("bootstrap samples must be at least 100")
+    months = np.unique(month_labels)
+    if len(months) < 2:
+        raise ValueError("at least two calendar-month blocks are required")
+    blocks = {month: np.flatnonzero(month_labels == month) for month in months}
+    rng = np.random.default_rng(seed)
+    brier_deltas = np.empty(samples, dtype=float)
+    logloss_deltas = np.empty(samples, dtype=float)
+    for iteration in range(samples):
+        chosen_months = rng.choice(months, size=len(months), replace=True)
+        indices = np.concatenate([blocks[month] for month in chosen_months])
+        model_brier, model_logloss = _binary_scores(
+            model_probabilities[indices], outcomes[indices]
+        )
+        market_brier, market_logloss = _binary_scores(
+            market_probabilities[indices], outcomes[indices]
+        )
+        brier_deltas[iteration] = model_brier - market_brier
+        logloss_deltas[iteration] = model_logloss - market_logloss
+    return {
+        "unit": "calendar_month",
+        "blocks": int(len(months)),
+        "replicates": samples,
+        "seed": seed,
+        "delta_brier_model_minus_market_ci95": [
+            float(value) for value in np.quantile(brier_deltas, [0.025, 0.975])
+        ],
+        "delta_logloss_model_minus_market_ci95": [
+            float(value) for value in np.quantile(logloss_deltas, [0.025, 0.975])
+        ],
+    }
+
+
+def analyze(
+    manifest: dict[str, Any],
+    rows: list[dict[str, Any]],
+    bins: int = 10,
+    bootstrap_samples: int = 5000,
+    seed: int = 20261118,
+) -> dict[str, Any]:
+    alignment = validate_snapshot_alignment(manifest, rows)
+    ordered = sorted(
+        rows,
+        key=lambda row: (
+            row["market_snapshot_date"],
+            row["fixture_date"],
+            row["fixture_id"],
+        ),
+    )
+    outcomes = np.asarray(
+        [int(row["actual_result"] == "X") for row in ordered], dtype=float
+    )
+    market_vectors = [row["market_probabilities"] for row in ordered]
+    market = _metrics(market_vectors, outcomes, bins)
+    month_labels = np.asarray(
+        [row["market_snapshot_date"][:7] for row in ordered], dtype=str
+    )
+    modes = sorted(manifest["model_modes"])
+    diagnostics: dict[str, Any] = {}
     for mode in modes:
-        results[mode]=metric_rows(rows,mode,bins)
-        results[mode]["segments"]={field:group_metrics(rows,mode,field,bins) for field in ("season","league")}
-    # Paired comparison: model and market are scored on identical fixture IDs.
-    market_rows = [r for r in rows if r.get('market_eligible') and r.get('market_probabilities')]
-    market_by_id = {r['fixture_id']: r for r in market_rows}
-    results['market_snapshot_eligible'] = metric_rows([
-        {**r, 'model_probabilities': {'market': r['market_probabilities']}} for r in market_rows
-    ], 'market', bins)
-    results['market_snapshot_eligible']['n_market_eligible'] = len(market_rows)
-    paired = {}
-    for mode in modes:
-        common = [r for r in rows if r['fixture_id'] in market_by_id and mode in r.get('model_probabilities', {})]
-        if not common:
-            paired[mode] = {'n': 0}
-            continue
-        mb, kb, ml, kl = [], [], [], []
-        mh, kh = 0, 0
-        for row in common:
-            y = int(row['actual_result'] == 'X')
-            pm = float(row['model_probabilities'][mode]['X'])
-            pk = float(market_by_id[row['fixture_id']]['market_probabilities']['X'])
-            mb.append((pm-y)**2); kb.append((pk-y)**2)
-            ml.append(-(y*math.log(max(pm,1e-15))+(1-y)*math.log(max(1-pm,1e-15))))
-            kl.append(-(y*math.log(max(pk,1e-15))+(1-y)*math.log(max(1-pk,1e-15))))
-            mh += int(max(row['model_probabilities'][mode], key=row['model_probabilities'][mode].get) == 'X' and y == 1)
-            kp = market_by_id[row['fixture_id']]['market_probabilities']
-            kh += int(max(kp, key=kp.get) == 'X' and y == 1)
-        paired[mode] = {'n': len(common), 'model_x_brier': sum(mb)/len(common), 'market_x_brier': sum(kb)/len(common), 'delta_brier_model_minus_market': sum(a-b for a,b in zip(mb,kb))/len(common), 'model_x_logloss': sum(ml)/len(common), 'market_x_logloss': sum(kl)/len(common), 'delta_logloss_model_minus_market': sum(a-b for a,b in zip(ml,kl))/len(common), 'model_x_top1_hits': mh, 'market_x_top1_hits': kh}
-    results['paired_market_comparison_same_fixtures'] = paired
-    report={'schema_version':1,'source_ledger':str(path),'manifest':manifest,'rows':len(rows),'diagnostics':results,'limitations':['Segmentation fields are reported only when present in source ledger rows; xG/strength/disagreement are not inferred.','Market comparison is restricted to identical fixture IDs marked market_eligible; eligibility does not certify exact odds capture timestamps.','Paired differences are descriptive; no temporal block-bootstrap confidence intervals or significance tests are claimed.','No causal interpretation or model adjustment is performed.']}
-    output_dir.mkdir(parents=True,exist_ok=True)
-    (output_dir/"draw_diagnostic.json").write_text(json.dumps(report,indent=2,ensure_ascii=False)+"\n",encoding="utf-8")
-    lines=["# OOS draw (X) diagnostic","",f"- Rows: {len(rows)}",f"- Source ledger: {path}",f"- Ledger code revision: {manifest.get('code_revision','unknown')}","", "## Summary"]
-    for mode, m in results.items():
-        if mode.startswith("market"):
-            label="Market benchmark (eligible rows)"
-        else: label=mode
-        lines += [f"### {label}", "",f"- n: {m.get('n',0)}",f"- Draw prevalence: {m.get('draw_rate',float('nan')):.4f}",f"- P(X) mean: {m.get('mean_p_x',float('nan')):.4f}",f"- Binary X Brier: {m.get('brier_x_binary',float('nan')):.4f}",f"- Binary X Log Loss: {m.get('logloss_x_binary',float('nan')):.4f}",f"- X top-1 precision: {m.get('x_top1_precision')}",f"- X top-1 recall: {m.get('draw_recall_when_x_top1')}",f"- X included top-2 recall: {m.get('x_top2_recall')}", "", "Calibration bins:"]
-        lines.append("| Bin | n | mean P(X) | observed |")
-        lines.append("|---|---:|---:|---:|")
-        for b in m.get("calibration_bins",[]): lines.append(f"| {b['bin']} | {b['n']} | {b['mean_predicted']:.4f} | {b['observed_rate']:.4f} |")
-        lines.append("")
-    lines += ["## Caveats",""]+[f"- {item}" for item in report["limitations"]]
-    (output_dir/"draw_diagnostic.md").write_text("\n".join(lines)+"\n",encoding="utf-8")
+        vectors = [row["model_probabilities"][mode] for row in ordered]
+        metrics = _metrics(vectors, outcomes, bins)
+        model_px = np.asarray([vector["X"] for vector in vectors], dtype=float)
+        market_px = np.asarray([vector["X"] for vector in market_vectors], dtype=float)
+        bootstrap = paired_block_bootstrap(
+            model_px, market_px, outcomes, month_labels, bootstrap_samples, seed
+        )
+        metrics["paired_market"] = {
+            "n": len(ordered),
+            "delta_brier_model_minus_market": metrics["brier_x"] - market["brier_x"],
+            "delta_logloss_model_minus_market": (
+                metrics["logloss_x"] - market["logloss_x"]
+            ),
+            "bootstrap": bootstrap,
+        }
+        diagnostics[mode] = metrics
+
+    segmentations: dict[str, Any] = {}
+    for field in ("competition", "season_label"):
+        grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        for row in ordered:
+            value = row.get(field)
+            if value is not None:
+                grouped[str(value)].append(row)
+        segmentations[field] = {}
+        for label, group in sorted(grouped.items()):
+            if len(group) < 30:
+                continue
+            group_outcomes = np.asarray(
+                [int(row["actual_result"] == "X") for row in group], dtype=float
+            )
+            segmentations[field][label] = {
+                "n": len(group),
+                "draw_rate": float(group_outcomes.mean()),
+                "market": _metrics(
+                    [row["market_probabilities"] for row in group],
+                    group_outcomes,
+                    bins,
+                ),
+                "models": {
+                    mode: _metrics(
+                        [row["model_probabilities"][mode] for row in group],
+                        group_outcomes,
+                        bins,
+                    )
+                    for mode in modes
+                },
+            }
+
+    return {
+        "schema_version": 2,
+        "source": {
+            "ledger_type": "snapshot_aligned",
+            "code_revision": manifest.get("code_revision"),
+            "dataset_sha256": manifest.get("dataset_sha256"),
+            "forecast_start_date": manifest.get("forecast_start_date"),
+            "forecast_end_date": manifest.get("forecast_end_date"),
+            "forecast_count": manifest.get("forecast_count"),
+        },
+        "sample": {
+            "n": len(ordered),
+            "draws": int(outcomes.sum()),
+            "draw_rate": float(outcomes.mean()),
+            "snapshot_dates": alignment["snapshot_dates"],
+            "calendar_month_blocks": len(alignment["months"]),
+        },
+        "market": market,
+        "models": diagnostics,
+        "segments": segmentations,
+        "method": {
+            "market_comparison": "identical snapshot-aligned fixture IDs",
+            "training_cutoff": "strictly before market snapshot date",
+            "bootstrap": "paired calendar-month block bootstrap",
+            "tie_break": "1, then X, then 2",
+        },
+        "limitations": [
+            "Snapshot alignment is by documented calendar date, not exact intraday odds-capture timestamp.",
+            "xG, strength and DC/ML disagreement are not inferred when absent from ledger rows.",
+            "No payout, ROI or ticket-optimization claim is made.",
+            "Bootstrap intervals are conditional on this sample and block definition.",
+        ],
+    }
+
+
+def write_report(report: dict[str, Any], output_dir: Path) -> None:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    (output_dir / "draw_diagnostic.json").write_text(
+        json.dumps(report, indent=2, ensure_ascii=False, allow_nan=False) + "\n",
+        encoding="utf-8",
+    )
+    lines = [
+        "# OOS draw (X) diagnostic",
+        "",
+        f"- Fixtures: {report['sample']['n']}",
+        f"- Draws: {report['sample']['draws']} ({report['sample']['draw_rate']:.2%})",
+        f"- Snapshot dates: {report['sample']['snapshot_dates']}",
+        f"- Calendar-month bootstrap blocks: {report['sample']['calendar_month_blocks']}",
+        "",
+        "## P(X) metrics",
+        "",
+        "| Mode | Brier X | Log loss X | Mean P(X) | Top-1 precision | Top-1 recall | Top-2 recall |",
+        "|---|---:|---:|---:|---:|---:|---:|",
+        f"| Market | {report['market']['brier_x']:.5f} | {report['market']['logloss_x']:.5f} | {report['market']['mean_p_x']:.2%} | {report['market']['top1']['precision']!s} | {report['market']['top1']['recall']!s} | {report['market']['top2']['recall']!s} |",
+    ]
+    for mode, metrics in report["models"].items():
+        lines.append(
+            f"| {mode} | {metrics['brier_x']:.5f} | {metrics['logloss_x']:.5f} | "
+            f"{metrics['mean_p_x']:.2%} | {metrics['top1']['precision']!s} | "
+            f"{metrics['top1']['recall']!s} | {metrics['top2']['recall']!s} |"
+        )
+    lines += ["", "## Paired model-versus-market block bootstrap", ""]
+    lines += [
+        "| Mode | Δ Brier | IC95% | Δ Log loss | IC95% |",
+        "|---|---:|---:|---:|---:|",
+    ]
+    for mode, metrics in report["models"].items():
+        paired = metrics["paired_market"]
+        boot = paired["bootstrap"]
+        lines.append(
+            f"| {mode} | {paired['delta_brier_model_minus_market']:+.5f} | "
+            f"[{boot['delta_brier_model_minus_market_ci95'][0]:+.5f}, "
+            f"{boot['delta_brier_model_minus_market_ci95'][1]:+.5f}] | "
+            f"{paired['delta_logloss_model_minus_market']:+.5f} | "
+            f"[{boot['delta_logloss_model_minus_market_ci95'][0]:+.5f}, "
+            f"{boot['delta_logloss_model_minus_market_ci95'][1]:+.5f}] |"
+        )
+    lines += ["", "## Limitations", ""]
+    lines.extend(f"- {item}" for item in report["limitations"])
+    (output_dir / "draw_diagnostic.md").write_text(
+        "\n".join(lines) + "\n", encoding="utf-8"
+    )
+
+
+def run(
+    ledger_path: Path,
+    output_dir: Path,
+    bins: int = 10,
+    bootstrap_samples: int = 5000,
+    seed: int = 20261118,
+) -> dict[str, Any]:
+    manifest, rows = read_prediction_ledger(ledger_path)
+    report = analyze(manifest, rows, bins, bootstrap_samples, seed)
+    report["source"]["ledger_path"] = str(ledger_path)
+    write_report(report, output_dir)
     return report
 
 
 def main() -> None:
-    parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("ledger",type=Path)
-    parser.add_argument("--output-dir",type=Path,default=Path("draw-diagnostic"))
-    parser.add_argument("--bins",type=int,default=10)
-    args=parser.parse_args()
-    if not 2<=args.bins<=50: parser.error("--bins must be between 2 and 50")
-    report=run(args.ledger,args.output_dir,args.bins)
-    print(json.dumps({"rows":report["rows"],"models":list(report["diagnostics"]),"outputs":[str(args.output_dir/"draw_diagnostic.md"),str(args.output_dir/"draw_diagnostic.json")]},indent=2))
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("ledger", type=Path, help="snapshot-aligned immutable JSONL ledger")
+    parser.add_argument("--output-dir", type=Path, default=Path("draw-diagnostic"))
+    parser.add_argument("--bins", type=int, default=10)
+    parser.add_argument("--bootstrap-samples", type=int, default=5000)
+    parser.add_argument("--seed", type=int, default=20261118)
+    args = parser.parse_args()
+    if not 2 <= args.bins <= 50:
+        parser.error("--bins must be between 2 and 50")
+    if args.bootstrap_samples < 100:
+        parser.error("--bootstrap-samples must be at least 100")
+    try:
+        report = run(
+            args.ledger,
+            args.output_dir,
+            args.bins,
+            args.bootstrap_samples,
+            args.seed,
+        )
+    except (OSError, TypeError, ValueError) as exc:
+        parser.error(str(exc))
+    print(
+        json.dumps(
+            {
+                "rows": report["sample"]["n"],
+                "models": list(report["models"]),
+                "snapshot_dates": report["sample"]["snapshot_dates"],
+                "outputs": [
+                    str(args.output_dir / "draw_diagnostic.md"),
+                    str(args.output_dir / "draw_diagnostic.json"),
+                ],
+            },
+            indent=2,
+        )
+    )
 
 
-if __name__=="__main__":
+if __name__ == "__main__":
     main()
