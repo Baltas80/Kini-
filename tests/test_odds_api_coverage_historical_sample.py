@@ -109,7 +109,11 @@ def test_checked_in_bundle_has_six_historical_and_ten_current_fixtures():
         "2425",
         "2526",
     }
-    valencia = next(fixture for fixture in fixtures if fixture.sample_id == "sp1-2425-2025-03-08-valencia-valladolid")
+    valencia = next(
+        fixture
+        for fixture in fixtures
+        if fixture.sample_id == "sp1-2425-2025-03-08-valencia-valladolid"
+    )
     assert valencia.kickoff_at == datetime(2025, 3, 8, 17, 30, tzinfo=UTC)
     assert len(bundle_digest) == 64
 
