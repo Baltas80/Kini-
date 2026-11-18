@@ -767,6 +767,48 @@ def test_optimizer_rejects_missing_sign_probability():
         TicketOptimizer().optimize(predictions, budget=8)
 
 
+def test_optimizer_rejects_extra_probability_keys():
+    predictions = [{"1": 0.5, "X": 0.3, "2": 0.2} for _ in range(14)]
+    predictions[3]["home"] = 0.0
+
+    with pytest.raises(ValueError, match="unexpected probability key"):
+        TicketOptimizer().optimize(predictions, budget=8)
+
+
+def test_optimizer_rejects_coerced_probability_values():
+    for invalid_value in ("0.5", np.bool_(True)):
+        predictions = [{"1": 0.5, "X": 0.3, "2": 0.2} for _ in range(14)]
+        predictions[5]["1"] = invalid_value
+
+        with pytest.raises(TypeError, match="invalid probability"):
+            TicketOptimizer().optimize(predictions, budget=8)
+
+
+def test_optimizer_accepts_numpy_numeric_scalars():
+    predictions = [
+        {"1": np.float64(0.5), "X": np.float32(0.3), "2": np.float64(0.2)}
+        for _ in range(14)
+    ]
+
+    result = TicketOptimizer().optimize(predictions, budget=8)
+
+    assert result["column_count"] == 8
+    assert 0.0 <= result["independent_coverage_estimate"] <= 1.0
+
+
+def test_optimizer_does_not_renormalize_validated_probability_vectors():
+    vector = {"1": 0.5000002, "X": 0.3, "2": 0.1999999}
+    predictions = [vector.copy() for _ in range(14)]
+
+    result = TicketOptimizer().optimize(predictions, budget=2)
+
+    expected = (vector["1"] + vector["X"]) * vector["1"] ** 13
+    assert result["column_count"] == 2
+    assert result["independent_coverage_estimate"] == pytest.approx(
+        expected, rel=0.0, abs=1e-12
+    )
+
+
 def test_optimizer_rejects_invalid_probability_distributions():
     import pytest
 
