@@ -3816,3 +3816,14 @@ No API key, paid subscription, provider data or new bookmaker probabilities were
 - The workflow is on the PR branch only; GitHub manual dispatch becomes available after it reaches the default branch. It has not been merged.
 - No API key was supplied to this run, so no provider request was sent and no live coverage claim is made.
 - **Next action:** after authorized integration, add `THE_ODDS_API_KEY` as a repository Actions secret and run the default 10-fixture probe. Review the aggregate result before expanding the crosswalk or considering any paid price pilot.
+
+## 2026-11-18 — Bounded Actions workflow validation
+
+- Workflow and documentation commit: [713a87c](https://github.com/Baltas80/Kini-/commit/713a87cc9f0930e0ab4743ed2bf229c77801178e).
+- CI [44229519439](https://github.com/Baltas80/Kini-/actions/runs/44229519439) passed the Actionlint workflow-validation step, Ruff lint, Ruff format and **437 tests**. The 25 warnings are upstream NumPy/penaltyblog deprecations in the Dixon–Coles dependency path.
+- Historical-data validation [44229519448](https://github.com/Baltas80/Kini-/actions/runs/44229519448) passed: **5,322/5,322** completed fixtures; 56 canonical team IDs; 10,644/10,644 team references resolved; zero unresolved references, missing scores, duplicate fixtures, conflicting duplicates or score/result mismatches; `integrity_passed=true`.
+- Historical-model workflow [44229519480](https://github.com/Baltas80/Kini-/actions/runs/44229519480) and coupon workflow [44229519461](https://github.com/Baltas80/Kini-/actions/runs/44229519461) passed their change gates and correctly skipped the expensive model/coupon jobs. This change contains no model, dataset, coupon or optimizer behavior; no new predictive metric is claimed.
+- The new workflow's YAML and embedded Python blocks were parsed/compiled locally; the CI Actionlint step also passed against the committed workflow.
+- The live provider probe was not dispatched: the workflow is not yet on the default branch, and no API key was supplied to this run. Therefore zero provider requests were sent and no event/bookmaker coverage is claimed.
+- `master` remains at `ef331c3a3f50220b5d2b1a71900a2d7003b259c4`; PR [#10](https://github.com/Baltas80/Kini-/pull/10) remains open/draft. No merge or direct change to `master`.
+- **Next action:** after authorized integration makes the workflow dispatchable, add `THE_ODDS_API_KEY` as a repository Actions secret and run the default bounded EU probe. Do not ingest provider data or change model eligibility based on coverage metadata alone.

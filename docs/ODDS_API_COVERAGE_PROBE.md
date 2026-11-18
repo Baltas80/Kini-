@@ -72,3 +72,11 @@ The repository includes a manual workflow, `.github/workflows/odds-api-coverage-
 The workflow serializes runs, accepts only one region, caps the verified crosswalk at 10 fixtures and three horizons (maximum 60 coverage requests/credits), and calls only the historical events and event-markets endpoints. It does **not** call the paid historical-odds endpoint. It writes aggregate counts to the Actions job summary, does not upload an artifact containing event IDs or bookmaker-level records, and removes the raw local report after summarization.
 
 GitHub only exposes `workflow_dispatch` after the workflow file reaches the default branch. This change is currently prepared on the open PR branch; it has not been merged. No live request was sent in this implementation run because no API key was supplied. The local PowerShell command above remains available for a manual run from a machine with the key.
+
+## Validation of the manual workflow
+
+- Commit: [713a87c](https://github.com/Baltas80/Kini-/commit/713a87cc9f0930e0ab4743ed2bf229c77801178e).
+- CI [44229519439](https://github.com/Baltas80/Kini-/actions/runs/44229519439): Actionlint, Ruff lint/format and **437 tests passed** (25 upstream NumPy/penaltyblog deprecation warnings).
+- Historical data [44229519448](https://github.com/Baltas80/Kini-/actions/runs/44229519448): 5,322 completed fixtures, 56 canonical team IDs, 10,644/10,644 references resolved, zero unresolved references or duplicate/conflicting fixtures; integrity passed.
+- Historical-model [44229519480](https://github.com/Baltas80/Kini-/actions/runs/44229519480) and coupon [44229519461](https://github.com/Baltas80/Kini-/actions/runs/44229519461) jobs were correctly skipped by their change filters; no new model result is claimed.
+- The live probe remains pending because this workflow must first reach the default branch and requires the repository secret `THE_ODDS_API_KEY`. No provider request was sent by the validation runs.
