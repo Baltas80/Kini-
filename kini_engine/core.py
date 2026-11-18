@@ -1007,18 +1007,20 @@ class TicketOptimizer:
                 raise ValueError(
                     f"match {index}: missing probability for sign(s): {', '.join(missing_signs)}"
                 )
+            extra_signs = [sign for sign in prediction if sign not in SIGNS]
+            if extra_signs:
+                raise ValueError(
+                    f"match {index}: unexpected probability key(s): {extra_signs!r}"
+                )
 
             values: dict[str, float] = {}
             for sign in SIGNS:
                 raw = prediction[sign]
-                if isinstance(raw, (bool, np.bool_)):
+                if isinstance(raw, (bool, np.bool_)) or not isinstance(
+                    raw, (int, float, np.integer, np.floating)
+                ):
                     raise TypeError(f"match {index}: invalid probability for sign {sign}")
-                try:
-                    value = float(raw)
-                except (TypeError, ValueError) as exc:
-                    raise ValueError(
-                        f"match {index}: invalid probability for sign {sign}"
-                    ) from exc
+                value = float(raw)
                 if not np.isfinite(value) or value < 0.0 or value > 1.0:
                     raise ValueError(
                         f"match {index}: probability for sign {sign} must be finite and in [0, 1]"
@@ -1030,7 +1032,9 @@ class TicketOptimizer:
                 raise ValueError(
                     f"match {index}: 1/X/2 probabilities must sum to 1 (got {total:.8g})"
                 )
-            normalized.append({sign: values[sign] / total for sign in SIGNS})
+            # The 1e-6 sum tolerance is validation only. Preserve source values:
+            # do not coerce strings or silently renormalize a forecast vector.
+            normalized.append({sign: values[sign] for sign in SIGNS})
 
         # State is (number of doubles, number of triples). The SELAE direct
         # table constrains triples; the 31,104 cap also applies after Pleno.
@@ -1063,7 +1067,9 @@ class TicketOptimizer:
 
                     signs = tuple(ordered[:count])
                     mass = sum(probabilities[sign] for sign in signs)
-                    candidate = log_mass + float(np.log(max(mass, 1e-15)))
+                    if mass <= 0.0:
+                        raise RuntimeError("validated probability vector produced zero selected mass")
+                    candidate = log_mass + float(np.log(mass))
                     state = (new_doubles, new_triples)
                     previous = nxt.get(state)
                     if previous is None or candidate > previous[0]:
