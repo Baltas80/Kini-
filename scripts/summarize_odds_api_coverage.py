@@ -8,7 +8,6 @@ import os
 import pathlib
 import typing
 
-
 COUNTERS = (
     "fixtures",
     "exact",
