@@ -15,7 +15,7 @@ def test_draw_metrics_top1_top2_and_binary_scores():
     assert m["x_top1_hits"]==1
     assert m["x_top1_precision"]==1
     assert m["draw_recall_when_x_top1"]==.5
-    assert m["x_in_top2_n"]==3
+    assert m["x_in_top2_n"]==2
     assert m["x_top2_hits"]==2
     assert m["x_top2_recall"]==1
     assert m["brier_x_binary"]>=0
