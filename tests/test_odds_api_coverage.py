@@ -1,6 +1,6 @@
+import argparse
 import json
 from datetime import UTC, datetime
-from pathlib import Path
 
 import pytest
 
@@ -49,6 +49,8 @@ def fixture():
         home_team="Malaga",
         away_team="Santander",
         kickoff_at=datetime(2026, 11, 7, 13, 0, tzinfo=UTC),
+        schedule_source="Official club schedule",
+        evidence_url="https://example.com/official-schedule",
     )
 
 
@@ -114,6 +116,8 @@ def test_load_probe_fixtures_keeps_only_verified_mens_sp1_sp2(tmp_path):
                 "home_football_data_name": "Malaga",
                 "away_football_data_name": "Santander",
                 "kickoff_at": "2026-11-07T14:00:00+01:00",
+                "schedule_source": "Official club schedule",
+                "evidence_url": "https://example.com/official-schedule",
             },
             {
                 "draw_date": "2026-11-08",
@@ -160,6 +164,8 @@ def test_load_probe_fixtures_rejects_timezone_naive_kickoff(tmp_path):
                         "home_football_data_name": "Malaga",
                         "away_football_data_name": "Santander",
                         "kickoff_at": "2026-11-07T14:00:00",
+                        "schedule_source": "Official club schedule",
+                        "evidence_url": "https://example.com/official-schedule",
                     }
                 ],
             }
@@ -174,7 +180,7 @@ def test_load_probe_fixtures_rejects_timezone_naive_kickoff(tmp_path):
 def test_parse_lead_hours_requires_positive_unique_finite_values():
     assert parse_lead_hours("24, 6, 1") == (24.0, 6.0, 1.0)
     for value in ("0,6", "-1", "nan", "6,6", ""):
-        with pytest.raises(Exception):
+        with pytest.raises(argparse.ArgumentTypeError):
             parse_lead_hours(value)
 
 

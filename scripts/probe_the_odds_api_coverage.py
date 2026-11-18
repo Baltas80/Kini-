@@ -33,6 +33,8 @@ class ProbeFixture:
     home_team: str
     away_team: str
     kickoff_at: datetime
+    schedule_source: str
+    evidence_url: str
 
     @property
     def fixture_id(self) -> str:
@@ -54,7 +56,7 @@ def _parse_aware_datetime(value: Any, label: str) -> datetime:
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"{label} must be a non-empty ISO-8601 string")
     try:
-        parsed = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(value.strip())
     except ValueError as exc:
         raise ValueError(f"{label} is not a valid ISO-8601 timestamp: {value!r}") from exc
     if parsed.tzinfo is None or parsed.utcoffset() is None:
@@ -79,17 +81,19 @@ def load_probe_fixtures(path: str | Path) -> tuple[list[ProbeFixture], str]:
     except json.JSONDecodeError as exc:
         raise ValueError(f"Invalid crosswalk JSON: {source_path}") from exc
 
-    if not isinstance(payload, dict) or payload.get("schema_version") != 1:
+    if not isinstance(payload, dict):
+        raise TypeError("SELAE crosswalk must be a JSON object")
+    if payload.get("schema_version") != 1:
         raise ValueError("Unsupported SELAE crosswalk schema")
     entries = payload.get("entries")
     if not isinstance(entries, list):
-        raise ValueError("SELAE crosswalk entries must be a list")
+        raise TypeError("SELAE crosswalk entries must be a list")
 
     fixtures: list[ProbeFixture] = []
     seen: set[tuple[str, str, int]] = set()
     for index, entry in enumerate(entries, start=1):
         if not isinstance(entry, dict):
-            raise ValueError(f"Crosswalk entry {index} must be an object")
+            raise TypeError(f"Crosswalk entry {index} must be an object")
         if entry.get("gender") != "men":
             continue
 
@@ -101,6 +105,8 @@ def load_probe_fixtures(path: str | Path) -> tuple[list[ProbeFixture], str]:
         away = entry.get("away_football_data_name")
         draw_date = entry.get("draw_date")
         position = entry.get("position")
+        schedule_source = entry.get("schedule_source")
+        evidence_url = entry.get("evidence_url")
         if not isinstance(home, str) or not home.strip():
             raise ValueError(f"Crosswalk entry {index} has no canonical home name")
         if not isinstance(away, str) or not away.strip():
@@ -109,6 +115,13 @@ def load_probe_fixtures(path: str | Path) -> tuple[list[ProbeFixture], str]:
             raise ValueError(f"Crosswalk entry {index} has no draw date")
         if isinstance(position, bool) or not isinstance(position, int) or position < 1:
             raise ValueError(f"Crosswalk entry {index} has an invalid position")
+        if not isinstance(schedule_source, str) or not schedule_source.strip():
+            raise ValueError(f"Crosswalk entry {index} has no official schedule source")
+        if (
+            not isinstance(evidence_url, str)
+            or not evidence_url.startswith("https://")
+        ):
+            raise ValueError(f"Crosswalk entry {index} has no HTTPS schedule evidence URL")
 
         kickoff_at = _parse_aware_datetime(
             entry.get("kickoff_at"), f"Crosswalk entry {index} kickoff_at"
@@ -127,6 +140,8 @@ def load_probe_fixtures(path: str | Path) -> tuple[list[ProbeFixture], str]:
                 home_team=home.strip(),
                 away_team=away.strip(),
                 kickoff_at=kickoff_at,
+                schedule_source=schedule_source.strip(),
+                evidence_url=evidence_url.strip(),
             )
         )
 
@@ -221,7 +236,7 @@ class TheOddsApiCoverageClient:
         except ValueError as exc:
             raise ValueError(f"The Odds API returned invalid JSON for {path}") from exc
         if not isinstance(payload, dict):
-            raise ValueError(f"The Odds API returned a non-object response for {path}")
+            raise TypeError(f"The Odds API returned a non-object response for {path}")
 
         usage = _usage_headers(response)
         last_cost = usage.get("x-requests-last")
@@ -266,12 +281,12 @@ class TheOddsApiCoverageClient:
         snapshot = self._snapshot_timestamp(payload, requested_at, "historical events")
         raw_events = payload.get("data")
         if not isinstance(raw_events, list):
-            raise ValueError("Historical events response data must be a list")
+            raise TypeError("Historical events response data must be a list")
 
         events: list[dict[str, str]] = []
         for index, raw_event in enumerate(raw_events, start=1):
             if not isinstance(raw_event, dict):
-                raise ValueError(f"Historical event {index} must be an object")
+                raise TypeError(f"Historical event {index} must be an object")
             event_id = raw_event.get("id")
             home = raw_event.get("home_team")
             away = raw_event.get("away_team")
@@ -317,27 +332,29 @@ class TheOddsApiCoverageClient:
             payload, requested_at, "historical event markets"
         )
         data = payload.get("data")
-        if not isinstance(data, dict) or data.get("id") != event_id:
+        if not isinstance(data, dict):
+            raise TypeError("Historical event markets data must be an object")
+        if data.get("id") != event_id:
             raise ValueError("Historical event markets response has a mismatched event ID")
 
         bookmakers = data.get("bookmakers", [])
         if not isinstance(bookmakers, list):
-            raise ValueError("Historical event markets bookmakers must be a list")
+            raise TypeError("Historical event markets bookmakers must be a list")
 
         market_keys_by_bookmaker: dict[str, list[str]] = {}
         for index, bookmaker in enumerate(bookmakers, start=1):
             if not isinstance(bookmaker, dict):
-                raise ValueError(f"Bookmaker {index} must be an object")
+                raise TypeError(f"Bookmaker {index} must be an object")
             key = bookmaker.get("key")
             markets = bookmaker.get("markets", [])
             if not isinstance(key, str) or not key.strip():
                 raise ValueError(f"Bookmaker {index} has no key")
             if not isinstance(markets, list):
-                raise ValueError(f"Bookmaker {key} markets must be a list")
+                raise TypeError(f"Bookmaker {key} markets must be a list")
             keys: set[str] = set()
             for market in markets:
                 if not isinstance(market, dict) or not isinstance(market.get("key"), str):
-                    raise ValueError(f"Bookmaker {key} has a malformed market entry")
+                    raise TypeError(f"Bookmaker {key} has a malformed market entry")
                 keys.add(market["key"])
             market_keys_by_bookmaker[key] = sorted(keys)
 
@@ -374,8 +391,11 @@ def probe_coverage(
         not math.isfinite(value) or value <= 0 for value in lead_hours
     ):
         raise ValueError("Lead hours must be positive finite values")
-    if not region.strip():
+    if not isinstance(region, str) or not region.strip():
         raise ValueError("Bookmaker region must not be empty")
+    region = region.strip()
+    if "," in region:
+        raise ValueError("Probe one bookmaker region per run to keep credit estimates exact")
 
     results: list[dict[str, Any]] = []
     for fixture in fixtures:
@@ -405,6 +425,8 @@ def probe_coverage(
                 "target_home_team": fixture.home_team,
                 "target_away_team": fixture.away_team,
                 "official_kickoff_at": _format_timestamp(fixture.kickoff_at),
+                "schedule_source": fixture.schedule_source,
+                "schedule_evidence_url": fixture.evidence_url,
                 "requested_lead_hours": lead,
                 "requested_at": _format_timestamp(requested_at),
                 "region": region,
