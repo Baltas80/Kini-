@@ -50,7 +50,7 @@ def _validate_direct_system(columns: Any) -> list[tuple[str, ...]]:
     ]
     if len(set(parsed)) != len(parsed):
         raise ValueError("direct system contains duplicate columns")
-    selected = [set(column[i] for column in parsed) for i in range(14)]
+    selected = [{column[i] for column in parsed} for i in range(14)]
     widths = [len(signs) for signs in selected]
     if any(width not in (1, 2, 3) for width in widths):
         raise ValueError("direct system has an invalid sign width")
@@ -91,7 +91,7 @@ def audit_report(
         )
         models = coupon.get("models")
         if not isinstance(models, dict):
-            raise ValueError(f"{coupon_id}: models must be an object")
+            raise TypeError(f"{coupon_id}: models must be an object")
 
         for mode in MODE_KEYS:
             model = models.get(mode)
@@ -183,10 +183,14 @@ def audit_report(
             "not a representative benchmark"
         ),
         "independence_assumptions": [
-            "match outcomes are treated as independent within a coupon "
-            "when calculating coverage mass",
-            "coupon coverage events are treated as independent when calculating "
-            "the probability of zero covered coupons",
+            (
+                "match outcomes are treated as independent within a coupon "
+                "when calculating coverage mass"
+            ),
+            (
+                "coupon coverage events are treated as independent when calculating "
+                "the probability of zero covered coupons"
+            ),
         ],
         "models": summaries,
         "rows": per_model,

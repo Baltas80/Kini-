@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+from collections import defaultdict
 import json
 import os
-from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
@@ -38,7 +38,7 @@ def aggregate_report(report: dict[str, Any]) -> dict[tuple[str, float], dict[str
         if not isinstance(competition, str) or not competition:
             raise ValueError("Coverage row is missing competition_id")
         if isinstance(lead, bool) or not isinstance(lead, (int, float)):
-            raise ValueError("Coverage row has an invalid requested lead horizon")
+            raise TypeError("Coverage row has an invalid requested lead horizon")
         key = (competition, float(lead))
         item = groups[key]
         item["fixtures"] += 1
@@ -79,8 +79,10 @@ def render_summary(report: dict[str, Any]) -> str:
     lines.extend(
         [
             "",
-            "Only aggregate counts are retained in this workflow summary. "
-            "Raw provider responses, event IDs and bookmaker-level records are not uploaded.",
+            (
+                "Only aggregate counts are retained in this workflow summary. "
+                "Raw provider responses, event IDs and bookmaker-level records are not uploaded."
+            ),
         ]
     )
     return "\n".join(lines) + "\n"
