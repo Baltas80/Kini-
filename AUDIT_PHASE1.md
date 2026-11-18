@@ -3983,3 +3983,14 @@ A static review of the read-only coverage probe found that it matched provider e
 - No live API request, price download or dataset modification was performed.
 
 **Next action:** keep the coverage probe read-only and pending the API key. Do not use this coverage metadata as model input or market benchmark evidence.
+
+
+## 2026-11-18 — CI fix checkpoint (ticket-ledger / odds-coverage stack)
+
+- Root cause: Ruff formatting failures in the joint-scenario audit and tests, plus an unsorted import block in the aggregate odds-coverage summarizer.
+- Fixes: normalized formatting; corrected the summarizer's `Path` usage; added a regression test for `main()` writing the GitHub step summary and removing the temporary report; kept the standard-library import block in Ruff's expected order.
+- Validated code commit: `4071d9db69bcd53eea03beaa345aecaafa0a3b3d`.
+- CI run [44336847452](https://github.com/Baltas80/Kini-/actions/runs/44336847452): Actionlint, Ruff lint, Ruff format and pytest passed.
+- Historical-data-validation [44336847473](https://github.com/Baltas80/Kini-/actions/runs/44336847473): passed. Coupon-backtest workflow [44336847485](https://github.com/Baltas80/Kini-/actions/runs/44336847485): passed. Historical-model backtest [44336847450](https://github.com/Baltas80/Kini-/actions/runs/44336847450): skipped because predictive behavior was unchanged.
+- PR #11 and #12 branches were updated with merge commits to carry the base fixes without modifying `master`. Their final CI runs are still pending.
+- Next priority: finish PR #11/#12 CI, then inspect the odds-coverage probe artifact and its sample's source/time integrity before expanding the probe.
