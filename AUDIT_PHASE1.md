@@ -1,3 +1,19 @@
+## Current status override — 2026-11-18, optimizer input contract hardened and CI validated
+
+- **Branch head:** `d45202a8065b13dcd14cc2b90fef0b7afe8c1323` on `feat/immutable-ticket-ledger`; PR [#10](https://github.com/Baltas80/Kini-/pull/10) remains open/draft and stacked on `feat/selae-fixture-reconciliation`. `master` remains at `ef331c3a3f50220b5d2b1a71900a2d7003b259c4`; no merge or direct master change.
+- **P6 optimizer contract:** `TicketOptimizer.optimize()` now accepts only exact numeric `1/X/2` mappings. It rejects missing or extra keys, numeric strings, Python/NumPy booleans, non-finite values and values outside [0,1]. NumPy integer/floating scalars remain supported.
+- **No silent repair:** vectors whose sum is within the existing 1e-6 tolerance are validated but preserved unchanged; the optimizer no longer divides source values by their sum. The internal collection is named `validated_probabilities`. Selected mass is logged directly, with zero mass treated as an invariant failure.
+- **Regression tests:** four new tests cover extra keys, coercion attempts, NumPy numeric scalar compatibility and preservation of near-unit source vectors.
+- **CI:** [run 44250465424](https://github.com/Baltas80/Kini-/actions/runs/44250465424) passed Actionlint, Ruff lint, Ruff format and **452 pytest tests** in 5.80s. The 25 warnings are upstream NumPy 2.5 deprecations in `penaltyblog/models/dixon_coles.py:257` (array shape assignment); no project test failed.
+- **Historical data:** [run 44250465417](https://github.com/Baltas80/Kini-/actions/runs/44250465417) passed with **5,322 completed fixtures**, 56 canonical team IDs, 10,644/10,644 references resolved, zero unresolved references, zero duplicate/conflicting fixtures and `integrity_passed=true`.
+- **Coupon workflow:** [run 44250465499](https://github.com/Baltas80/Kini-/actions/runs/44250465499) passed its change gate and correctly skipped the coupon pilot because no coupon, model or optimizer coupon-evaluation path changed. No new coupon hit result is claimed.
+- **Historical model backtest:** [run 44250465447](https://github.com/Baltas80/Kini-/actions/runs/44250465447) is still pending in the Actions concurrency queue and has not produced a result. No new Brier, Log Loss or predictive-performance metric is claimed for this optimizer-input-only change.
+- **Next action:** retain the existing independent-match coverage label and continue with an out-of-sample joint-scenario coverage audit; do not promote a model or infer expected payout/profitability from coupon hit counts.
+
+Commits: [59e6ff4](https://github.com/Baltas80/Kini-/commit/59e6ff4e20af43682efa8fee87fb8cbe18b85f2d), [badb71c](https://github.com/Baltas80/Kini-/commit/badb71c3d9bea75ade0304bcd7751c0c3a7a2562), [d45202a](https://github.com/Baltas80/Kini-/commit/d45202a8065b13dcd14cc2b90fef0b7afe8c1323).
+
+---
+
 ## Current status override — 2026-11-18, Odds API coverage probe implemented and CI validated
 
 - **Branch:** `feat/immutable-ticket-ledger`. The read-only provider probe implementation is validated at code commit `a3c8663896630096e33bdf27efad42cda2506b62`. PR #10 remains open/draft and stacked on `feat/selae-fixture-reconciliation`. `master` was not modified and no PR was merged.
