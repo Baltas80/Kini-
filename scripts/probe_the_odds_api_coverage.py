@@ -240,8 +240,10 @@ def load_historical_sample_fixtures(
         if not isinstance(evidence_url, str) or not evidence_url.startswith("https://"):
             raise ValueError(f"Historical sample entry {index} has no HTTPS evidence URL")
 
+        if not isinstance(kickoff_raw, str):
+            raise TypeError(f"Historical sample entry {index} kickoff_at must be a string")
         try:
-            kickoff_local = datetime.fromisoformat(str(kickoff_raw))
+            kickoff_local = datetime.fromisoformat(kickoff_raw)
         except ValueError as exc:
             raise ValueError(
                 f"Historical sample entry {index} has invalid kickoff_at"
@@ -256,13 +258,26 @@ def load_historical_sample_fixtures(
             )
         kickoff_at = kickoff_local.astimezone(UTC)
 
-        checked_at = _parse_aware_datetime(
-            evidence_checked_raw,
-            f"Historical sample entry {index} evidence_checked_at_utc",
-        )
-        if checked_at.utcoffset() != timedelta(0):
+        if not isinstance(evidence_checked_raw, str):
+            raise TypeError(
+                f"Historical sample entry {index} evidence_checked_at_utc must be a string"
+            )
+        try:
+            evidence_checked_local = datetime.fromisoformat(evidence_checked_raw)
+        except ValueError as exc:
             raise ValueError(
-                f"Historical sample entry {index} evidence_checked_at_utc must be UTC"
+                f"Historical sample entry {index} has invalid evidence_checked_at_utc"
+            ) from exc
+        if (
+            evidence_checked_local.tzinfo is None
+            or evidence_checked_local.utcoffset() is None
+        ):
+            raise ValueError(
+                f"Historical sample entry {index} evidence_checked_at_utc must be timezone-aware"
+            )
+        if evidence_checked_local.utcoffset() != timedelta(0):
+            raise ValueError(
+                f"Historical sample entry {index} evidence_checked_at_utc must use UTC"
             )
 
         fixture_key = (
