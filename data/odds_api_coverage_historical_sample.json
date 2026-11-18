@@ -51,7 +51,7 @@
       "home_football_data_name": "Sevilla",
       "away_football_data_name": "Sociedad",
       "kickoff_at": "2024-03-02T14:00:00+01:00",
-      "schedule_source": "LaLiga official match page",
+      "schedule_source": "LaLiga official matchday results",
       "evidence_url": "https://www.laliga.com/partido/temporada-2023-2024-laliga-easports-sevilla-fc-real-sociedad-27",
       "evidence_checked_at_utc": "2026-11-18T13:40:08Z"
     },
@@ -63,9 +63,9 @@
       "gender": "men",
       "home_football_data_name": "Valencia",
       "away_football_data_name": "Valladolid",
-      "kickoff_at": "2025-03-08T17:30:00+01:00",
+      "kickoff_at": "2025-03-08T18:30:00+01:00",
       "schedule_source": "LaLiga official match page",
-      "evidence_url": "https://www.laliga.com/en-US/match/temporada-2024-2025-laliga-ea-sports-valencia-cf-real-valladolid-cf-27",
+      "evidence_url": "https://www.laliga.com/laliga-easports/resultados/2024-25/jornada-27",
       "evidence_checked_at_utc": "2026-11-18T13:40:08Z"
     },
     {
