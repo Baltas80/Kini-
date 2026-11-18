@@ -1451,3 +1451,36 @@ def test_quiniela_persists_pre_ticket_record_to_immutable_ledger(
     assert stored["ticket_sha256"] == result["ticket_record_sha256"]
     assert stored["ticket_record"]["columns"] == result["ticket"]["columns"]
 
+
+@pytest.mark.parametrize(
+    "probabilities",
+    [
+        {"1": 0.5, "X": 0.25, "2": 0.25, "P": 0.0},
+        {"1": "0.5", "X": 0.25, "2": 0.25},
+        {"1": True, "X": 0.0, "2": 0.0},
+        {"1": 0.5, "X": 0.5},
+    ],
+)
+def test_external_source_eligibility_requires_exact_numeric_probability_vectors(
+    probabilities,
+):
+    market_fixture = Match(
+        datetime(2025, 4, 1),
+        "A",
+        "B",
+        market=probabilities,
+        detail={
+            "market_temporal_status": "schedule_compatible",
+            "market_pre_match_eligible": True,
+        },
+    )
+    lae_fixture = Match(
+        datetime(2025, 4, 1),
+        "A",
+        "B",
+        lae=probabilities,
+        detail=verified_lae_detail(),
+    )
+
+    assert market_fixture.has_temporally_eligible_market is False
+    assert lae_fixture.has_temporally_eligible_lae is False

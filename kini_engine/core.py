@@ -28,26 +28,30 @@ LAE_KICKOFF_EVIDENCE_MAX_AGE = timedelta(hours=24)
 
 
 def _validated_probability_vector(probabilities: Any) -> np.ndarray | None:
-    """Return a valid 1/X/2 vector without silently repairing bad source data."""
-    if not isinstance(probabilities, dict):
+    """Return an exact numeric 1/X/2 vector without silently repairing source data."""
+    if not isinstance(probabilities, dict) or set(probabilities) != set(SIGNS):
         return None
 
-    values: list[float] = []
-    for sign in SIGNS:
-        raw = probabilities.get(sign)
-        if isinstance(raw, (bool, np.bool_)):
-            return None
-        try:
-            value = float(raw)
-        except (TypeError, ValueError):
-            return None
-        if not np.isfinite(value) or not 0.0 <= value <= 1.0:
-            return None
-        values.append(value)
-
-    if not np.isclose(sum(values), 1.0, rtol=0.0, atol=1e-6):
+    raw_values = [probabilities[sign] for sign in SIGNS]
+    if any(
+        isinstance(value, (bool, np.bool_))
+        or not isinstance(value, (int, float, np.integer, np.floating))
+        for value in raw_values
+    ):
         return None
-    return np.asarray(values, dtype=float)
+
+    try:
+        values = np.asarray(raw_values, dtype=float)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    if (
+        not np.isfinite(values).all()
+        or np.any(values < 0.0)
+        or np.any(values > 1.0)
+        or not np.isclose(float(values.sum()), 1.0, rtol=0.0, atol=1e-6)
+    ):
+        return None
+    return values
 
 
 @dataclass(frozen=True)

@@ -1402,3 +1402,21 @@ def test_snapshot_aligned_backtest_fails_closed_below_minimum_training_history(
 def test_metrics_reject_invalid_probability_vectors(probabilities):
     with pytest.raises(ValueError):
         multiclass_metrics([(probabilities, "1")])
+
+@pytest.mark.parametrize(
+    "probabilities",
+    [
+        {"1": 0.5, "X": 0.25, "2": 0.25, "P": 0.0},
+        {"1": "0.5", "X": 0.25, "2": 0.25},
+        {"1": True, "X": 0.0, "2": 0.0},
+    ],
+)
+def test_bookmaker_probability_rejects_noncanonical_vectors(probabilities):
+    match = Match(
+        datetime(2025, 4, 1),
+        "A",
+        "B",
+        detail={"market_bookmaker_probabilities": {"bet365": probabilities}},
+    )
+
+    assert backtest._bookmaker_probability(match, "bet365") is None

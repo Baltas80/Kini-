@@ -9,7 +9,7 @@ from typing import Any
 import numpy as np
 from scipy.optimize import minimize
 
-from .core import SIGNS, KiniEngine, Match, _date_num
+from .core import SIGNS, KiniEngine, Match, _date_num, _validated_probability_vector
 
 DC_DEPENDENT_MODES = frozenset(
     {"dc", "ensemble", "ensemble_dc_ml", "ensemble_dc_ml_adaptive"}
@@ -561,20 +561,8 @@ def _bookmaker_probability(
     if not isinstance(bookmaker_vectors, dict):
         return None
     raw = bookmaker_vectors.get(bookmaker)
-    if not isinstance(raw, dict):
-        return None
-    if any(isinstance(raw.get(sign), bool) for sign in SIGNS):
-        return None
-    try:
-        vector = np.asarray([raw[sign] for sign in SIGNS], dtype=float)
-    except (KeyError, TypeError, ValueError):
-        return None
-    if (
-        not np.isfinite(vector).all()
-        or np.any(vector < 0.0)
-        or np.any(vector > 1.0)
-        or not np.isclose(float(vector.sum()), 1.0, rtol=0.0, atol=1e-6)
-    ):
+    vector = _validated_probability_vector(raw)
+    if vector is None:
         return None
     return dict(zip(SIGNS, map(float, vector)))
 

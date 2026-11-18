@@ -3680,3 +3680,26 @@ This is a provenance-validation fix only; it does not change forecasts, optimize
 - PR #10 remains open/draft, based on `feat/selae-fixture-reconciliation`; `master` remains untouched.
 
 **Next action:** identify and reconcile a candidate coupon from a different season, retaining strict source, kickoff, team-identity, score and prize evidence.
+
+
+
+## 2026-11-18 — Strict source probability-vector contract
+
+A consistency review after the P4 probability-contract change found that the shared live-source validator and the per-bookmaker historical helper were still more permissive than the backtest metrics/calibration contract. They could accept a vector with an extra key or numeric strings, then silently ignore/coerce those values.
+
+- `kini_engine/core.py::_validated_probability_vector` now requires exactly the `1`, `X`, `2` keys and actual numeric non-boolean values. It rejects non-finite/out-of-range values and sums outside 1e-6; it never coerces strings or repairs malformed vectors.
+- `kini_engine/backtest.py::_bookmaker_probability` now reuses the same validator, preventing a weaker per-book path.
+- Regression tests cover extra keys, missing keys, numeric strings and booleans for market/LAE eligibility, plus malformed bookmaker vectors.
+- No model formula, training split, source dataset or optimizer objective changes.
+
+### Baseline evidence before this change
+
+- Branch head: `b10fb74de57db5e674a8745eecabbc26ef971535`, PR #10.
+- CI [44190886893](https://github.com/Baltas80/Kini-/actions/runs/44190886893): Actionlint, Ruff lint/format and **423 tests passed** (25 third-party deprecation warnings).
+- Historical-data validation [44190886994](https://github.com/Baltas80/Kini-/actions/runs/44190886994): passed.
+- Historical backtest [44190887051](https://github.com/Baltas80/Kini-/actions/runs/44190887051): all five streams passed acceptance with **5,022/5,022 forecasts each**; the prediction-diagnostics gate passed. Dataset: 5,322 rows, SHA-256 `7251b84acd803047746c0c55c6bdabb60d9499208cfd6c781f72080295346f44`.
+- On the exact 3,856-fixture model/market intersection, market Brier/Log Loss were **0.597512 / 0.999449**; the main ensemble scored **0.613610 / 1.022979**. The market remained stronger. Its 4,433 schedule-eligible rows remain a schedule-screened benchmark, not exact timestamp-verified executable odds.
+
+### Validation of this change
+
+Pending CI, historical-data validation and the required historical-backtest workflow on the new head. No new predictive metric is claimed until those jobs complete.
