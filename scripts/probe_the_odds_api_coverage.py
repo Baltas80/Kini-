@@ -58,7 +58,9 @@ def _parse_aware_datetime(value: Any, label: str) -> datetime:
     try:
         parsed = datetime.fromisoformat(value.strip())
     except ValueError as exc:
-        raise ValueError(f"{label} is not a valid ISO-8601 timestamp: {value!r}") from exc
+        raise ValueError(
+            f"{label} is not a valid ISO-8601 timestamp: {value!r}"
+        ) from exc
     if parsed.tzinfo is None or parsed.utcoffset() is None:
         raise ValueError(f"{label} must include an explicit timezone")
     return parsed.astimezone(UTC)
@@ -117,11 +119,10 @@ def load_probe_fixtures(path: str | Path) -> tuple[list[ProbeFixture], str]:
             raise ValueError(f"Crosswalk entry {index} has an invalid position")
         if not isinstance(schedule_source, str) or not schedule_source.strip():
             raise ValueError(f"Crosswalk entry {index} has no official schedule source")
-        if (
-            not isinstance(evidence_url, str)
-            or not evidence_url.startswith("https://")
-        ):
-            raise ValueError(f"Crosswalk entry {index} has no HTTPS schedule evidence URL")
+        if not isinstance(evidence_url, str) or not evidence_url.startswith("https://"):
+            raise ValueError(
+                f"Crosswalk entry {index} has no HTTPS schedule evidence URL"
+            )
 
         kickoff_at = _parse_aware_datetime(
             entry.get("kickoff_at"), f"Crosswalk entry {index} kickoff_at"
@@ -256,7 +257,9 @@ class TheOddsApiCoverageClient:
     def _snapshot_timestamp(
         payload: dict[str, Any], requested_at: datetime, endpoint: str
     ) -> datetime:
-        snapshot = _parse_aware_datetime(payload.get("timestamp"), f"{endpoint} timestamp")
+        snapshot = _parse_aware_datetime(
+            payload.get("timestamp"), f"{endpoint} timestamp"
+        )
         if snapshot > requested_at:
             raise ValueError(
                 f"{endpoint} returned a future snapshot: "
@@ -291,9 +294,10 @@ class TheOddsApiCoverageClient:
             home = raw_event.get("home_team")
             away = raw_event.get("away_team")
             commence_time = raw_event.get("commence_time")
-            if not all(isinstance(value, str) and value.strip() for value in (
-                event_id, home, away, commence_time
-            )):
+            if not all(
+                isinstance(value, str) and value.strip()
+                for value in (event_id, home, away, commence_time)
+            ):
                 raise ValueError(f"Historical event {index} is missing identity fields")
             parsed_commence = _parse_aware_datetime(
                 commence_time, f"Historical event {event_id} commence_time"
@@ -335,7 +339,9 @@ class TheOddsApiCoverageClient:
         if not isinstance(data, dict):
             raise TypeError("Historical event markets data must be an object")
         if data.get("id") != event_id:
-            raise ValueError("Historical event markets response has a mismatched event ID")
+            raise ValueError(
+                "Historical event markets response has a mismatched event ID"
+            )
 
         bookmakers = data.get("bookmakers", [])
         if not isinstance(bookmakers, list):
@@ -353,7 +359,9 @@ class TheOddsApiCoverageClient:
                 raise TypeError(f"Bookmaker {key} markets must be a list")
             keys: set[str] = set()
             for market in markets:
-                if not isinstance(market, dict) or not isinstance(market.get("key"), str):
+                if not isinstance(market, dict) or not isinstance(
+                    market.get("key"), str
+                ):
                     raise TypeError(f"Bookmaker {key} has a malformed market entry")
                 keys.add(market["key"])
             market_keys_by_bookmaker[key] = sorted(keys)
@@ -395,7 +403,9 @@ def probe_coverage(
         raise ValueError("Bookmaker region must not be empty")
     region = region.strip()
     if "," in region:
-        raise ValueError("Probe one bookmaker region per run to keep credit estimates exact")
+        raise ValueError(
+            "Probe one bookmaker region per run to keep credit estimates exact"
+        )
 
     results: list[dict[str, Any]] = []
     for fixture in fixtures:
@@ -617,9 +627,7 @@ def main(argv: list[str] | None = None) -> int:
         "exact_matches": sum(
             row["match_status"] == "exact" for row in report["results"]
         ),
-        "h2h_available": sum(
-            row["h2h_market_available"] for row in report["results"]
-        ),
+        "h2h_available": sum(row["h2h_market_available"] for row in report["results"]),
         "prices_downloaded": False,
         "production_dataset_modified": False,
     }

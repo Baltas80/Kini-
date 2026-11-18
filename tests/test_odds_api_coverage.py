@@ -189,11 +189,19 @@ def test_probe_records_exact_match_snapshot_hashes_and_h2h_bookmakers():
         [
             FakeResponse(
                 event_payload(),
-                {"x-requests-used": "1", "x-requests-remaining": "499", "x-requests-last": "1"},
+                {
+                    "x-requests-used": "1",
+                    "x-requests-remaining": "499",
+                    "x-requests-last": "1",
+                },
             ),
             FakeResponse(
                 markets_payload(),
-                {"x-requests-used": "2", "x-requests-remaining": "498", "x-requests-last": "1"},
+                {
+                    "x-requests-used": "2",
+                    "x-requests-remaining": "498",
+                    "x-requests-last": "1",
+                },
             ),
         ]
     )
