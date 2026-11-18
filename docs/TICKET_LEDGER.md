@@ -131,3 +131,8 @@ The backup implementation was validated on commit [bf745a3](https://github.com/B
 ## Integrity-check coverage boundary
 
 The full integrity check also compares the indexed ticket columns (draw date, creation/cutoff timestamps and first kickoff) with the validated canonical ticket payload. This prevents a modified index column from changing draw-date listings while the payload hash remains valid. Score verification checks the UTC format of its recorded timestamp and binds the stored evidence key to the score's reconciliation digest (or its combined evidence digest when Pleno/prize evidence is present). These checks detect inconsistent ledger state; they do not turn the local SQLite file into a signed or tamper-proof audit log.
+
+
+## CI validation for index and score metadata hardening
+
+The integrity check and read-path metadata validation were finalized on commit [103732a](https://github.com/Baltas80/Kini-/commit/103732ab7e3b5455cada13823a778fe2ba02dd41). CI [44243800741](https://github.com/Baltas80/Kini-/actions/runs/44243800741) passed Actionlint, Ruff lint, Ruff format and **448 tests** (25 upstream NumPy/penaltyblog deprecation warnings). Historical-data validation [44243800727](https://github.com/Baltas80/Kini-/actions/runs/44243800727) passed with 5,322 completed fixtures, 56 canonical teams, 10,644/10,644 team references resolved, no unresolved references or duplicate/conflicting fixtures, and integrity_passed=true. Historical-model and coupon jobs were correctly skipped because no predictive or optimizer behavior changed.

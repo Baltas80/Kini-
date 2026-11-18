@@ -3841,3 +3841,17 @@ No API key, paid subscription, provider data or new bookmaker probabilities were
 - PR [#10](https://github.com/Baltas80/Kini-/pull/10) remains open/draft on `feat/immutable-ticket-ledger`. `master` remains at `ef331c3a3f50220b5d2b1a71900a2d7003b259c4`; no merge or direct master change occurred.
 
 **Next action:** keep the historical-odds provider probe read-only and pending. It still requires an operator-supplied `THE_ODDS_API_KEY` and authorized integration before GitHub's manual dispatch can run. Do not add market prices to the training set until exact event/fixture matching, point-in-time validation and licensing are independently demonstrated.
+
+
+## 2026-11-18 — Ticket-ledger integrity metadata hardening
+
+- Follow-up review found that the ledger's ticket payload hash and schema validation did not compare the denormalized SQLite columns used by draw-date queries (draw_date, ticket creation/cutoff timestamps and first kickoff) with the canonical payload. A modified index column could therefore misroute a listing while the payload hash remained valid. The full integrity check now verifies these fields, and get_ticket_record validates them on every read so draw-date listings fail closed.
+- Score integrity now requires the score's reconciliation digest to be valid and bound to the stored evidence key (including legacy no-Pleno records), and validates that the score's recorded_at_utc is an explicit UTC timestamp.
+- Regression coverage includes four tampered ticket-index columns, a tampered draw-date listing/read path, a timezone-naive score timestamp, and a score reconciliation digest that is rehashed but no longer matches its immutable evidence key.
+- Final code commit: [103732a](https://github.com/Baltas80/Kini-/commit/103732ab7e3b5455cada13823a778fe2ba02dd41). The immediately preceding attempt [a83a257](https://github.com/Baltas80/Kini-/commit/a83a2574c66635425d322c5fea8b9beca1f8eaef) failed only the Ruff format gate; formatting was corrected in 103732a and the full CI was rerun.
+- CI [44243800741](https://github.com/Baltas80/Kini-/actions/runs/44243800741) passed Actionlint, Ruff lint, Ruff format and **448 tests**. The 25 warnings remain upstream NumPy/penaltyblog Dixon–Coles deprecations.
+- Historical-data validation [44243800727](https://github.com/Baltas80/Kini-/actions/runs/44243800727) passed with **5,322 completed fixtures**, 56 canonical team IDs, 10,644/10,644 team references resolved, zero unresolved references, zero duplicate/conflicting fixtures and integrity_passed=true.
+- Historical-model [44243800701](https://github.com/Baltas80/Kini-/actions/runs/44243800701) and coupon [44243800724](https://github.com/Baltas80/Kini-/actions/runs/44243800724) passed their change gates and correctly skipped the expensive model/coupon jobs. This is ledger-storage hardening; no new predictive metric or coupon result is claimed.
+- master remains at ef331c3a3f50220b5d2b1a71900a2d7003b259c4. PR [#10](https://github.com/Baltas80/Kini-/pull/10) remains open/draft on feat/immutable-ticket-ledger; no merge or direct change to master occurred.
+
+**Next action:** retain the Odds API probe as read-only and pending. Its manual workflow still requires the repository Actions secret THE_ODDS_API_KEY and authorized integration to the default branch before it can be dispatched. Do not ingest coverage metadata or prices into the training set until exact event/fixture matching, point-in-time timestamps and licensing are independently established.
