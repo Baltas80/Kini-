@@ -8,7 +8,6 @@ from __future__ import annotations
 import argparse
 import json
 import math
-import random
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
@@ -104,11 +103,34 @@ def run(path: Path, output_dir: Path, bins: int) -> dict[str, Any]:
     for mode in modes:
         results[mode]=metric_rows(rows,mode,bins)
         results[mode]["segments"]={field:group_metrics(rows,mode,field,bins) for field in ("season","league")}
-    # same-fixture comparison against eligible market consensus
-    market_rows=[r for r in rows if r.get("market_eligible") and r.get("market_probabilities")]
-    results["market_snapshot_eligible"]=metric_rows([{**r,"model_probabilities":{"market":r["market_probabilities"]}} for r in market_rows],"market",bins)
-    results["market_snapshot_eligible"]["n_market_eligible"]=len(market_rows)
-    report={"schema_version":1,"source_ledger":str(path),"manifest":manifest,"rows":len(rows),"diagnostics":results,"limitations":["Segmentation fields are reported only when present in source ledger rows; xG/strength/disagreement are not inferred.","Market benchmark uses only ledger rows marked market_eligible; eligibility does not certify exact odds capture timestamps.","No causal interpretation or model adjustment is performed."]}
+    # Paired comparison: model and market are scored on identical fixture IDs.
+    market_rows = [r for r in rows if r.get('market_eligible') and r.get('market_probabilities')]
+    market_by_id = {r['fixture_id']: r for r in market_rows}
+    results['market_snapshot_eligible'] = metric_rows([
+        {**r, 'model_probabilities': {'market': r['market_probabilities']}} for r in market_rows
+    ], 'market', bins)
+    results['market_snapshot_eligible']['n_market_eligible'] = len(market_rows)
+    paired = {}
+    for mode in modes:
+        common = [r for r in rows if r['fixture_id'] in market_by_id and mode in r.get('model_probabilities', {})]
+        if not common:
+            paired[mode] = {'n': 0}
+            continue
+        mb, kb, ml, kl = [], [], [], []
+        mh, kh = 0, 0
+        for row in common:
+            y = int(row['actual_result'] == 'X')
+            pm = float(row['model_probabilities'][mode]['X'])
+            pk = float(market_by_id[row['fixture_id']]['market_probabilities']['X'])
+            mb.append((pm-y)**2); kb.append((pk-y)**2)
+            ml.append(-(y*math.log(max(pm,1e-15))+(1-y)*math.log(max(1-pm,1e-15))))
+            kl.append(-(y*math.log(max(pk,1e-15))+(1-y)*math.log(max(1-pk,1e-15))))
+            mh += int(max(row['model_probabilities'][mode], key=row['model_probabilities'][mode].get) == 'X' and y == 1)
+            kp = market_by_id[row['fixture_id']]['market_probabilities']
+            kh += int(max(kp, key=kp.get) == 'X' and y == 1)
+        paired[mode] = {'n': len(common), 'model_x_brier': sum(mb)/len(common), 'market_x_brier': sum(kb)/len(common), 'delta_brier_model_minus_market': sum(a-b for a,b in zip(mb,kb))/len(common), 'model_x_logloss': sum(ml)/len(common), 'market_x_logloss': sum(kl)/len(common), 'delta_logloss_model_minus_market': sum(a-b for a,b in zip(ml,kl))/len(common), 'model_x_top1_hits': mh, 'market_x_top1_hits': kh}
+    results['paired_market_comparison_same_fixtures'] = paired
+    report={'schema_version':1,'source_ledger':str(path),'manifest':manifest,'rows':len(rows),'diagnostics':results,'limitations':['Segmentation fields are reported only when present in source ledger rows; xG/strength/disagreement are not inferred.','Market comparison is restricted to identical fixture IDs marked market_eligible; eligibility does not certify exact odds capture timestamps.','Paired differences are descriptive; no temporal block-bootstrap confidence intervals or significance tests are claimed.','No causal interpretation or model adjustment is performed.']}
     output_dir.mkdir(parents=True,exist_ok=True)
     (output_dir/"draw_diagnostic.json").write_text(json.dumps(report,indent=2,ensure_ascii=False)+"\n",encoding="utf-8")
     lines=["# OOS draw (X) diagnostic","",f"- Rows: {len(rows)}",f"- Source ledger: {path}",f"- Ledger code revision: {manifest.get('code_revision','unknown')}","", "## Summary"]
