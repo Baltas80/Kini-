@@ -73,6 +73,21 @@ def _validate_recorded_at(value: object, validated: dict[str, Any]) -> str:
     return recorded_at.isoformat().replace("+00:00", "Z")
 
 
+def _validate_utc_timestamp(value: object, field: str) -> str:
+    """Validate a timezone-aware UTC timestamp stored in the ledger."""
+    if not isinstance(value, str) or not value.strip():
+        raise TicketLedgerError(f"{field} must be a non-empty ISO-8601 timestamp")
+    raw = value.strip()
+    normalized_input = f"{raw[:-1]}+00:00" if raw.endswith("Z") else raw
+    try:
+        parsed = datetime.fromisoformat(normalized_input)
+    except ValueError as exc:
+        raise TicketLedgerError(f"{field} must be an ISO-8601 timestamp") from exc
+    if parsed.tzinfo is None or parsed.utcoffset() != timedelta(0):
+        raise TicketLedgerError(f"{field} must be expressed in UTC")
+    return parsed.astimezone(UTC).isoformat().replace("+00:00", "Z")
+
+
 class TicketLedger:
     """SQLite-backed append-only ledger for generated Quiniela tickets and scores.
 
@@ -172,7 +187,10 @@ class TicketLedger:
         ticket_count = 0
         ticket_rows = connection.execute(
             """
-            SELECT ticket_id, payload_json, payload_sha256, recorded_at_utc
+            SELECT
+                ticket_id, draw_date, ticket_created_at_utc,
+                ticket_cutoff_at_utc, first_kickoff_at, payload_json,
+                payload_sha256, recorded_at_utc
             FROM tickets ORDER BY ticket_id
             """
         )
@@ -196,7 +214,25 @@ class TicketLedger:
                 )
             try:
                 validated = validate_ticket_record(ticket)
+                expected_metadata = {
+                    "draw_date": validated["draw_date"],
+                    "ticket_created_at_utc": validated["ticket_created_at_utc"]
+                    .isoformat()
+                    .replace("+00:00", "Z"),
+                    "ticket_cutoff_at_utc": validated["ticket_cutoff_at_utc"]
+                    .isoformat()
+                    .replace("+00:00", "Z"),
+                    "first_kickoff_at": validated["first_kickoff_at"].isoformat(),
+                }
+                for column, expected in expected_metadata.items():
+                    if row[column] != expected:
+                        raise TicketLedgerError(
+                            f"stored ticket {ticket_id!r} has inconsistent "
+                            f"{column} metadata"
+                        )
                 _validate_recorded_at(row["recorded_at_utc"], validated)
+            except TicketLedgerError:
+                raise
             except (KeyError, TypeError, ValueError) as exc:
                 raise TicketLedgerError(
                     f"stored ticket {ticket_id!r} failed structural validation"
@@ -207,7 +243,9 @@ class TicketLedger:
         score_count = 0
         score_rows = connection.execute(
             """
-            SELECT ticket_id, reconciliation_sha256, score_json, score_sha256
+            SELECT
+                ticket_id, reconciliation_sha256, score_json, score_sha256,
+                recorded_at_utc
             FROM ticket_scores ORDER BY ticket_id, reconciliation_sha256
             """
         )
@@ -237,17 +275,27 @@ class TicketLedger:
                 raise TicketLedgerError(
                     f"stored score for ticket {ticket_id!r} has inconsistent ticket binding"
                 )
-            evidence_digest = score.get(
-                "score_evidence_sha256", row["reconciliation_sha256"]
-            )
             try:
+                reconciliation_digest = _sha256(
+                    score.get("reconciliation_sha256"),
+                    "stored score reconciliation digest",
+                )
                 evidence_digest = _sha256(
-                    evidence_digest, "stored score evidence digest"
+                    score.get("score_evidence_sha256", reconciliation_digest),
+                    "stored score evidence digest",
+                )
+                normalized_score_time = _validate_utc_timestamp(
+                    row["recorded_at_utc"], "score recorded_at_utc"
                 )
             except TicketLedgerError as exc:
                 raise TicketLedgerError(
-                    f"stored score for ticket {ticket_id!r} has an invalid evidence digest"
+                    f"stored score for ticket {ticket_id!r} has invalid integrity metadata"
                 ) from exc
+            if normalized_score_time != row["recorded_at_utc"]:
+                raise TicketLedgerError(
+                    f"stored score for ticket {ticket_id!r} has non-canonical "
+                    "recorded_at_utc"
+                )
             if evidence_digest != row["reconciliation_sha256"]:
                 raise TicketLedgerError(
                     f"stored score for ticket {ticket_id!r} has an inconsistent evidence key"

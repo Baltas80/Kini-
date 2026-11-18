@@ -67,7 +67,7 @@ The automated tests cover:
 - Press-release importer integration that emits a standalone Pleno result report from the verified PDF bytes.
 - Draw-date filtering and bounded listing.
 - Engine-to-ledger integration for a pre-ticket coupon plan.
-- Full SQLite/foreign-key integrity checks, ticket and score hash/binding verification, WAL-aware backup/reopen, no-overwrite publication and corrupted-source rejection.
+- Full SQLite/foreign-key integrity checks, ticket and score hash/binding verification, denormalized ticket-index metadata checks, score timestamp validation, WAL-aware backup/reopen, no-overwrite publication and corrupted-source rejection.
 
 
 ## Strict ticket-record contract
@@ -126,3 +126,8 @@ This protects against accidental corruption and incomplete file-copy procedures;
 ## CI validation for backup and integrity hardening
 
 The backup implementation was validated on commit [bf745a3](https://github.com/Baltas80/Kini-/commit/bf745a3192a33a84052343b6634f889b88ed3270). CI [44236087928](https://github.com/Baltas80/Kini-/actions/runs/44236087928) passed Actionlint, Ruff lint, Ruff format and **441 tests** (25 upstream NumPy/penaltyblog deprecation warnings). Historical-data validation [44236087912](https://github.com/Baltas80/Kini-/actions/runs/44236087912) passed with 5,322 completed fixtures and no missing team names/scores, duplicate fixtures or conflicting duplicates. Historical-model and coupon jobs were correctly skipped because no predictive or optimizer behavior changed.
+
+
+## Integrity-check coverage boundary
+
+The full integrity check also compares the indexed ticket columns (draw date, creation/cutoff timestamps and first kickoff) with the validated canonical ticket payload. This prevents a modified index column from changing draw-date listings while the payload hash remains valid. Score verification checks the UTC format of its recorded timestamp and binds the stored evidence key to the score's reconciliation digest (or its combined evidence digest when Pleno/prize evidence is present). These checks detect inconsistent ledger state; they do not turn the local SQLite file into a signed or tamper-proof audit log.

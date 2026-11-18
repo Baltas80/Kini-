@@ -541,6 +541,90 @@ def test_ticket_ledger_verify_integrity_checks_ticket_and_score_rows(tmp_path):
     }
 
 
+@pytest.mark.parametrize(
+    ("column", "tampered_value"),
+    [
+        ("draw_date", "2026-11-09"),
+        ("ticket_created_at_utc", "2026-11-08T09:31:00Z"),
+        ("ticket_cutoff_at_utc", "2026-11-08T11:01:00Z"),
+        ("first_kickoff_at", "2026-11-08T15:00:00+01:00"),
+    ],
+)
+def test_ticket_ledger_integrity_rejects_tampered_ticket_index_metadata(
+    tmp_path, column, tampered_value
+):
+    path = tmp_path / "tickets.sqlite3"
+    ledger = TicketLedger(path)
+    ticket = _ticket()
+    ledger.append_ticket(ticket)
+
+    with sqlite3.connect(path) as connection:
+        connection.execute("DROP TRIGGER tickets_no_update")
+        connection.execute(
+            f"UPDATE tickets SET {column} = ? WHERE ticket_id = ?",
+            (tampered_value, ticket["ticket_id"]),
+        )
+
+    with pytest.raises(TicketLedgerError, match=f"inconsistent {column} metadata"):
+        ledger.verify_integrity()
+
+
+def test_ticket_ledger_integrity_rejects_non_utc_score_timestamp(tmp_path):
+    path = tmp_path / "tickets.sqlite3"
+    ledger = TicketLedger(path)
+    ticket = _ticket()
+    ledger.append_ticket(ticket)
+    reconciliation_json = json.dumps(
+        _reconciliation(), ensure_ascii=False, separators=(",", ":")
+    )
+    ledger.score_ticket_json(str(ticket["ticket_id"]), reconciliation_json)
+
+    with sqlite3.connect(path) as connection:
+        connection.execute("DROP TRIGGER ticket_scores_no_update")
+        connection.execute(
+            "UPDATE ticket_scores SET recorded_at_utc = ? WHERE ticket_id = ?",
+            ("2026-11-08T09:45:00", ticket["ticket_id"]),
+        )
+
+    with pytest.raises(TicketLedgerError, match="invalid integrity metadata"):
+        ledger.verify_integrity()
+
+
+def test_ticket_ledger_integrity_binds_legacy_score_digest_to_row_key(tmp_path):
+    path = tmp_path / "tickets.sqlite3"
+    ledger = TicketLedger(path)
+    ticket = _ticket()
+    ledger.append_ticket(ticket)
+    reconciliation_json = json.dumps(
+        _reconciliation(), ensure_ascii=False, separators=(",", ":")
+    )
+    ledger.score_ticket_json(str(ticket["ticket_id"]), reconciliation_json)
+
+    with sqlite3.connect(path) as connection:
+        connection.row_factory = sqlite3.Row
+        row = connection.execute(
+            "SELECT score_json FROM ticket_scores WHERE ticket_id = ?",
+            (ticket["ticket_id"],),
+        ).fetchone()
+        score = json.loads(row["score_json"])
+        score["reconciliation_sha256"] = HASH_B
+        payload = json.dumps(
+            score, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+        )
+        digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()
+        connection.execute("DROP TRIGGER ticket_scores_no_update")
+        connection.execute(
+            """
+            UPDATE ticket_scores
+            SET score_json = ?, score_sha256 = ? WHERE ticket_id = ?
+            """,
+            (payload, digest, ticket["ticket_id"]),
+        )
+
+    with pytest.raises(TicketLedgerError, match="inconsistent evidence key"):
+        ledger.verify_integrity()
+
+
 def test_ticket_ledger_backup_is_consistent_and_reopenable(tmp_path):
     source_path = tmp_path / "source" / "tickets.sqlite3"
     backup_path = tmp_path / "backups" / "tickets-verified.sqlite3"
