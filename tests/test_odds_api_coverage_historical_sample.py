@@ -14,7 +14,7 @@ from scripts.probe_the_odds_api_coverage import (
 
 def _entry(
     *,
-    kickoff_at: str = "2025-03-08T17:30:00+01:00",
+    kickoff_at: str = "2025-03-08T18:30:00+01:00",
     evidence_checked_at_utc: str = "2026-11-18T13:40:08Z",
 ) -> dict[str, str]:
     return {
@@ -57,14 +57,14 @@ def test_historical_sample_loader_validates_timezone_and_identity(tmp_path):
     assert fixtures[0].season == "2425"
     assert fixtures[0].draw_date is None
     assert fixtures[0].position is None
-    assert fixtures[0].kickoff_at == datetime(2025, 3, 8, 16, 30, tzinfo=UTC)
+    assert fixtures[0].kickoff_at == datetime(2025, 3, 8, 17, 30, tzinfo=UTC)
     assert len(fixtures[0].fixture_id) == 64
     assert len(digest) == 64
 
 
 def test_historical_sample_loader_rejects_timezone_naive_kickoff(tmp_path):
     path = tmp_path / "sample.json"
-    _write_sample(path, [_entry(kickoff_at="2025-03-08T17:30:00")])
+    _write_sample(path, [_entry(kickoff_at="2025-03-08T18:30:00")])
 
     with pytest.raises(ValueError, match="explicit timezone"):
         load_historical_sample_fixtures(path)
@@ -109,6 +109,8 @@ def test_checked_in_bundle_has_six_historical_and_ten_current_fixtures():
         "2425",
         "2526",
     }
+    valencia = next(fixture for fixture in fixtures if fixture.sample_id == "sp1-2425-2025-03-08-valencia-valladolid")
+    assert valencia.kickoff_at == datetime(2025, 3, 8, 17, 30, tzinfo=UTC)
     assert len(bundle_digest) == 64
 
 
