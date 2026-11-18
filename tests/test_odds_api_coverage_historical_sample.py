@@ -110,7 +110,7 @@ def test_checked_in_bundle_has_six_historical_and_ten_current_fixtures():
     assert len(bundle_digest) == 64
 
 
-def test_fixture_bundle_rejects_duplicate_ids(tmp_path):
+def test_fixture_bundle_combines_sources(tmp_path):
     crosswalk = tmp_path / "crosswalk.json"
     crosswalk.write_text(
         json.dumps(
@@ -141,3 +141,24 @@ def test_fixture_bundle_rejects_duplicate_ids(tmp_path):
     assert len(fixtures) == 2
     assert len({fixture.fixture_id for fixture in fixtures}) == 2
     assert len(digest) == 64
+
+
+def test_historical_sample_loader_rejects_duplicate_sample_id(tmp_path):
+    path = tmp_path / "sample.json"
+    entries = [_entry(), {**_entry(), "home_football_data_name": "Other Home"}]
+    _write_sample(path, entries)
+
+    with pytest.raises(ValueError, match="Duplicate historical sample_id"):
+        load_historical_sample_fixtures(path)
+
+
+def test_historical_sample_loader_rejects_duplicate_fixture_key(tmp_path):
+    path = tmp_path / "sample.json"
+    entries = [
+        _entry(),
+        {**_entry(), "sample_id": "different-id"},
+    ]
+    _write_sample(path, entries)
+
+    with pytest.raises(ValueError, match="Duplicate historical sample fixture"):
+        load_historical_sample_fixtures(path)
