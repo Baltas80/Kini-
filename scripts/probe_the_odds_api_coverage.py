@@ -22,6 +22,7 @@ SPORT_KEYS = {
 DEFAULT_LEAD_HOURS = (24.0, 6.0, 1.0)
 DEFAULT_REGION = "eu"
 REQUEST_TIMEOUT_SECONDS = 20.0
+MAX_KICKOFF_DELTA_SECONDS = 90 * 60
 
 
 @dataclass(frozen=True)
@@ -417,13 +418,25 @@ def probe_coverage(
             events, event_snapshot, event_digest, event_usage = (
                 client.historical_events(fixture, requested_at)
             )
-            exact_matches = [
+            participant_matches = [
                 event
                 for event in events
                 if _exact_name_key(event["home_team"])
                 == _exact_name_key(fixture.home_team)
                 and _exact_name_key(event["away_team"])
                 == _exact_name_key(fixture.away_team)
+            ]
+            exact_matches = [
+                event
+                for event in participant_matches
+                if abs(int(event["kickoff_delta_seconds"]))
+                <= MAX_KICKOFF_DELTA_SECONDS
+            ]
+            kickoff_mismatches = [
+                event
+                for event in participant_matches
+                if abs(int(event["kickoff_delta_seconds"]))
+                > MAX_KICKOFF_DELTA_SECONDS
             ]
 
             row: dict[str, Any] = {
@@ -448,11 +461,22 @@ def probe_coverage(
                 "events_usage": event_usage,
                 "candidate_event_count": len(events),
                 "candidate_events": events,
+                "participant_match_count": len(participant_matches),
+                "kickoff_mismatch_count": len(kickoff_mismatches),
                 "exact_match_count": len(exact_matches),
+                "snapshot_is_pre_kickoff": None,
                 "match_status": (
                     "exact"
                     if len(exact_matches) == 1
-                    else ("ambiguous" if exact_matches else "no_exact_match")
+                    else (
+                        "ambiguous"
+                        if exact_matches
+                        else (
+                            "kickoff_mismatch"
+                            if participant_matches
+                            else "no_exact_match"
+                        )
+                    )
                 ),
                 "event_id": None,
                 "market_snapshot_timestamp": None,
@@ -468,11 +492,10 @@ def probe_coverage(
             if len(exact_matches) == 1:
                 event = exact_matches[0]
                 event_id = event["id"]
-                markets, market_snapshot, market_digest, market_usage = (
-                    client.historical_event_markets(
-                        fixture, event_id, requested_at, region
-                    )
+                provider_kickoff = _parse_aware_datetime(
+                    event["commence_time"], f"Provider event {event_id} commence_time"
                 )
+                is_pre_kickoff = requested_at < provider_kickoff
                 row.update(
                     {
                         "event_id": event_id,
@@ -480,22 +503,39 @@ def probe_coverage(
                         "provider_away_team": event["away_team"],
                         "provider_commence_time": event["commence_time"],
                         "kickoff_delta_seconds": int(event["kickoff_delta_seconds"]),
-                        "market_snapshot_timestamp": _format_timestamp(market_snapshot),
-                        "market_snapshot_staleness_seconds": int(
-                            (requested_at - market_snapshot).total_seconds()
-                        ),
-                        "market_response_sha256": market_digest,
-                        "market_usage": market_usage,
-                        **markets,
+                        "snapshot_is_pre_kickoff": is_pre_kickoff,
                     }
                 )
-                row["coverage_status"] = (
-                    "h2h_available"
-                    if markets["h2h_market_available"]
-                    else "event_found_without_h2h"
-                )
+                if not is_pre_kickoff:
+                    row["coverage_status"] = "snapshot_not_pre_kickoff"
+                else:
+                    markets, market_snapshot, market_digest, market_usage = (
+                        client.historical_event_markets(
+                            fixture, event_id, requested_at, region
+                        )
+                    )
+                    row.update(
+                        {
+                            "market_snapshot_timestamp": _format_timestamp(
+                                market_snapshot
+                            ),
+                            "market_snapshot_staleness_seconds": int(
+                                (requested_at - market_snapshot).total_seconds()
+                            ),
+                            "market_response_sha256": market_digest,
+                            "market_usage": market_usage,
+                            **markets,
+                        }
+                    )
+                    row["coverage_status"] = (
+                        "h2h_available"
+                        if markets["h2h_market_available"]
+                        else "event_found_without_h2h"
+                    )
             elif exact_matches:
                 row["coverage_status"] = "ambiguous_exact_event_match"
+            elif participant_matches:
+                row["coverage_status"] = "kickoff_mismatch"
             else:
                 row["coverage_status"] = "no_exact_event_match"
 
@@ -514,6 +554,7 @@ def probe_coverage(
         "sport_keys": SPORT_KEYS,
         "region": region,
         "lead_hours": list(lead_hours),
+        "kickoff_match_tolerance_seconds": MAX_KICKOFF_DELTA_SECONDS,
         "fixture_probe_count": len(results),
         "api_request_count": client.request_count,
         "estimated_credits_upper_bound": client.request_count,
@@ -525,7 +566,8 @@ def probe_coverage(
         "limitations": [
             "This probe uses historical events and historical event markets endpoints only.",
             "No odds prices are downloaded; the paid historical odds endpoint is not called.",
-            "Only exact normalized home/away name matches are accepted; no fuzzy team matching is used.",
+            "Only exact normalized home/away matches with kickoff within 90 minutes are accepted; no fuzzy team matching is used.",
+            "Market coverage is not counted when the requested snapshot is at or after the provider's scheduled kickoff.",
             "The supplied crosswalk is a sample, not a complete league-season coverage census.",
             "Coverage metadata does not establish redistribution rights or commercial licensing.",
         ],
