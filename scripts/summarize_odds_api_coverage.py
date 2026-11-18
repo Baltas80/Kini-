@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
+import collections
 import json
 import os
-from collections import defaultdict
-from pathlib import Path
-from typing import Any
+import pathlib
+import typing
 
 
 COUNTERS = (
@@ -21,9 +21,9 @@ COUNTERS = (
 )
 
 
-def aggregate_report(report: dict[str, Any]) -> dict[tuple[str, float], dict[str, int]]:
+def aggregate_report(report: dict[str, typing.Any]) -> dict[tuple[str, float], dict[str, int]]:
     """Aggregate rows by competition and lead horizon without retaining event detail."""
-    groups: dict[tuple[str, float], dict[str, int]] = defaultdict(
+    groups: dict[tuple[str, float], dict[str, int]] = collections.defaultdict(
         lambda: dict.fromkeys(COUNTERS, 0)
     )
     rows = report.get("results", [])
@@ -52,7 +52,7 @@ def aggregate_report(report: dict[str, Any]) -> dict[tuple[str, float], dict[str
     return dict(groups)
 
 
-def render_summary(report: dict[str, Any]) -> str:
+def render_summary(report: dict[str, typing.Any]) -> str:
     """Return a markdown summary using aggregate counters only."""
     groups = aggregate_report(report)
     lines = [
@@ -89,7 +89,7 @@ def render_summary(report: dict[str, Any]) -> str:
 
 
 def main() -> int:
-    report_path = Path("artifacts/the_odds_api_coverage.json")
+    report_path = pathlib.Path("artifacts/the_odds_api_coverage.json")
     if not report_path.exists():
         print("No coverage report was produced.")
         return 0
@@ -101,7 +101,7 @@ def main() -> int:
         print(summary, end="")
         return 0
 
-    summary_path = Path(summary_path_value)
+    summary_path = pathlib.Path(summary_path_value)
     summary_path.parent.mkdir(parents=True, exist_ok=True)
     with summary_path.open("a", encoding="utf-8") as handle:
         handle.write(summary)
