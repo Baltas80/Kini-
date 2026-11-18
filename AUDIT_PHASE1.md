@@ -3703,3 +3703,15 @@ A consistency review after the P4 probability-contract change found that the sha
 ### Validation of this change
 
 Pending CI, historical-data validation and the required historical-backtest workflow on the new head. No new predictive metric is claimed until those jobs complete.
+
+
+### Validation update — 2026-11-18, current head `867ec2f`
+
+The first CI attempt on implementation commit `564e205` failed only at the formatting gate because the appended bookmaker regression test had one missing top-level blank line. This was corrected in `867ec2f`; no code or test logic changed in that formatting-only commit.
+
+- CI [44205910370](https://github.com/Baltas80/Kini-/actions/runs/44205910370): **430 tests passed**; Actionlint, Ruff lint and Ruff format passed. The 25 NumPy/penaltyblog deprecation warnings are upstream.
+- Historical-data validation [44205910420](https://github.com/Baltas80/Kini-/actions/runs/44205910420): **5,322 completed fixtures**, 56 canonical team IDs, 10,644/10,644 references resolved, zero unresolved/ambiguous references, duplicates or conflicting duplicates; integrity passed.
+- Coupon workflow [44205910399](https://github.com/Baltas80/Kini-/actions/runs/44205910399): change gate passed; pilot skipped because coupon archive/optimizer behavior was not changed.
+- Historical backtest [44205701560](https://github.com/Baltas80/Kini-/actions/runs/44205701560) is still running its full comparison. The format-only follow-up [44205910454](https://github.com/Baltas80/Kini-/actions/runs/44205910454) is queued; no new predictive result is claimed until the full comparison passes its non-empty, ledger, market and calibration gates.
+
+The source-vector implementation and regression suite are validated by CI. The P4 change remains **partially validated** until the required full historical comparison completes.
