@@ -865,6 +865,8 @@ def _recent_form(history: list[Match], team: str) -> float:
 class TicketOptimizer:
     """SELAE direct-multiple optimizer under an independent-match approximation.
 
+    Input vectors must contain exactly numeric 1/X/2 probabilities. The
+    optimizer does not coerce or silently renormalize source forecasts.
     The budget counts 14-match columns. Each selected Pleno category pair
     multiplies payable bets; the official cap applies after that multiplier.
     Coverage is not expected payout or profitability.
@@ -998,7 +1000,7 @@ class TicketOptimizer:
                 f"of {self.minimum_columns} total bets"
             )
 
-        normalized: list[dict[str, float]] = []
+        validated_probabilities: list[dict[str, float]] = []
         for index, prediction in enumerate(predictions, start=1):
             if not isinstance(prediction, dict):
                 raise TypeError(f"match {index}: probabilities must be a mapping")
@@ -1034,7 +1036,7 @@ class TicketOptimizer:
                 )
             # The 1e-6 sum tolerance is validation only. Preserve source values:
             # do not coerce strings or silently renormalize a forecast vector.
-            normalized.append({sign: values[sign] for sign in SIGNS})
+            validated_probabilities.append({sign: values[sign] for sign in SIGNS})
 
         # State is (number of doubles, number of triples). The SELAE direct
         # table constrains triples; the 31,104 cap also applies after Pleno.
@@ -1042,7 +1044,7 @@ class TicketOptimizer:
             (0, 0): (0.0, [])
         }
 
-        for probabilities in normalized:
+        for probabilities in validated_probabilities:
             nxt: dict[tuple[int, int], tuple[float, list[tuple[str, ...]]]] = {}
             ordered = sorted(
                 SIGNS,
@@ -1068,7 +1070,9 @@ class TicketOptimizer:
                     signs = tuple(ordered[:count])
                     mass = sum(probabilities[sign] for sign in signs)
                     if mass <= 0.0:
-                        raise RuntimeError("validated probability vector produced zero selected mass")
+                        raise RuntimeError(
+                            "validated probability vector produced zero selected mass"
+                        )
                     candidate = log_mass + float(np.log(mass))
                     state = (new_doubles, new_triples)
                     previous = nxt.get(state)
