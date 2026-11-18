@@ -127,6 +127,12 @@ jobs:
               )
               item["unmatched"] += row["match_status"] == "no_exact_match"
               item["ambiguous"] += row["match_status"] == "ambiguous"
+              item["kickoff_mismatch"] += (
+                  row["match_status"] == "kickoff_mismatch"
+              )
+              item["post_kickoff"] += (
+                  row["coverage_status"] == "snapshot_not_pre_kickoff"
+              )
 
           lines = [
               "# The Odds API — aggregate coverage probe",
@@ -140,14 +146,15 @@ jobs:
               f"- Production dataset modified: {report['production_dataset_modified']}",
               f"- Eligible for model input: {report['eligible_for_model_input']}",
               "",
-              "| Competition | Lead (h) | Fixtures | Exact event | h2h | Event without h2h | Unmatched | Ambiguous |",
-              "|---|---:|---:|---:|---:|---:|---:|---:|",
+              "| Competition | Lead (h) | Fixtures | Exact event | h2h | Event without h2h | Unmatched | Kickoff mismatch | Ambiguous | Post-kickoff snapshot |",
+              "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
           ]
           for (competition, lead), item in sorted(groups.items()):
               lines.append(
                   f"| {competition} | {lead:g} | {item['fixtures']} | "
                   f"{item['exact']} | {item['h2h']} | {item['without_h2h']} | "
-                  f"{item['unmatched']} | {item['ambiguous']} |"
+                  f"{item['unmatched']} | {item['kickoff_mismatch']} | "
+                  f"{item['ambiguous']} | {item['post_kickoff']} |"
               )
           lines.extend([
               "",
