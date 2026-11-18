@@ -3871,3 +3871,75 @@ No API key, paid subscription, provider data or new bookmaker probabilities were
 - master remains at ef331c3a3f50220b5d2b1a71900a2d7003b259c4. PR [#10](https://github.com/Baltas80/Kini-/pull/10) remains open/draft on feat/immutable-ticket-ledger; no merge or direct change to master occurred.
 
 **Next action:** retain the Odds API probe as read-only and pending. Its manual workflow still requires the repository Actions secret THE_ODDS_API_KEY and authorized integration to the default branch before it can be dispatched. Do not ingest coverage metadata or prices into the training set until exact event/fixture matching, point-in-time timestamps and licensing are independently established.
+
+
+## 2026-11-18 — P0 historical backtest acceptance completed (run 44250711096)
+
+The previously pending historical-model run is now complete and validated on code revision `f17566ba8f70ca87917b4351a63a142c41e6faea` (PR #10 branch). This closes the non-empty forecast acceptance blocker for this revision: **5,022/5,022 forecasts for each of five model streams, zero prediction errors, zero empty prediction sets**.
+
+- [Historical backtest workflow 44250711096](https://github.com/Baltas80/Kini-/actions/runs/44250711096) completed successfully. The run enforced non-empty backtests, per-fixture forecast-ledger acceptance, cold-start diagnostics, schedule-screened market eligibility, common-information-time comparisons, snapshot-aligned market checks, fixed-book Bet365 checks and prequential-calibration sample consistency.
+- [CI 44250711029](https://github.com/Baltas80/Kini-/actions/runs/44250711029) passed Actionlint, Ruff lint/format and **452 tests** (25 upstream NumPy/penaltyblog deprecation warnings).
+- [Historical data validation 44250711084](https://github.com/Baltas80/Kini-/actions/runs/44250711084) passed. Dataset: 5,322 fixtures, 56 canonical teams, 10,644/10,644 team references resolved, no unresolved identities, duplicates or conflicting fixtures.
+- [Coupon pilot 44250710961](https://github.com/Baltas80/Kini-/actions/runs/44250710961) passed its change gate and skipped the pilot because this commit does not alter coupon behavior.
+
+### Reproducibility and integrity
+
+- Dataset CSV SHA-256: `7251b84acd803047746c0c55c6bdabb60d9499208cfd6c781f72080295346f44` (5,322 rows; 3,223,124 bytes). Profile SHA-256: `2886a3619a9156bfaac37015c734c357238f03261980ca536fa96afcec5809c5`.
+- Full prediction ledger: 5,022 forecast rows, SHA-256 `866187f24763bdacd5adcbcb1f6bf57ee677ba6acac9dbe480d0bb47cbc6fbb3`. Independent artifact audit verified 5,022 unique fixture IDs, five complete model streams per row, valid probability vectors and no training-cutoff/date violations.
+- Snapshot-aligned ledger: 3,991 forecast rows across 319 snapshot dates, SHA-256 `d2e1626681d9ed9a22ac59ec7ea5b9c961d8c0cdafaaf9f8460bce1d6095f3e0`. Independent artifact audit verified 3,991 unique fixture IDs, valid vectors and no cutoff violations.
+- Backtest artifact ZIP SHA-256: `30393fd6f16b6271b8c7f2ec189a98b784e34bada8cdcd86a5095b80cfd1040d` (artifact ID 14409181662; retained 90 days).
+- Test/backtest configuration: initial training minimum 300; refit every 30 forecast dates; Dixon–Coles decay 0.995; adaptive ensemble minimum history 300, window 1,000 and regularization 0.02; prequential calibration minimum history 500, window 1,500, refit every 30 dates and regularization 0.05.
+
+### Full walk-forward results (5,022 fixtures; 2020-12-11 to 2026-11-16)
+
+| Model | Accuracy | Brier | Log Loss | RPS | ECE |
+|---|---:|---:|---:|---:|---:|
+| Dixon–Coles | 0.48188 | 0.61665 | 1.02776 | 0.20822 | 0.01125 |
+| ML | 0.44166 | 0.64549 | 1.07131 | 0.21994 | 0.04386 |
+| Market-assisted ensemble | 0.47949 | 0.61361 | 1.02298 | 0.20700 | 0.01250 |
+| Fixed DC/ML-only | 0.47591 | 0.61585 | 1.02636 | 0.20799 | 0.00917 |
+| Adaptive DC/ML-only | 0.47730 | 0.61606 | 1.02666 | 0.20806 | 0.00815 |
+| Market baseline (schedule-eligible; n=4,433) | 0.50733 | 0.59746 | 0.99937 | 0.19982 | 0.02430 |
+
+The market comparison is evaluated separately on the exact 4,433-fixture common market sample (same fixtures for each model and market):
+
+| Model | Accuracy | Brier | Log Loss | Delta Brier vs market | Delta Log Loss vs market |
+|---|---:|---:|---:|---:|---:|
+| Dixon–Coles | 0.48071 | 0.61636 | 1.02746 | +0.01890 | +0.02809 |
+| ML | 0.43808 | 0.64743 | 1.07414 | +0.04997 | +0.07477 |
+| Market-assisted ensemble | 0.47823 | 0.61356 | 1.02297 | +0.01610 | +0.02360 |
+| Fixed DC/ML-only | 0.47417 | 0.61610 | 1.02680 | +0.01864 | +0.02743 |
+| Adaptive DC/ML-only | 0.47507 | 0.61630 | 1.02709 | +0.01884 | +0.02772 |
+| Market | 0.50733 | 0.59746 | 0.99937 | — | — |
+
+Paired uncertainty diagnostics use 10,000 resamples of 249 ISO-week clusters; exploratory 95% intervals for each model-market Brier and Log Loss deltas remain strictly positive, and accuracy deltas strictly negative. The intervals are not adjusted for multiple comparisons. **No model is promoted; the market remains better on proper scoring rules and sign accuracy.** The market screen remains schedule-compatible, not exact timestamp verified or evidence of executable prices.
+
+### Snapshot-aligned common-time benchmark
+
+- **3,991** fixtures on the exact model/market common sample; **319** valid snapshot dates and one fresh model fit per snapshot date.
+- 4,256 mapped fixtures; 457 unmapped fixtures; zero invalid snapshot mappings. 265 fixtures were skipped for insufficient prior training history. No missing actual results or prediction errors.
+- Training rule: completed result date and model-fit cutoff strictly before snapshot date; same-day outcomes excluded because exact publication timestamps are unavailable.
+
+| Model | Accuracy | Brier | Log Loss |
+|---|---:|---:|---:|
+| Dixon–Coles | 0.48284 | 0.61483 | 1.02837 |
+| ML | 0.44250 | 0.63892 | 1.06067 |
+| Market-assisted ensemble | 0.48284 | 0.61097 | 1.01954 |
+| Fixed DC/ML-only | 0.47983 | 0.61352 | 1.02353 |
+| Adaptive DC/ML-only | 0.48008 | 0.61377 | 1.02393 |
+| Market baseline | **0.51065** | **0.59415** | **0.99461** |
+
+The market again wins on the identical snapshot-aligned sample. The 111-fixture strict common-information-time market subset is too small for model selection and is retained only as a diagnostic; the schedule/snapshot benchmark remains the larger descriptive comparison.
+
+### Prequential calibration decision
+
+Calibration was learned from prior out-of-fold predictions only, with same-calendar-day outcomes excluded. On 4,491 post-warm-up fixtures, calibration improved DC and ML, but the main market-assisted ensemble's Brier and Log Loss worsened slightly (0.6125949 → 0.6127260; 1.0213299 → 1.0214362), while ECE improved. On the exact 3,856 model/market calibration intersection, ensemble Brier and Log Loss also worsened (0.6113160 → 0.6115258; 1.0197101 → 1.0199257). **Do not promote the calibrator for the main ensemble**; keep it experimental. Market calibration improves its own proper scores, but the market still outperforms the model streams.
+
+### P0 decision and limitations
+
+- **P0 non-empty backtest blocker is closed for revision `f17566b`**: all five streams produce valid, fixture-bound probabilities, full samples and zero forecast errors. Regression acceptance is enforced by CI.
+- The 73 Dixon–Coles-dependent cold-start forecasts (1.45% of the 5,022 forecasts) used the explicit fallback; ML had zero cold-start fallbacks. The fallback is recorded and accepted, not silently hidden.
+- Historical kickoff/result-publication timestamps and exact per-fixture odds-capture timestamps are not available for the public Football-Data sample. Market timing remains schedule-screened/snapshot-date aligned, not fully timestamp verified.
+- The ensemble remains unpromoted; the market is the strongest benchmark. No payout/ROI/profitability claim is made.
+
+**Next priority:** audit/resolve the read-only historical odds coverage probe using a valid `THE_ODDS_API_KEY` (the credential is not available in the current environment; no request has been sent). Keep prices out of the training dataset until event matching, point-in-time capture and licensing are demonstrated. Continue P1/P2 source and leakage work in the existing audit, without repeating this backtest unless code/data changes or new evidence require it.
