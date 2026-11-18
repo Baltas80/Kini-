@@ -3967,6 +3967,9 @@ A static review of the read-only coverage probe found that it matched provider e
 - Added a strict 90-minute kickoff matching tolerance. Participant matches outside the tolerance are reported as `kickoff_mismatch` and do not trigger a markets request.
 - Added a pre-kickoff guard: if the requested snapshot is at or after the provider's scheduled kickoff, it is reported as `snapshot_not_pre_kickoff` and the markets endpoint is not called.
 - The workflow aggregate now counts kickoff mismatches and post-kickoff snapshots separately.
-- Added regression tests for both cases. Validation is pending the GitHub CI triggered by this change; no live API request, price download or dataset modification is performed.
+- Added regression tests for both cases. The initial CI attempt failed only Ruff formatting; the formatting correction was committed and the final CI run passed: [44274752034](https://github.com/Baltas80/Kini-/actions/runs/44274752034), **454 tests passed**, workflow validation, Ruff lint and format all passed.
+- Historical-data validation [44274751931](https://github.com/Baltas80/Kini-/actions/runs/44274751931) passed: **5,322 completed fixtures**, zero unresolved team references, zero duplicate/conflicting fixtures and `integrity_passed=true`.
+- Historical-model workflow [44274751958](https://github.com/Baltas80/Kini-/actions/runs/44274751958) passed its change gate and skipped the model backtest; coupon pilot [44274751914](https://github.com/Baltas80/Kini-/actions/runs/44274751914) also skipped. No new predictive metric is claimed.
+- No live API request, price download or dataset modification was performed.
 
-**Next action:** validate the change through CI, then keep the coverage probe read-only and pending the API key. Do not use this coverage metadata as model input or market benchmark evidence.
+**Next action:** keep the coverage probe read-only and pending the API key. Do not use this coverage metadata as model input or market benchmark evidence.
