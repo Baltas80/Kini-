@@ -123,16 +123,11 @@ def audit_report(
                     f"{coupon_id} {mode}: independent coverage estimate is not numeric"
                 )
             saved_mass = float(saved_mass)
-            if (
-                not math.isfinite(saved_mass)
-                or not 0.0 <= saved_mass <= 1.0 + 2e-5
-            ):
+            if not math.isfinite(saved_mass) or not 0.0 <= saved_mass <= 1.0 + 2e-5:
                 raise ValueError(
                     f"{coupon_id} {mode}: independent coverage estimate is invalid"
                 )
-            if not math.isclose(
-                column_mass, saved_mass, rel_tol=1e-6, abs_tol=1e-12
-            ):
+            if not math.isclose(column_mass, saved_mass, rel_tol=1e-6, abs_tol=1e-12):
                 raise ValueError(
                     f"{coupon_id} {mode}: expanded-column probability mass "
                     f"{column_mass:.12g} does not match stored independent estimate "
