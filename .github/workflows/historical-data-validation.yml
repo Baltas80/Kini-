@@ -63,30 +63,42 @@ jobs:
         with:
           python-version: "3.12"
       - run: python -m pip install -e ".[dev]"
-      - name: Find latest validated dataset on PR base branch
+      - name: Find latest validated dataset artifact
         if: github.event_name == 'pull_request'
         id: source_dataset
         env:
           GH_TOKEN: ${{ github.token }}
           BASE_BRANCH: ${{ github.event.pull_request.base.ref }}
         run: |
-          runs_json="$(gh api --method GET "repos/$GITHUB_REPOSITORY/actions/workflows/historical-data-validation.yml/runs" -f "branch=$BASE_BRANCH" -f status=completed -F per_page=100)"
-          dataset_run_id=""
-          while read -r run_id; do
-            [[ -n "$run_id" ]] || continue
-            artifacts_json="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/artifacts?per_page=100")"
-            if jq -e '[.artifacts[]? | select(.name == "kini-historical-data" and .expired == false)] | length > 0' <<<"$artifacts_json" >/dev/null; then
-              dataset_run_id="$run_id"
-              break
-            fi
-          done < <(
-            jq -r '.workflow_runs[]? | select(.conclusion == "success") | .id' <<<"$runs_json"
-          )
-          if [[ -z "$dataset_run_id" ]]; then
-            echo "No successful, unexpired kini-historical-data artifact exists on base branch $BASE_BRANCH" >&2
+          find_artifact_run() {
+            local runs_json="$1"
+            while read -r run_id run_branch; do
+              [[ -n "$run_id" ]] || continue
+              artifacts_json="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/artifacts?per_page=100")"
+              if jq -e '[.artifacts[]? | select(.name == "kini-historical-data" and .expired == false)] | length > 0' <<<"$artifacts_json" >/dev/null; then
+                echo "$run_id|$run_branch"
+                return 0
+              fi
+            done < <(
+              jq -r '.workflow_runs[]? | select(.conclusion == "success") | "\(.id) \(.head_branch)"' <<<"$runs_json"
+            )
+            return 1
+          }
+
+          base_runs="$(gh api --method GET "repos/$GITHUB_REPOSITORY/actions/workflows/historical-data-validation.yml/runs" -f "branch=$BASE_BRANCH" -f status=completed -F per_page=100)"
+          selected="$(find_artifact_run "$base_runs" || true)"
+          if [[ -z "$selected" ]]; then
+            echo "No validated artifact on base branch $BASE_BRANCH; searching recent successful runs across branches."
+            all_runs="$(gh api --method GET "repos/$GITHUB_REPOSITORY/actions/workflows/historical-data-validation.yml/runs" -f status=completed -F per_page=100)"
+            selected="$(find_artifact_run "$all_runs" || true)"
+          fi
+          if [[ -z "$selected" ]]; then
+            echo "No successful, unexpired kini-historical-data artifact is available." >&2
             exit 1
           fi
-          echo "Using validated historical dataset from run $dataset_run_id on $BASE_BRANCH"
+          dataset_run_id="${selected%%|*}"
+          dataset_branch="${selected#*|}"
+          echo "Using validated historical dataset from run $dataset_run_id on branch $dataset_branch"
           echo "run_id=$dataset_run_id" >> "$GITHUB_OUTPUT"
       - name: Download validated dataset from PR base branch
         if: github.event_name == 'pull_request'

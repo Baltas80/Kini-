@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "provider": "verified_schedule_sample",
+  "description": "Six historical SP1 fixtures with timezone-aware kickoff times checked against official club/LaLiga schedule evidence. This is a coverage sample, not a league census or model dataset.",
+  "entries": [
+    {
+      "sample_id": "sp1-2021-2020-10-04-barcelona-sevilla",
+      "fixture_date": "2020-10-04",
+      "season": "2021",
+      "competition_id": "SP1",
+      "gender": "men",
+      "home_football_data_name": "Barcelona",
+      "away_football_data_name": "Sevilla",
+      "kickoff_at": "2020-10-04T21:00:00+02:00",
+      "schedule_source": "FC Barcelona official website",
+      "evidence_url": "https://www.fcbarcelona.com/en/news/1841855/barca-v-sevilla-set-for-sunday-4-october",
+      "evidence_checked_at_utc": "2026-11-18T13:40:08Z"
+    },
+    {
+      "sample_id": "sp1-2122-2022-03-05-osasuna-villarreal",
+      "fixture_date": "2022-03-05",
+      "season": "2122",
+      "competition_id": "SP1",
+      "gender": "men",
+      "home_football_data_name": "Osasuna",
+      "away_football_data_name": "Villarreal",
+      "kickoff_at": "2022-03-05T14:00:00+01:00",
+      "schedule_source": "LaLiga official results",
+      "evidence_url": "https://www.laliga.com/laliga-easports/resultados/2021-22/jornada-27",
+      "evidence_checked_at_utc": "2026-11-18T13:40:08Z"
+    },
+    {
+      "sample_id": "sp1-2223-2023-04-01-athletic-getafe",
+      "fixture_date": "2023-04-01",
+      "season": "2223",
+      "competition_id": "SP1",
+      "gender": "men",
+      "home_football_data_name": "Ath Bilbao",
+      "away_football_data_name": "Getafe",
+      "kickoff_at": "2023-04-01T16:15:00+02:00",
+      "schedule_source": "LaLiga official results",
+      "evidence_url": "https://www.laliga.com/laliga-easports/resultados/2022-23/jornada-27",
+      "evidence_checked_at_utc": "2026-11-18T13:40:08Z"
+    },
+    {
+      "sample_id": "sp1-2324-2024-03-02-sevilla-sociedad",
+      "fixture_date": "2024-03-02",
+      "season": "2324",
+      "competition_id": "SP1",
+      "gender": "men",
+      "home_football_data_name": "Sevilla",
+      "away_football_data_name": "Sociedad",
+      "kickoff_at": "2024-03-02T14:00:00+01:00",
+      "schedule_source": "LaLiga official match page",
+      "evidence_url": "https://www.laliga.com/partido/temporada-2023-2024-laliga-easports-sevilla-fc-real-sociedad-27",
+      "evidence_checked_at_utc": "2026-11-18T13:40:08Z"
+    },
+    {
+      "sample_id": "sp1-2425-2025-03-08-valencia-valladolid",
+      "fixture_date": "2025-03-08",
+      "season": "2425",
+      "competition_id": "SP1",
+      "gender": "men",
+      "home_football_data_name": "Valencia",
+      "away_football_data_name": "Valladolid",
+      "kickoff_at": "2025-03-08T17:30:00+01:00",
+      "schedule_source": "LaLiga official match page",
+      "evidence_url": "https://www.laliga.com/en-US/match/temporada-2024-2025-laliga-ea-sports-valencia-cf-real-valladolid-cf-27",
+      "evidence_checked_at_utc": "2026-11-18T13:40:08Z"
+    },
+    {
+      "sample_id": "sp1-2526-2026-03-07-athletic-barcelona",
+      "fixture_date": "2026-03-07",
+      "season": "2526",
+      "competition_id": "SP1",
+      "gender": "men",
+      "home_football_data_name": "Ath Bilbao",
+      "away_football_data_name": "Barcelona",
+      "kickoff_at": "2026-03-07T20:00:00+01:00",
+      "schedule_source": "LaLiga official match page",
+      "evidence_url": "https://www.laliga.com/es-US/partido/temporada-2025-2026-laliga-ea-sports-athletic-club-fc-barcelona-27",
+      "evidence_checked_at_utc": "2026-11-18T13:40:08Z"
+    }
+  ]
+}

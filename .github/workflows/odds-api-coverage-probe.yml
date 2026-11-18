@@ -55,15 +55,18 @@ jobs:
           python - <<'PY'
           import os
           from scripts.probe_the_odds_api_coverage import (
-              load_probe_fixtures,
+              load_probe_fixture_bundle,
               parse_lead_hours,
           )
 
-          fixtures, _ = load_probe_fixtures("data/selae_fixture_crosswalk.json")
+          fixtures, _ = load_probe_fixture_bundle(
+              "data/selae_fixture_crosswalk.json",
+              "data/odds_api_coverage_historical_sample.json",
+          )
           leads = parse_lead_hours(os.environ["LEAD_HOURS"])
-          if len(fixtures) > 10:
+          if len(fixtures) > 16:
               raise SystemExit(
-                  f"Refusing {len(fixtures)} fixtures; this pilot is capped at 10"
+                  f"Refusing {len(fixtures)} fixtures; this pilot is capped at 16"
               )
           if len(leads) > 3:
               raise SystemExit(
@@ -75,8 +78,8 @@ jobs:
                   f"Expected a sample from SP1 and SP2, found {sorted(competitions)}"
               )
           request_cap = len(fixtures) * len(leads) * 2
-          if request_cap > 60:
-              raise SystemExit(f"Refusing request budget {request_cap}; maximum is 60")
+          if request_cap > 96:
+              raise SystemExit(f"Refusing request budget {request_cap}; maximum is 96")
           print(
               f"Bounded sample accepted: {len(fixtures)} fixtures, "
               f"{len(leads)} horizons, at most {request_cap} requests/credits"
