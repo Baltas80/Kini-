@@ -1,3 +1,16 @@
+## Current status override — 2026-11-18, Odds API coverage probe implemented and CI validated
+
+- **Branch:** `feat/immutable-ticket-ledger`. The read-only provider probe implementation is validated at code commit `a3c8663896630096e33bdf27efad42cda2506b62`. PR #10 remains open/draft and stacked on `feat/selae-fixture-reconciliation`. `master` was not modified and no PR was merged.
+- **P0/model status:** the previously validated non-empty backtest and model comparison remain unchanged. This unit adds no model features, probabilities, market rows or training data.
+- **New implementation:** `scripts/probe_the_odds_api_coverage.py`, `tests/test_odds_api_coverage.py`, and `docs/ODDS_API_COVERAGE_PROBE.md`. The probe uses only the free historical-events and historical-event-markets coverage endpoints, checks the current ten-fixture verified SP1/SP2 crosswalk at 24/6/1-hour pre-kickoff horizons, captures actual snapshot timestamps, event IDs, teams, bookmaker/market keys, response hashes and quota headers, and never requests prices.
+- **CI evidence on code commit a3c866:** run `44222165537` passed workflow validation, Ruff lint, Ruff format and `pytest -q`: **437 passed, 25 warnings in 4.18s**. The warning summary is confined to `tests/test_core.py`. Historical-data validation run `44222165317` passed. Historical model backtest and coupon backtest change-gates passed and correctly skipped their expensive jobs because no model/coupon behavior changed.
+- **Earlier failures corrected:** the first lint pass identified invalid-input exception types and an unused test import; those were corrected. The first format check then identified two unformatted files; commit `a3c866` applies the exact Ruff formatting changes. The final code CI is green.
+- **Provider economics:** official documentation lists LaLiga and Segunda historical sport coverage from 2020-06-06. Coverage discovery is available on all plans at one credit per request; historical prices are paid-only at 10 credits per region/market/snapshot. A full default probe of ten fixtures × three horizons has an upper bound of 60 coverage requests/credits, reduced when an events response is empty. No subscription was purchased.
+- **Live probe not yet run:** no `THE_ODDS_API_KEY` was supplied, so zero provider requests were sent and no live bookmaker coverage result is claimed. The current ten-fixture crosswalk is a current-season sample, not a multi-season census. Coverage metadata is not price evidence and remains ineligible for model input.
+- **Next priority:** execute the probe with a valid key, review exact event reconciliation and EU `h2h` availability, then expand the verified fixture sample across seasons before any bounded paid price pilot. Preserve the existing fail-closed market eligibility and licensing review.
+
+---
+
 ## Current status override — 2026-11-17, nine-coupon pilot validated
 
 - **Working branch:** `feat/immutable-ticket-ledger`; PR [#10](https://github.com/Baltas80/Kini-/pull/10) remains open/draft and stacked on `feat/selae-fixture-reconciliation`. No merge or direct change to `master`.
