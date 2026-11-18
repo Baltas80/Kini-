@@ -711,3 +711,6 @@ The script verifies each model's 14 normalized probability vectors and the direc
 
 Audit of the nine-coupon pilot artifact from workflow run 44188103063: realized coverage was 0/9 for DC, ML and ensemble. Mean estimated independent coverage per coupon was 0.1330%, 0.1178% and 0.0721%; expected covered coupons over nine draws were 0.0120, 0.0106 and 0.0065. Under the additional independent-coupon assumption, zero-covered probabilities were 98.81%, 98.94% and 99.35%. These small selected historical draws are mechanics evidence only, not a representative benchmark, model promotion, payout or profitability evidence. The audit covers 14 main matches only and excludes Pleno al 15.
 
+
+
+Validation for this audit unit: CI run 44288749545 passed Actionlint, Ruff lint/format and 460 pytest tests; historical-data validation run 44288749530 passed. Model/coupon backtest change gates skipped as expected.
