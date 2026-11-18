@@ -91,6 +91,8 @@ jobs:
           kini_engine/ticket_ledger.py
           tests/test_ticket_ledger.py
           scripts/score_selae_ticket.py
+          scripts/probe_the_odds_api_coverage.py
+          tests/test_odds_api_coverage.py
           tests/test_ticket_outcomes.py
           tests/test_prize_scoring.py
       - name: Verify formatting for predictive core, Liga F and SELAE evidence code
@@ -135,6 +137,8 @@ jobs:
           kini_engine/ticket_ledger.py
           tests/test_ticket_ledger.py
           scripts/score_selae_ticket.py
+          scripts/probe_the_odds_api_coverage.py
+          tests/test_odds_api_coverage.py
           tests/test_ticket_outcomes.py
           tests/test_prize_scoring.py
       - run: pytest -q
