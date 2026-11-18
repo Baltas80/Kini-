@@ -100,6 +100,8 @@ jobs:
           tests/test_joint_scenario_coverage_audit.py
           tests/test_ticket_outcomes.py
           tests/test_prize_scoring.py
+          scripts/analyze_draw_oos.py
+          tests/test_draw_diagnostic.py
       - name: Verify formatting for predictive core, Liga F and SELAE evidence code
         run: >-
           ruff format --check
@@ -151,4 +153,6 @@ jobs:
           tests/test_joint_scenario_coverage_audit.py
           tests/test_ticket_outcomes.py
           tests/test_prize_scoring.py
+          scripts/analyze_draw_oos.py
+          tests/test_draw_diagnostic.py
       - run: pytest -q
