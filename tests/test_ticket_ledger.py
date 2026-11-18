@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import sqlite3
+import stat
 
 import pytest
 
@@ -642,7 +644,7 @@ def test_ticket_ledger_integrity_binds_legacy_score_digest_to_row_key(tmp_path):
         ledger.verify_integrity()
 
 
-def test_ticket_ledger_backup_is_consistent_and_reopenable(tmp_path):
+def test_ticket_ledger_backup_is_consistent_and_reopenable(tmp_path, monkeypatch):
     source_path = tmp_path / "source" / "tickets.sqlite3"
     backup_path = tmp_path / "backups" / "tickets-verified.sqlite3"
     ledger = TicketLedger(source_path)
@@ -653,7 +655,19 @@ def test_ticket_ledger_backup_is_consistent_and_reopenable(tmp_path):
     )
     ledger.score_ticket_json(str(ticket["ticket_id"]), reconciliation_json)
 
+    directory_sync_seen = []
+    if os.name == "posix":
+        original_fsync = os.fsync
+
+        def recording_fsync(descriptor):
+            directory_sync_seen.append(stat.S_ISDIR(os.fstat(descriptor).st_mode))
+            original_fsync(descriptor)
+
+        monkeypatch.setattr(os, "fsync", recording_fsync)
+
     result = ledger.backup_to(backup_path)
+    if os.name == "posix":
+        assert any(directory_sync_seen)
 
     assert result["ticket_count"] == 1
     assert result["score_count"] == 1
@@ -698,3 +712,32 @@ def test_ticket_ledger_backup_fails_closed_on_corrupt_ticket(tmp_path):
     with pytest.raises(TicketLedgerError, match="SHA-256 integrity check"):
         ledger.backup_to(destination)
     assert not destination.exists()
+
+
+@pytest.mark.skipif(os.name != "posix", reason="directory fsync is POSIX-specific")
+def test_ticket_ledger_backup_reports_directory_fsync_failure_after_publish(
+    tmp_path, monkeypatch
+):
+    source_path = tmp_path / "source" / "tickets.sqlite3"
+    backup_path = tmp_path / "backups" / "tickets-verified.sqlite3"
+    ledger = TicketLedger(source_path)
+    ledger.append_ticket(_ticket())
+
+    original_fsync = os.fsync
+
+    def failing_directory_fsync(descriptor):
+        if stat.S_ISDIR(os.fstat(descriptor).st_mode):
+            raise OSError("simulated directory fsync failure")
+        original_fsync(descriptor)
+
+    monkeypatch.setattr(os, "fsync", failing_directory_fsync)
+
+    with pytest.raises(TicketLedgerError, match="backup directory fsync failed"):
+        ledger.backup_to(backup_path)
+
+    # Publication precedes directory fsync. The file is valid, but durability
+    # of its directory entry could not be confirmed; callers must not retry
+    # without checking the existing destination.
+    assert backup_path.exists()
+    assert list(backup_path.parent.iterdir()) == [backup_path]
+    assert TicketLedger(backup_path).verify_integrity()["integrity"] == "ok"

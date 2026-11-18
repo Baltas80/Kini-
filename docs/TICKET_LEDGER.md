@@ -113,8 +113,10 @@ The source defaults to `KINI_TICKET_LEDGER_PATH` or `data/kini-tickets.sqlite3`;
 - verifies SQLite integrity, foreign keys, every ticket payload hash and ticket schema, and every score payload hash and ticket/evidence binding before backup;
 - uses SQLite's online backup API, so committed WAL content is included consistently while the source remains available;
 - verifies the standalone backup before publishing it;
-- refuses to overwrite an existing destination and publishes the completed file without a partial-copy window;
+- refuses to overwrite an existing destination and publishes the completed file without a partial-copy window; on POSIX, the parent directory is fsynced after publication to persist the directory entry;
 - prints the absolute backup path, SHA-256 digest, and ticket/score counts.
+
+On platforms without directory fsync, that additional crash-durability step is unavailable. If directory fsync fails after publication, the destination may already exist and should be checked before retrying.
 
 The destination filesystem must support hard links for atomic no-overwrite publication. Choose a new filename for each backup. Restore by stopping all ledger writers, copying the verified backup to the configured ledger path, and restarting the service; retain the backup unchanged.
 
