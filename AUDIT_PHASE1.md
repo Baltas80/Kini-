@@ -3943,3 +3943,18 @@ Calibration was learned from prior out-of-fold predictions only, with same-calen
 - The ensemble remains unpromoted; the market is the strongest benchmark. No payout/ROI/profitability claim is made.
 
 **Next priority:** audit/resolve the read-only historical odds coverage probe using a valid `THE_ODDS_API_KEY` (the credential is not available in the current environment; no request has been sent). Keep prices out of the training dataset until event matching, point-in-time capture and licensing are demonstrated. Continue P1/P2 source and leakage work in the existing audit, without repeating this backtest unless code/data changes or new evidence require it.
+
+
+## 2026-11-18 — Code-level point-in-time feature audit (P2 partial)
+
+Reviewed `kini_engine/core.py` and the corresponding regression coverage in `tests/test_core.py` at revision `f17566ba8f70ca87917b4351a63a142c41e6faea`.
+
+- ML inference uses exactly 12 rolling features: overall and venue-specific recent-form summaries (points, goals for and goals against) for the home and away teams. The current implementation excludes standings and arbitrary contextual fields because the source lacks reliable publication timestamps.
+- `_prior_completed_matches` admits only completed matches with a source calendar date strictly earlier than the forecast date. `_assert_training_history_precedes_fixture` fails closed if the training snapshot contains any completed result on or after the forecast day.
+- ML training rows are built chronologically by calendar-day group: features are generated from the accumulated state before the group, then that day's results are added. This prevents within-day label leakage.
+- Context adjustments and H2H/surprise calculations use the same prior-date filter. DC and ML historical training guards reject same-day/future labels.
+- Existing tests explicitly cover same-day/future training results, same-day/future feature contamination, unverified standings, context/surprise contamination, incremental feature-row equivalence and same-calendar-day training-row exclusion. CI on the current documentation checkpoint [44268506792](https://github.com/Baltas80/Kini-/actions/runs/44268506792) passed **452 tests**, including these regression tests.
+
+**Code-level conclusion:** no leakage path was found in the audited rolling-feature, training-row or context/H2H functions. This is not a full point-in-time certification: the historical source is date-level, not timestamp-level. Exact kickoff/publication times and odds-capture times remain unavailable, so the model can be audited only against a conservative calendar-day boundary. Same-day fixtures/results are intentionally excluded.
+
+**P2 status:** code-level leakage controls and regression tests are validated; source timestamp availability and independent point-in-time reconstruction remain open. Continue with source provenance and odds-coverage evidence rather than re-running the same code audit.
