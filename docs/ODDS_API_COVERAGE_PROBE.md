@@ -36,11 +36,15 @@ $env:THE_ODDS_API_KEY = "YOUR_API_KEY"
 python -m scripts.probe_the_odds_api_coverage --lead-hours 24,6,1 --region eu
 ```
 
-The script reads `data/selae_fixture_crosswalk.json`, using only verified men's SP1/SP2 fixtures with timezone-aware official kickoffs. It probes each fixture at 24, 6 and 1 hour before kickoff by default. It uses the `eu` bookmaker region.
+The script combines `data/selae_fixture_crosswalk.json` (ten current coupon fixtures) with `data/odds_api_coverage_historical_sample.json` (six independently verified fixtures from 2020/21 through 2025/26). Both inputs contain only men's SP1/SP2 fixtures with timezone-aware official kickoffs. The default probe checks 24, 6 and 1 hour before kickoff and uses the `eu` bookmaker region.
+
+### Historical kickoff audit — 18 November 2026
+
+A cross-check against the official LaLiga matchday results and Valencia CF's published match schedule found that Valencia–Valladolid on 8 March 2025 was scheduled for **18:30 CET** (17:30 UTC), not 17:30 CET. The bundled sample now stores `2025-03-08T18:30:00+01:00` and uses the [official LaLiga matchday results](https://www.laliga.com/laliga-easports/resultados/2024-25/jornada-27) as evidence. A regression test asserts the UTC instant to prevent a repeat. This correction affects only coverage-probe metadata, not historical model inputs. Sources: [Valencia CF schedule](https://www.valenciacf.com/cuando-y-donde-ver-en-directo-el-valencia-cf-real-valladolid-cf), [LaLiga results](https://www.laliga.com/laliga-easports/resultados/2024-25/jornada-27).
 
 The report is written atomically to `artifacts/the_odds_api_coverage.json`. The `artifacts/` directory is gitignored; do not commit provider responses or redistribute provider data.
 
-A different sample or smaller credit budget can be selected by editing the crosswalk or passing a different `--crosswalk` file. The horizons can be reduced, for example:
+A different sample or smaller credit budget can be selected by editing either source file or passing `--crosswalk` and `--historical-sample`. The bundled sample is capped at 16 fixtures and three horizons (96 requests/credits maximum, two requests per fixture/horizon). The horizons can be reduced, for example:
 
 ```powershell
 python -m scripts.probe_the_odds_api_coverage --lead-hours 6,1
@@ -54,7 +58,7 @@ python -m scripts.probe_the_odds_api_coverage --lead-hours 6,1
 - Unmatched and ambiguous candidates are retained in the report for manual alias review; they are not joined to the model dataset.
 - The report records event and market response SHA-256 digests, API quota headers, bookmaker keys and the `h2h` availability by bookmaker, plus the kickoff delta, matching tolerance and whether the snapshot is strictly pre-kickoff.
 - The maximum credit estimate is one credit per request. Empty historical-events responses may be free; actual per-request quota headers are retained where supplied.
-- A sample of ten current-season fixtures is not proof of full historical coverage, bookmaker continuity or usable odds density across 2020/21–2026/27.
+- The 16-fixture sample spans the current coupon and six historical SP1 seasons, but it is not a coverage census, does not establish bookmaker continuity and does not prove usable odds density across 2020/21–2026/27.
 - Coverage metadata is not odds evidence. A later paid-data pilot would still need exact fixture reconciliation, snapshot-time validation, per-bookmaker price checks, point-in-time safeguards and a licensing review before any market benchmark or model input is changed.
 - The provider's own `last_update` timestamps on actual odds responses must also be checked against the requested snapshot and kickoff. This probe does not fetch those responses.
 
@@ -70,7 +74,7 @@ The repository includes a manual workflow, `.github/workflows/odds-api-coverage-
 2. Once this workflow is present on the repository's default branch, open **Actions → The Odds API coverage probe → Run workflow**.
 3. Keep the default `eu` region and `24,6,1` hour horizons for the first run.
 
-The workflow serializes runs, accepts only one region, caps the verified crosswalk at 10 fixtures and three horizons (maximum 60 coverage requests/credits), and calls only the historical events and event-markets endpoints. It does **not** call the paid historical-odds endpoint. It writes aggregate counts to the Actions job summary, does not upload an artifact containing event IDs or bookmaker-level records, and removes the raw local report after summarization.
+The workflow serializes runs, accepts only one region, combines the ten current fixtures with six historical fixtures, and caps the total at 16 fixtures and three horizons (maximum 96 coverage requests/credits). It calls only the historical events and event-markets endpoints and does **not** call the paid historical-odds endpoint. It writes aggregate counts to the Actions job summary, does not upload an artifact containing event IDs or bookmaker-level records, and removes the raw local report after summarization.
 
 GitHub only exposes `workflow_dispatch` after the workflow file reaches the default branch. This change is currently prepared on the open PR branch; it has not been merged. No live request was sent in this implementation run because no API key was supplied. The local PowerShell command above remains available for a manual run from a machine with the key.
 

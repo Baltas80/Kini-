@@ -8,7 +8,7 @@ import os
 import tempfile
 import unicodedata
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -27,8 +27,8 @@ MAX_KICKOFF_DELTA_SECONDS = 90 * 60
 
 @dataclass(frozen=True)
 class ProbeFixture:
-    draw_date: str
-    position: int
+    draw_date: str | None
+    position: int | None
     competition_id: str
     sport_key: str
     home_team: str
@@ -36,17 +36,33 @@ class ProbeFixture:
     kickoff_at: datetime
     schedule_source: str
     evidence_url: str
+    sample_id: str | None = None
+    fixture_date: str | None = None
+    season: str | None = None
 
     @property
     def fixture_id(self) -> str:
         identity = {
-            "draw_date": self.draw_date,
-            "position": self.position,
             "competition_id": self.competition_id,
             "kickoff_at": _format_timestamp(self.kickoff_at),
             "home_team": self.home_team,
             "away_team": self.away_team,
         }
+        if self.sample_id is not None:
+            identity.update(
+                {
+                    "sample_id": self.sample_id,
+                    "fixture_date": self.fixture_date,
+                    "season": self.season,
+                }
+            )
+        else:
+            identity.update(
+                {
+                    "draw_date": self.draw_date,
+                    "position": self.position,
+                }
+            )
         payload = json.dumps(
             identity, ensure_ascii=False, sort_keys=True, separators=(",", ":")
         )
@@ -157,6 +173,180 @@ def load_probe_fixtures(path: str | Path) -> tuple[list[ProbeFixture], str]:
         )
     )
     return fixtures, hashlib.sha256(raw_bytes).hexdigest()
+
+
+def load_historical_sample_fixtures(
+    path: str | Path,
+) -> tuple[list[ProbeFixture], str]:
+    """Load a small, separately verified cross-season schedule sample."""
+    source_path = Path(path)
+    raw_bytes = source_path.read_bytes()
+    try:
+        payload = json.loads(raw_bytes)
+    except json.JSONDecodeError as exc:
+        raise ValueError(
+            f"Invalid historical coverage sample JSON: {source_path}"
+        ) from exc
+
+    if not isinstance(payload, dict):
+        raise TypeError("Historical coverage sample must be a JSON object")
+    if (
+        payload.get("schema_version") != 1
+        or payload.get("provider") != "verified_schedule_sample"
+    ):
+        raise ValueError("Unsupported historical coverage sample schema/provider")
+    entries = payload.get("entries")
+    if not isinstance(entries, list):
+        raise TypeError("Historical coverage sample entries must be a list")
+
+    fixtures: list[ProbeFixture] = []
+    seen_ids: set[str] = set()
+    seen_fixture_keys: set[tuple[str, str, str, str]] = set()
+    for index, entry in enumerate(entries, start=1):
+        if not isinstance(entry, dict):
+            raise TypeError(f"Historical sample entry {index} must be an object")
+        sample_id = entry.get("sample_id")
+        fixture_date = entry.get("fixture_date")
+        season = entry.get("season")
+        competition_id = entry.get("competition_id")
+        gender = entry.get("gender")
+        home = entry.get("home_football_data_name")
+        away = entry.get("away_football_data_name")
+        schedule_source = entry.get("schedule_source")
+        evidence_url = entry.get("evidence_url")
+        kickoff_raw = entry.get("kickoff_at")
+        evidence_checked_raw = entry.get("evidence_checked_at_utc")
+
+        if not isinstance(sample_id, str) or not sample_id.strip():
+            raise ValueError(f"Historical sample entry {index} has no sample_id")
+        if sample_id in seen_ids:
+            raise ValueError(f"Duplicate historical sample_id: {sample_id}")
+        seen_ids.add(sample_id)
+        if not isinstance(fixture_date, str) or not fixture_date.strip():
+            raise ValueError(f"Historical sample entry {index} has no fixture_date")
+        try:
+            date.fromisoformat(fixture_date)
+        except ValueError as exc:
+            raise ValueError(
+                f"Historical sample entry {index} has invalid fixture_date"
+            ) from exc
+        if not isinstance(season, str) or not season.strip():
+            raise ValueError(f"Historical sample entry {index} has no season")
+        if competition_id not in SPORT_KEYS or gender != "men":
+            raise ValueError(
+                f"Historical sample entry {index} must be a men's SP1/SP2 fixture"
+            )
+        if not isinstance(home, str) or not home.strip():
+            raise ValueError(
+                f"Historical sample entry {index} has no canonical home name"
+            )
+        if not isinstance(away, str) or not away.strip():
+            raise ValueError(
+                f"Historical sample entry {index} has no canonical away name"
+            )
+        if not isinstance(schedule_source, str) or not schedule_source.strip():
+            raise ValueError(f"Historical sample entry {index} has no schedule source")
+        if not isinstance(evidence_url, str) or not evidence_url.startswith("https://"):
+            raise ValueError(
+                f"Historical sample entry {index} has no HTTPS evidence URL"
+            )
+
+        if not isinstance(kickoff_raw, str):
+            raise TypeError(
+                f"Historical sample entry {index} kickoff_at must be a string"
+            )
+        try:
+            kickoff_local = datetime.fromisoformat(kickoff_raw)
+        except ValueError as exc:
+            raise ValueError(
+                f"Historical sample entry {index} has invalid kickoff_at"
+            ) from exc
+        if kickoff_local.tzinfo is None or kickoff_local.utcoffset() is None:
+            raise ValueError(
+                f"Historical sample entry {index} kickoff_at must include an explicit timezone"
+            )
+        if kickoff_local.date().isoformat() != fixture_date:
+            raise ValueError(
+                f"Historical sample entry {index} fixture_date must match kickoff_at's local date"
+            )
+        kickoff_at = kickoff_local.astimezone(UTC)
+
+        if not isinstance(evidence_checked_raw, str):
+            raise TypeError(
+                f"Historical sample entry {index} evidence_checked_at_utc must be a string"
+            )
+        try:
+            evidence_checked_local = datetime.fromisoformat(evidence_checked_raw)
+        except ValueError as exc:
+            raise ValueError(
+                f"Historical sample entry {index} has invalid evidence_checked_at_utc"
+            ) from exc
+        if (
+            evidence_checked_local.tzinfo is None
+            or evidence_checked_local.utcoffset() is None
+        ):
+            raise ValueError(
+                f"Historical sample entry {index} evidence_checked_at_utc must be timezone-aware"
+            )
+        if evidence_checked_local.utcoffset() != timedelta(0):
+            raise ValueError(
+                f"Historical sample entry {index} evidence_checked_at_utc must use UTC"
+            )
+
+        fixture_key = (
+            competition_id,
+            _format_timestamp(kickoff_at),
+            _exact_name_key(home),
+            _exact_name_key(away),
+        )
+        if fixture_key in seen_fixture_keys:
+            raise ValueError(f"Duplicate historical sample fixture: {fixture_key}")
+        seen_fixture_keys.add(fixture_key)
+
+        fixtures.append(
+            ProbeFixture(
+                draw_date=None,
+                position=None,
+                competition_id=competition_id,
+                sport_key=SPORT_KEYS[competition_id],
+                home_team=home.strip(),
+                away_team=away.strip(),
+                kickoff_at=kickoff_at,
+                schedule_source=schedule_source.strip(),
+                evidence_url=evidence_url.strip(),
+                sample_id=sample_id.strip(),
+                fixture_date=fixture_date,
+                season=season.strip(),
+            )
+        )
+
+    if not fixtures:
+        raise ValueError("Historical coverage sample contains no fixtures")
+    fixtures.sort(key=lambda fixture: fixture.kickoff_at)
+    return fixtures, hashlib.sha256(raw_bytes).hexdigest()
+
+
+def load_probe_fixture_bundle(
+    crosswalk_path: str | Path,
+    historical_sample_path: str | Path,
+) -> tuple[list[ProbeFixture], str]:
+    """Combine the current verified coupon crosswalk and historical sample."""
+    current, current_digest = load_probe_fixtures(crosswalk_path)
+    historical, historical_digest = load_historical_sample_fixtures(
+        historical_sample_path
+    )
+    fixtures = current + historical
+    fixture_ids = [fixture.fixture_id for fixture in fixtures]
+    if len(fixture_ids) != len(set(fixture_ids)):
+        raise ValueError("Combined coverage sample contains duplicate fixture IDs")
+    bundle = {
+        "current_crosswalk_sha256": current_digest,
+        "historical_sample_sha256": historical_digest,
+    }
+    bundle_digest = hashlib.sha256(
+        json.dumps(bundle, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+    return fixtures, bundle_digest
 
 
 def parse_lead_hours(value: str) -> tuple[float, ...]:
@@ -441,6 +631,9 @@ def probe_coverage(
                 "fixture_id": fixture.fixture_id,
                 "draw_date": fixture.draw_date,
                 "position": fixture.position,
+                "sample_id": fixture.sample_id,
+                "fixture_date": fixture.fixture_date,
+                "season": fixture.season,
                 "competition_id": fixture.competition_id,
                 "sport_key": fixture.sport_key,
                 "target_home_team": fixture.home_team,
@@ -608,6 +801,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Verified SELAE-to-Football-Data fixture crosswalk",
     )
     parser.add_argument(
+        "--historical-sample",
+        type=Path,
+        default=Path("data/odds_api_coverage_historical_sample.json"),
+        help="Separately verified cross-season fixture sample",
+    )
+    parser.add_argument(
         "--output",
         type=Path,
         default=Path("artifacts/the_odds_api_coverage.json"),
@@ -648,7 +847,9 @@ def main(argv: list[str] | None = None) -> int:
             "no network requests were sent"
         )
 
-    fixtures, crosswalk_digest = load_probe_fixtures(args.crosswalk)
+    fixtures, crosswalk_digest = load_probe_fixture_bundle(
+        args.crosswalk, args.historical_sample
+    )
     client = TheOddsApiCoverageClient(api_key, timeout=args.timeout)
     report = probe_coverage(
         fixtures,
