@@ -67,6 +67,7 @@ The automated tests cover:
 - Press-release importer integration that emits a standalone Pleno result report from the verified PDF bytes.
 - Draw-date filtering and bounded listing.
 - Engine-to-ledger integration for a pre-ticket coupon plan.
+- Full SQLite/foreign-key integrity checks, ticket and score hash/binding verification, WAL-aware backup/reopen, no-overwrite publication and corrupted-source rejection.
 
 
 ## Strict ticket-record contract
@@ -120,3 +121,8 @@ The destination filesystem must support hard links for atomic no-overwrite publi
 Python callers can use `TicketLedger(path).verify_integrity()` for a full logical check or `TicketLedger(path).backup_to(destination)` for the same verified backup operation. The returned SHA-256 identifies the exact published SQLite backup file.
 
 This protects against accidental corruption and incomplete file-copy procedures; it is not a digital signature, independent timestamp, off-site backup, or protection against a privileged database owner replacing both the database and its backups. Store copies on separate durable storage according to an operational retention policy.
+
+
+## CI validation for backup and integrity hardening
+
+The backup implementation was validated on commit [bf745a3](https://github.com/Baltas80/Kini-/commit/bf745a3192a33a84052343b6634f889b88ed3270). CI [44236087928](https://github.com/Baltas80/Kini-/actions/runs/44236087928) passed Actionlint, Ruff lint, Ruff format and **441 tests** (25 upstream NumPy/penaltyblog deprecation warnings). Historical-data validation [44236087912](https://github.com/Baltas80/Kini-/actions/runs/44236087912) passed with 5,322 completed fixtures and no missing team names/scores, duplicate fixtures or conflicting duplicates. Historical-model and coupon jobs were correctly skipped because no predictive or optimizer behavior changed.
