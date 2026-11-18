@@ -11,8 +11,8 @@
 - **Evidence hashes:** artifact [14375911470](https://github.com/Baltas80/Kini-/actions/runs/44188103063/artifacts/14375911470), ZIP SHA-256 `084d12be17a8615700440df0ed975d1fdb8f90002ce3a56a91c465b178be1a95`; HistoricalQuiniela raw HTML SHA-256 `945d2e7471e839ccde874ae303229e6b16492d6355367549e85b87c0b5faa2ae`; normalized SELAE JSON SHA-256 `2eee2fe48f82d5d1ab69e4be9cdbc51957b44c8fabd30d8dbf1356879d8470bb`; combined archive SHA-256 `fb8aceb909164b2d365adb01ed8c352fd8b7bfbcf4bd30c1be12e4c93afbf145`; backtest JSON SHA-256 `18e9629ba8df890fcce59eb88764e1787d214ecee3961481a95581096807eb2b`. The official PDF bytes were not captured; no raw-PDF digest is claimed. HistoricalQuiniela's `source_date_label_at` (14/08/2022 23:24 +02:00) remains a page label, not a result-publication timestamp.
 - **Final CI:** [run 44189932245](https://github.com/Baltas80/Kini-/actions/runs/44189932245) passed Actionlint, Ruff lint, Ruff format and **419 pytest tests** (25 non-blocking NumPy/penaltyblog deprecation warnings). The earlier strict prize test exposed that the official PDF host `www.selae.es` was missing from the allowlist; `selae.es` and `www.selae.es` are now accepted by exact hostname, and a lookalike-host regression rejects `www.selae.es.evil.example`.
 - **Interpretation limits:** this is pipeline and ticket-construction evidence, not a representative probability benchmark. It does not provide Brier Score, Log Loss, reliability curves, a same-match market comparison, actual purchased-ticket evidence, payouts, ROI or profitability. Keep the ensemble unpromoted.
-- **P4 probability contract hardening:** `multiclass_metrics`, calibration and ensemble inputs now use one strict validator. It requires exactly the 1/X/2 keys, numeric non-boolean finite values in [0,1], and a sum within 1e-6 of one; it no longer silently renormalizes malformed forecasts. Regression tests cover non-unit sums, out-of-range values, extra keys and booleans. CI and the full walk-forward backtest for this change are pending.
-- **Next priority:** verify strict probability-vector validation and the full walk-forward backtest, then audit point-in-time feature generation and historical odds availability for leakage before adding same-match Brier/Log Loss/calibration comparisons against the market baseline. Do not promote the ensemble without out-of-sample evidence. Keep PR #10 draft and do not merge.
+- **P4 probability contract:** strict 1/X/2 validation now applies consistently to model metrics, calibration, ensembles, live market/LAE eligibility and per-bookmaker backtest inputs. It rejects extra/missing keys, strings, booleans, non-finite/out-of-range values and non-unit sums; no coercion or silent repair. Implementation 564e205 passed the full historical backtest; current-head CI passed 430 tests.
+- **Next priority:** investigate whether a historically timestamped, legally usable pre-match odds source can replace or complement Football-Data's schedule-only snapshot. Keep Friday/Tuesday and otherwise unverified captures out of strict parity claims. The audited 12 ML features and walk-forward feature construction use only results dated before the forecast/snapshot; exact historical result-publication timestamps remain unavailable. Do not promote any ensemble: the market remains stronger on the 3,991-fixture snapshot-aligned sample. Keep PR #10 draft; do not merge.
 
 Date: 2026-11-15  
 Repository: Baltas80/Kini-  
@@ -3715,3 +3715,44 @@ The first CI attempt on implementation commit `564e205` failed only at the forma
 - Historical backtest [44205701560](https://github.com/Baltas80/Kini-/actions/runs/44205701560) is still running its full comparison. The format-only follow-up [44205910454](https://github.com/Baltas80/Kini-/actions/runs/44205910454) is queued; no new predictive result is claimed until the full comparison passes its non-empty, ledger, market and calibration gates.
 
 The source-vector implementation and regression suite are validated by CI. The P4 change remains **partially validated** until the required full historical comparison completes.
+
+## 2026-11-18 — Strict source-vector contract and full historical backtest validated
+
+The strict source-vector hardening is now validated end-to-end. Functional code commit: [564e205](https://github.com/Baltas80/Kini-/commit/564e205c0a6b996ba65cf880a9c91ef5d57d0dd4). Later commits 867ec2f and a4992d9 contain formatting/documentation only.
+
+- kini_engine/core.py::_validated_probability_vector requires exactly the 1, X, 2 keys and actual numeric, non-boolean values. It rejects NaN/infinity, values outside [0,1] and sums outside 1e-6; it does not coerce strings or renormalize malformed data.
+- kini_engine/backtest.py::_bookmaker_probability now reuses that validator. Regression tests cover extra/missing keys, numeric strings and booleans in market/LAE and bookmaker paths.
+- CI on the current PR head: [44206165507](https://github.com/Baltas80/Kini-/actions/runs/44206165507), 430 tests passed; Actionlint, Ruff lint and Ruff format passed. The 25 NumPy/penaltyblog warnings are upstream deprecations.
+- Historical-data validation on the current PR head: [44206165633](https://github.com/Baltas80/Kini-/actions/runs/44206165633), 5,322 completed fixtures, 56 canonical team IDs, 10,644/10,644 team references resolved, zero unresolved/ambiguous references, duplicates or conflicting duplicates; integrity passed.
+- Coupon workflow [44206165542](https://github.com/Baltas80/Kini-/actions/runs/44206165542) passed its change gate and skipped the pilot because coupon/optimizer behavior did not change.
+- Full historical backtest on functional code commit [564e205](https://github.com/Baltas80/Kini-/commit/564e205c0a6b996ba65cf880a9c91ef5d57d0dd4): [run 44205701560](https://github.com/Baltas80/Kini-/actions/runs/44205701560) succeeded. All five forecast streams produced 5,022/5,022 forecasts with zero prediction errors. The per-fixture forecast ledger, cold-start diagnostics, market temporal gates, snapshot-aligned market benchmark and prequential calibration gates all passed. Dataset: 5,322 rows, SHA-256 7251b84acd803047746c0c55c6bdabb60d9499208cfd6c781f72080295346f44.
+- Snapshot-aligned comparison: 3,991 identical fixtures across 319 market snapshot dates, one fit per snapshot, with training cutoff strictly before the snapshot. Artifact [14386790498](https://github.com/Baltas80/Kini-/actions/runs/44205701560/artifacts/14386790498), ZIP SHA-256 9c37946728af423d1523553e0eabf01ce546a84d7d7a6d26d4002c99521099d3.
+
+| Model (snapshot-aligned) | n | Accuracy | Multiclass Brier | Log Loss |
+|---|---:|---:|---:|---:|
+| Dixon–Coles | 3,991 | 0.48284 | 0.61483 | 1.02837 |
+| ML | 3,991 | 0.44250 | 0.63892 | 1.06067 |
+| Market-assisted ensemble | 3,991 | 0.48284 | 0.61097 | 1.01954 |
+| Fixed DC/ML-only blend | 3,991 | 0.47983 | 0.61352 | 1.02353 |
+| Adaptive DC/ML-only blend | 3,991 | 0.48008 | 0.61377 | 1.02393 |
+| Multi-book pre-closing market | 3,991 | 0.51065 | 0.59415 | 0.99461 |
+
+The market remains better on all three headline metrics. The market-assisted ensemble is not an independent market challenger, and the DC/ML-only blends do not close the gap. No model is promoted. The separate wider schedule-screened market sample contains 4,433 fixtures; it is not a substitute for the snapshot-aligned sample.
+
+### Point-in-time review
+
+The existing feature path was reviewed in core.py and backtest.py:
+
+- The ML model uses 12 rolling form features derived only from completed results on dates strictly before the fixture.
+- Historical training rows are built chronologically in date groups; all fixtures on a date are featurized before any result from that date is added to the rolling state.
+- Inference uses the history available before the forecast date. The walk-forward loop forecasts a whole date before appending that date's results.
+- Snapshot-aligned forecasts refit once per snapshot and use one identical strictly prior history for all fixtures assigned to that snapshot.
+- Existing regression tests cover same-day/future-result contamination, unverified standings, incremental/reference feature-builder equivalence, same-day group isolation, snapshot-day exclusion and LAE capture ordering.
+
+This audit found no leakage path in the current 12 ML features or the date-level walk-forward construction. It does not prove the exact publication time of historical match results; the source provides calendar dates only.
+
+### Remaining limitation and next action
+
+Football-Data provides no per-fixture odds-capture timestamp and does not document the timezone of its CSV Time field. Friday/Tuesday fixtures remain excluded by the conservative schedule screen; other schedule-compatible rows are not exact timestamp verification or proof of executable prices. Next, investigate a historically timestamped odds provider with documented licensing and cost, then integrate it only if the captured-at timestamp can be tied to each fixture. Do not relax the current fail-closed eligibility rule to increase sample size.
+
+The current PR head is a4992d9; its changes after the tested functional commit are documentation/formatting only. PR #10 remains open/draft and stacked on feat/selae-fixture-reconciliation. master remains untouched; no PR was merged.
