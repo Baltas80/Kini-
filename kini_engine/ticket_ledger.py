@@ -109,6 +109,25 @@ def _validate_ticket_index_metadata(
             )
 
 
+def _fsync_directory(directory: Path) -> None:
+    """Persist directory-entry changes on POSIX filesystems."""
+    if os.name != "posix":
+        return
+    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
+    try:
+        descriptor = os.open(directory, flags)
+    except OSError as exc:
+        raise TicketLedgerError(
+            "backup directory fsync could not open directory"
+        ) from exc
+    try:
+        os.fsync(descriptor)
+    except OSError as exc:
+        raise TicketLedgerError("backup directory fsync failed") from exc
+    finally:
+        os.close(descriptor)
+
+
 class TicketLedger:
     """SQLite-backed append-only ledger for generated Quiniela tickets and scores.
 
@@ -376,6 +395,7 @@ class TicketLedger:
                     "an existing destination; use a filesystem that supports hard links"
                 ) from exc
             temporary_path.unlink()
+            _fsync_directory(target_path.parent)
 
             digest = hashlib.sha256()
             with target_path.open("rb") as handle:
