@@ -224,6 +224,8 @@ def test_coupon_backtest_uses_only_results_before_first_kickoff(
     )
     assert captured["history_count"] == 300
     assert result["training_cutoff_date"] == "2020-12-11"
+    assert result["training_history_min_date"] == "2020-01-01"
+    assert result["training_history_max_date"] == "2020-10-26"
     assert result["pleno_prediction"]["model"] == "dixon_coles"
     assert (
         result["pleno_prediction"]["selection_method"]
@@ -358,6 +360,8 @@ def _accepted_coupon_backtest_result() -> tuple[dict[str, object], list[str]]:
         "first_kickoff_at": coupon["first_kickoff_at"],
         "training_cutoff_date": coupon["training_cutoff_date"],
         "training_match_count": 303,
+        "training_history_min_date": "2020-01-01",
+        "training_history_max_date": "2020-12-11",
         "model_fit_match_count": 303,
         "pleno_prediction": {
             "model": "dixon_coles",
@@ -382,7 +386,7 @@ def _accepted_coupon_backtest_result() -> tuple[dict[str, object], list[str]]:
     }
     return (
         {
-            "schema_version": 2,
+            "schema_version": coupons.COUPON_BACKTEST_RESULT_SCHEMA_VERSION,
             "config": {"budget_columns": 8, "min_history_matches": 300},
             "summary": {"coupon_count": 1, "models": summary_models},
             "coupons": [coupon_result],
@@ -399,6 +403,42 @@ def test_coupon_backtest_acceptance_requires_all_models_and_valid_vectors() -> N
         budget=8,
         min_history_matches=300,
     )
+
+
+def test_coupon_backtest_acceptance_rejects_legacy_result_schema() -> None:
+    result, coupon_ids = _accepted_coupon_backtest_result()
+    result["schema_version"] = 2
+    with pytest.raises(ValueError, match="unsupported coupon backtest result schema"):
+        validate_coupon_backtest_acceptance(
+            result,
+            coupon_ids,
+            budget=8,
+            min_history_matches=300,
+        )
+
+
+def test_coupon_backtest_acceptance_rejects_training_history_after_cutoff() -> None:
+    result, coupon_ids = _accepted_coupon_backtest_result()
+    result["coupons"][0]["training_history_max_date"] = "2020-12-12"
+    with pytest.raises(ValueError, match="training history dates"):
+        validate_coupon_backtest_acceptance(
+            result,
+            coupon_ids,
+            budget=8,
+            min_history_matches=300,
+        )
+
+
+def test_coupon_backtest_acceptance_rejects_reversed_training_history_range() -> None:
+    result, coupon_ids = _accepted_coupon_backtest_result()
+    result["coupons"][0]["training_history_min_date"] = "2020-12-12"
+    with pytest.raises(ValueError, match="training history dates"):
+        validate_coupon_backtest_acceptance(
+            result,
+            coupon_ids,
+            budget=8,
+            min_history_matches=300,
+        )
 
 
 @pytest.mark.parametrize("mode", ["dc", "ml", "ensemble_dc_ml"])

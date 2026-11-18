@@ -6,7 +6,7 @@ import json
 import re
 import sys
 from dataclasses import dataclass
-from datetime import date
+from datetime import UTC, date, datetime
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -152,10 +152,30 @@ def extract_pdf_text(pdf_path: Path) -> str:
     return text
 
 
+def _normalize_verified_at_utc(value: str | None) -> str:
+    if value is None:
+        parsed = datetime.now(UTC)
+    else:
+        try:
+            parsed = datetime.fromisoformat(value)
+        except ValueError as exc:
+            raise ValueError("verified_at_utc must be an ISO UTC timestamp") from exc
+        if (
+            parsed.tzinfo is None
+            or parsed.utcoffset() is None
+            or parsed.utcoffset().total_seconds() != 0
+        ):
+            raise ValueError("verified_at_utc must include a UTC offset")
+        parsed = parsed.astimezone(UTC)
+    return parsed.isoformat().replace("+00:00", "Z")
+
+
 def import_press_release(
     pdf_path: Path,
     draw_date: str,
     source_url: str,
+    *,
+    verified_at_utc: str | None = None,
 ) -> dict[str, object]:
     source_url = validate_official_source_url(source_url)
     pdf_bytes = pdf_path.read_bytes()
@@ -165,6 +185,12 @@ def import_press_release(
     text = extract_pdf_text(pdf_path)
     verified_date = validate_draw_date_in_text(text, draw_date)
     outcome = parse_selae_press_release_text(text)
+    source_sha256 = hashlib.sha256(pdf_bytes).hexdigest()
+    verified_at = _normalize_verified_at_utc(verified_at_utc)
+    verification_method = (
+        "Official SELAE press-release PDF signature checked; draw date verified "
+        "in extracted text; complete 14-sign and Pleno category vector parsed."
+    )
 
     return {
         "schema_version": 1,
@@ -172,7 +198,7 @@ def import_press_release(
         "source_type": "official_press_release_pdf",
         "source_url": source_url,
         "source_file_name": pdf_path.name,
-        "source_sha256": hashlib.sha256(pdf_bytes).hexdigest(),
+        "source_sha256": source_sha256,
         "draw_date": verified_date,
         "draw_date_verified_in_pdf": True,
         "signs": list(outcome.signs),
@@ -180,6 +206,18 @@ def import_press_release(
             "home": outcome.pleno_home,
             "away": outcome.pleno_away,
             "code": outcome.pleno_code,
+        },
+        "pleno15_result": {
+            "schema_version": 1,
+            "provider": "SELAE",
+            "draw_date": verified_date,
+            "source_url": source_url,
+            "source_sha256": source_sha256,
+            "evidence_type": "official_press_release_pdf",
+            "verified_at_utc": verified_at,
+            "verification_method": verification_method,
+            "home_category": outcome.pleno_home,
+            "away_category": outcome.pleno_away,
         },
         "raw_result_vector": outcome.raw_vector,
         "parser_version": PARSER_VERSION,
@@ -207,11 +245,25 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--source-url", required=True, help="Official SELAE PDF URL")
     parser.add_argument("--output", type=Path)
+    parser.add_argument(
+        "--pleno15-output",
+        type=Path,
+        help="Optional standalone Pleno result JSON for the persistent ticket scorer.",
+    )
     args = parser.parse_args(argv)
 
     output_path = (
         args.output or Path("artifacts/selae-press-releases") / f"{args.draw_date}.json"
     )
+    if (
+        args.pleno15_output is not None
+        and args.pleno15_output.resolve() == output_path.resolve()
+    ):
+        print(
+            "SELAE_PRESS_RELEASE_IMPORT_ERROR: --pleno15-output must differ from --output",
+            file=sys.stderr,
+        )
+        return 2
     try:
         record = import_press_release(args.pdf, args.draw_date, args.source_url)
         output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -219,6 +271,18 @@ def main(argv: list[str] | None = None) -> int:
             json.dumps(record, ensure_ascii=False, indent=2, allow_nan=False) + "\n",
             encoding="utf-8",
         )
+        if args.pleno15_output is not None:
+            args.pleno15_output.parent.mkdir(parents=True, exist_ok=True)
+            args.pleno15_output.write_text(
+                json.dumps(
+                    record["pleno15_result"],
+                    ensure_ascii=False,
+                    indent=2,
+                    allow_nan=False,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
     except (ImportError, OSError, RuntimeError, ValueError) as exc:
         print(f"SELAE_PRESS_RELEASE_IMPORT_ERROR: {exc}", file=sys.stderr)
         return 2
@@ -228,6 +292,8 @@ def main(argv: list[str] | None = None) -> int:
         f"signs={len(record['signs'])} pleno={record['pleno']['code']}"
     )
     print(f"Record: {output_path}")
+    if args.pleno15_output is not None:
+        print(f"Pleno result: {args.pleno15_output}")
     return 0
 
 

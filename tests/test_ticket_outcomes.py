@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import hashlib
+import json
 from copy import deepcopy
+from datetime import UTC, datetime
+from pathlib import Path
 
 import pytest
 
@@ -9,8 +13,10 @@ from kini_engine.ticket_outcomes import (
     build_ticket_probability_vectors,
     outcomes_from_reconciliation,
     score_ticket_record,
+    validate_pleno15_report,
     validate_preclose_public_draw_snapshot,
 )
+from scripts.score_selae_ticket import main as score_ticket_cli_main
 
 DRAW_DATE = "2026-11-08"
 SELAE_URL = (
@@ -83,18 +89,48 @@ def _ticket(report: dict[str, object]) -> dict[str, object]:
     outcomes = outcomes_from_reconciliation(report, DRAW_DATE)
     actual = [item["sign"] for item in outcomes]
     second = ["1" if sign != "1" else "2" for sign in actual]
+    plan = _coupon_plan()
+    model_probabilities = {
+        position: {"1": 0.5, "X": 0.3, "2": 0.2}
+        for position in range(1, 15)
+        if position != 7
+    }
+    vectors = build_ticket_probability_vectors(
+        draw_date=DRAW_DATE,
+        coupon_plan=plan,
+        model_probabilities_by_position=model_probabilities,
+        public_draw_snapshots={7: _preclose_snapshot()},
+    )
+    sources = []
+    for source in vectors["probability_sources"]:
+        if source["source"] == "football_model":
+            sources.append({**source, "model_mode": "ensemble"})
+        else:
+            sources.append(source)
     return {
         "schema_version": 1,
         "ticket_id": "test-ticket-2026-11-08",
         "draw_date": DRAW_DATE,
-        "ticket_created_at_utc": "2026-11-08T09:30:00Z",
-        "ticket_cutoff_at_utc": "2026-11-08T11:00:00Z",
-        "first_kickoff_at": "2026-11-08T14:00:00+01:00",
-        "cutoff_evidence_url": SELAE_URL,
-        "cutoff_evidence_sha256": HASH_B,
-        "schedule_evidence_url": "https://www.malagacf.com/fixture-schedule",
-        "schedule_evidence_sha256": HASH_C,
+        "ticket_created_at_utc": vectors["ticket_created_at_utc"],
+        "ticket_cutoff_at_utc": vectors["ticket_cutoff_at_utc"],
+        "first_kickoff_at": vectors["first_kickoff_at"],
+        "cutoff_evidence_url": plan["cutoff_evidence_url"],
+        "cutoff_evidence_sha256": plan["cutoff_evidence_sha256"],
+        "cutoff_evidence_captured_at_utc": plan["cutoff_evidence_captured_at_utc"],
+        "schedule_evidence_url": plan["schedule_evidence_url"],
+        "schedule_evidence_sha256": plan["schedule_evidence_sha256"],
+        "schedule_evidence_captured_at_utc": plan["schedule_captured_at_utc"],
+        "pleno15_home": plan["pleno15_home"],
+        "pleno15_away": plan["pleno15_away"],
+        "pleno15_kickoff_at": vectors["pleno15_kickoff_at"],
+        "coupon_plan": deepcopy(plan),
+        "probability_vectors": vectors["probabilities"],
+        "probability_sources": sources,
+        "public_draw_positions": vectors["public_draw_positions"],
         "columns": [actual, second],
+        "pleno15_combinations": [{"home_goals": "0", "away_goals": "0"}],
+        "budget": 8,
+        "cost_eur": 1.5,
     }
 
 
@@ -198,6 +234,204 @@ def test_ticket_scoring_uses_public_draw_sign_not_reported_placeholder_score() -
     assert result["reconciliation_sha256"] == HASH_C
     assert result["payout_evaluated"] is False
     assert result["profitability_evaluated"] is False
+
+
+def _pleno15_report() -> dict[str, object]:
+    return {
+        "schema_version": 1,
+        "provider": "SELAE",
+        "draw_date": DRAW_DATE,
+        "source_url": SELAE_URL,
+        "source_sha256": HASH_A,
+        "evidence_type": "normalized_official_extract",
+        "verified_at_utc": "2026-11-08T16:00:00Z",
+        "verification_method": "Synthetic unit-test fixture; no real SELAE result is asserted.",
+        "home": "Pleno Home (M)",
+        "away": "Pleno Away (M)",
+        "home_goals": 2,
+        "away_goals": 3,
+        "home_category": "2",
+        "away_category": "M",
+    }
+
+
+def test_pleno15_validator_accepts_committed_official_selae_extract() -> None:
+    snapshot_path = (
+        Path(__file__).parents[1]
+        / "kini_engine"
+        / "data"
+        / "selae_official_coupon_results"
+        / "2020-2021-21.json"
+    )
+    raw = snapshot_path.read_bytes()
+    snapshot = json.loads(raw)
+    pleno = snapshot["pleno"]
+    report = {
+        "schema_version": 1,
+        "provider": "SELAE",
+        "draw_date": snapshot["draw_date"],
+        "source_url": snapshot["source_url"],
+        "source_sha256": hashlib.sha256(raw).hexdigest(),
+        "evidence_type": "normalized_official_extract",
+        # Test-only timestamp; the committed historical snapshot stores a date,
+        # not a trusted time-of-day attestation.
+        "verified_at_utc": "2026-11-17T12:00:00Z",
+        "verification_method": "Unit test of the committed normalized SELAE extract.",
+        "home": pleno["home"],
+        "away": pleno["away"],
+        "home_goals": pleno["home_goals"],
+        "away_goals": pleno["away_goals"],
+        "home_category": pleno["home_category"],
+        "away_category": pleno["away_category"],
+    }
+
+    validated = validate_pleno15_report(
+        report,
+        draw_date=snapshot["draw_date"],
+        expected_home=pleno["home"],
+        expected_away=pleno["away"],
+        # Only a lower bound for temporal validation in this unit test.
+        kickoff_at=datetime(2020, 12, 13, tzinfo=UTC),
+    )
+
+    assert validated["home_goals"] == 4
+    assert validated["away_goals"] == 0
+    assert validated["home_category"] == "M"
+    assert validated["away_category"] == "0"
+    assert validated["source_sha256"] == hashlib.sha256(raw).hexdigest()
+
+
+def _pleno15_press_release_report() -> dict[str, object]:
+    return {
+        "schema_version": 1,
+        "provider": "SELAE",
+        "draw_date": DRAW_DATE,
+        "source_url": "https://www.loteriasyapuestas.es/f/loterias/documentos/nota.pdf",
+        "source_sha256": HASH_A,
+        "evidence_type": "official_press_release_pdf",
+        "verified_at_utc": "2026-11-08T16:00:00Z",
+        "verification_method": "Synthetic unit-test PDF vector; no live result asserted.",
+        "home_category": "2",
+        "away_category": "M",
+    }
+
+
+def test_ticket_scoring_evaluates_pleno15_from_official_pdf_vector() -> None:
+    report = _reconciliation()
+    ticket = _ticket(report)
+    ticket["pleno15_combinations"] = [{"home_goals": "2", "away_goals": "M"}]
+
+    result = score_ticket_record(
+        ticket,
+        report,
+        pleno15_report=_pleno15_press_release_report(),
+        pleno15_report_sha256=HASH_B,
+    )
+
+    assert result["pleno15_evaluated"] is True
+    assert result["pleno15_hit"] is True
+    assert result["covered_full_coupon"] is True
+    assert result["pleno15_actual"] == {
+        "home_category": "2",
+        "away_category": "M",
+    }
+    assert result["pleno15_outcome_provenance"]["team_identity_source"] == (
+        "ticket_plan_draw_date_binding"
+    )
+
+
+def test_ticket_scoring_evaluates_official_pleno15_categories() -> None:
+    report = _reconciliation()
+    ticket = _ticket(report)
+    ticket["pleno15_combinations"] = [{"home_goals": "2", "away_goals": "M"}]
+
+    result = score_ticket_record(
+        ticket,
+        report,
+        pleno15_report=_pleno15_report(),
+        pleno15_report_sha256=HASH_B,
+    )
+
+    assert result["covered_14"] is True
+    assert result["pleno15_evaluated"] is True
+    assert result["pleno15_actual"] == {
+        "home_goals": 2,
+        "away_goals": 3,
+        "home_category": "2",
+        "away_category": "M",
+    }
+    assert result["pleno15_hit"] is True
+    assert result["covered_full_coupon"] is True
+    assert result["pleno15_report_sha256"] == HASH_B
+    assert result["pleno15_outcome_provenance"]["evidence_type"] == (
+        "normalized_official_extract"
+    )
+
+
+def test_ticket_scoring_reports_pleno15_miss_separately_from_14_coverage() -> None:
+    report = _reconciliation()
+    result = score_ticket_record(
+        _ticket(report),
+        report,
+        pleno15_report=_pleno15_report(),
+    )
+
+    assert result["covered_14"] is True
+    assert result["pleno15_evaluated"] is True
+    assert result["pleno15_hit"] is False
+    assert result["covered_full_coupon"] is False
+
+
+def test_ticket_scoring_marks_pleno15_unassessed_without_official_evidence() -> None:
+    report = _reconciliation()
+    result = score_ticket_record(_ticket(report), report)
+
+    assert result["covered_14"] is True
+    assert "pleno15_evaluated" not in result
+    assert "pleno15_actual" not in result
+    assert "pleno15_hit" not in result
+    assert "covered_full_coupon" not in result
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("source_url", "https://example.com/result", "official SELAE host"),
+        ("draw_date", "2026-11-09", "draw date mismatch"),
+        ("home", "Different Team", "team identity"),
+        ("home_category", "1", "categories conflict"),
+        ("home_category", ["2"], "categories must be 0, 1, 2 or M"),
+        ("verified_at_utc", "2026-11-08T13:00:00Z", "must not precede"),
+        ("evidence_type", "unverified_summary", "evidence_type"),
+    ],
+)
+def test_ticket_scoring_rejects_invalid_pleno15_evidence(
+    field: str, value: object, message: str
+) -> None:
+    report = _reconciliation()
+    pleno = _pleno15_report()
+    pleno[field] = value
+    with pytest.raises(TicketOutcomeError, match=message):
+        score_ticket_record(_ticket(report), report, pleno15_report=pleno)
+
+
+def test_ticket_scoring_rejects_press_release_report_without_pdf_url() -> None:
+    report = _reconciliation()
+    pleno = _pleno15_press_release_report()
+    pleno["source_url"] = "https://www.loteriasyapuestas.es/es/la-quiniela"
+
+    with pytest.raises(TicketOutcomeError, match="official PDF"):
+        score_ticket_record(_ticket(report), report, pleno15_report=pleno)
+
+
+def test_ticket_scoring_rejects_pleno15_report_digest_without_report() -> None:
+    report = _reconciliation()
+    with pytest.raises(TicketOutcomeError, match="requires a Pleno"):
+        score_ticket_record(
+            _ticket(report),
+            report,
+            pleno15_report_sha256=HASH_B,
+        )
 
 
 def test_reconciliation_rejects_missing_or_duplicate_positions() -> None:
@@ -656,3 +890,265 @@ def test_coupon_plan_rejects_cutoff_evidence_captured_after_ticket_creation() ->
             model_probabilities_by_position=model_probabilities,
             public_draw_snapshots={7: _preclose_snapshot()},
         )
+
+
+def test_ticket_record_rejects_missing_probability_vectors() -> None:
+    ticket = _ticket(_reconciliation())
+    ticket["probability_vectors"].pop()
+    with pytest.raises(TicketOutcomeError, match="14 1/X/2 probability vectors"):
+        score_ticket_record(ticket, _reconciliation())
+
+
+def test_ticket_record_rejects_probability_source_that_conflicts_with_coupon_plan() -> (
+    None
+):
+    ticket = _ticket(_reconciliation())
+    ticket["probability_sources"][6] = {
+        "position": 7,
+        "source": "football_model",
+        "model_mode": "ensemble",
+    }
+    with pytest.raises(TicketOutcomeError, match="pre-close public-draw provenance"):
+        score_ticket_record(ticket, _reconciliation())
+
+
+def test_ticket_record_rejects_pleno_identity_mismatch() -> None:
+    ticket = _ticket(_reconciliation())
+    ticket["pleno15_home"] = "Different team"
+    with pytest.raises(TicketOutcomeError, match="Pleno al 15 identity/kickoff"):
+        score_ticket_record(ticket, _reconciliation())
+
+
+def test_ticket_record_rejects_invalid_pleno_category_pair() -> None:
+    ticket = _ticket(_reconciliation())
+    ticket["pleno15_combinations"][0]["home_goals"] = "3"
+    with pytest.raises(TicketOutcomeError, match="invalid categories"):
+        score_ticket_record(ticket, _reconciliation())
+
+
+def test_ticket_record_rejects_budget_or_cost_inconsistency() -> None:
+    ticket = _ticket(_reconciliation())
+    ticket["budget"] = 1
+    with pytest.raises(TicketOutcomeError, match="exceeds its declared budget"):
+        score_ticket_record(ticket, _reconciliation())
+
+    ticket = _ticket(_reconciliation())
+    ticket["cost_eur"] = 2.0
+    with pytest.raises(TicketOutcomeError, match="cost does not match"):
+        score_ticket_record(ticket, _reconciliation())
+
+
+def _official_prize_snapshot_for_test(
+    ticket: dict[str, object],
+    reconciliation: dict[str, object],
+    pleno_report: dict[str, object],
+) -> dict[str, object]:
+    outcomes = outcomes_from_reconciliation(reconciliation, DRAW_DATE)
+    positions = ticket["coupon_plan"]["positions"]
+    fixtures = []
+    for position, outcome, plan_fixture in zip(
+        range(1, 15), outcomes, positions, strict=True
+    ):
+        sign = outcome["sign"]
+        home_goals, away_goals = (
+            (1, 0) if sign == "1" else (0, 1) if sign == "2" else (0, 0)
+        )
+        fixtures.append(
+            {
+                "number": position,
+                "home": plan_fixture["home"],
+                "away": plan_fixture["away"],
+                "home_goals": home_goals,
+                "away_goals": away_goals,
+                "result": sign,
+            }
+        )
+    pdf_url = (
+        "https://www.loteriasyapuestas.es/f/loterias/documentos/"
+        "Quiniela/Notas%20de%20prensa/test.pdf"
+    )
+    categories = [
+        ("pleno_al_15", 1, 100.0, "awarded"),
+        ("14", 2, 20.0, "awarded"),
+        ("13", 5, 5.0, "awarded"),
+        ("12", 10, 2.0, "awarded"),
+        ("11", 100, 1.0, "awarded"),
+        ("10", 200, 0.0, "awarded"),
+    ]
+    return {
+        "schema_version": 1,
+        "source": "SELAE",
+        "draw_date": DRAW_DATE,
+        "source_url": SELAE_URL,
+        "verified_at": DRAW_DATE,
+        "verification_method": (
+            "Synthetic unit-test snapshot; no real SELAE result is asserted."
+        ),
+        "snapshot_type": "normalized_json_extract_not_raw_html",
+        "supporting_sources": [
+            {"role": "official_selae_result_page", "url": SELAE_URL},
+            {"role": "official_selae_press_release_pdf", "url": pdf_url},
+        ],
+        "fixtures": fixtures,
+        "pleno": {
+            "number": 15,
+            "home": ticket["pleno15_home"],
+            "away": ticket["pleno15_away"],
+            "home_goals": pleno_report["home_goals"],
+            "away_goals": pleno_report["away_goals"],
+            "home_category": pleno_report["home_category"],
+            "away_category": pleno_report["away_category"],
+        },
+        "prize_distribution": {
+            "source_type": (
+                "official_selae_press_release_pdf_transcribed_to_normalized_extract"
+            ),
+            "source_url": pdf_url,
+            "revenue_eur": 1000.0,
+            "categories": [
+                {
+                    "category": name,
+                    "winner_count": winners,
+                    "unit_prize_eur": prize,
+                    "status": status,
+                }
+                for name, winners, prize, status in categories
+            ],
+        },
+    }
+
+
+def test_official_prize_scoring_expands_columns_by_pleno_pairs() -> None:
+    reconciliation = _reconciliation()
+    ticket = _ticket(reconciliation)
+    pleno_report = _pleno15_report()
+    ticket["pleno15_combinations"] = [
+        {"home_goals": "2", "away_goals": "M"},
+        {"home_goals": "0", "away_goals": "0"},
+    ]
+    ticket["cost_eur"] = 3.0
+    snapshot = _official_prize_snapshot_for_test(ticket, reconciliation, pleno_report)
+    snapshot_raw = json.dumps(
+        snapshot, ensure_ascii=False, separators=(",", ":")
+    ).encode()
+    snapshot_digest = hashlib.sha256(snapshot_raw).hexdigest()
+
+    result = score_ticket_record(
+        ticket,
+        reconciliation,
+        pleno15_report=pleno_report,
+        pleno15_report_sha256=HASH_B,
+        official_result_snapshot=snapshot,
+        official_result_snapshot_sha256=snapshot_digest,
+    )
+
+    assert result["prize_tiers_evaluated"] is True
+    assert result["prize_tier_counts"] == {
+        "pleno_al_15": 1,
+        "14": 2,
+        "13": 0,
+        "12": 0,
+        "11": 0,
+        "10": 0,
+    }
+    assert result["conditional_published_prize_reference_eur"] == "140.00"
+    assert result["conditional_prize_reference_complete"] is True
+    assert result["official_result_snapshot_sha256"] == snapshot_digest
+    assert result["payout_evaluated"] is False
+    assert result["profitability_evaluated"] is False
+
+
+def test_official_prize_scoring_does_not_price_a_rollover_tier() -> None:
+    reconciliation = _reconciliation()
+    ticket = _ticket(reconciliation)
+    pleno_report = _pleno15_report()
+    ticket["pleno15_combinations"] = [{"home_goals": "2", "away_goals": "M"}]
+    snapshot = _official_prize_snapshot_for_test(ticket, reconciliation, pleno_report)
+    pleno_tier = next(
+        item
+        for item in snapshot["prize_distribution"]["categories"]
+        if item["category"] == "pleno_al_15"
+    )
+    pleno_tier.update({"winner_count": 0, "unit_prize_eur": None, "status": "rollover"})
+    snapshot_raw = json.dumps(
+        snapshot, ensure_ascii=False, separators=(",", ":")
+    ).encode()
+
+    result = score_ticket_record(
+        ticket,
+        reconciliation,
+        pleno15_report=pleno_report,
+        pleno15_report_sha256=HASH_B,
+        official_result_snapshot=snapshot,
+        official_result_snapshot_sha256=hashlib.sha256(snapshot_raw).hexdigest(),
+    )
+
+    assert result["prize_tier_counts"]["pleno_al_15"] == 1
+    assert result["conditional_prize_reference_complete"] is False
+    assert result["conditional_published_prize_reference_eur"] is None
+    assert result["payout_evaluated"] is False
+
+
+def test_official_prize_scoring_rejects_snapshot_result_conflict() -> None:
+    reconciliation = _reconciliation()
+    ticket = _ticket(reconciliation)
+    pleno_report = _pleno15_report()
+    snapshot = _official_prize_snapshot_for_test(ticket, reconciliation, pleno_report)
+    snapshot["fixtures"][0]["result"] = "X"
+    snapshot_raw = json.dumps(
+        snapshot, ensure_ascii=False, separators=(",", ":")
+    ).encode()
+
+    with pytest.raises(TicketOutcomeError, match="conflicts with its score"):
+        score_ticket_record(
+            ticket,
+            reconciliation,
+            pleno15_report=pleno_report,
+            pleno15_report_sha256=HASH_B,
+            official_result_snapshot=snapshot,
+            official_result_snapshot_sha256=hashlib.sha256(snapshot_raw).hexdigest(),
+        )
+
+
+def test_ticket_scoring_cli_accepts_official_prize_snapshot(tmp_path: Path) -> None:
+    reconciliation = _reconciliation()
+    ticket = _ticket(reconciliation)
+    ticket["pleno15_combinations"] = [{"home_goals": "2", "away_goals": "M"}]
+    pleno_report = _pleno15_report()
+    snapshot = _official_prize_snapshot_for_test(ticket, reconciliation, pleno_report)
+    inputs = {
+        "ticket.json": ticket,
+        "reconciliation.json": reconciliation,
+        "pleno15.json": pleno_report,
+        "official-result.json": snapshot,
+    }
+    input_paths = {}
+    for name, value in inputs.items():
+        path = tmp_path / name
+        path.write_text(
+            json.dumps(value, ensure_ascii=False, separators=(",", ":")),
+            encoding="utf-8",
+        )
+        input_paths[name] = path
+    output = tmp_path / "score.json"
+
+    exit_code = score_ticket_cli_main(
+        [
+            "--ticket",
+            str(input_paths["ticket.json"]),
+            "--reconciliation",
+            str(input_paths["reconciliation.json"]),
+            "--pleno15",
+            str(input_paths["pleno15.json"]),
+            "--official-result-snapshot",
+            str(input_paths["official-result.json"]),
+            "--output",
+            str(output),
+        ]
+    )
+
+    assert exit_code == 0
+    score = json.loads(output.read_text(encoding="utf-8"))
+    assert score["prize_tiers_evaluated"] is True
+    assert score["conditional_published_prize_reference_eur"] == "120.00"
+    assert score["payout_evaluated"] is False

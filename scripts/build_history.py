@@ -173,11 +173,14 @@ def fetch_csv(
     cache_ttl_hours: float = DEFAULT_CACHE_TTL_HOURS,
     refresh: bool = False,
     offline: bool = False,
+    require_fresh: bool = False,
     expected_division: str | None = None,
 ) -> pd.DataFrame:
     """Read a validated cache or download the source, retrying and falling back safely."""
     if offline and refresh:
         raise ValueError("offline mode cannot be combined with refresh")
+    if offline and require_fresh:
+        raise ValueError("offline mode cannot be combined with require_fresh")
     path = Path(cache_path)
     cached_content: bytes | None = None
     cached_df: pd.DataFrame | None = None
@@ -216,6 +219,10 @@ def fetch_csv(
         return downloaded
     except (requests.RequestException, ValueError, pd.errors.ParserError) as exc:
         if cached_df is not None and cached_content is not None:
+            if require_fresh:
+                raise RuntimeError(
+                    f"No se pudo renovar {url}; require_fresh impide usar la caché anterior: {exc}"
+                ) from exc
             log.warning(
                 "Fuente no disponible; usando caché válida aunque esté caducada (%s): %s",
                 url,
@@ -405,6 +412,7 @@ def build_history(
     cache_ttl_hours: float = DEFAULT_CACHE_TTL_HOURS,
     refresh: bool = False,
     offline: bool = False,
+    require_fresh: bool = False,
     session: requests.Session | None = None,
 ) -> pd.DataFrame:
     """Build a validated, de-duplicated chronological history from cached/source CSVs."""
@@ -419,6 +427,8 @@ def build_history(
         raise ValueError("cache_ttl_hours no puede ser negativo")
     if offline and refresh:
         raise ValueError("offline mode cannot be combined with refresh")
+    if offline and require_fresh:
+        raise ValueError("offline mode cannot be combined with require_fresh")
 
     frames: list[pd.DataFrame] = []
     source_urls: list[str] = []
@@ -439,6 +449,7 @@ def build_history(
                 cache_ttl_hours=cache_ttl_hours,
                 refresh=refresh,
                 offline=offline,
+                require_fresh=require_fresh,
                 expected_division=code,
             )
             source_urls.append(url)
@@ -561,6 +572,11 @@ def _parse_args() -> argparse.Namespace:
         help="Usar exclusivamente caché local; no realizar peticiones HTTP.",
     )
     parser.add_argument(
+        "--require-fresh",
+        action="store_true",
+        help="Rechazar cualquier fallback a caché si una descarga solicitada falla.",
+    )
+    parser.add_argument(
         "--seasons",
         nargs="+",
         default=list(SEASONS),
@@ -585,6 +601,7 @@ def main() -> None:
         cache_ttl_hours=args.cache_ttl_hours,
         refresh=args.refresh,
         offline=args.offline,
+        require_fresh=args.require_fresh,
     )
     print(f"Wrote {len(history)} matches to {args.output}")
 

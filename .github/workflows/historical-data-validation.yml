@@ -1,7 +1,12 @@
 name: historical-data-validation
 
+permissions:
+  actions: read
+  contents: read
+
 on:
   push:
+    branches: [master]
     paths:
       - "scripts/build_history.py"
       - "kini_engine/dataio.py"
@@ -58,24 +63,112 @@ jobs:
         with:
           python-version: "3.12"
       - run: python -m pip install -e ".[dev]"
+      - name: Find latest validated dataset on PR base branch
+        if: github.event_name == 'pull_request'
+        id: source_dataset
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASE_BRANCH: ${{ github.event.pull_request.base.ref }}
+        run: |
+          runs_json="$(gh api --method GET "repos/$GITHUB_REPOSITORY/actions/workflows/historical-data-validation.yml/runs" -f "branch=$BASE_BRANCH" -f status=completed -F per_page=100)"
+          dataset_run_id=""
+          while read -r run_id; do
+            [[ -n "$run_id" ]] || continue
+            artifacts_json="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/artifacts?per_page=100")"
+            if jq -e '[.artifacts[]? | select(.name == "kini-historical-data" and .expired == false)] | length > 0' <<<"$artifacts_json" >/dev/null; then
+              dataset_run_id="$run_id"
+              break
+            fi
+          done < <(
+            jq -r '.workflow_runs[]? | select(.conclusion == "success") | .id' <<<"$runs_json"
+          )
+          if [[ -z "$dataset_run_id" ]]; then
+            echo "No successful, unexpired kini-historical-data artifact exists on base branch $BASE_BRANCH" >&2
+            exit 1
+          fi
+          echo "Using validated historical dataset from run $dataset_run_id on $BASE_BRANCH"
+          echo "run_id=$dataset_run_id" >> "$GITHUB_OUTPUT"
+      - name: Download validated dataset from PR base branch
+        if: github.event_name == 'pull_request'
+        uses: actions/download-artifact@v4
+        with:
+          name: kini-historical-data
+          run-id: ${{ steps.source_dataset.outputs.run_id }}
+          repository: ${{ github.repository }}
+          github-token: ${{ github.token }}
+          path: data
       - name: Restore Football-Data raw CSV cache
+        if: github.event_name != 'pull_request'
         id: football_cache
         uses: actions/cache/restore@v4
         with:
           path: .cache/football-data
           key: football-data-${{ runner.os }}-${{ github.ref_name }}-${{ github.run_id }}
           restore-keys: |
-            football-data-${{ runner.os }}-${{ github.ref_name }}-
-            football-data-${{ runner.os }}-
+            football-data-${{ runner.os }}-master-
       - name: Build historical data and profile
+        if: github.event_name != 'pull_request'
         env:
           REFRESH_SOURCE: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.refresh_source) }}
         run: |
           if [ "$REFRESH_SOURCE" = "true" ]; then
-            python scripts/build_history.py --refresh
+            python scripts/build_history.py --refresh --require-fresh
           else
             python scripts/build_history.py --offline
           fi
+      - name: Enforce weekly Football-Data source snapshot
+        env:
+          REFRESH_SOURCE: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.refresh_source) }}
+        run: |
+          python - <<'PY'
+          import json
+          import math
+          import os
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          profile = json.loads(
+              Path("data/historical_spain.profile.json").read_text(encoding="utf-8")
+          )
+          sources = profile.get("source_cache_metadata")
+          if not profile.get("integrity_passed"):
+              raise SystemExit("Historical dataset profile reports failed integrity")
+          if len(profile.get("source_urls", [])) != 14:
+              raise SystemExit("Expected exactly 14 Football-Data source URLs")
+          if not isinstance(sources, list) or len(sources) != 14:
+              raise SystemExit("Expected exactly 14 cached Football-Data source files")
+
+          max_age_hours = 1.0 if os.environ.get("REFRESH_SOURCE") == "true" else 168.0
+          now = datetime.now(timezone.utc)
+          stale = []
+          mtimes = []
+          for source in sources:
+              modified = source.get("cache_file_mtime_utc")
+              if not isinstance(modified, str):
+                  stale.append((source.get("source_url"), "missing cache mtime"))
+                  continue
+              timestamp = datetime.fromisoformat(modified)
+              if timestamp.tzinfo is None or timestamp.utcoffset() is None:
+                  stale.append((source.get("source_url"), "timezone-naive mtime"))
+                  continue
+              timestamp = timestamp.astimezone(timezone.utc)
+              age_hours = (now - timestamp).total_seconds() / 3600.0
+              if not math.isfinite(age_hours) or age_hours < 0 or age_hours > max_age_hours:
+                  stale.append((source.get("source_url"), age_hours))
+                  continue
+              mtimes.append(timestamp)
+          if stale:
+              raise SystemExit(
+                  f"Football-Data cache exceeds the {max_age_hours:g}-hour freshness limit: {stale}"
+              )
+          if len(mtimes) != 14 or (max(mtimes) - min(mtimes)).total_seconds() > 3600:
+              raise SystemExit("Football-Data source files do not belong to one hourly snapshot")
+
+          print(
+              "WEEKLY_HISTORY_SOURCE_ACCEPTANCE_OK: "
+              f"{len(sources)} source files; maximum age {max_age_hours:g} hours"
+          )
+          PY
       - name: Validate canonical team identities
         run: |
           python -m scripts.validate_team_identity_registry --csv data/historical_spain.csv --output data/team_identity_validation.json

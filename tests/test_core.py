@@ -18,6 +18,7 @@ from kini_engine.core import (
     score_grid,
     surprise_signal,
 )
+from kini_engine.ticket_ledger import TicketLedger
 from kini_engine.ticket_outcomes import TicketOutcomeError
 
 
@@ -766,6 +767,48 @@ def test_optimizer_rejects_missing_sign_probability():
         TicketOptimizer().optimize(predictions, budget=8)
 
 
+def test_optimizer_rejects_extra_probability_keys():
+    predictions = [{"1": 0.5, "X": 0.3, "2": 0.2} for _ in range(14)]
+    predictions[3]["home"] = 0.0
+
+    with pytest.raises(ValueError, match="unexpected probability key"):
+        TicketOptimizer().optimize(predictions, budget=8)
+
+
+def test_optimizer_rejects_coerced_probability_values():
+    for invalid_value in ("0.5", np.bool_(True)):
+        predictions = [{"1": 0.5, "X": 0.3, "2": 0.2} for _ in range(14)]
+        predictions[5]["1"] = invalid_value
+
+        with pytest.raises(TypeError, match="invalid probability"):
+            TicketOptimizer().optimize(predictions, budget=8)
+
+
+def test_optimizer_accepts_numpy_numeric_scalars():
+    predictions = [
+        {"1": np.float64(0.5), "X": np.float32(0.3), "2": np.float64(0.2)}
+        for _ in range(14)
+    ]
+
+    result = TicketOptimizer().optimize(predictions, budget=8)
+
+    assert result["column_count"] == 8
+    assert 0.0 <= result["independent_coverage_estimate"] <= 1.0
+
+
+def test_optimizer_does_not_renormalize_validated_probability_vectors():
+    vector = {"1": 0.5000002, "X": 0.3, "2": 0.1999999}
+    predictions = [vector.copy() for _ in range(14)]
+
+    result = TicketOptimizer().optimize(predictions, budget=2)
+
+    expected = (vector["1"] + vector["X"]) * vector["1"] ** 13
+    assert result["column_count"] == 2
+    assert result["independent_coverage_estimate"] == pytest.approx(
+        expected, rel=0.0, abs=1e-12
+    )
+
+
 def test_optimizer_rejects_invalid_probability_distributions():
     import pytest
 
@@ -1422,3 +1465,64 @@ def test_quiniela_pre_ticket_plan_validates_pleno15_kickoff_against_fixture():
             coupon_plan=plan,
             public_draw_snapshots=snapshots,
         )
+
+def test_quiniela_persists_pre_ticket_record_to_immutable_ledger(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        "kini_engine.ticket_ledger._utc_now",
+        lambda: "2026-11-08T10:59:59Z",
+    )
+    plan, fixtures, snapshots = _planned_coupon_with_public_draw()
+    ledger = TicketLedger(tmp_path / "tickets.sqlite3")
+    engine = KiniEngine(enable_ml=False, ticket_ledger=ledger).fit(sample())
+
+    result = engine.quiniela(
+        fixtures,
+        budget=2,
+        coupon_plan=plan,
+        public_draw_snapshots=snapshots,
+    )
+
+    receipt = result["ticket_ledger"]
+    stored = ledger.get_ticket_record(result["ticket_id"])
+    assert receipt["inserted"] is True
+    assert stored is not None
+    assert stored["ticket_record"] == result["ticket_record"]
+    assert stored["ticket_sha256"] == result["ticket_record_sha256"]
+    assert stored["ticket_record"]["columns"] == result["ticket"]["columns"]
+
+
+@pytest.mark.parametrize(
+    "probabilities",
+    [
+        {"1": 0.5, "X": 0.25, "2": 0.25, "P": 0.0},
+        {"1": "0.5", "X": 0.25, "2": 0.25},
+        {"1": True, "X": 0.0, "2": 0.0},
+        {"1": 0.5, "X": 0.5},
+    ],
+)
+def test_external_source_eligibility_requires_exact_numeric_probability_vectors(
+    probabilities,
+):
+    market_fixture = Match(
+        datetime(2025, 4, 1),
+        "A",
+        "B",
+        market=probabilities,
+        detail={
+            "market_temporal_status": "schedule_compatible",
+            "market_pre_match_eligible": True,
+        },
+    )
+    lae_fixture = Match(
+        datetime(2025, 4, 1),
+        "A",
+        "B",
+        lae=probabilities,
+        detail=verified_lae_detail(),
+    )
+
+    assert market_fixture.has_temporally_eligible_market is False
+    assert lae_fixture.has_temporally_eligible_lae is False

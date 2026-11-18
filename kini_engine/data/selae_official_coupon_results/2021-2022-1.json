@@ -1,0 +1,202 @@
+{
+  "schema_version": 1,
+  "source": "SELAE",
+  "draw_date": "2021-08-15",
+  "source_url": "https://www.loteriasyapuestas.es/es/la-quiniela/resultados/la-quiniela-resultados-del-15-de-agosto-de-2021",
+  "verified_at": "2026-11-17",
+  "verification_method": "Manual review of the official SELAE result page and official SELAE press-release PDF. The 14 ordered main fixtures, team labels, scores and signs, plus the Elche–Athletic Club Pleno al 15 (0-0), were cross-checked against HistoricalQuiniela Jornada 1 of 2021/2022 and the validated Football-Data 2021/2022 SP1/SP2 dataset. HistoricalQuiniela supplies Europe/Madrid kickoff times; Football-Data supplies exact competition/date/team/score reconciliation. The official PDF text was available, but its original bytes were not retrieved; no raw-PDF digest is claimed.",
+  "snapshot_type": "normalized_json_extract_not_raw_html",
+  "supporting_sources": [
+    {
+      "role": "official_selae_result_page",
+      "url": "https://www.loteriasyapuestas.es/es/la-quiniela/resultados/la-quiniela-resultados-del-15-de-agosto-de-2021"
+    },
+    {
+      "role": "official_selae_press_release_pdf",
+      "url": "https://www.loteriasyapuestas.es/f/loterias/documentos/Quiniela/Notas%20de%20prensa/NOTA_DE_PRENSA_DE_LA_QUINIELA_DE_FECHA_15_8_21.pdf"
+    },
+    {
+      "role": "schedule_and_kickoff_crosscheck",
+      "url": "https://www.historicoquiniela.com/historico/2021-2022/1"
+    },
+    {
+      "role": "football_data_sp1_crosscheck",
+      "url": "https://www.football-data.co.uk/mmz4281/2122/SP1.csv"
+    },
+    {
+      "role": "football_data_sp2_crosscheck",
+      "url": "https://www.football-data.co.uk/mmz4281/2122/SP2.csv"
+    }
+  ],
+  "fixtures": [
+    {
+      "number": 1,
+      "home": "Osasuna",
+      "away": "Espanyol",
+      "home_goals": 0,
+      "away_goals": 0,
+      "result": "X"
+    },
+    {
+      "number": 2,
+      "home": "Mallorca",
+      "away": "Betis",
+      "home_goals": 1,
+      "away_goals": 1,
+      "result": "X"
+    },
+    {
+      "number": 3,
+      "home": "Cádiz",
+      "away": "Levante",
+      "home_goals": 1,
+      "away_goals": 1,
+      "result": "X"
+    },
+    {
+      "number": 4,
+      "home": "Alavés",
+      "away": "Real Madrid",
+      "home_goals": 1,
+      "away_goals": 4,
+      "result": "2"
+    },
+    {
+      "number": 5,
+      "home": "Celta",
+      "away": "At. Madrid",
+      "home_goals": 1,
+      "away_goals": 2,
+      "result": "2"
+    },
+    {
+      "number": 6,
+      "home": "Barcelona",
+      "away": "Real Sociedad",
+      "home_goals": 4,
+      "away_goals": 2,
+      "result": "1"
+    },
+    {
+      "number": 7,
+      "home": "Sevilla",
+      "away": "Rayo Vallecano",
+      "home_goals": 3,
+      "away_goals": 0,
+      "result": "1"
+    },
+    {
+      "number": 8,
+      "home": "Villarreal",
+      "away": "Granada",
+      "home_goals": 0,
+      "away_goals": 0,
+      "result": "X"
+    },
+    {
+      "number": 9,
+      "home": "R. Sociedad B",
+      "away": "Leganés",
+      "home_goals": 1,
+      "away_goals": 0,
+      "result": "1"
+    },
+    {
+      "number": 10,
+      "home": "Ponferradina",
+      "away": "Alcorcón",
+      "home_goals": 1,
+      "away_goals": 0,
+      "result": "1"
+    },
+    {
+      "number": 11,
+      "home": "Sporting",
+      "away": "Burgos",
+      "home_goals": 1,
+      "away_goals": 0,
+      "result": "1"
+    },
+    {
+      "number": 12,
+      "home": "R. Oviedo",
+      "away": "Lugo",
+      "home_goals": 2,
+      "away_goals": 2,
+      "result": "X"
+    },
+    {
+      "number": 13,
+      "home": "Las Palmas",
+      "away": "Valladolid",
+      "home_goals": 1,
+      "away_goals": 1,
+      "result": "X"
+    },
+    {
+      "number": 14,
+      "home": "Fuenlabrada",
+      "away": "Tenerife",
+      "home_goals": 1,
+      "away_goals": 2,
+      "result": "2"
+    }
+  ],
+  "pleno": {
+    "number": 15,
+    "home": "Elche",
+    "away": "Athletic Club",
+    "home_goals": 0,
+    "away_goals": 0,
+    "home_category": "0",
+    "away_category": "0"
+  },
+  "prize_distribution": {
+    "source_type": "official_selae_press_release_pdf_transcribed_to_normalized_extract",
+    "source_url": "https://www.loteriasyapuestas.es/f/loterias/documentos/Quiniela/Notas%20de%20prensa/NOTA_DE_PRENSA_DE_LA_QUINIELA_DE_FECHA_15_8_21.pdf",
+    "revenue_eur": 2417637.75,
+    "categories": [
+      {
+        "category": "pleno_al_15",
+        "winner_count": 1,
+        "unit_prize_eur": 479523.55,
+        "status": "awarded"
+      },
+      {
+        "category": "14",
+        "winner_count": 16,
+        "unit_prize_eur": 24176.38,
+        "status": "awarded"
+      },
+      {
+        "category": "13",
+        "winner_count": 384,
+        "unit_prize_eur": 472.19,
+        "status": "awarded"
+      },
+      {
+        "category": "12",
+        "winner_count": 4507,
+        "unit_prize_eur": 40.23,
+        "status": "awarded"
+      },
+      {
+        "category": "11",
+        "winner_count": 26651,
+        "unit_prize_eur": 6.8,
+        "status": "awarded"
+      },
+      {
+        "category": "10",
+        "winner_count": 103695,
+        "unit_prize_eur": 2.1,
+        "status": "awarded"
+      }
+    ],
+    "elige8": {
+      "revenue_eur": 66307.5,
+      "winner_count": 413,
+      "unit_prize_eur": 88.3
+    }
+  }
+}

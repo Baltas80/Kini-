@@ -152,3 +152,564 @@ def test_snapshot_loader_rejects_non_object_json(tmp_path: Path) -> None:
 def test_snapshot_directory_rejects_unsafe_season_slug(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="YYYY-YYYY"):
         load_official_snapshot_for_journey(tmp_path, "../2020-2021", 21)
+
+
+def test_jornada_19_official_snapshot_matches_reviewed_selae_results() -> None:
+    path = (
+        Path(__file__).resolve().parents[1]
+        / "kini_engine"
+        / "data"
+        / "selae_official_coupon_results"
+        / "2020-2021-19.json"
+    )
+    snapshot, digest = load_official_coupon_snapshot(path)
+
+    expected = [
+        ("Levante", "Getafe", 3, 0, "1"),
+        ("Sevilla", "Real Madrid", 0, 1, "2"),
+        ("At. Madrid", "Valladolid", 2, 0, "1"),
+        ("Cádiz", "Barcelona", 2, 1, "1"),
+        ("Granada", "Huesca", 3, 3, "X"),
+        ("Osasuna", "Betis", 0, 2, "2"),
+        ("Villarreal", "Elche", 0, 0, "X"),
+        ("Alavés", "Real Sociedad", 0, 0, "X"),
+        ("Alcorcón", "Almería", 0, 1, "2"),
+        ("Espanyol", "Sporting", 2, 0, "1"),
+        ("Mirandés", "Lugo", 0, 0, "X"),
+        ("Rayo Vallecano", "Logroñés", 2, 1, "1"),
+        ("Zaragoza", "Fuenlabrada", 1, 0, "1"),
+        ("Sabadell", "R. Oviedo", 0, 1, "2"),
+    ]
+    actual = [
+        (
+            item["home"],
+            item["away"],
+            item["home_goals"],
+            item["away_goals"],
+            item["result"],
+        )
+        for item in snapshot["fixtures"]
+    ]
+    assert snapshot["draw_date"] == "2020-12-06"
+    assert snapshot["source_url"] == (
+        "https://www.loteriasyapuestas.es/es/la-quiniela/resultados/"
+        "la-quiniela-resultados-del-6-de-diciembre-de-2020"
+    )
+    supporting_sources = {
+        item["role"]: item["url"] for item in snapshot["supporting_sources"]
+    }
+    assert supporting_sources["official_selae_result_page"] == snapshot["source_url"]
+    assert supporting_sources["football_data_sp1_crosscheck"] == (
+        "https://www.football-data.co.uk/mmz4281/2021/SP1.csv"
+    )
+    assert supporting_sources["football_data_sp2_crosscheck"] == (
+        "https://www.football-data.co.uk/mmz4281/2021/SP2.csv"
+    )
+    assert actual == expected
+    assert snapshot["pleno"] == {
+        "number": 15,
+        "home": "Eibar",
+        "away": "Valencia",
+        "home_goals": 0,
+        "away_goals": 0,
+        "home_category": "0",
+        "away_category": "0",
+    }
+    assert snapshot["prize_distribution"]["categories"] == [
+        {
+            "category": "pleno_al_15",
+            "winner_count": 0,
+            "unit_prize_eur": None,
+            "status": "rollover",
+        },
+        {
+            "category": "14",
+            "winner_count": 0,
+            "unit_prize_eur": None,
+            "status": "rollover",
+        },
+        {
+            "category": "13",
+            "winner_count": 37,
+            "unit_prize_eur": 7077.29,
+            "status": "awarded",
+        },
+        {
+            "category": "12",
+            "winner_count": 569,
+            "unit_prize_eur": 460.21,
+            "status": "awarded",
+        },
+        {
+            "category": "11",
+            "winner_count": 5240,
+            "unit_prize_eur": 49.97,
+            "status": "awarded",
+        },
+        {
+            "category": "10",
+            "winner_count": 31232,
+            "unit_prize_eur": 10.06,
+            "status": "awarded",
+        },
+    ]
+    assert digest == hashlib.sha256(path.read_bytes()).hexdigest()
+
+    coupon = {
+        "coupon_id": "2020-2021:19",
+        "source_date": "2020-12-06",
+        "fixtures": [
+            {
+                "number": item["number"],
+                "home": item["home"],
+                "away": item["away"],
+                "home_goals": item["home_goals"],
+                "away_goals": item["away_goals"],
+                "result": item["result"],
+            }
+            for item in snapshot["fixtures"]
+        ]
+        + [
+            {
+                "number": 15,
+                "home": "Eibar",
+                "away": "Valencia",
+                "home_goals": 0,
+                "away_goals": 0,
+                "pleno_home_category": "0",
+                "pleno_away_category": "0",
+            }
+        ],
+    }
+    verified = verify_coupon_against_selae_snapshot(
+        coupon, snapshot, snapshot_sha256=digest
+    )
+    assert verified["official_main_matches_verified"] is True
+    assert verified["official_pleno_verified"] is True
+
+
+def test_jornada_22_official_snapshot_matches_reviewed_selae_results() -> None:
+    path = (
+        Path(__file__).resolve().parents[1]
+        / "kini_engine"
+        / "data"
+        / "selae_official_coupon_results"
+        / "2020-2021-22.json"
+    )
+    snapshot, digest = load_official_coupon_snapshot(path)
+
+    expected = [
+        ("At. Madrid", "Elche", 3, 1, "1"),
+        ("Barcelona", "Valencia", 2, 2, "X"),
+        ("Levante", "Real Sociedad", 2, 1, "1"),
+        ("Osasuna", "Villarreal", 1, 3, "2"),
+        ("Sevilla", "Valladolid", 1, 1, "X"),
+        ("Celta", "Alavés", 2, 0, "1"),
+        ("Granada", "Betis", 2, 0, "1"),
+        ("Cádiz", "Getafe", 0, 2, "2"),
+        ("Mallorca", "Fuenlabrada", 2, 3, "2"),
+        ("Zaragoza", "Lugo", 1, 0, "1"),
+        ("Alcorcón", "Cartagena", 2, 1, "1"),
+        ("Espanyol", "Almería", 2, 1, "1"),
+        ("Rayo Vallecano", "Las Palmas", 2, 0, "1"),
+        ("Málaga", "Logroñés", 0, 0, "X"),
+    ]
+    actual = [
+        (
+            item["home"],
+            item["away"],
+            item["home_goals"],
+            item["away_goals"],
+            item["result"],
+        )
+        for item in snapshot["fixtures"]
+    ]
+    assert snapshot["draw_date"] == "2020-12-20"
+    assert snapshot["source_url"] == (
+        "https://www.loteriasyapuestas.es/es/la-quiniela/resultados/"
+        "la-quiniela-resultados-del-20-de-diciembre-de-2020"
+    )
+    sources = {item["role"]: item["url"] for item in snapshot["supporting_sources"]}
+    assert sources["official_selae_result_page"] == snapshot["source_url"]
+    assert sources["official_selae_press_release_pdf"] == (
+        "https://www.loteriasyapuestas.es/f/loterias/documentos/Quiniela/Notas%20de%20prensa/"
+        "NOTA_DE_PRENSA_DE_LA_QUINIELA_DE_FECHA_20_12_20.pdf"
+    )
+    assert sources["schedule_and_kickoff_crosscheck"] == (
+        "https://www.historicoquiniela.com/historico/2020-2021/22"
+    )
+    assert sources["football_data_sp1_crosscheck"] == (
+        "https://www.football-data.co.uk/mmz4281/2021/SP1.csv"
+    )
+    assert sources["football_data_sp2_crosscheck"] == (
+        "https://www.football-data.co.uk/mmz4281/2021/SP2.csv"
+    )
+    assert actual == expected
+    assert snapshot["pleno"] == {
+        "number": 15,
+        "home": "Eibar",
+        "away": "Real Madrid",
+        "home_goals": 1,
+        "away_goals": 3,
+        "home_category": "1",
+        "away_category": "M",
+    }
+
+    coupon = {
+        "coupon_id": "2020-2021:22",
+        "source_date": "2020-12-20",
+        "fixtures": [
+            {
+                "number": item["number"],
+                "home": item["home"],
+                "away": item["away"],
+                "home_goals": item["home_goals"],
+                "away_goals": item["away_goals"],
+                "result": item["result"],
+            }
+            for item in snapshot["fixtures"]
+        ]
+        + [
+            {
+                "number": 15,
+                "home": snapshot["pleno"]["home"],
+                "away": snapshot["pleno"]["away"],
+                "home_goals": snapshot["pleno"]["home_goals"],
+                "away_goals": snapshot["pleno"]["away_goals"],
+                "pleno_home_category": snapshot["pleno"]["home_category"],
+                "pleno_away_category": snapshot["pleno"]["away_category"],
+            }
+        ],
+    }
+    verified = verify_coupon_against_selae_snapshot(
+        coupon, snapshot, snapshot_sha256=digest
+    )
+    assert verified["official_main_matches_verified"] is True
+    assert verified["official_pleno_verified"] is True
+
+
+def test_jornada_25_official_snapshot_matches_reviewed_selae_results() -> None:
+    path = (
+        Path(__file__).resolve().parents[1]
+        / "kini_engine"
+        / "data"
+        / "selae_official_coupon_results"
+        / "2020-2021-25.json"
+    )
+    snapshot, digest = load_official_coupon_snapshot(path)
+
+    expected = [
+        ("Villarreal", "Levante", 2, 1, "1"),
+        ("Betis", "Sevilla", 1, 1, "X"),
+        ("Getafe", "Valladolid", 0, 1, "2"),
+        ("Real Madrid", "Celta", 2, 0, "1"),
+        ("Athletic Club", "Elche", 1, 0, "1"),
+        ("Alavés", "At. Madrid", 1, 2, "2"),
+        ("Eibar", "Granada", 2, 0, "1"),
+        ("Real Sociedad", "Osasuna", 1, 1, "X"),
+        ("Huesca", "Barcelona", 0, 1, "2"),
+        ("Fuenlabrada", "Leganés", 0, 0, "X"),
+        ("Rayo Vallecano", "Alcorcón", 2, 1, "1"),
+        ("Las Palmas", "Espanyol", 1, 0, "1"),
+        ("Almería", "Ponferradina", 3, 1, "1"),
+        ("R. Oviedo", "Mallorca", 2, 2, "X"),
+    ]
+    actual = [
+        (
+            item["home"],
+            item["away"],
+            item["home_goals"],
+            item["away_goals"],
+            item["result"],
+        )
+        for item in snapshot["fixtures"]
+    ]
+    assert snapshot["draw_date"] == "2021-01-03"
+    assert snapshot["source_url"] == (
+        "https://www.loteriasyapuestas.es/es/la-quiniela/resultados/"
+        "la-quiniela-resultados-del-03-de-enero-de-2021"
+    )
+    sources = {item["role"]: item["url"] for item in snapshot["supporting_sources"]}
+    assert sources["official_selae_result_page"] == snapshot["source_url"]
+    assert sources["official_selae_press_release_pdf"] == (
+        "https://www.loteriasyapuestas.es/f/loterias/documentos/Quiniela/Notas%20de%20prensa/"
+        "NOTA_DE_PRENSA_DE_LA_QUINIELA_DE_FECHA_3_1_21.pdf"
+    )
+    assert sources["schedule_and_kickoff_crosscheck"] == (
+        "https://www.historicoquiniela.com/historico/2020-2021/25"
+    )
+    assert sources["football_data_sp1_crosscheck"] == (
+        "https://www.football-data.co.uk/mmz4281/2021/SP1.csv"
+    )
+    assert sources["football_data_sp2_crosscheck"] == (
+        "https://www.football-data.co.uk/mmz4281/2021/SP2.csv"
+    )
+    assert actual == expected
+    assert snapshot["pleno"] == {
+        "number": 15,
+        "home": "Valencia",
+        "away": "Cádiz",
+        "home_goals": 1,
+        "away_goals": 1,
+        "home_category": "1",
+        "away_category": "1",
+    }
+
+    coupon = {
+        "coupon_id": "2020-2021:25",
+        "source_date": "2021-01-03",
+        "fixtures": [
+            {
+                "number": item["number"],
+                "home": item["home"],
+                "away": item["away"],
+                "home_goals": item["home_goals"],
+                "away_goals": item["away_goals"],
+                "result": item["result"],
+            }
+            for item in snapshot["fixtures"]
+        ]
+        + [
+            {
+                "number": 15,
+                "home": snapshot["pleno"]["home"],
+                "away": snapshot["pleno"]["away"],
+                "home_goals": snapshot["pleno"]["home_goals"],
+                "away_goals": snapshot["pleno"]["away_goals"],
+                "pleno_home_category": snapshot["pleno"]["home_category"],
+                "pleno_away_category": snapshot["pleno"]["away_category"],
+            }
+        ],
+    }
+    verified = verify_coupon_against_selae_snapshot(
+        coupon, snapshot, snapshot_sha256=digest
+    )
+    assert verified["official_main_matches_verified"] is True
+    assert verified["official_pleno_verified"] is True
+    assert digest == hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def test_jornada_1_2021_2022_official_snapshot_matches_reviewed_selae_results() -> None:
+    path = (
+        Path(__file__).resolve().parents[1]
+        / "kini_engine"
+        / "data"
+        / "selae_official_coupon_results"
+        / "2021-2022-1.json"
+    )
+    snapshot, digest = load_official_coupon_snapshot(path)
+
+    expected = [
+        ("Osasuna", "Espanyol", 0, 0, "X"),
+        ("Mallorca", "Betis", 1, 1, "X"),
+        ("Cádiz", "Levante", 1, 1, "X"),
+        ("Alavés", "Real Madrid", 1, 4, "2"),
+        ("Celta", "At. Madrid", 1, 2, "2"),
+        ("Barcelona", "Real Sociedad", 4, 2, "1"),
+        ("Sevilla", "Rayo Vallecano", 3, 0, "1"),
+        ("Villarreal", "Granada", 0, 0, "X"),
+        ("R. Sociedad B", "Leganés", 1, 0, "1"),
+        ("Ponferradina", "Alcorcón", 1, 0, "1"),
+        ("Sporting", "Burgos", 1, 0, "1"),
+        ("R. Oviedo", "Lugo", 2, 2, "X"),
+        ("Las Palmas", "Valladolid", 1, 1, "X"),
+        ("Fuenlabrada", "Tenerife", 1, 2, "2"),
+    ]
+    actual = [
+        (
+            item["home"],
+            item["away"],
+            item["home_goals"],
+            item["away_goals"],
+            item["result"],
+        )
+        for item in snapshot["fixtures"]
+    ]
+    assert snapshot["draw_date"] == "2021-08-15"
+    assert snapshot["source_url"] == (
+        "https://www.loteriasyapuestas.es/es/la-quiniela/resultados/"
+        "la-quiniela-resultados-del-15-de-agosto-de-2021"
+    )
+    supporting_sources = {
+        item["role"]: item["url"] for item in snapshot["supporting_sources"]
+    }
+    assert supporting_sources["official_selae_press_release_pdf"].endswith(
+        "NOTA_DE_PRENSA_DE_LA_QUINIELA_DE_FECHA_15_8_21.pdf"
+    )
+    assert supporting_sources["schedule_and_kickoff_crosscheck"] == (
+        "https://www.historicoquiniela.com/historico/2021-2022/1"
+    )
+    assert supporting_sources["football_data_sp1_crosscheck"] == (
+        "https://www.football-data.co.uk/mmz4281/2122/SP1.csv"
+    )
+    assert supporting_sources["football_data_sp2_crosscheck"] == (
+        "https://www.football-data.co.uk/mmz4281/2122/SP2.csv"
+    )
+    assert actual == expected
+    assert snapshot["pleno"] == {
+        "number": 15,
+        "home": "Elche",
+        "away": "Athletic Club",
+        "home_goals": 0,
+        "away_goals": 0,
+        "home_category": "0",
+        "away_category": "0",
+    }
+    coupon = {
+        "coupon_id": "2021-2022:01",
+        "source_date": "2021-08-15",
+        "fixtures": [dict(item) for item in snapshot["fixtures"]]
+        + [
+            {
+                "number": 15,
+                "home": snapshot["pleno"]["home"],
+                "away": snapshot["pleno"]["away"],
+                "home_goals": snapshot["pleno"]["home_goals"],
+                "away_goals": snapshot["pleno"]["away_goals"],
+                "pleno_home_category": snapshot["pleno"]["home_category"],
+                "pleno_away_category": snapshot["pleno"]["away_category"],
+            }
+        ],
+    }
+    verified = verify_coupon_against_selae_snapshot(
+        coupon,
+        snapshot,
+        snapshot_sha256=digest,
+    )
+    assert verified["official_main_matches_verified"] is True
+    assert verified["official_pleno_verified"] is True
+    assert digest == hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def test_jornada_1_2022_2023_official_snapshot_matches_reviewed_selae_results() -> None:
+    path = (
+        Path(__file__).resolve().parents[1]
+        / "kini_engine"
+        / "data"
+        / "selae_official_coupon_results"
+        / "2022-2023-1.json"
+    )
+    snapshot, digest = load_official_coupon_snapshot(path)
+
+    expected = [
+        ("Celta", "Espanyol", 2, 2, "X"),
+        ("Valladolid", "Villarreal", 0, 3, "2"),
+        ("Barcelona", "Rayo Vallecano", 0, 0, "X"),
+        ("Cádiz", "Real Sociedad", 0, 1, "2"),
+        ("Valencia", "Girona", 1, 0, "1"),
+        ("Almería", "Real Madrid", 1, 2, "2"),
+        ("Athletic Club", "Mallorca", 0, 0, "X"),
+        ("Getafe", "At. Madrid", 0, 3, "2"),
+        ("Eibar", "Tenerife", 2, 1, "1"),
+        ("Mirandés", "Sporting", 1, 1, "X"),
+        ("Leganés", "Alavés", 1, 2, "2"),
+        ("Las Palmas", "Zaragoza", 0, 0, "X"),
+        ("Racing", "Villarreal B", 0, 2, "2"),
+        ("Ibiza", "Granada", 0, 2, "2"),
+    ]
+    actual = [
+        (
+            item["home"],
+            item["away"],
+            item["home_goals"],
+            item["away_goals"],
+            item["result"],
+        )
+        for item in snapshot["fixtures"]
+    ]
+    assert snapshot["draw_date"] == "2022-08-14"
+    assert snapshot["source_url"] == (
+        "https://www.loteriasyapuestas.es/es/la-quiniela/resultados/"
+        "la-quiniela-resultados-del-14-de-agosto-de-2022"
+    )
+    sources = {item["role"]: item["url"] for item in snapshot["supporting_sources"]}
+    assert sources["official_selae_press_release_pdf"].endswith(
+        "NOTA_DE_PRENSA_DE_LA_QUINIELA_DE_FECHA_14_8_22.pdf"
+    )
+    assert sources["schedule_and_kickoff_crosscheck"] == (
+        "https://www.historicoquiniela.com/historico/2022-2023/1"
+    )
+    assert sources["football_data_sp1_crosscheck"] == (
+        "https://www.football-data.co.uk/mmz4281/2223/SP1.csv"
+    )
+    assert sources["football_data_sp2_crosscheck"] == (
+        "https://www.football-data.co.uk/mmz4281/2223/SP2.csv"
+    )
+    assert actual == expected
+    assert snapshot["pleno"] == {
+        "number": 15,
+        "home": "Betis",
+        "away": "Elche",
+        "home_goals": 3,
+        "away_goals": 0,
+        "home_category": "M",
+        "away_category": "0",
+    }
+    prize = snapshot["prize_distribution"]
+    assert prize["revenue_eur"] == 2_633_274.00
+    assert prize["categories"] == [
+        {
+            "category": "pleno_al_15",
+            "winner_count": 0,
+            "unit_prize_eur": None,
+            "status": "rollover",
+        },
+        {
+            "category": "14",
+            "winner_count": 0,
+            "unit_prize_eur": None,
+            "status": "rollover",
+        },
+        {
+            "category": "13",
+            "winner_count": 90,
+            "unit_prize_eur": 2194.40,
+            "status": "awarded",
+        },
+        {
+            "category": "12",
+            "winner_count": 1591,
+            "unit_prize_eur": 124.13,
+            "status": "awarded",
+        },
+        {
+            "category": "11",
+            "winner_count": 14042,
+            "unit_prize_eur": 14.06,
+            "status": "awarded",
+        },
+        {
+            "category": "10",
+            "winner_count": 71640,
+            "unit_prize_eur": 3.31,
+            "status": "awarded",
+        },
+    ]
+    assert prize["elige8"] == {
+        "revenue_eur": 68_687.50,
+        "winner_count": 25,
+        "unit_prize_eur": 1511.13,
+    }
+
+    coupon = {
+        "coupon_id": "2022-2023:01",
+        "source_date": "2022-08-14",
+        "fixtures": [dict(item) for item in snapshot["fixtures"]]
+        + [
+            {
+                "number": 15,
+                "home": snapshot["pleno"]["home"],
+                "away": snapshot["pleno"]["away"],
+                "home_goals": snapshot["pleno"]["home_goals"],
+                "away_goals": snapshot["pleno"]["away_goals"],
+                "pleno_home_category": snapshot["pleno"]["home_category"],
+                "pleno_away_category": snapshot["pleno"]["away_category"],
+            }
+        ],
+    }
+    verified = verify_coupon_against_selae_snapshot(
+        coupon, snapshot, snapshot_sha256=digest
+    )
+    assert verified["official_main_matches_verified"] is True
+    assert verified["official_pleno_verified"] is True
+    assert digest == hashlib.sha256(path.read_bytes()).hexdigest()

@@ -7,7 +7,11 @@ from math import isfinite
 from typing import Any
 from urllib.parse import urlsplit
 
+from .prize_scoring import PrizeScoringError, evaluate_official_prize_snapshot
+from .team_identity import normalize_team_name
+
 SIGNS = ("1", "X", "2")
+PLENO15_CATEGORIES = frozenset({"0", "1", "2", "M"})
 POSITIONS = tuple(range(1, 15))
 SELAE_HOSTS = {"loteriasyapuestas.es", "www.loteriasyapuestas.es"}
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
@@ -118,6 +122,144 @@ def _position(value: object, field: str) -> int:
     if isinstance(value, bool) or not isinstance(value, int) or value not in POSITIONS:
         raise TicketOutcomeError(f"{field} must be an integer from 1 to 14")
     return value
+
+
+def _pleno15_category(goals: int) -> str:
+    return str(goals) if goals <= 2 else "M"
+
+
+def validate_pleno15_report(
+    report: dict[str, Any],
+    *,
+    draw_date: str,
+    expected_home: str,
+    expected_away: str,
+    kickoff_at: datetime,
+) -> dict[str, Any]:
+    """Validate official SELAE Pleno evidence in PDF-vector or scorecard form."""
+    if not isinstance(report, dict):
+        raise TicketOutcomeError("Pleno al 15 result report must be an object")
+    _require_schema_v1(report, "SELAE Pleno al 15 result")
+    base_fields = {
+        "schema_version",
+        "provider",
+        "draw_date",
+        "source_url",
+        "source_sha256",
+        "evidence_type",
+        "verified_at_utc",
+        "verification_method",
+        "home_category",
+        "away_category",
+    }
+    evidence_type = _required_text(report.get("evidence_type"), "evidence_type")
+    if evidence_type == "official_press_release_pdf":
+        allowed_fields = base_fields
+    elif evidence_type in {"raw_official_response", "normalized_official_extract"}:
+        allowed_fields = base_fields | {
+            "home",
+            "away",
+            "home_goals",
+            "away_goals",
+        }
+    else:
+        raise TicketOutcomeError("Pleno al 15 evidence_type is unsupported")
+    if set(report) != allowed_fields:
+        missing = sorted(allowed_fields - set(report))
+        unexpected = sorted(set(report) - allowed_fields)
+        raise TicketOutcomeError(
+            f"Pleno al 15 result fields mismatch; missing={missing}, "
+            f"unexpected={unexpected}"
+        )
+    if report.get("provider") != "SELAE":
+        raise TicketOutcomeError("Pleno al 15 result provider must be SELAE")
+    expected_date = _parse_draw_date(draw_date, "draw_date")
+    if (
+        _parse_draw_date(report.get("draw_date"), "Pleno result draw_date")
+        != expected_date
+    ):
+        raise TicketOutcomeError("Pleno al 15 result draw date mismatch")
+
+    source_url = _validate_official_selae_url(
+        report.get("source_url"), "Pleno al 15 source_url"
+    )
+    if evidence_type == "official_press_release_pdf" and not urlsplit(
+        source_url
+    ).path.lower().endswith(".pdf"):
+        raise TicketOutcomeError(
+            "official_press_release_pdf evidence must point to an official PDF"
+        )
+    source_sha256 = _validate_sha256(
+        report.get("source_sha256"), "Pleno al 15 source_sha256"
+    )
+    verified_at = _parse_utc_timestamp(report.get("verified_at_utc"), "verified_at_utc")
+    if verified_at < kickoff_at.astimezone(UTC):
+        raise TicketOutcomeError(
+            "Pleno al 15 result verification must not precede its kickoff"
+        )
+    verification_method = _required_text(
+        report.get("verification_method"), "verification_method"
+    )
+
+    home_category = report.get("home_category")
+    away_category = report.get("away_category")
+    if (
+        not isinstance(home_category, str)
+        or home_category not in PLENO15_CATEGORIES
+        or not isinstance(away_category, str)
+        or away_category not in PLENO15_CATEGORIES
+    ):
+        raise TicketOutcomeError("Pleno al 15 categories must be 0, 1, 2 or M")
+
+    if evidence_type == "official_press_release_pdf":
+        home = expected_home
+        away = expected_away
+        home_goals = None
+        away_goals = None
+        team_identity_source = "ticket_plan_draw_date_binding"
+    else:
+        home = _required_text(report.get("home"), "Pleno al 15 home")
+        away = _required_text(report.get("away"), "Pleno al 15 away")
+        if normalize_team_name(home) != normalize_team_name(
+            expected_home
+        ) or normalize_team_name(away) != normalize_team_name(expected_away):
+            raise TicketOutcomeError(
+                "Pleno al 15 result team identity does not match the stored coupon plan"
+            )
+        home_goals = report.get("home_goals")
+        away_goals = report.get("away_goals")
+        if (
+            isinstance(home_goals, bool)
+            or isinstance(away_goals, bool)
+            or not isinstance(home_goals, int)
+            or not isinstance(away_goals, int)
+            or home_goals < 0
+            or away_goals < 0
+        ):
+            raise TicketOutcomeError("Pleno al 15 goals must be non-negative integers")
+        if home_category != _pleno15_category(
+            home_goals
+        ) or away_category != _pleno15_category(away_goals):
+            raise TicketOutcomeError(
+                "Pleno al 15 categories conflict with the official goal counts"
+            )
+        team_identity_source = "official_result_document"
+
+    return {
+        "draw_date": expected_date,
+        "source_url": source_url,
+        "source_sha256": source_sha256,
+        "evidence_type": evidence_type,
+        "verified_at_utc": verified_at.isoformat().replace("+00:00", "Z"),
+        "verification_method": verification_method,
+        "home": home,
+        "away": away,
+        "home_goals": home_goals,
+        "away_goals": away_goals,
+        "home_category": home_category,
+        "away_category": away_category,
+        "team_identity_source": team_identity_source,
+    }
 
 
 def outcomes_from_reconciliation(
@@ -671,8 +813,43 @@ def _validate_ticket_record(ticket: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(ticket, dict):
         raise TicketOutcomeError("direct-ticket record must be an object")
     _require_schema_v1(ticket, "direct-ticket record")
+
+    required_fields = {
+        "schema_version",
+        "ticket_id",
+        "draw_date",
+        "ticket_created_at_utc",
+        "ticket_cutoff_at_utc",
+        "first_kickoff_at",
+        "cutoff_evidence_url",
+        "cutoff_evidence_sha256",
+        "cutoff_evidence_captured_at_utc",
+        "schedule_evidence_url",
+        "schedule_evidence_sha256",
+        "schedule_evidence_captured_at_utc",
+        "pleno15_home",
+        "pleno15_away",
+        "pleno15_kickoff_at",
+        "coupon_plan",
+        "probability_vectors",
+        "probability_sources",
+        "public_draw_positions",
+        "columns",
+        "pleno15_combinations",
+        "budget",
+        "cost_eur",
+    }
+    if set(ticket) != required_fields:
+        missing = sorted(required_fields - set(ticket))
+        unexpected = sorted(set(ticket) - required_fields)
+        raise TicketOutcomeError(
+            f"direct-ticket fields mismatch; missing={missing}, unexpected={unexpected}"
+        )
+
     ticket_id = _required_text(ticket.get("ticket_id"), "ticket_id")
     draw_date = _parse_draw_date(ticket.get("draw_date"), "draw_date")
+    if ticket.get("draw_date") != draw_date:
+        raise TicketOutcomeError("draw_date must use canonical YYYY-MM-DD format")
     created_at = _parse_utc_timestamp(
         ticket.get("ticket_created_at_utc"), "ticket_created_at_utc"
     )
@@ -684,10 +861,163 @@ def _validate_ticket_record(ticket: dict[str, Any]) -> dict[str, Any]:
         raise TicketOutcomeError(
             "ticket timestamps must satisfy created_at < cutoff < first kickoff"
         )
-    _validate_https_url(ticket.get("cutoff_evidence_url"), "cutoff_evidence_url")
-    _validate_sha256(ticket.get("cutoff_evidence_sha256"), "cutoff_evidence_sha256")
-    _validate_https_url(ticket.get("schedule_evidence_url"), "schedule_evidence_url")
-    _validate_sha256(ticket.get("schedule_evidence_sha256"), "schedule_evidence_sha256")
+
+    plan = _validate_coupon_plan(ticket.get("coupon_plan"), draw_date)
+    if (
+        created_at != plan["ticket_created_at_utc"]
+        or cutoff != plan["ticket_cutoff_at_utc"]
+    ):
+        raise TicketOutcomeError(
+            "ticket timestamps do not match the validated coupon plan"
+        )
+    if first_kickoff.astimezone(UTC) != plan["first_kickoff_at"].astimezone(UTC):
+        raise TicketOutcomeError(
+            "first_kickoff_at does not match the validated coupon plan"
+        )
+
+    evidence_fields = (
+        (
+            "cutoff_evidence_url",
+            "cutoff_evidence_sha256",
+            "cutoff_evidence_captured_at_utc",
+            "cutoff_evidence_url",
+            "cutoff_evidence_sha256",
+            "cutoff_evidence_captured_at_utc",
+        ),
+        (
+            "schedule_evidence_url",
+            "schedule_evidence_sha256",
+            "schedule_evidence_captured_at_utc",
+            "schedule_evidence_url",
+            "schedule_evidence_sha256",
+            "schedule_captured_at_utc",
+        ),
+    )
+    for (
+        url_field,
+        digest_field,
+        captured_field,
+        plan_url_field,
+        plan_digest_field,
+        plan_captured_field,
+    ) in evidence_fields:
+        url = _validate_official_selae_url(ticket.get(url_field), url_field)
+        digest = _validate_sha256(ticket.get(digest_field), digest_field)
+        captured_at = _parse_utc_timestamp(ticket.get(captured_field), captured_field)
+        if (
+            url != plan[plan_url_field]
+            or digest != plan[plan_digest_field]
+            or captured_at != plan[plan_captured_field]
+        ):
+            raise TicketOutcomeError(
+                f"{url_field}/{digest_field}/{captured_field} do not match coupon-plan evidence"
+            )
+
+    pleno_home = _required_text(ticket.get("pleno15_home"), "pleno15_home")
+    pleno_away = _required_text(ticket.get("pleno15_away"), "pleno15_away")
+    pleno_kickoff = _parse_timestamp(
+        ticket.get("pleno15_kickoff_at"), "pleno15_kickoff_at"
+    )
+    if (
+        pleno_home != plan["pleno15_home"]
+        or pleno_away != plan["pleno15_away"]
+        or pleno_kickoff.astimezone(UTC) != plan["pleno15_kickoff_at"].astimezone(UTC)
+    ):
+        raise TicketOutcomeError(
+            "Pleno al 15 identity/kickoff does not match coupon plan"
+        )
+
+    raw_public_positions = ticket.get("public_draw_positions")
+    expected_public_positions = sorted(plan["public_draw_positions"])
+    if (
+        not isinstance(raw_public_positions, list)
+        or any(
+            isinstance(value, bool) or not isinstance(value, int)
+            for value in raw_public_positions
+        )
+        or raw_public_positions != expected_public_positions
+    ):
+        raise TicketOutcomeError(
+            "public_draw_positions must exactly match the validated coupon plan"
+        )
+
+    raw_vectors = ticket.get("probability_vectors")
+    if not isinstance(raw_vectors, list) or len(raw_vectors) != 14:
+        raise TicketOutcomeError("ticket must contain 14 1/X/2 probability vectors")
+    probability_vectors = [
+        _validate_probability_vector(vector, f"probability_vectors[{index}]")
+        for index, vector in enumerate(raw_vectors, start=1)
+    ]
+
+    raw_sources = ticket.get("probability_sources")
+    if not isinstance(raw_sources, list) or len(raw_sources) != 14:
+        raise TicketOutcomeError("ticket must contain 14 probability-source records")
+    probability_sources: list[dict[str, Any]] = []
+    for position, source in enumerate(raw_sources, start=1):
+        if (
+            not isinstance(source, dict)
+            or isinstance(source.get("position"), bool)
+            or not isinstance(source.get("position"), int)
+            or source.get("position") != position
+        ):
+            raise TicketOutcomeError(
+                f"probability_sources[{position}] must identify coupon position {position}"
+            )
+        if position in plan["public_draw_positions"]:
+            expected_source_fields = {
+                "position",
+                "source",
+                "source_id",
+                "captured_at_utc",
+                "source_url",
+                "source_sha256",
+            }
+            if (
+                set(source) != expected_source_fields
+                or source.get("source") != "preclose_participant_forecast"
+            ):
+                raise TicketOutcomeError(
+                    f"position {position} must retain complete pre-close public-draw provenance"
+                )
+            source_id = _required_text(
+                source.get("source_id"), f"position {position}.source_id"
+            )
+            source_url = _validate_official_selae_url(
+                source.get("source_url"), f"position {position}.source_url"
+            )
+            source_digest = _validate_sha256(
+                source.get("source_sha256"), f"position {position}.source_sha256"
+            )
+            captured_at = _parse_utc_timestamp(
+                source.get("captured_at_utc"), f"position {position}.captured_at_utc"
+            )
+            if captured_at >= created_at:
+                raise TicketOutcomeError(
+                    f"position {position} public-draw forecast was not captured before ticket creation"
+                )
+            probability_sources.append(
+                {
+                    "position": position,
+                    "source": "preclose_participant_forecast",
+                    "source_id": source_id,
+                    "captured_at_utc": captured_at,
+                    "source_url": source_url,
+                    "source_sha256": source_digest,
+                }
+            )
+        else:
+            expected_source_fields = {"position", "source", "model_mode"}
+            if (
+                set(source) != expected_source_fields
+                or source.get("source") != "football_model"
+                or not isinstance(source.get("model_mode"), str)
+                or source.get("model_mode")
+                not in {"ensemble", "ensemble_dc_ml", "dc", "ml"}
+            ):
+                raise TicketOutcomeError(
+                    f"position {position} must identify a supported football-model forecast"
+                )
+            probability_sources.append(dict(source))
 
     raw_columns = ticket.get("columns")
     if not isinstance(raw_columns, list) or not 1 <= len(raw_columns) <= 31_104:
@@ -713,14 +1043,81 @@ def _validate_ticket_record(ticket: dict[str, Any]) -> dict[str, Any]:
         seen.add(column)
         columns.append(column)
 
+    categories = {"0", "1", "2", "M"}
+    raw_pleno = ticket.get("pleno15_combinations")
+    if not isinstance(raw_pleno, list) or not 1 <= len(raw_pleno) <= 16:
+        raise TicketOutcomeError(
+            "pleno15_combinations must contain 1 to 16 category pairs"
+        )
+    pleno_combinations: list[dict[str, str]] = []
+    seen_pairs: set[tuple[str, str]] = set()
+    for index, pair in enumerate(raw_pleno, start=1):
+        if (
+            not isinstance(pair, dict)
+            or set(pair) != {"home_goals", "away_goals"}
+            or not isinstance(pair.get("home_goals"), str)
+            or pair.get("home_goals") not in categories
+            or not isinstance(pair.get("away_goals"), str)
+            or pair.get("away_goals") not in categories
+        ):
+            raise TicketOutcomeError(
+                f"Pleno al 15 combination {index} has invalid categories"
+            )
+        normalized_pair = (pair["home_goals"], pair["away_goals"])
+        if normalized_pair in seen_pairs:
+            raise TicketOutcomeError(f"duplicate Pleno al 15 combination {index}")
+        seen_pairs.add(normalized_pair)
+        pleno_combinations.append(
+            {"home_goals": normalized_pair[0], "away_goals": normalized_pair[1]}
+        )
+
+    budget = ticket.get("budget")
+    if (
+        isinstance(budget, bool)
+        or not isinstance(budget, int)
+        or not 1 <= budget <= 31_104
+    ):
+        raise TicketOutcomeError("ticket budget must be an integer from 1 to 31,104")
+    if len(columns) > budget:
+        raise TicketOutcomeError("ticket column count exceeds its declared budget")
+
+    total_bets = len(columns) * len(pleno_combinations)
+    if not 2 <= total_bets <= 31_104:
+        raise TicketOutcomeError("ticket total bets violate SELAE's minimum/maximum")
+    cost = ticket.get("cost_eur")
+    if (
+        isinstance(cost, bool)
+        or not isinstance(cost, (int, float))
+        or not isfinite(float(cost))
+        or abs(float(cost) - round(total_bets * 0.75, 2)) > 0.005
+    ):
+        raise TicketOutcomeError(
+            "ticket cost does not match total bets at EUR 0.75 per bet"
+        )
+
     return {
         "ticket_id": ticket_id,
         "draw_date": draw_date,
         "ticket_created_at_utc": created_at,
         "ticket_cutoff_at_utc": cutoff,
         "first_kickoff_at": first_kickoff,
+        "pleno15_home": pleno_home,
+        "pleno15_away": pleno_away,
+        "pleno15_kickoff_at": pleno_kickoff,
         "columns": columns,
+        "probability_vectors": probability_vectors,
+        "probability_sources": probability_sources,
+        "public_draw_positions": expected_public_positions,
+        "pleno15_combinations": pleno_combinations,
+        "budget": budget,
+        "total_bets": total_bets,
+        "cost_eur": float(cost),
     }
+
+
+def validate_ticket_record(ticket: dict[str, Any]) -> dict[str, Any]:
+    """Public structural validator for an immutable direct-ticket record."""
+    return _validate_ticket_record(ticket)
 
 
 def score_ticket_record(
@@ -729,16 +1126,55 @@ def score_ticket_record(
     *,
     ticket_sha256: str | None = None,
     reconciliation_sha256: str | None = None,
+    pleno15_report: dict[str, Any] | None = None,
+    pleno15_report_sha256: str | None = None,
+    official_result_snapshot: dict[str, Any] | None = None,
+    official_result_snapshot_sha256: str | None = None,
 ) -> dict[str, Any]:
-    """Score persisted 14-match columns against official played/public-draw outcomes.
+    """Score 14 signs, optional Pleno categories and official prize-tier evidence."""
 
-    This function calculates hit and coverage results only. It does not infer prizes,
-    payout, expected value or profitability.
-    """
     validated = _validate_ticket_record(ticket)
     outcomes = outcomes_from_reconciliation(
         reconciliation_report, validated["draw_date"]
     )
+    if pleno15_report is None:
+        if pleno15_report_sha256 is not None:
+            raise TicketOutcomeError(
+                "pleno15_report_sha256 requires a Pleno al 15 result report"
+            )
+        validated_pleno15 = None
+    else:
+        validated_pleno15 = validate_pleno15_report(
+            pleno15_report,
+            draw_date=validated["draw_date"],
+            expected_home=validated["pleno15_home"],
+            expected_away=validated["pleno15_away"],
+            kickoff_at=validated["pleno15_kickoff_at"],
+        )
+    pleno15_digest = (
+        _validate_sha256(pleno15_report_sha256, "pleno15_report_sha256")
+        if pleno15_report_sha256 is not None
+        else None
+    )
+    if official_result_snapshot is None:
+        if official_result_snapshot_sha256 is not None:
+            raise TicketOutcomeError(
+                "official_result_snapshot_sha256 requires an official result snapshot"
+            )
+        snapshot_digest = None
+    else:
+        if validated_pleno15 is None or pleno15_digest is None:
+            raise TicketOutcomeError(
+                "official prize scoring requires hashed official Pleno result evidence"
+            )
+        if official_result_snapshot_sha256 is None:
+            raise TicketOutcomeError(
+                "official_result_snapshot_sha256 is required with an official result snapshot"
+            )
+        snapshot_digest = _validate_sha256(
+            official_result_snapshot_sha256, "official_result_snapshot_sha256"
+        )
+
     actual = tuple(item["sign"] for item in outcomes)
     columns = validated["columns"]
     hit_counts = [
@@ -786,4 +1222,49 @@ def score_ticket_record(
         result["reconciliation_sha256"] = _validate_sha256(
             reconciliation_sha256, "reconciliation_sha256"
         )
+    if validated_pleno15 is not None:
+        actual_pleno_pair = (
+            validated_pleno15["home_category"],
+            validated_pleno15["away_category"],
+        )
+        selected_pleno_pairs = {
+            (pair["home_goals"], pair["away_goals"])
+            for pair in validated["pleno15_combinations"]
+        }
+        pleno15_hit = actual_pleno_pair in selected_pleno_pairs
+        pleno15_actual = {
+            "home_category": actual_pleno_pair[0],
+            "away_category": actual_pleno_pair[1],
+        }
+        if validated_pleno15["home_goals"] is not None:
+            pleno15_actual["home_goals"] = validated_pleno15["home_goals"]
+            pleno15_actual["away_goals"] = validated_pleno15["away_goals"]
+        result.update(
+            {
+                "pleno15_evaluated": True,
+                "pleno15_actual": pleno15_actual,
+                "pleno15_hit": pleno15_hit,
+                "covered_full_coupon": (actual in set(columns)) and pleno15_hit,
+                "pleno15_outcome_provenance": validated_pleno15,
+            }
+        )
+        if pleno15_digest is not None:
+            result["pleno15_report_sha256"] = pleno15_digest
+    if official_result_snapshot is not None:
+        try:
+            prize_evaluation = evaluate_official_prize_snapshot(
+                official_result_snapshot,
+                snapshot_sha256=snapshot_digest,
+                expected_draw_date=validated["draw_date"],
+                expected_main_results=actual,
+                expected_fixtures=ticket["coupon_plan"]["positions"],
+                expected_pleno_home=validated["pleno15_home"],
+                expected_pleno_away=validated["pleno15_away"],
+                validated_pleno15=validated_pleno15,
+                columns=columns,
+                pleno15_combinations=validated["pleno15_combinations"],
+            )
+        except PrizeScoringError as exc:
+            raise TicketOutcomeError(str(exc)) from exc
+        result.update(prize_evaluation)
     return result

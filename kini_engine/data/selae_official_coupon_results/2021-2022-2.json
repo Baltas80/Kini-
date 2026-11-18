@@ -1,0 +1,214 @@
+{
+  "schema_version": 1,
+  "source": "SELAE",
+  "verified_at": "2026-11-17",
+  "snapshot_type": "normalized_json_extract_not_raw_html",
+  "draw_date": "2021-08-22",
+  "source_url": "https://www.loteriasyapuestas.es/es/la-quiniela/resultados/la-quiniela-resultados-del-22-de-agosto-de-2021",
+  "verification_method": "Manual review of the official SELAE result page and official SELAE press-release PDF. The 14 ordered main fixtures, team labels, scores and signs, plus the Osasuna–Celta Pleno al 15 (0-0), were cross-checked against the 2021/2022 Jornada 2 schedule and the validated Football-Data SP1/SP2 dataset. The earliest coupon fixture kickoff is 21/08/2021 17:00 Europe/Madrid; the model training cutoff is 20/08/2021. The original PDF bytes were not captured; no raw-PDF digest is claimed.",
+  "supporting_sources": [
+    {
+      "role": "official_selae_result_page",
+      "url": "https://www.loteriasyapuestas.es/es/la-quiniela/resultados/la-quiniela-resultados-del-22-de-agosto-de-2021"
+    },
+    {
+      "role": "official_selae_press_release_pdf",
+      "url": "https://www.selae.es/f/loterias/documentos/Quiniela/Notas%20de%20prensa/NOTA_DE_PRENSA_DE_LA_QUINIELA_DE_FECHA_22_8_21.pdf"
+    },
+    {
+      "role": "schedule_and_kickoff_crosscheck",
+      "url": "https://www.historicoquiniela.com/historico/2021-2022/2"
+    },
+    {
+      "role": "laliga_first_division_schedule_crosscheck",
+      "url": "https://www.as.com/futbol/2021/08/15/primera/1629056400_124281.html"
+    },
+    {
+      "role": "laliga_hypermotion_schedule_crosscheck",
+      "url": "https://www.laliga.com/laliga-hypermotion/resultados/2021-22/jornada-2"
+    },
+    {
+      "role": "rfef_second_division_calendar",
+      "url": "https://rfef.es/sites/default/files/images19/calendario_2d_2122.pdf"
+    },
+    {
+      "role": "football_data_sp1_crosscheck",
+      "url": "https://www.football-data.co.uk/mmz4281/2122/SP1.csv"
+    },
+    {
+      "role": "football_data_sp2_crosscheck",
+      "url": "https://www.football-data.co.uk/mmz4281/2122/SP2.csv"
+    }
+  ],
+  "fixtures": [
+    {
+      "number": 1,
+      "home": "Alavés",
+      "away": "Mallorca",
+      "home_goals": 0,
+      "away_goals": 1,
+      "result": "2"
+    },
+    {
+      "number": 2,
+      "home": "Granada",
+      "away": "Valencia",
+      "home_goals": 1,
+      "away_goals": 1,
+      "result": "X"
+    },
+    {
+      "number": 3,
+      "home": "Espanyol",
+      "away": "Villarreal",
+      "home_goals": 0,
+      "away_goals": 0,
+      "result": "X"
+    },
+    {
+      "number": 4,
+      "home": "Athletic Club",
+      "away": "Barcelona",
+      "home_goals": 1,
+      "away_goals": 1,
+      "result": "X"
+    },
+    {
+      "number": 5,
+      "home": "Real Sociedad",
+      "away": "Rayo Vallecano",
+      "home_goals": 1,
+      "away_goals": 0,
+      "result": "1"
+    },
+    {
+      "number": 6,
+      "home": "At. Madrid",
+      "away": "Elche",
+      "home_goals": 1,
+      "away_goals": 0,
+      "result": "1"
+    },
+    {
+      "number": 7,
+      "home": "Levante",
+      "away": "Real Madrid",
+      "home_goals": 3,
+      "away_goals": 3,
+      "result": "X"
+    },
+    {
+      "number": 8,
+      "home": "Getafe",
+      "away": "Sevilla",
+      "home_goals": 0,
+      "away_goals": 1,
+      "result": "2"
+    },
+    {
+      "number": 9,
+      "home": "Lugo",
+      "away": "Real Sociedad B",
+      "home_goals": 0,
+      "away_goals": 0,
+      "result": "X"
+    },
+    {
+      "number": 10,
+      "home": "Tenerife",
+      "away": "Sporting",
+      "home_goals": 0,
+      "away_goals": 0,
+      "result": "X"
+    },
+    {
+      "number": 11,
+      "home": "Alcorcón",
+      "away": "Fuenlabrada",
+      "home_goals": 0,
+      "away_goals": 2,
+      "result": "2"
+    },
+    {
+      "number": 12,
+      "home": "Ibiza",
+      "away": "Málaga",
+      "home_goals": 2,
+      "away_goals": 2,
+      "result": "X"
+    },
+    {
+      "number": 13,
+      "home": "Girona",
+      "away": "Las Palmas",
+      "home_goals": 0,
+      "away_goals": 0,
+      "result": "X"
+    },
+    {
+      "number": 14,
+      "home": "Huesca",
+      "away": "Cartagena",
+      "home_goals": 2,
+      "away_goals": 0,
+      "result": "1"
+    }
+  ],
+  "pleno": {
+    "number": 15,
+    "home": "Osasuna",
+    "away": "Celta",
+    "home_goals": 0,
+    "away_goals": 0,
+    "home_category": "0",
+    "away_category": "0"
+  },
+  "prize_distribution": {
+    "source_type": "official_selae_press_release_pdf_transcribed_to_normalized_extract",
+    "source_url": "https://www.selae.es/f/loterias/documentos/Quiniela/Notas%20de%20prensa/NOTA_DE_PRENSA_DE_LA_QUINIELA_DE_FECHA_22_8_21.pdf",
+    "revenue_eur": 2629699.5,
+    "categories": [
+      {
+        "category": "pleno_al_15",
+        "winner_count": 0,
+        "unit_prize_eur": null,
+        "status": "rollover"
+      },
+      {
+        "category": "14",
+        "winner_count": 2,
+        "unit_prize_eur": 210375.96,
+        "status": "awarded"
+      },
+      {
+        "category": "13",
+        "winner_count": 64,
+        "unit_prize_eur": 3081.68,
+        "status": "awarded"
+      },
+      {
+        "category": "12",
+        "winner_count": 795,
+        "unit_prize_eur": 248.08,
+        "status": "awarded"
+      },
+      {
+        "category": "11",
+        "winner_count": 6528,
+        "unit_prize_eur": 30.21,
+        "status": "awarded"
+      },
+      {
+        "category": "10",
+        "winner_count": 34738,
+        "unit_prize_eur": 6.81,
+        "status": "awarded"
+      }
+    ],
+    "elige8": {
+      "revenue_eur": 73338,
+      "winner_count": 89,
+      "unit_prize_eur": 453.21
+    }
+  }
+}

@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 
 import pytest
 
 from scripts.import_selae_press_release import (
     import_press_release,
+    main,
     parse_selae_press_release_text,
     validate_draw_date_in_text,
     validate_official_source_url,
@@ -146,6 +148,61 @@ def test_source_url_must_be_official_https_pdf() -> None:
 def test_draw_date_rejects_impossible_calendar_date() -> None:
     with pytest.raises(ValueError, match="draw_date must use ISO format"):
         validate_draw_date_in_text("Resultados", "2026-02-30")
+
+
+def test_import_emits_hashable_pleno15_report_for_ticket_scoring(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    pdf_path = tmp_path / "official.pdf"
+    pdf_bytes = b"%PDF-1.7 synthetic official press-release bytes"
+    pdf_path.write_bytes(pdf_bytes)
+    press_text = """
+    Jornada celebrada el 8 de noviembre de 2026.
+    Resultados:
+    2 - X - 2 - 2 - 1 - X - 1 - 2 - 2 - 2 - X - X - 2 - 1 - 12 -
+    """
+    monkeypatch.setattr(
+        "scripts.import_selae_press_release.extract_pdf_text",
+        lambda _path: press_text,
+    )
+
+    record = import_press_release(
+        pdf_path,
+        "2026-11-08",
+        "https://www.loteriasyapuestas.es/f/loterias/documentos/nota.pdf",
+        verified_at_utc="2026-11-08T16:00:00Z",
+    )
+
+    report = record["pleno15_result"]
+    assert report["evidence_type"] == "official_press_release_pdf"
+    assert report["draw_date"] == "2026-11-08"
+    assert report["home_category"] == "1"
+    assert report["away_category"] == "2"
+    assert report["source_sha256"] == hashlib.sha256(pdf_bytes).hexdigest()
+    assert report["verified_at_utc"] == "2026-11-08T16:00:00Z"
+
+
+def test_import_cli_rejects_same_combined_and_pleno_output_path(
+    tmp_path: Path,
+) -> None:
+    output = tmp_path / "result.json"
+    result = main(
+        [
+            "--pdf",
+            str(tmp_path / "not-read.pdf"),
+            "--draw-date",
+            "2026-11-08",
+            "--source-url",
+            "https://www.loteriasyapuestas.es/f/loterias/documentos/nota.pdf",
+            "--output",
+            str(output),
+            "--pleno15-output",
+            str(output),
+        ]
+    )
+
+    assert result == 2
+    assert not output.exists()
 
 
 def test_import_rejects_non_pdf_bytes_before_text_extraction(tmp_path: Path) -> None:

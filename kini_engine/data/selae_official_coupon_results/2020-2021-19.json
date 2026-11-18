@@ -1,0 +1,202 @@
+{
+  "schema_version": 1,
+  "source": "SELAE",
+  "draw_date": "2020-12-06",
+  "source_url": "https://www.loteriasyapuestas.es/es/la-quiniela/resultados/la-quiniela-resultados-del-6-de-diciembre-de-2020",
+  "verified_at": "2026-11-17",
+  "verification_method": "Manual review of the official SELAE result page and official SELAE press-release PDF. The 14 ordered fixtures, team labels, scores, signs and Pleno al 15 were cross-checked against HistoricalQuiniela Jornada 19 and the Football-Data SP1/SP2 historical dataset. Prize distribution is transcribed from the linked official PDF and validated by the engine for conditional published-unit-prize references only; actual payout and profitability remain unevaluated without verified ticket-participation evidence.",
+  "snapshot_type": "normalized_json_extract_not_raw_html",
+  "supporting_sources": [
+    {
+      "role": "official_selae_result_page",
+      "url": "https://www.loteriasyapuestas.es/es/la-quiniela/resultados/la-quiniela-resultados-del-6-de-diciembre-de-2020"
+    },
+    {
+      "role": "official_selae_press_release_pdf",
+      "url": "https://www.loteriasyapuestas.es/f/loterias/documentos/Quiniela/Notas%20de%20prensa/NOTA_DE_PRENSA_DE_LA_QUINIELA_DE_FECHA_6_12_20.pdf"
+    },
+    {
+      "role": "schedule_and_kickoff_crosscheck",
+      "url": "https://www.historicoquiniela.com/historico/2020-2021/19"
+    },
+    {
+      "role": "football_data_sp1_crosscheck",
+      "url": "https://www.football-data.co.uk/mmz4281/2021/SP1.csv"
+    },
+    {
+      "role": "football_data_sp2_crosscheck",
+      "url": "https://www.football-data.co.uk/mmz4281/2021/SP2.csv"
+    }
+  ],
+  "fixtures": [
+    {
+      "number": 1,
+      "home": "Levante",
+      "away": "Getafe",
+      "home_goals": 3,
+      "away_goals": 0,
+      "result": "1"
+    },
+    {
+      "number": 2,
+      "home": "Sevilla",
+      "away": "Real Madrid",
+      "home_goals": 0,
+      "away_goals": 1,
+      "result": "2"
+    },
+    {
+      "number": 3,
+      "home": "At. Madrid",
+      "away": "Valladolid",
+      "home_goals": 2,
+      "away_goals": 0,
+      "result": "1"
+    },
+    {
+      "number": 4,
+      "home": "Cádiz",
+      "away": "Barcelona",
+      "home_goals": 2,
+      "away_goals": 1,
+      "result": "1"
+    },
+    {
+      "number": 5,
+      "home": "Granada",
+      "away": "Huesca",
+      "home_goals": 3,
+      "away_goals": 3,
+      "result": "X"
+    },
+    {
+      "number": 6,
+      "home": "Osasuna",
+      "away": "Betis",
+      "home_goals": 0,
+      "away_goals": 2,
+      "result": "2"
+    },
+    {
+      "number": 7,
+      "home": "Villarreal",
+      "away": "Elche",
+      "home_goals": 0,
+      "away_goals": 0,
+      "result": "X"
+    },
+    {
+      "number": 8,
+      "home": "Alavés",
+      "away": "Real Sociedad",
+      "home_goals": 0,
+      "away_goals": 0,
+      "result": "X"
+    },
+    {
+      "number": 9,
+      "home": "Alcorcón",
+      "away": "Almería",
+      "home_goals": 0,
+      "away_goals": 1,
+      "result": "2"
+    },
+    {
+      "number": 10,
+      "home": "Espanyol",
+      "away": "Sporting",
+      "home_goals": 2,
+      "away_goals": 0,
+      "result": "1"
+    },
+    {
+      "number": 11,
+      "home": "Mirandés",
+      "away": "Lugo",
+      "home_goals": 0,
+      "away_goals": 0,
+      "result": "X"
+    },
+    {
+      "number": 12,
+      "home": "Rayo Vallecano",
+      "away": "Logroñés",
+      "home_goals": 2,
+      "away_goals": 1,
+      "result": "1"
+    },
+    {
+      "number": 13,
+      "home": "Zaragoza",
+      "away": "Fuenlabrada",
+      "home_goals": 1,
+      "away_goals": 0,
+      "result": "1"
+    },
+    {
+      "number": 14,
+      "home": "Sabadell",
+      "away": "R. Oviedo",
+      "home_goals": 0,
+      "away_goals": 1,
+      "result": "2"
+    }
+  ],
+  "pleno": {
+    "number": 15,
+    "home": "Eibar",
+    "away": "Valencia",
+    "home_goals": 0,
+    "away_goals": 0,
+    "home_category": "0",
+    "away_category": "0"
+  },
+  "prize_distribution": {
+    "source_type": "official_selae_press_release_pdf_transcribed_to_normalized_extract",
+    "source_url": "https://www.loteriasyapuestas.es/f/loterias/documentos/Quiniela/Notas%20de%20prensa/NOTA_DE_PRENSA_DE_LA_QUINIELA_DE_FECHA_6_12_20.pdf",
+    "revenue_eur": 3491465.25,
+    "categories": [
+      {
+        "category": "pleno_al_15",
+        "winner_count": 0,
+        "unit_prize_eur": null,
+        "status": "rollover"
+      },
+      {
+        "category": "14",
+        "winner_count": 0,
+        "unit_prize_eur": null,
+        "status": "rollover"
+      },
+      {
+        "category": "13",
+        "winner_count": 37,
+        "unit_prize_eur": 7077.29,
+        "status": "awarded"
+      },
+      {
+        "category": "12",
+        "winner_count": 569,
+        "unit_prize_eur": 460.21,
+        "status": "awarded"
+      },
+      {
+        "category": "11",
+        "winner_count": 5240,
+        "unit_prize_eur": 49.97,
+        "status": "awarded"
+      },
+      {
+        "category": "10",
+        "winner_count": 31232,
+        "unit_prize_eur": 10.06,
+        "status": "awarded"
+      }
+    ],
+    "elige8": {
+      "revenue_eur": 93099,
+      "winner_count": 22,
+      "unit_prize_eur": 2327.48
+    }
+  }
+}

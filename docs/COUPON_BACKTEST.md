@@ -1,3 +1,18 @@
+## Optimizer probability-vector contract — validated 2026-11-18
+
+The direct-multiple optimizer now enforces the same strict source-vector contract as the predictive and market paths:
+
+- Exactly the three keys `1`, `X` and `2`; missing and extra keys are rejected.
+- Values must be finite numeric scalars in [0,1]. Numeric strings and Python/NumPy booleans are rejected; NumPy integer/floating scalars are accepted.
+- The existing 1e-6 sum tolerance is validation only. Source values are not silently renormalized before selecting signs or computing independent-match coverage.
+- The DP uses the selected marginal mass directly and treats zero selected mass as an invariant failure.
+
+Regression tests and full CI passed on 2026-11-18: [CI run 44250465424](https://github.com/Baltas80/Kini-/actions/runs/44250465424), **452 passed**, 25 upstream NumPy/penaltyblog deprecation warnings. The historical-data validation also passed on the same head: [run 44250465417](https://github.com/Baltas80/Kini-/actions/runs/44250465417), 5,322 fixtures and 10,644/10,644 canonical team references resolved.
+
+The coupon pilot was skipped by its change gate because coupon/model evaluation behavior did not change. The historical-model workflow remains pending; no new model or coupon performance metric is claimed.
+
+---
+
 # Coupon-level walk-forward backtest
 
 ## Purpose
@@ -12,7 +27,7 @@ This pilot introduces a coupon-level evaluation with one immutable training snap
 - Its summary field labelled "Fecha" is stored only as `source_date_label_at` plus its calendar date. It is **not** a result-publication timestamp: Jornada 21/2020-21 displays 13-12-2020 22:57 even though its Pleno fixture Celta–Cádiz kicked off on 14-12-2020. The label is used only to select the corresponding SELAE draw-date URL and is never used as evidence that results were available at that time.
 - The ordered 14 main fixtures, their teams, scores and 1/X/2 signs, plus the Pleno al 15 score/categories, must reconcile exactly against the corresponding public SELAE results page.
 - Raw HTML from HistoricalQuiniela is retained as a workflow artifact. The archive records SHA-256 digests, source URLs and retrieval timestamps.
-- The SELAE detail page returned HTTP 403 from the GitHub Actions runner. For the single pilot coupon, a normalized JSON extract of the public official SELAE page is committed at kini_engine/data/selae_official_coupon_results/2020-2021-21.json. Its SHA-256 covers the JSON extract, not raw HTML; the file records the official URL, verification date and method. This is an explicit manual-source limitation, not an automated raw-page capture.
+- The SELAE detail page returned HTTP 403 from the GitHub Actions runner. The current nine-coupon pilot therefore uses individually reviewed normalized extracts for 2020/2021 Jornadas 19, 21, 22, 25 and 29, plus 2021/2022 Jornadas 1, 2 and 3, and 2022/2023 Jornada 1, under `kini_engine/data/selae_official_coupon_results/`. Each digest covers the exact JSON extract bytes, not raw SELAE HTML or PDF bytes. Prize distributions for Jornadas 19, 22, 25, 29 and 2021/2022 Jornadas 1, 2 and 3 are transcribed from official SELAE press-release PDFs; Jornada 21 remains result-only. The original PDF bytes were not captured, so no raw-PDF digest is claimed. This is an explicit manual-source limitation, not an automated raw-page capture.
 - Team labels from HistoricalQuiniela are mapped through a season-scoped explicit alias file and the canonical Football-Data registry. Every one of the 15 fixtures must match exactly one Football-Data fixture by local calendar date, canonical home/away identity and final score.
 - No fuzzy matching or silent alias substitution is allowed. A missing alias, ambiguous identity, missing fixture, duplicate candidate or score/date mismatch rejects the coupon.
 - The full historical results are used only to verify fixture identity/date/result. The model training history is filtered separately to the common pre-first-kickoff cutoff.
@@ -25,8 +40,9 @@ This pilot introduces a coupon-level evaluation with one immutable training snap
 2. Find the earliest kickoff.
 3. Set the training cutoff to the previous local calendar day.
 4. Include only completed historical matches whose source calendar date is on or before that cutoff.
-5. Fit Dixon-Coles once and use the same history snapshot for all 15 fixtures and all model candidates in that coupon.
-6. Do not use historical market odds: this coupon archive does not contain verified pre-kickoff odds-capture timestamps.
+5. Record the minimum and maximum source dates actually used for the fitted history. The acceptance validator independently requires the recorded range to be ordered, no later than the cutoff, and strictly before the first kickoff.
+6. Fit Dixon-Coles once and use the same history snapshot for all 15 fixtures and all model candidates in that coupon.
+7. Do not use historical market odds: this coupon archive does not contain verified pre-kickoff odds-capture timestamps.
 
 The previous-calendar-day cutoff is deliberately conservative because the Football-Data historical dataset has date-only match timestamps and cannot establish the exact completion time of another match on the same day. The secondary source supplies kickoff times; the Football-Data cross-check validates each fixture's calendar date, team identity and score, but not the exact kickoff minute.
 
@@ -51,9 +67,9 @@ The independent marginal coverage estimate is reported separately from realized 
 
 ## Pilot scope and limitations
 
-The first CI pilot imports and evaluates Jornada 21 of 2020/2021 only. It validates ingestion, normalized official reconciliation, canonical identity, common cutoff, model execution and optimizer integration. The official snapshot is a manually reviewed normalized extract, not the original SELAE HTML; a future full-season archive needs an accessible official endpoint or individually reviewed official snapshots.
+The current CI pilot imports and evaluates nine coupons across three seasons: 2020/2021 Jornadas 19, 21, 22, 25 and 29; 2021/2022 Jornadas 1, 2 and 3; and 2022/2023 Jornada 1. It validates ingestion, normalized official reconciliation, canonical identity, common cutoff, model execution and optimizer integration. The official snapshots are manually reviewed normalized extracts, not original SELAE HTML/PDF captures; a full-season archive still requires individually reviewed official snapshots or a reliable official endpoint.
 
-One coupon is not a performance sample and must not be used to select a model or claim an improvement. After the pilot passes, the importer can retrieve all 63 jornadas for 2020/2021 and later seasons. Full-season expansion requires checking every official reconciliation and documenting missing, postponed or rescheduled fixtures before aggregate ticket metrics are interpreted.
+Six coupons across two seasons remain far too few for model selection, hit-rate estimation, payout performance or profitability claims. The importer can retrieve all 63 jornadas for 2020/2021 and 68 for 2021/2022, but full-season expansion requires official reconciliation for every draw and explicit handling of missing, postponed or rescheduled fixtures before aggregate ticket metrics are interpreted.
 
 
 ## Fail-closed acceptance for multi-coupon runs
@@ -81,7 +97,7 @@ This option makes multi-journey import reproducible when official pages have bee
 
 ## Reproducible direct-ticket audit
 
-Coupon backtest result schema version 2 stores the exact generated columns for each model candidate. Each column contains 14 ordered 1/X/2 signs. The result also stores the actual 14 main outcomes, the actual Pleno categories, selected Pleno category sets, and the price per payable bet.
+Coupon backtest result schema version 3 stores the exact generated columns for each model candidate and adds the explicit `training_history_min_date` / `training_history_max_date` fitted-window provenance. Each column contains 14 ordered 1/X/2 signs. The result also stores the actual 14 main outcomes, the actual Pleno categories, selected Pleno category sets, and the price per payable bet. The acceptance gate rejects legacy result schema version 2; the separate coupon archive remains schema version 2.
 
 The acceptance validator requires:
 
@@ -264,3 +280,437 @@ The returned `ticket_record` is a JSON-serializable schema-v1 direct-ticket reco
 The MCP `predict_quiniela` tool exposes the same arguments. Because JSON object keys are strings, public-draw snapshot positions are supplied as keys such as `"7"`; the tool validates and converts them to integer positions before calling the engine.
 
 The timestamps and hashes remain declared metadata: structural validation does not independently authenticate the local capture time or source bytes. The change closes the code-path integration gap, not the absence of a historical, independently timestamped participant-forecast ledger.
+
+## Operational immutable ticket history
+
+Generated pre-ticket records can be persisted in the SQLite ledger described in [TICKET_LEDGER.md](TICKET_LEDGER.md). The ledger stores the exact generated columns and probability/source provenance, rejects conflicting reuse of ticket IDs, and can append reproducible 14-match and official prize-tier scoring results against hashed SELAE evidence. The separate prize-scoring module exposes conditional published-unit-prize references only; actual payout, expected value and profitability remain unevaluated. The configured database must reside on persistent storage in deployment.
+
+
+## Training-window provenance
+
+Each coupon result now records `training_history_min_date` and `training_history_max_date` from the exact rows passed to the model fit. The batch acceptance validator rejects missing, reversed or post-cutoff ranges and requires the latest training source date to precede the first kickoff. This makes the actual date window visible in the artifact instead of recording only a row count and a declared cutoff.
+
+The date-range fields are audit metadata derived from the filtered input dataset. They do not independently authenticate match completion timestamps; the dataset's date-only limitation and previous-local-calendar-day cutoff remain in force.
+
+
+## First end-to-end coupon pilot result — 2026-11-17
+
+Run [44090714917](https://github.com/Baltas80/Kini-/actions/runs/44090714917), artifact ID `14332295130`, code revision `70a8288bb28d9a8199636c35ff57e918a43484e1`.
+
+The single pilot coupon was `2020-2021:21` (Jornada 21), with first kickoff `2020-12-12T14:00:00+01:00`. The common training cutoff was `2020-12-11`; the fitted history contained 303 matches from `2020-09-12` through `2020-12-11`. The full historical dataset contained 5,322 rows and had SHA-256 `7251b84acd803047746c0c55c6bdabb60d9499208cfd6c781f72080295346f44`.
+
+All three candidates completed all 14 main-match predictions with no model failures. Each generated an 8-column ticket (3 doubles, 0 triples), 8 payable bets and a cost of €6.00 at €0.75 per bet.
+
+| Candidate | Single-sign hits | Best direct column | Exact 14/14 coverage | Pleno hit | Full 15/15 coverage |
+|---|---:|---:|---|---|---|
+| Dixon-Coles | 7/14 | 7/14 | No | No | No |
+| ML | 5/14 | 6/14 | No | No | No |
+| Fixed DC/ML ensemble | 7/14 | 8/14 | No | No | No |
+
+The Dixon-Coles Pleno prediction was category pair `1–1`, with aggregated probability mass `0.13002176742050037`; the reconciled SELAE result was `M–0`. It did not hit.
+
+This is a single-coupon integration smoke test, not a performance sample. It does not justify selecting the ensemble, estimating long-run hit rates, or claiming profitability. The official result source is a manually reviewed normalized SELAE JSON extract, not raw official HTML. Prize tiers, realized payout and return on stake are not included. The secondary coupon archive supplies kickoff metadata; the model's historical match dataset has date-only timestamps, so the documented previous-local-calendar-day cutoff remains the conservative temporal boundary.
+
+
+## Schema-v3 verification run — 2026-11-17
+
+Run [44091537438](https://github.com/Baltas80/Kini-/actions/runs/44091537438), artifact ID `14332240705`, code revision `7d1cd819e304907ed17e8157a6c765e184c63287`. The emitted result declares `schema_version: 3`; the batch writer and fail-closed validator use the shared `COUPON_BACKTEST_RESULT_SCHEMA_VERSION` constant. The pilot passed all acceptance steps and reproduced the same one-coupon metrics above: 303 training matches, 14 predictions per model, 8 columns/€6 per candidate, no exact 14/14 coverage, no Pleno hit and no full 15/15 coverage. The fitted date range is `2020-09-12`–`2020-12-11`.
+
+This rerun verifies the result-contract migration, not a new performance sample.
+
+
+## Second independently reviewed historical coupon — Jornada 19, 2020-12-06
+
+A second coupon is now represented by a normalized SELAE result extract at `kini_engine/data/selae_official_coupon_results/2020-2021-19.json`. It contains all 14 ordered main fixtures and the Eibar–Valencia Pleno al 15 result (0–0, categories 0–0). The official result page and the official SELAE press-release PDF are recorded as supporting sources. The 14 match identities, scores and dates were cross-checked against the HistoricalQuiniela Jornada 19 page and the Football-Data SP1/SP2 historical dataset.
+
+The official press release reports €3,491,465.25 in Quiniela revenue, no winners in the Pleno al 15 or 14 categories (both rollovers), and unit prizes of €7,077.29 (13), €460.21 (12), €49.97 (11) and €10.06 (10). These values are preserved in the normalized extract as source evidence; the current backtest does **not** yet consume them to calculate payouts or return on stake.
+
+The earliest main fixture kicked off on 2020-12-05 at 14:00 Europe/Madrid. The conservative previous-local-calendar-day cutoff is 2020-12-04, with 277 completed Football-Data matches in the validated 5,322-row source snapshot. The coupon pilot minimum is therefore set to 250 matches, below the observed 277 but still explicitly enforced. This is an engineering smoke-test threshold, not a claim of statistically sufficient model training.
+
+The pilot now imports journeys 19 and 21 together and requires two independently reviewed SELAE snapshots, 30 reconciled fixtures, and 14 predictions from each of Dixon-Coles, ML and the fixed DC/ML ensemble for each coupon. It reuses the immutable validated historical-data artifact from the PR base branch instead of downloading Football-Data again for every PR run. Manual workflow dispatch performs a fresh, fail-closed history build.
+
+This expands the end-to-end sample from one to two coupons. It remains far too small for model selection, hit-rate estimation, payout performance or profitability claims. The next separate task is to validate the stored prize-distribution schema and implement exact-column payout scoring without assuming that a 14-match hit and a Pleno hit are interchangeable.
+
+
+## Multi-coupon pilot validation — 2026-11-17
+
+Final run [44102306745](https://github.com/Baltas80/Kini-/actions/runs/44102306745), artifact ID `14336777336`, code revision `b2c1d9b5b04858f22058c5ff84ba2289d878ece3`. The pilot used the validated 5,322-row Football-Data artifact (SHA-256 `7251b84acd803047746c0c55c6bdabb60d9499208cfd6c781f72080295346f44`) from the PR base branch, rather than downloading the source files again.
+
+Both official snapshots reconciled successfully: Jornada 19 (2020-12-06) and Jornada 21 (2020-12-13). The first coupon had 277 training matches through 2020-12-04; the second had 303 through 2020-12-11. Each of DC, ML and fixed DC/ML ensemble emitted 14 forecasts for each coupon. All six evaluations produced eight columns, three doubles, zero triples and €6.00 cost; no 14/14, Pleno or full 15/15 coverage occurred.
+
+| Coupon | Model | Single-sign hits | Best direct column |
+|---|---|---:|---:|
+| 2020-2021:19 | Dixon-Coles | 5 | 6 |
+| 2020-2021:19 | ML | 6 | 7 |
+| 2020-2021:19 | Fixed DC/ML ensemble | 4 | 7 |
+| 2020-2021:21 | Dixon-Coles | 7 | 7 |
+| 2020-2021:21 | ML | 5 | 6 |
+| 2020-2021:21 | Fixed DC/ML ensemble | 7 | 8 |
+
+The two coupons are adjacent and their training windows overlap substantially. These results validate the import/reconciliation/prediction/optimizer pipeline, not model quality. They are not sufficient for model selection, hit-rate estimation or profitability claims.
+
+CI [44102306450](https://github.com/Baltas80/Kini-/actions/runs/44102306450) passed with 391 tests and 25 warnings. Historical data validation [44102306414](https://github.com/Baltas80/Kini-/actions/runs/44102306414) passed. The historical model backtest job was skipped by its change filter and is not represented as a new full backtest.
+
+The official prize distribution for Jornada 19 is captured in the normalized SELAE extract, but payout scoring is not implemented. The next step is to validate that prize schema and calculate realized payout for every exact direct column and Pleno combination; only then should the archive be expanded for a larger multi-season sample.
+
+
+## Final source-metadata revalidation — 2026-11-17
+
+The Jornada 19 official result URL was normalized to the SELAE route generated by `selae_result_url` (day `6`, without a leading zero). The normalized snapshot now records both Football-Data SP1 and SP2 source URLs, in addition to the SELAE result page, SELAE press-release PDF and HistoricalQuiniela kickoff schedule. The exact normalized snapshot SHA-256 is `c92f06377823af0d42369cfeae5f498e9f999f1229b18676cc78eaf8fac03058`; Jornada 21 remains `293660df4bbdd044c944998b2979935451dd19c8dcde5639a6a2f5fc76a35488`.
+
+- Final coupon pilot [44103113026](https://github.com/Baltas80/Kini-/actions/runs/44103113026): **success**, artifact ID `14337585593`, code revision `590af9d7da44828845e51d484dcfa7c2805eec62`. Both coupons, 30 fixture reconciliations and six 14-prediction model evaluations passed acceptance; metrics were unchanged from the preceding two-coupon run.
+- Final CI [44103113010](https://github.com/Baltas80/Kini-/actions/runs/44103113010): **391 passed**, 25 warnings; lint, formatting and workflow validation passed.
+- Final historical-data validation [44103113152](https://github.com/Baltas80/Kini-/actions/runs/44103113152): **success**, using the validated PR-base dataset artifact.
+- Historical model workflow [44103112931](https://github.com/Baltas80/Kini-/actions/runs/44103112931): workflow succeeded, but the predictive-model backtest job was skipped by its change filter. No new full historical model backtest is claimed.
+
+PR #10 remains open and draft. No merge or `master` modification occurred.
+
+
+## Jornada 22 expansion — 2026-11-17
+
+The pilot is configured for three coupons: Jornada 19 (2020-12-06), Jornada 21 (2020-12-13) and Jornada 22 (2020-12-20). Jornada 22's normalized SELAE extract records all 14 ordered outcomes and the Eibar–Real Madrid Pleno al 15 (1–3, categories 1–M). Its official press-release PDF reports €3,973,360.50 revenue, one Pleno winner, three 14-category winners, and the remaining four prize tiers; Elige8 reports €95,926 revenue, 26 winners and €2,029.20 per winner.
+
+Sources for Jornada 22:
+- [Official SELAE result page](https://www.loteriasyapuestas.es/es/la-quiniela/resultados/la-quiniela-resultados-del-20-de-diciembre-de-2020)
+- [Official SELAE press-release PDF](https://www.loteriasyapuestas.es/f/loterias/documentos/Quiniela/Notas%20de%20prensa/NOTA_DE_PRENSA_DE_LA_QUINIELA_DE_FECHA_20_12_20.pdf)
+- [HistoricalQuiniela schedule and kickoff timestamps](https://www.historicoquiniela.com/historico/2020-2021/22)
+- Football-Data 2020/2021 [SP1](https://www.football-data.co.uk/mmz4281/2021/SP1.csv) and [SP2](https://www.football-data.co.uk/mmz4281/2021/SP2.csv) are used as independent date/team/score reconciliation sources, not as kickoff-time evidence.
+
+HistoricalQuiniela reports the first Jornada 22 kickoff on 19 December 2020 at 14:00 local time; the conservative training cutoff is therefore 18 December 2020. The workflow must still prove that at least 250 completed training matches exist by that cutoff and reconcile all 15 fixtures to Football-Data before any model output is accepted. The pilot is not considered expanded successfully until all three models produce 14 valid forecasts for each of the three coupons and the optimizer's cost/coverage checks pass.
+
+
+The first three-coupon execution confirmed the official result/Pleno extracts and exact Football-Data reconciliation for all 15 Jornada 22 fixtures, but stopped before modelling because the strict alias crosswalk lacked the source label `Cartagena`. The crosswalk now maps it explicitly to the canonical Football-Data identity `team:es:cartagena`, and a regression test verifies the mapping. The failed run is retained as evidence of the missing-alias defect; it is not counted as a successful pilot. A new run on the corrected branch must pass the full import, common-cutoff model evaluation and acceptance gate.
+
+
+## Three-coupon pilot — validated 2026-11-17
+
+The corrected pilot passed in [GitHub Actions run 44135127064](https://github.com/Baltas80/Kini-/actions/runs/44135127064), on functional code revision `e71cd2319682f8c50748090a5f76084756a0bf69`. The later HEAD `1c6447957bf39d0fb2055f118ff62491130b8b40` contains only test-formatting and documentation changes; its CI passed separately.
+
+Acceptance evidence:
+- Three official SELAE snapshots: Jornadas 19, 21 and 22.
+- 45/45 fixtures reconciled in order to Football-Data (14 main fixtures plus Pleno per coupon).
+- All three official result/Pleno snapshots verified; the exact normalized JSON bytes are hashed into the archive.
+- Nine successful model/coupon evaluations: DC, ML and fixed DC/ML ensemble on each of three coupons.
+- Fourteen 1/X/2 predictions per model/coupon (126 forecasts total), no model errors or empty prediction sets.
+- Training histories are strictly pre-first-kickoff: 277 matches through 2020-12-04; 303 through 2020-12-11; 325 through 2020-12-18.
+- Each ticket uses eight direct columns, three doubles, zero triples, eight payable bets and €6.00 cost per coupon.
+
+| Coupon | First kickoff (Europe/Madrid) | Training cutoff | Training matches | DC single/best | ML single/best | Ensemble single/best |
+|---|---|---|---:|---:|---:|---:|
+| 2020-2021:19 | 2020-12-05 14:00 | 2020-12-04 | 277 | 5 / 6 | 6 / 7 | 4 / 7 |
+| 2020-2021:21 | 2020-12-12 14:00 | 2020-12-11 | 303 | 7 / 7 | 5 / 6 | 7 / 8 |
+| 2020-2021:22 | 2020-12-19 14:00 | 2020-12-18 | 325 | 6 / 7 | 7 / 7 | 6 / 7 |
+
+`single/best` means correct signs in the model's single-sign forecast / maximum hits among the eight generated columns. Mean best-column hits were 6.67 (DC), 6.67 (ML) and 7.33 (ensemble); mean single-sign hits were 6.00, 6.00 and 5.67 respectively. None of the nine evaluations covered all 14 main signs, none hit the selected Pleno pair, and none covered the complete 15-match coupon.
+
+The selected Pleno pairs were 0–1 for Jornada 19 (actual 0–0), 1–1 for Jornada 21 (actual M–0), and 0–1 for Jornada 22 (actual 1–M). This is a separate Dixon–Coles category-pair forecast; it is not an ML Pleno prediction.
+
+The model candidates each cost €6 per coupon, or €18 over the three coupons. This is ticket cost only. The official prize table in the Jornada 22 snapshot is not applied as actual payout: no sales receipt/official participation is evidenced, and hypothetical extra entries could change pari-mutuel winner counts. `payout_evaluated` and `profitability_evaluated` remain false.
+
+The three draws are a small, temporally adjacent pipeline sample. They are not sufficient for model selection, calibrated-performance claims, hit-rate estimation, or profitability claims. This coupon workflow does not calculate Brier Score or Log Loss; the full fixture-level historical model workflow was skipped by its change filter in this run.
+
+Artifact: [quiniela-coupon-pilot, ID 14350339610](https://github.com/Baltas80/Kini-/actions/runs/44135127064/artifacts/14350339610), ZIP SHA-256 `281741eab1469ed978952154a732cd605d8784746bac3138c26042496bd5d894`.
+
+Jornada 22 normalized snapshot SHA-256: `71f0577f4c8deb6e0560a29169d858fb0eac4a37ab7333f32e5f5126c11b2f8c`. The raw SELAE PDF bytes were not captured, so this is not a PDF hash.
+
+
+## Latest HEAD revalidation — 2026-11-17
+
+The final documentation HEAD `6c396e3ddb7f11faecc8e9e0405abcf8ba404d43` was revalidated:
+- CI [44135733444](https://github.com/Baltas80/Kini-/actions/runs/44135733444): Actionlint, Ruff lint/format and **406 tests passed**, 25 upstream deprecation warnings.
+- Historical data [44135733521](https://github.com/Baltas80/Kini-/actions/runs/44135733521): 5,322 completed fixtures; 56 canonical team IDs; 10,644 resolved team references; zero unresolved teams and zero score/result mismatches; all 14 source files were within 168 hours.
+- Coupon workflow [44135733610](https://github.com/Baltas80/Kini-/actions/runs/44135733610): change filter correctly skipped the pilot because the last successful three-coupon functional run remains valid and intervening changes were tests/documentation only.
+- Historical model workflow [44135733492](https://github.com/Baltas80/Kini-/actions/runs/44135733492): model backtest skipped by its change filter; no new full model comparison is claimed.
+
+The accepted three-coupon evidence remains run 44135127064 on functional code revision `e71cd2319682f8c50748090a5f76084756a0bf69`. No model or coupon implementation changed after that revision; later commits only corrected test formatting and updated documentation.
+
+
+## Jornada 25 and four-coupon pilot — validated 2026-11-17
+
+This section supersedes the earlier three-coupon pilot totals and the historical note that official prize-schema validation had not yet been implemented.
+
+### Jornada 25 source reconciliation
+
+Jornada 25 (draw date 2021-01-03) was added from the official SELAE result page and press-release PDF. Its 14 ordered main fixtures and Valencia–Cádiz Pleno al 15 (1–1) were checked against the HistoricalQuiniela Jornada 25 schedule and kickoff timestamps and the validated Football-Data 2020/2021 SP1/SP2 dataset. HistoricalQuiniela supplies the Europe/Madrid kickoff times; Football-Data is used for date/team/score reconciliation only. All 15 fixture rows matched exactly. The only new season-scoped alias was Ponferradina → Ponferradina, now covered by a canonical-registry regression test.
+
+Sources:
+- [Official SELAE result page](https://www.loteriasyapuestas.es/es/la-quiniela/resultados/la-quiniela-resultados-del-03-de-enero-de-2021)
+- [Official SELAE press-release PDF](https://www.loteriasyapuestas.es/f/loterias/documentos/Quiniela/Notas%20de%20prensa/NOTA_DE_PRENSA_DE_LA_QUINIELA_DE_FECHA_3_1_21.pdf)
+- [HistoricalQuiniela Jornada 25 schedule and kickoff times](https://www.historicoquiniela.com/historico/2020-2021/25)
+- Football-Data 2020/2021 [SP1](https://www.football-data.co.uk/mmz4281/2021/SP1.csv) and [SP2](https://www.football-data.co.uk/mmz4281/2021/SP2.csv)
+
+The official press release reports €2,669,930.25 Quiniela revenue; Pleno al 15: 1 winner at €200,244.77; 14: 14 winners at €30,513.49; 13: 275 at €728.16; 12: 3,660 at €54.71; 11: 30,768 at €6.51; 10: 143,371 at €1.68. The published combined P15 + first-category amount is €230,758.26, equal to the Pleno and 14 unit amounts combined. Elige8 reports €73,222.50 revenue, 286 winners and €140.81 per winner. These figures are stored in the normalized snapshot and validated by the prize-scoring tests.
+
+The PDF was available as official parsed source text, but its original bytes were not retrievable in this run. No raw-PDF SHA-256 is claimed. The snapshot digest covers only the normalized JSON bytes.
+
+### Four-coupon model/optimizer smoke test
+
+Final pilot: [GitHub Actions run 44147170147](https://github.com/Baltas80/Kini-/actions/runs/44147170147), artifact ID 14356852772, ZIP SHA-256 aa924ae1dcc73f06732b39a6091c5fa15278735dd25943cb4b737992e50bd1ef. The validated historical dataset contained 5,322 fixtures, SHA-256 7251b84acd803047746c0c55c6bdabb60d9499208cfd6c781f72080295346f44.
+
+Acceptance evidence: four official SELAE snapshots; 60/60 ordered fixtures reconciled to Football-Data; 12 successful model/coupon evaluations (DC, ML and fixed DC/ML ensemble for each coupon); 14 forecasts per evaluation (168 forecasts total); zero failed models or empty prediction sets. Every candidate used eight direct columns, three doubles, zero triples, eight payable bets and €6.00 per coupon (€24.00 per model across the four draws).
+
+| Coupon | First kickoff (Europe/Madrid) | Training cutoff | Training matches | DC single/best | ML single/best | Ensemble single/best |
+|---|---|---|---:|---:|---:|---:|
+| 2020-2021:19 | 2020-12-05 14:00 | 2020-12-04 | 277 | 5 / 6 | 6 / 7 | 4 / 7 |
+| 2020-2021:21 | 2020-12-12 14:00 | 2020-12-11 | 303 | 7 / 7 | 5 / 6 | 7 / 8 |
+| 2020-2021:22 | 2020-12-19 14:00 | 2020-12-18 | 325 | 6 / 7 | 7 / 7 | 6 / 7 |
+| 2020-2021:25 | 2021-01-02 14:00 | 2021-01-01 | 364 | 8 / 9 | 7 / 8 | 8 / 8 |
+
+Mean single-sign/best-column hits were 6.50 / 7.25 (DC), 6.25 / 7.00 (ML) and 6.25 / 7.50 (ensemble). The Jornada 25 cutoff is strictly before the first kickoff; its latest training match was 2020-12-31. The dataset profile and importer therefore preserve the declared temporal boundary for this coupon.
+
+No candidate covered 14/14 main signs, no complete 15/15 coupon was covered, and none of the four Dixon–Coles Pleno pair predictions matched the official pair. The four draws are temporally close with overlapping training histories; these are descriptive pipeline-smoke-test outputs, not an independent or sufficiently large performance sample. They do not justify model ranking, long-run hit-rate estimates or profitability claims. This coupon workflow does not calculate Brier Score, Log Loss or a market comparison.
+
+The separate prize_scoring layer now validates official prize distributions, classifies each expanded direct bet and exposes conditional published-unit-prize references. It does not establish that a stored pre-ticket was actually purchased/entered, and it does not estimate a counterfactual pari-mutuel payout or ROI. Actual payout and profitability remain unevaluated.
+
+Validation on the final code/test head:
+- CI [44147170232](https://github.com/Baltas80/Kini-/actions/runs/44147170232): Actionlint, Ruff lint/format passed; **410 tests passed**, 25 upstream NumPy/penaltyblog deprecation warnings.
+- Historical data validation [44147170149](https://github.com/Baltas80/Kini-/actions/runs/44147170149): **5,322 completed fixtures**, 56 canonical team IDs, 10,644/10,644 resolved team references, zero unresolved/ambiguous references, zero duplicate/conflicting fixtures, and 14 source files within the 168-hour snapshot window.
+- Historical model workflow [44147170145](https://github.com/Baltas80/Kini-/actions/runs/44147170145): the workflow succeeded but its model-backtest job was skipped by the change filter because no predictive-model code changed. No new full historical model metrics are claimed.
+
+PR #10 remains open/draft on feat/immutable-ticket-ledger, stacked on the existing feature branch. No merge and no changes to master.
+
+**Next priority:** expand the official coupon/prize archive across additional draws and seasons only where every ordered fixture can be independently reconciled. Preserve raw PDF byte digests whenever source bytes are actually retrievable; do not infer them from normalized JSON hashes.
+
+
+## Jornada 29 and five-coupon pilot — validated 2026-11-17
+
+### Jornada 29 source reconciliation
+
+Jornada 29 (draw date 2021-01-24) was added from the official SELAE result page and its official press-release PDF. The 14 ordered main fixtures and the Athletic Club–Getafe Pleno al 15 (5–1; categories M–1) were checked against the HistoricalQuiniela Jornada 29 schedule and its Europe/Madrid kickoff timestamps, then reconciled one-to-one against the validated Football-Data 2020/2021 SP1/SP2 dataset. All 15 fixtures matched by competition, date, explicit team alias and full-time score. The only new aliases were Girona → Girona and Castellón → Castellon; both resolve to their canonical Football-Data team IDs through the existing registry.
+
+HistoricalQuiniela gives the first kickoff as 2021-01-23 14:00 Europe/Madrid. The training cutoff is therefore 2021-01-22, with 417 completed historical matches from 2020-09-12 through 2021-01-22. The latest validated historical dataset contains 5,322 fixtures and has SHA-256 `7251b84acd803047746c0c55c6bdabb60d9499208cfd6c781f72080295346f44`.
+
+Sources:
+- [Official SELAE result page](https://www.loteriasyapuestas.es/es/la-quiniela/resultados/la-quiniela-resultados-del-24-de-enero-de-2021)
+- [Official SELAE press-release PDF](https://www.loteriasyapuestas.es/f/loterias/documentos/Quiniela/Notas%20de%20prensa/NOTA_DE_PRENSA_DE_LA_QUINIELA_DE_FECHA_24_1_21.pdf)
+- [HistoricalQuiniela Jornada 29 schedule and kickoff times](https://www.historicoquiniela.com/historico/2020-2021/29)
+- Football-Data 2020/2021 [SP1](https://www.football-data.co.uk/mmz4281/2021/SP1.csv) and [SP2](https://www.football-data.co.uk/mmz4281/2021/SP2.csv)
+
+The official press release reports €3,149,695.50 Quiniela revenue; Pleno al 15 and 14 both had zero winners and rolled over; 13: 40 winners at €5,905.68; 12: 609 at €387.89; 11: 4,756 at €49.67; 10: 25,968 at €10.92. Elige8 reports €83,271.50 revenue, 66 winners and €693.93 per winner. These values are in the normalized SELAE snapshot and covered by a strict prize-validation regression test.
+
+The official PDF text was retrievable through the official indexed PDF page, but its original bytes were not captured. No raw-PDF digest is claimed. Jornada 29 normalized snapshot SHA-256: `4794789c451a10a3a8b7cf82b3fb9ea0e857007280e42546312b0c695205c34e`.
+
+### Five-coupon common-cutoff pilot
+
+Final run: [GitHub Actions 44156981828](https://github.com/Baltas80/Kini-/actions/runs/44156981828), on functional code revision `a2dd2cac50278c53b3d64997cf3125058b99dd73`. Evidence artifact: [quiniela-coupon-pilot, ID 14360688825](https://github.com/Baltas80/Kini-/actions/runs/44156981828/artifacts/14360688825), ZIP SHA-256 `4e7d5f21f8dcf4c871606db3fe24b3ff7eb2af02d908b6c381a3406723ad98b2`.
+
+Acceptance evidence:
+- Five official SELAE snapshots: Jornadas 19, 21, 22, 25 and 29.
+- 75/75 ordered main-plus-Pleno fixtures reconciled to Football-Data.
+- Fifteen successful model/coupon evaluations: Dixon–Coles, ML and fixed DC/ML ensemble on each coupon.
+- Fourteen 1/X/2 forecasts per evaluation: 210 forecasts total; zero failed evaluations and zero empty prediction sets.
+- Every candidate used eight direct columns, three doubles, zero triples, eight payable bets and €6.00 cost per coupon.
+- The new Jornada 29 training set is strictly pre-first-kickoff: 417 matches through 2021-01-22.
+
+| Coupon | First kickoff (Europe/Madrid) | Training cutoff | Training matches | DC single/best | ML single/best | Ensemble single/best |
+|---|---|---|---:|---:|---:|---:|
+| 2020-2021:19 | 2020-12-05 14:00 | 2020-12-04 | 277 | 5 / 6 | 6 / 7 | 4 / 7 |
+| 2020-2021:21 | 2020-12-12 14:00 | 2020-12-11 | 303 | 7 / 7 | 5 / 6 | 7 / 8 |
+| 2020-2021:22 | 2020-12-19 14:00 | 2020-12-18 | 325 | 6 / 7 | 7 / 7 | 6 / 7 |
+| 2020-2021:25 | 2021-01-02 14:00 | 2021-01-01 | 364 | 8 / 9 | 7 / 8 | 8 / 8 |
+| 2020-2021:29 | 2021-01-23 14:00 | 2021-01-22 | 417 | 4 / 6 | 5 / 6 | 5 / 5 |
+
+Across the five draws, mean single-sign/best-column hits were 6.00/7.00 (DC), 6.00/6.80 (ML) and 6.00/7.00 (fixed ensemble). No candidate covered 14/14 main signs, no full 15/15 coupon was covered, and none of the five Dixon–Coles Pleno category-pair predictions matched the official pair. These adjacent draws share overlapping training histories; this remains a pipeline smoke test, not a statistically adequate sample for model ranking, calibrated-performance claims or future hit-rate estimates.
+
+The pilot does not calculate Brier Score, Log Loss or a market comparison. The historical model workflow [44156982053](https://github.com/Baltas80/Kini-/actions/runs/44156982053) correctly skipped its expensive backtest job under the change filter; no new full historical model metrics are claimed. Actual payout and profitability remain unevaluated: the archive has official published prize tiers, but no evidence that these hypothetical tickets were purchased or entered, and pari-mutuel winner counts cannot be inferred.
+
+Final validation on the report HEAD:
+- CI [44156981868](https://github.com/Baltas80/Kini-/actions/runs/44156981868): Actionlint, Ruff lint/format and **412 tests passed**, with 25 upstream NumPy/penaltyblog deprecation warnings.
+- Historical data validation [44156981922](https://github.com/Baltas80/Kini-/actions/runs/44156981922): 5,322 completed fixtures; 56 canonical team IDs; 10,644/10,644 team references resolved; zero unresolved/ambiguous identities, zero duplicates removed and zero score/result mismatches. All 14 source files were within the 168-hour freshness limit (maximum observed cache age approximately 8.84 hours).
+
+PR #10 remains open/draft and stacked on `feat/selae-fixture-reconciliation`. No merge and no changes to `master`.
+
+**Next priority:** add a fully reconciled coupon from a different season, then continue expanding the archive without treating adjacent same-season smoke-test draws as independent statistical evidence.
+
+## Cross-season extension — Jornada 1 2021/2022 and six-coupon pilot — validated 2026-11-17
+
+### Official source and fixture reconciliation
+
+- SELAE result page: [La Quiniela, 15 August 2021](https://www.loteriasyapuestas.es/es/la-quiniela/resultados/la-quiniela-resultados-del-15-de-agosto-de-2021). It publishes the ordered 14 signs and the Elche–Athletic Club Pleno al 15 result (0–0).
+- SELAE prize source: [official press-release PDF for 15 August 2021](https://www.loteriasyapuestas.es/f/loterias/documentos/Quiniela/Notas%20de%20prensa/NOTA_DE_PRENSA_DE_LA_QUINIELA_DE_FECHA_15_8_21.pdf). The normalized snapshot transcribes the revenue and prize tiers; the original PDF bytes were not captured.
+- Secondary schedule cross-check: [HistoricalQuiniela, 2021/2022 Jornada 1](https://www.historicoquiniela.com/historico/2021-2022/1). It supplies the 15 Europe/Madrid kickoff times and confirms the order, scores and Pleno categories. It is not treated as an official result source.
+- The 14 main fixtures and Pleno were reconciled 15/15 against the validated Football-Data 2021/2022 SP1/SP2 dataset. The season-scoped alias map adds explicit mappings for all 30 coupon labels, including `R. Sociedad B → Sociedad B`, `Sporting → Sp Gijon`, `Burgos → Burgos` and `Tenerife → Tenerife`; no fuzzy matching is used.
+- Normalized SELAE snapshot: `kini_engine/data/selae_official_coupon_results/2021-2022-1.json`, SHA-256 `5b43ae76cf11a35bbc1fa7467129f44f1acea2a0c183f96d3afdfdcef1d0426c`.
+
+### Temporal cutoff
+
+The earliest fixture was R. Sociedad B–Leganés on 14/08/2021 at 17:00 Europe/Madrid. The coupon's training cutoff was therefore 13/08/2021. The fitted history contained **845 completed matches**, with maximum source date 13/08/2021. No fixture on or after the first kickoff entered the training history. HistoricalQuiniela's draw-date label (15/08/2021, 00:02) is retained only as source metadata, not as a result-publication timestamp.
+
+### Jornada 1 model and ticket result
+
+Actual 14-sign sequence: `XXX2211X111XX2`; Pleno al 15: `0-0`.
+
+| Candidate | Single-sign hits | Best generated column | 14/14 covered | Pleno hit | Full coupon covered | Cost |
+|---|---:|---:|---|---|---|---:|
+| Dixon–Coles | 7/14 | 7/14 | No | No | No | €6.00 |
+| ML | 4/14 | 6/14 | No | No | No | €6.00 |
+| Fixed DC/ML ensemble | 6/14 | 7/14 | No | No | No | €6.00 |
+
+The Dixon–Coles Pleno selector chose home category 0 / away category 1 with probability mass 0.147828; the actual categories were 0/0. Every candidate generated eight 14-match columns (three doubles, no triples), eight payable bets and a €6.00 coupon cost.
+
+### Six-coupon aggregate (historical run; superseded by the nine-coupon pilot below)
+
+Run [44168093977](https://github.com/Baltas80/Kini-/actions/runs/44168093977) passed its fail-closed acceptance gate: six official coupons across two seasons, 90/90 SELAE results, 90/90 canonical fixture reconciliations, 18 model/coupon evaluations and 252 1/X/2 forecasts, with zero failed or empty model evaluations.
+
+| Candidate | Evaluated | Failed | Mean single-sign hits | Mean best-column hits | 14/14 coupons | Full coupons | Total cost |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Dixon–Coles | 6 | 0 | 6.17 | 7.00 | 0/6 | 0/6 | €36.00 |
+| ML | 6 | 0 | 5.67 | 6.67 | 0/6 | 0/6 | €36.00 |
+| Fixed DC/ML ensemble | 6 | 0 | 6.00 | 7.00 | 0/6 | 0/6 | €36.00 |
+
+These are realized ticket-hit diagnostics on six selected historical draws, not proper probabilistic scoring, not an unbiased hit-rate estimate and not evidence for selecting a model. The five 2020/2021 draws are close together; the single 2021/2022 draw adds cross-season coverage but does not establish season-level stability. No prize return, expected payout or profitability was evaluated.
+
+### Reproducibility and validation
+
+- Coupon artifact: [run 44168093977 / artifact 14367600025](https://github.com/Baltas80/Kini-/actions/runs/44168093977/artifacts/14367600025), ZIP SHA-256 `9fdfa18b2b5732de5dc4448424327befcac92f6bbbd803e6061af1f801691b9c`.
+- Coupon archive SHA-256: `c755c7e075e4aef6fcc81c0d8cce10b7061b634a4c247b61b0657a55f61559cd`.
+- Backtest JSON SHA-256: `34dd72b428fb13d007bf8c6330e66f1210d1118a50ea002ca9a0bdf0b71f6355`.
+- Historical dataset: 5,322 fixtures, SHA-256 `7251b84acd803047746c0c55c6bdabb60d9499208cfd6c781f72080295346f44`.
+- [CI run 44168094027](https://github.com/Baltas80/Kini-/actions/runs/44168094027): Ruff lint/format and **415 tests passed**, with 25 upstream deprecation warnings.
+- [Historical-data validation run 44168093971](https://github.com/Baltas80/Kini-/actions/runs/44168093971): 5,322 completed fixtures, 56 canonical teams, 10,644/10,644 resolved team references, zero duplicates, zero conflicting duplicates, zero invalid result labels and zero score/result mismatches.
+- [Historical-model workflow 44168093999](https://github.com/Baltas80/Kini-/actions/runs/44168093999) passed its change-detection job and correctly skipped the expensive backtest because no model/backtest implementation changed after the successful full model benchmark on commit `b9978dd`. The model benchmark baseline remains run 44112316408; this coupon run does not replace it.
+
+### Remaining limitations and next step
+
+Exact per-fixture odds-capture timestamps are still unavailable; the market comparison uses the documented snapshot schedule. The ticket evaluator can score caller-supplied joint scenarios but does not estimate a calibrated cross-match dependence distribution. Expected payout, pari-mutuel ROI and proof of ticket purchase/participation remain out of scope. Football-Data's free-data terms do not grant commercial-use or AI-training permission.
+
+Superseded by the nine-coupon expansion below. Keep the coupon results as pipeline evidence only; do not promote an ensemble or claim profitability from these selected draws.
+
+
+## Jornadas 2 and 3, 2021/2022 — eight-coupon pilot (validated 2026-11-17)
+
+The current eight-coupon pilot adds 2021/2022 Jornadas 2 and 3 to the five 2020/2021 coupons and Jornada 1. The importer fetched and retained the HistoricalQuiniela source HTML, derived all 15 Europe/Madrid kickoff timestamps, and reconciled each coupon's ordered 14 fixtures plus Pleno al 15 against a manually reviewed official SELAE snapshot and the canonical Football-Data SP1/SP2 dataset.
+
+### Jornada 2 — draw 2021-08-22
+
+- Official results: [SELAE result page](https://www.loteriasyapuestas.es/es/la-quiniela/resultados/la-quiniela-resultados-del-22-de-agosto-de-2021) and [official SELAE press-release PDF](https://www.selae.es/f/loterias/documentos/Quiniela/Notas%20de%20prensa/NOTA_DE_PRENSA_DE_LA_QUINIELA_DE_FECHA_22_8_21.pdf).
+- Schedule: [HistoricalQuiniela 2021/2022 Jornada 2](https://www.historicoquiniela.com/historico/2021-2022/2). First coupon kickoff: **2021-08-21 17:00 Europe/Madrid**. Training cutoff: **2021-08-20**.
+- The 14-sign result is `2XXX11X2XX2XX1`; Pleno al 15 Osasuna–Celta is 0–0 (categories 0–0).
+- The fitted training history contains **866 completed matches**, from 2020-09-12 through 2021-08-20. All 15 fixtures, including the Pleno, reconciled to Football-Data.
+- Ticket diagnostics: DC 6 single-sign / 6 best-column hits; ML 5/7; fixed DC/ML ensemble 6/6. No candidate covered 14/14 or the Pleno. Each candidate generated eight columns, three doubles, no triples, eight payable bets and €6.00 cost.
+
+### Jornada 3 — draw 2021-08-29
+
+- Official results: [SELAE result page](https://www.loteriasyapuestas.es/es/la-quiniela/resultados/la-quiniela-resultados-del-29-de-agosto-de-2021) and [official SELAE press-release PDF](https://www.loteriasyapuestas.es/f/loterias/documentos/Quiniela/Notas%20de%20prensa/NOTA_DE_PRENSA_DE_LA_QUINIELA_DE_FECHA_29_8_21.pdf).
+- Schedule: [HistoricalQuiniela 2021/2022 Jornada 3](https://www.historicoquiniela.com/historico/2021-2022/3). First coupon kickoff: **2021-08-28 17:00 Europe/Madrid**. Training cutoff: **2021-08-27**.
+- The 14-sign result is `21X21211X21122`; Pleno al 15 Atlético de Madrid–Villarreal is 2–2 (categories 2–2).
+- The fitted training history contains **888 completed matches**, from 2020-09-12 through 2021-08-27. All 15 fixtures, including the Pleno, reconciled to Football-Data.
+- Ticket diagnostics: DC 6/6; ML 4/5; fixed DC/ML ensemble 5/7. No candidate covered 14/14 or the Pleno. Each candidate generated eight columns, three doubles, no triples, eight payable bets and €6.00 cost.
+
+### Aggregate across all eight coupons
+
+Final coupon run: [44179473149](https://github.com/Baltas80/Kini-/actions/runs/44179473149), artifact [14371891106](https://github.com/Baltas80/Kini-/actions/runs/44179473149/artifacts/14371891106), on branch commit `921a4deccb7229c885b68f42790028d35a089632`.
+
+The fail-closed acceptance gate passed **8 coupons, 120/120 SELAE results, 120/120 canonical fixture reconciliations, 24 successful model/coupon evaluations and 336 valid 1/X/2 forecasts**. All three candidates used the same eight-column budget and cost €48 across the eight coupons.
+
+| Candidate | Evaluated | Failed | Mean single-sign hits | Mean best-column hits | 14/14 coupons | Full coupons | Total cost |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Dixon–Coles | 8 | 0 | 6.125 | 6.750 | 0/8 | 0/8 | €48.00 |
+| ML | 8 | 0 | 5.375 | 6.500 | 0/8 | 0/8 | €48.00 |
+| Fixed DC/ML ensemble | 8 | 0 | 5.875 | 6.875 | 0/8 | 0/8 | €48.00 |
+
+These are realized ticket-hit diagnostics on eight selected draws. They are not proper probabilistic scores, an unbiased hit-rate estimate, evidence for selecting a model, expected payout or profitability. The draws are not an independent or season-representative sample.
+
+### Source digests and reproducibility
+
+- Jornada 2 normalized SELAE snapshot SHA-256: `456315985c2f9c6320727eabc30dac6873a075f920a9cf29b908f3f74fa66f14`.
+- Jornada 3 normalized SELAE snapshot SHA-256: `e5e6bf421df2b4d22bcb2e47c0618cdd9165d89986e08516775ae5e3af2ae42f`.
+- HistoricalQuiniela raw HTML SHA-256: Jornada 2 `ded319f9b088b67f2821c5fa6e84771a39c4907cf44aa25ed170f9dc6dd47e30`; Jornada 3 `86b4b79953b7a88f485b0351cf308ebf825a163bc6228f798e6ea9b19c3c1b6c`. Both digests were recomputed from the exact HTML files in the uploaded artifact.
+- Combined coupon archive SHA-256: `587907c546721a7b559a9bfc4d61fc65938638ccece986f38c367f623df3a8a1`.
+- Backtest JSON SHA-256: `2af6ee4b87f920437a5a92c219e276350d2bdfd7aa60688ab1aa18669d00fdf1`.
+- Artifact ZIP SHA-256: `3243625048d30a2d914cdc6eb24acd42eee16aa702ff01a0005e5a57430f0652`.
+- [CI run 44179473184](https://github.com/Baltas80/Kini-/actions/runs/44179473184): Actionlint, Ruff lint/format and **415 tests passed**, with 25 upstream NumPy deprecation warnings.
+- [Historical-data validation run 44179473173](https://github.com/Baltas80/Kini-/actions/runs/44179473173): 5,322 fixtures, 56 canonical team IDs, 10,644/10,644 team references resolved, zero unresolved identities, duplicates, conflicting duplicates, invalid result labels or invalid/missing goal values.
+- [Historical-model workflow 44179473045](https://github.com/Baltas80/Kini-/actions/runs/44179473045): change detection passed and the expensive model backtest was correctly skipped because no model/backtest implementation changed. The full model benchmark remains run 44112316408.
+- The original SELAE PDF bytes for Jornadas 2 and 3 were not captured. The PDF URLs and normalized prize data are recorded, but no raw-PDF digest is claimed.
+
+### Remaining limitations and next step
+
+The coupon pilot still does not estimate calibrated cross-match dependence, expected payout or pari-mutuel ROI and does not prove that a ticket was purchased or participated. Exact historical odds-capture timestamps remain unavailable. The eight-draw sample is not sufficient for model selection or profitability claims.
+
+Next: add further independently reconciled coupons from less-adjacent dates and another season, preserving the same official-result, first-kickoff, team-identity and training-cutoff evidence. Do not promote the ensemble from ticket-hit diagnostics.
+
+## Nine-coupon extension — 2022/2023 Jornada 1 — validated 2026-11-17
+
+### New source and temporal boundary
+
+The archive now includes coupon `2022-2023:01`, drawn on 14/08/2022. The official SELAE result page records the 14 main fixtures and Betis–Elche Pleno al 15 (3–0; M–0). The official press-release PDF provides the prize distribution and Elige8 figures. HistoricalQuiniela supplies the ordered coupon and Europe/Madrid kickoff timestamps; the importer retains its raw HTML in the workflow artifact.
+
+- First kickoff: **13/08/2022 17:00 Europe/Madrid**.
+- Training cutoff: **12/08/2022**.
+- Strictly pre-cutoff training history: **1,686 completed matches**, 12/09/2020–12/08/2022.
+- The importer and acceptance reconciled all **15/15 fixtures** against the validated Football-Data 2022/2023 SP1/SP2 data and the normalized SELAE snapshot.
+- Thirty explicit season-scoped aliases were added for the 2022/2023 coupon. Each resolves with its expected SP1 or SP2 competition and season 2223; no fuzzy alias fallback is used.
+- The page's `source_date_label_at` is 14/08/2022 23:24 +02:00. It is a HistoricalQuiniela page label, not a publication timestamp and is not used as evidence of result availability.
+
+### Official prize extract
+
+- Main-game revenue: **€2,633,274.00**.
+- Pleno al 15: 0 winners, rollover.
+- 14: 0 winners, rollover.
+- 13: 90 winners × €2,194.40.
+- 12: 1,591 winners × €124.13.
+- 11: 14,042 winners × €14.06.
+- 10: 71,640 winners × €3.31.
+- Elige8: €68,687.50 revenue; 25 winners × €1,511.13.
+
+The original SELAE PDF bytes were not retained, so the stored digest covers the normalized JSON snapshot only, not the source PDF.
+
+### Nine-coupon pilot acceptance
+
+Coupon workflow [run 44188103063](https://github.com/Baltas80/Kini-/actions/runs/44188103063) passed its fail-closed pilot on code head `7b2305d34b4100baca3fb4a922d5bbfbb53ab742`. It evaluated the five 2020/2021 coupons, three 2021/2022 coupons and the new 2022/2023 coupon.
+
+- **9/9 coupons** completed.
+- **135/135** ordered main + Pleno fixtures reconciled against SELAE.
+- **135/135** canonical fixture reconciliations matched Football-Data.
+- **27/27** model/coupon evaluations succeeded: 9 coupons × DC, ML and fixed DC/ML ensemble.
+- **378** 1/X/2 probability vectors generated (27 × 14), with zero empty prediction sets.
+- The backtest validator rejects missing/extra signs, non-finite or out-of-range probabilities and vectors that do not sum to one within (10^{-6}).
+- Each candidate used 8 columns, 3 doubles, no triples, 8 expanded bets and €6.00 per coupon at €0.75 per bet.
+
+| Coupon | Training cutoff | Matches | DC single / best | ML single / best | Ensemble single / best |
+|---|---|---:|---:|---:|---:|
+| 2020-2021:19 | 2020-12-04 | 277 | 5 / 6 | 6 / 7 | 4 / 7 |
+| 2020-2021:21 | 2020-12-11 | 303 | 7 / 7 | 5 / 6 | 7 / 8 |
+| 2020-2021:22 | 2020-12-18 | 325 | 6 / 7 | 7 / 7 | 6 / 7 |
+| 2020-2021:25 | 2021-01-01 | 364 | 8 / 9 | 7 / 8 | 8 / 8 |
+| 2020-2021:29 | 2021-01-22 | 417 | 4 / 6 | 5 / 6 | 5 / 5 |
+| 2021-2022:01 | 2021-08-13 | 845 | 7 / 7 | 4 / 6 | 6 / 7 |
+| 2021-2022:02 | 2021-08-20 | 866 | 6 / 6 | 5 / 7 | 6 / 6 |
+| 2021-2022:03 | 2021-08-27 | 888 | 6 / 6 | 4 / 5 | 5 / 7 |
+| 2022-2023:01 | 2022-08-12 | 1,686 | 6 / 7 | 4 / 5 | 6 / 7 |
+
+Across the nine selected coupons, mean single-sign / best-column hits were DC **6.11 / 6.78**, ML **5.22 / 6.33**, and ensemble **5.89 / 6.89**. No model covered 14/14 main signs or the full 15/15 coupon in any draw. The new coupon's Pleno pair M–0 was selected by all three candidates, but that single outcome is not evidence of predictive skill. The ensemble is not promoted: nine selected draws are too few and too dependent for model selection or calibration claims.
+
+Each model's nine-coupon counterfactual cost is **€54.00**. This is a comparison of generated candidate tickets, not evidence that tickets were purchased or participated. Actual payout, ROI and profitability remain unevaluated.
+
+### Reproducibility evidence
+
+- Coupon pilot artifact: [14375911470](https://github.com/Baltas80/Kini-/actions/runs/44188103063/artifacts/14375911470); ZIP SHA-256: `084d12be17a8615700440df0ed975d1fdb8f90002ce3a56a91c465b178be1a95`.
+- HistoricalQuiniela raw HTML SHA-256: `945d2e7471e839ccde874ae303229e6b16492d6355367549e85b87c0b5faa2ae`.
+- Normalized SELAE JSON SHA-256: `2eee2fe48f82d5d1ab69e4be9cdbc51957b44c8fabd30d8dbf1356879d8470bb`.
+- Combined archive JSONL SHA-256: `fb8aceb909164b2d365adb01ed8c352fd8b7bfbcf4bd30c1be12e4c93afbf145`.
+- Backtest JSON SHA-256: `18e9629ba8df890fcce59eb88764e1787d214ecee3961481a95581096807eb2b`.
+
+### CI and remaining statistical work
+
+Historical-data validation [run 44189932304](https://github.com/Baltas80/Kini-/actions/runs/44189932304) passed the validated 14-source snapshot checks: 5,322 completed fixtures, zero duplicate/conflicting duplicates, zero invalid result labels and zero score/result mismatches. Historical-model run [44189932401](https://github.com/Baltas80/Kini-/actions/runs/44189932401) passed its change gate and skipped the expensive model backtest because no model/backtest implementation changed. Coupon workflow [run 44189932328](https://github.com/Baltas80/Kini-/actions/runs/44189932328) passed its change gate and skipped the pilot because no coupon/model behavior changed after the successful nine-coupon run.
+
+CI [run 44189932245](https://github.com/Baltas80/Kini-/actions/runs/44189932245) passed Actionlint, Ruff lint, Ruff format and **419 tests** (25 non-blocking NumPy/penaltyblog deprecation warnings). The earlier strict prize test exposed that `www.selae.es`, which serves the official press-release PDF, was missing from the exact host allowlist. The allowlist now includes `selae.es` and `www.selae.es`; a regression test accepts the official source and rejects the lookalike `www.selae.es.evil.example`.
+
+This coupon pilot does **not** calculate Brier Score, Log Loss, reliability curves, same-match market comparisons or economic returns. Those remain separate P0–P5 work; do not infer calibrated probabilities or future hit rates from the coupon hit counts.
+
+
+
+
+## Joint-scenario coverage mechanics audit — 2026-11-18
+
+A standalone audit script is available at scripts/audit_joint_scenario_coverage.py. Run it against a coupon-backtest JSON artifact with: python scripts/audit_joint_scenario_coverage.py --input coupon-backtest.json --output joint-coverage-audit.json.
+
+The script verifies each model's 14 normalized probability vectors and the direct multiple's unique, complete Cartesian column structure. It independently calculates the covered joint probability by summing the probabilities of the exact expanded columns (mutually exclusive scenarios under the match-independence approximation), checks that sum against the saved optimizer estimate, and compares the realized 14-sign outcome with the columns. The report explicitly labels the independence assumptions and the selected-sample scope.
+
+Audit of the nine-coupon pilot artifact from workflow run 44188103063: realized coverage was 0/9 for DC, ML and ensemble. Mean estimated independent coverage per coupon was 0.1330%, 0.1178% and 0.0721%; expected covered coupons over nine draws were 0.0120, 0.0106 and 0.0065. Under the additional independent-coupon assumption, zero-covered probabilities were 98.81%, 98.94% and 99.35%. These small selected historical draws are mechanics evidence only, not a representative benchmark, model promotion, payout or profitability evidence. The audit covers 14 main matches only and excludes Pleno al 15.
+
+
+
+Validation for this audit unit: CI run 44288749545 passed Actionlint, Ruff lint/format and 460 pytest tests; historical-data validation run 44288749530 passed. Model/coupon backtest change gates skipped as expected.

@@ -11,6 +11,7 @@ import numpy as np
 from scipy.stats import poisson
 
 from .team_identity import normalize_team_name
+from .ticket_ledger import TicketLedger
 from .ticket_outcomes import (
     TicketOutcomeError,
     build_ticket_probability_vectors,
@@ -27,26 +28,30 @@ LAE_KICKOFF_EVIDENCE_MAX_AGE = timedelta(hours=24)
 
 
 def _validated_probability_vector(probabilities: Any) -> np.ndarray | None:
-    """Return a valid 1/X/2 vector without silently repairing bad source data."""
-    if not isinstance(probabilities, dict):
+    """Return an exact numeric 1/X/2 vector without silently repairing source data."""
+    if not isinstance(probabilities, dict) or set(probabilities) != set(SIGNS):
         return None
 
-    values: list[float] = []
-    for sign in SIGNS:
-        raw = probabilities.get(sign)
-        if isinstance(raw, (bool, np.bool_)):
-            return None
-        try:
-            value = float(raw)
-        except (TypeError, ValueError):
-            return None
-        if not np.isfinite(value) or not 0.0 <= value <= 1.0:
-            return None
-        values.append(value)
-
-    if not np.isclose(sum(values), 1.0, rtol=0.0, atol=1e-6):
+    raw_values = [probabilities[sign] for sign in SIGNS]
+    if any(
+        isinstance(value, (bool, np.bool_))
+        or not isinstance(value, (int, float, np.integer, np.floating))
+        for value in raw_values
+    ):
         return None
-    return np.asarray(values, dtype=float)
+
+    try:
+        values = np.asarray(raw_values, dtype=float)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    if (
+        not np.isfinite(values).all()
+        or np.any(values < 0.0)
+        or np.any(values > 1.0)
+        or not np.isclose(float(values.sum()), 1.0, rtol=0.0, atol=1e-6)
+    ):
+        return None
+    return values
 
 
 @dataclass(frozen=True)
@@ -860,6 +865,8 @@ def _recent_form(history: list[Match], team: str) -> float:
 class TicketOptimizer:
     """SELAE direct-multiple optimizer under an independent-match approximation.
 
+    Input vectors must contain exactly numeric 1/X/2 probabilities. The
+    optimizer does not coerce or silently renormalize source forecasts.
     The budget counts 14-match columns. Each selected Pleno category pair
     multiplies payable bets; the official cap applies after that multiplier.
     Coverage is not expected payout or profitability.
@@ -993,7 +1000,7 @@ class TicketOptimizer:
                 f"of {self.minimum_columns} total bets"
             )
 
-        normalized: list[dict[str, float]] = []
+        validated_probabilities: list[dict[str, float]] = []
         for index, prediction in enumerate(predictions, start=1):
             if not isinstance(prediction, dict):
                 raise TypeError(f"match {index}: probabilities must be a mapping")
@@ -1002,18 +1009,20 @@ class TicketOptimizer:
                 raise ValueError(
                     f"match {index}: missing probability for sign(s): {', '.join(missing_signs)}"
                 )
+            extra_signs = [sign for sign in prediction if sign not in SIGNS]
+            if extra_signs:
+                raise ValueError(
+                    f"match {index}: unexpected probability key(s): {extra_signs!r}"
+                )
 
             values: dict[str, float] = {}
             for sign in SIGNS:
                 raw = prediction[sign]
-                if isinstance(raw, (bool, np.bool_)):
+                if isinstance(raw, (bool, np.bool_)) or not isinstance(
+                    raw, (int, float, np.integer, np.floating)
+                ):
                     raise TypeError(f"match {index}: invalid probability for sign {sign}")
-                try:
-                    value = float(raw)
-                except (TypeError, ValueError) as exc:
-                    raise ValueError(
-                        f"match {index}: invalid probability for sign {sign}"
-                    ) from exc
+                value = float(raw)
                 if not np.isfinite(value) or value < 0.0 or value > 1.0:
                     raise ValueError(
                         f"match {index}: probability for sign {sign} must be finite and in [0, 1]"
@@ -1025,7 +1034,9 @@ class TicketOptimizer:
                 raise ValueError(
                     f"match {index}: 1/X/2 probabilities must sum to 1 (got {total:.8g})"
                 )
-            normalized.append({sign: values[sign] / total for sign in SIGNS})
+            # The 1e-6 sum tolerance is validation only. Preserve source values:
+            # do not coerce strings or silently renormalize a forecast vector.
+            validated_probabilities.append({sign: values[sign] for sign in SIGNS})
 
         # State is (number of doubles, number of triples). The SELAE direct
         # table constrains triples; the 31,104 cap also applies after Pleno.
@@ -1033,7 +1044,7 @@ class TicketOptimizer:
             (0, 0): (0.0, [])
         }
 
-        for probabilities in normalized:
+        for probabilities in validated_probabilities:
             nxt: dict[tuple[int, int], tuple[float, list[tuple[str, ...]]]] = {}
             ordered = sorted(
                 SIGNS,
@@ -1058,7 +1069,11 @@ class TicketOptimizer:
 
                     signs = tuple(ordered[:count])
                     mass = sum(probabilities[sign] for sign in signs)
-                    candidate = log_mass + float(np.log(max(mass, 1e-15)))
+                    if mass <= 0.0:
+                        raise RuntimeError(
+                            "validated probability vector produced zero selected mass"
+                        )
+                    candidate = log_mass + float(np.log(mass))
                     state = (new_doubles, new_triples)
                     previous = nxt.get(state)
                     if previous is None or candidate > previous[0]:
@@ -1285,7 +1300,12 @@ class TicketOptimizer:
 class KiniEngine:
     """Main pipeline: KinielaGPT data/context + Dixon-Coles + supervised ML + LAE/market ensemble."""
 
-    def __init__(self, enable_ml: bool = False, enable_context: bool = False) -> None:
+    def __init__(
+        self,
+        enable_ml: bool = False,
+        enable_context: bool = False,
+        ticket_ledger: TicketLedger | None = None,
+    ) -> None:
         self.dc = DixonColes()
         self.ml = FeatureModel() if enable_ml else None
         self.enable_ml = enable_ml
@@ -1295,6 +1315,7 @@ class KiniEngine:
         self.fitted = False
         self.dc_fit_error: str | None = None
         self.temperature = 1.0
+        self.ticket_ledger = ticket_ledger
 
     def fit(self, history: list[Match]) -> KiniEngine:
         self.history = sorted(history, key=lambda m: _date_num(m.date))
@@ -1668,6 +1689,12 @@ class KiniEngine:
             ticket_record_sha256 = hashlib.sha256(
                 ticket_record_json.encode("utf-8")
             ).hexdigest()
+            ticket_ledger_receipt = None
+            if self.ticket_ledger is not None:
+                ticket_ledger_receipt = self.ticket_ledger.append_ticket(
+                    ticket_payload,
+                    expected_sha256=ticket_record_sha256,
+                )
             result.update(
                 {
                     "ticket_id": ticket_payload["ticket_id"],
@@ -1679,5 +1706,7 @@ class KiniEngine:
                     "coupon_plan": coupon_plan,
                 }
             )
+            if ticket_ledger_receipt is not None:
+                result["ticket_ledger"] = ticket_ledger_receipt
 
         return result

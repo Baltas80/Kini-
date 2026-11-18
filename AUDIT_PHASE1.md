@@ -1,4 +1,57 @@
-# Phase 1 audit — data integrity, temporal validation and model comparison
+## Current status override — 2026-11-18, joint-scenario coverage mechanics audited
+
+- **Working branch:** feat/immutable-ticket-ledger; PR #10 remains draft. This audit-only unit is based on 4cd3555000c14dbd43a920a0bb49f582b4fb4f4c. master is not changed.
+- **New reproducible tool:** scripts/audit_joint_scenario_coverage.py, with four regression tests in tests/test_joint_scenario_coverage_audit.py. It validates the exact 14 probability vectors, unique direct columns and complete Cartesian multiple structure; it independently sums the probabilities of the expanded ticket columns and checks that this mass matches the optimizer's saved independent coverage estimate. It also checks the realized complete 14-sign outcome against the expanded columns.
+- **Local validation:** 4/4 new tests passed; py_compile passed; the script was run against the previously validated nine-coupon artifact. GitHub CI run 44288749545 passed Actionlint, Ruff lint, Ruff format and 460 pytest tests (25 upstream NumPy/penaltyblog deprecation warnings); historical-data validation run 44288749530 also passed. The model backtest and coupon pilot gates correctly skipped because this unit is an audit utility and does not change model/coupon behavior.
+- **Evidence source:** coupon pilot workflow run 44188103063, artifact 14375911470 (ZIP SHA-256 084d12be17a8615700440df0ed975d1fdb8f90002ce3a56a91c465b178be1a95). The extracted coupon-backtest JSON SHA-256 is 18e9629ba8df890fcce59eb88764e1787d214ecee3961481a95581096807eb2b. This audit does not refit any model or rerun the coupon backtest.
+- **Observed joint coverage:** 0/9 coupons for DC, ML and the fixed DC/ML ensemble. Under the per-match independence approximation, the mean covered-scenario mass per coupon was DC 0.1330%, ML 0.1178%, ensemble 0.0721%; expected covered coupons across nine draws were only 0.0120, 0.0106 and 0.0065 respectively. The corresponding probability of zero covered coupons, assuming independent coupon coverage events, was 98.81%, 98.94% and 99.35%. The observed 0/9 is therefore unsurprising and is not a predictive-performance claim.
+- **Limitations:** the nine draws are a small, selected pilot, not a representative sample. The calculations assume independence across matches; the zero-hit calculation additionally assumes independence between coupons. This covers the 14 main matches only, excludes Pleno al 15, and does not estimate payout, ROI or profitability.
+- **Next priority:** continue P1/P2 source availability and point-in-time audit; do not promote a model from this coupon sample. No live odds request or dataset modification was made.
+
+## Current status override — 2026-11-18, optimizer input contract hardened and CI validated
+
+- **Branch head:** `d45202a8065b13dcd14cc2b90fef0b7afe8c1323` on `feat/immutable-ticket-ledger`; PR [#10](https://github.com/Baltas80/Kini-/pull/10) remains open/draft and stacked on `feat/selae-fixture-reconciliation`. `master` remains at `ef331c3a3f50220b5d2b1a71900a2d7003b259c4`; no merge or direct master change.
+- **P6 optimizer contract:** `TicketOptimizer.optimize()` now accepts only exact numeric `1/X/2` mappings. It rejects missing or extra keys, numeric strings, Python/NumPy booleans, non-finite values and values outside [0,1]. NumPy integer/floating scalars remain supported.
+- **No silent repair:** vectors whose sum is within the existing 1e-6 tolerance are validated but preserved unchanged; the optimizer no longer divides source values by their sum. The internal collection is named `validated_probabilities`. Selected mass is logged directly, with zero mass treated as an invariant failure.
+- **Regression tests:** four new tests cover extra keys, coercion attempts, NumPy numeric scalar compatibility and preservation of near-unit source vectors.
+- **CI:** [run 44250465424](https://github.com/Baltas80/Kini-/actions/runs/44250465424) passed Actionlint, Ruff lint, Ruff format and **452 pytest tests** in 5.80s. The 25 warnings are upstream NumPy 2.5 deprecations in `penaltyblog/models/dixon_coles.py:257` (array shape assignment); no project test failed.
+- **Historical data:** [run 44250465417](https://github.com/Baltas80/Kini-/actions/runs/44250465417) passed with **5,322 completed fixtures**, 56 canonical team IDs, 10,644/10,644 references resolved, zero unresolved references, zero duplicate/conflicting fixtures and `integrity_passed=true`.
+- **Coupon workflow:** [run 44250465499](https://github.com/Baltas80/Kini-/actions/runs/44250465499) passed its change gate and correctly skipped the coupon pilot because no coupon, model or optimizer coupon-evaluation path changed. No new coupon hit result is claimed.
+- **Historical model backtest:** [run 44250465447](https://github.com/Baltas80/Kini-/actions/runs/44250465447) is still pending in the Actions concurrency queue and has not produced a result. No new Brier, Log Loss or predictive-performance metric is claimed for this optimizer-input-only change.
+- **Next action:** retain the existing independent-match coverage label and continue with an out-of-sample joint-scenario coverage audit; do not promote a model or infer expected payout/profitability from coupon hit counts.
+
+Commits: [59e6ff4](https://github.com/Baltas80/Kini-/commit/59e6ff4e20af43682efa8fee87fb8cbe18b85f2d), [badb71c](https://github.com/Baltas80/Kini-/commit/badb71c3d9bea75ade0304bcd7751c0c3a7a2562), [d45202a](https://github.com/Baltas80/Kini-/commit/d45202a8065b13dcd14cc2b90fef0b7afe8c1323).
+
+---
+
+## Current status override — 2026-11-18, Odds API coverage probe implemented and CI validated
+
+- **Branch:** `feat/immutable-ticket-ledger`. The read-only provider probe implementation is validated at code commit `a3c8663896630096e33bdf27efad42cda2506b62`. PR #10 remains open/draft and stacked on `feat/selae-fixture-reconciliation`. `master` was not modified and no PR was merged.
+- **P0/model status:** the previously validated non-empty backtest and model comparison remain unchanged. This unit adds no model features, probabilities, market rows or training data.
+- **New implementation:** `scripts/probe_the_odds_api_coverage.py`, `tests/test_odds_api_coverage.py`, and `docs/ODDS_API_COVERAGE_PROBE.md`. The probe uses only the free historical-events and historical-event-markets coverage endpoints, checks the current ten-fixture verified SP1/SP2 crosswalk at 24/6/1-hour pre-kickoff horizons, captures actual snapshot timestamps, event IDs, teams, bookmaker/market keys, response hashes and quota headers, and never requests prices.
+- **CI evidence on code commit a3c866:** run `44222165537` passed workflow validation, Ruff lint, Ruff format and `pytest -q`: **437 passed, 25 warnings in 4.18s**. The warning summary is confined to `tests/test_core.py`. Historical-data validation run `44222165317` passed. Historical model backtest and coupon backtest change-gates passed and correctly skipped their expensive jobs because no model/coupon behavior changed.
+- **Earlier failures corrected:** the first lint pass identified invalid-input exception types and an unused test import; those were corrected. The first format check then identified two unformatted files; commit `a3c866` applies the exact Ruff formatting changes. The final code CI is green.
+- **Provider economics:** official documentation lists LaLiga and Segunda historical sport coverage from 2020-06-06. Coverage discovery is available on all plans at one credit per request; historical prices are paid-only at 10 credits per region/market/snapshot. A full default probe of ten fixtures × three horizons has an upper bound of 60 coverage requests/credits, reduced when an events response is empty. No subscription was purchased.
+- **Live probe not yet run:** no `THE_ODDS_API_KEY` was supplied, so zero provider requests were sent and no live bookmaker coverage result is claimed. The current ten-fixture crosswalk is a current-season sample, not a multi-season census. Coverage metadata is not price evidence and remains ineligible for model input.
+- **Next priority:** execute the probe with a valid key, review exact event reconciliation and EU `h2h` availability, then expand the verified fixture sample across seasons before any bounded paid price pilot. Preserve the existing fail-closed market eligibility and licensing review.
+
+---
+
+## Current status override — 2026-11-17, nine-coupon pilot validated
+
+- **Working branch:** `feat/immutable-ticket-ledger`; PR [#10](https://github.com/Baltas80/Kini-/pull/10) remains open/draft and stacked on `feat/selae-fixture-reconciliation`. No merge or direct change to `master`.
+- **P6 — third-season coupon:** added 2022/2023 Jornada 1 (draw 14/08/2022) with 14 ordered main results, Betis–Elche Pleno al 15 (3–0; M–0), all six prize tiers and Elige8. Sources: [SELAE result page](https://www.loteriasyapuestas.es/es/la-quiniela/resultados/la-quiniela-resultados-del-14-de-agosto-de-2022), [SELAE press-release PDF](https://www.selae.es/f/loterias/documentos/Quiniela/Notas%20de%20prensa/NOTA_DE_PRENSA_DE_LA_QUINIELA_DE_FECHA_14_8_22.pdf), [HistoricalQuiniela schedule](https://www.historicoquiniela.com/historico/2022-2023/1).
+- **Temporal boundary:** first kickoff 13/08/2022 17:00 Europe/Madrid; cutoff 12/08/2022; 1,686 strictly pre-cutoff matches, from 12/09/2020 through 12/08/2022. The backtest acceptance confirmed the maximum training date did not exceed the declared cutoff.
+- **Identity and results:** 30 explicit season-scoped aliases resolve to Football-Data SP1/SP2 identities for season 2223. The live importer and acceptance reconciled all 15 fixtures, including Pleno, against Football-Data and SELAE. No fuzzy matching.
+- **Nine-coupon pilot:** [run 44188103063](https://github.com/Baltas80/Kini-/actions/runs/44188103063) passed: 9 coupons, 135/135 official SELAE fixtures, 135/135 canonical fixture reconciliations, 27 successful model/coupon evaluations, 378 1/X/2 probability vectors, zero failed evaluations and zero empty predictions. Every model produced 14 probability vectors per coupon; the backtest validator checks exact sign keys, finite values, bounds [0,1] and sum-to-one tolerance 1e-6.
+- **New coupon results:** 2022-2023:01 — DC 6 single-sign / 7 best-column hits; ML 4 / 5; DC/ML ensemble 6 / 7. All three selected the actual Pleno pair M–0, but none covered 14/14 main signs or the full 15/15 coupon. Across all nine selected draws, mean single-sign / best-column hits: DC 6.11 / 6.78; ML 5.22 / 6.33; ensemble 5.89 / 6.89. No model is promoted from this small, selected sample.
+- **Ticket constraints:** each candidate used 8 columns, 3 doubles, 0 triples, 8 expanded bets and €6.00 per coupon at €0.75 per bet. The €54 aggregate cost is per model's nine-coupon counterfactual, not proof of purchased tickets. No 14/14 or full 15/15 coverage occurred.
+- **Data validation:** [run 44188202008](https://github.com/Baltas80/Kini-/actions/runs/44188202008) passed the validated snapshot checks with 5,322 completed fixtures, zero duplicates/conflicting duplicates, zero invalid result labels and zero score/result mismatches. [Historical-model run 44188202133](https://github.com/Baltas80/Kini-/actions/runs/44188202133) completed its change gate and correctly skipped the expensive model backtest; no new Brier/Log Loss or market comparison is claimed.
+- **Evidence hashes:** artifact [14375911470](https://github.com/Baltas80/Kini-/actions/runs/44188103063/artifacts/14375911470), ZIP SHA-256 `084d12be17a8615700440df0ed975d1fdb8f90002ce3a56a91c465b178be1a95`; HistoricalQuiniela raw HTML SHA-256 `945d2e7471e839ccde874ae303229e6b16492d6355367549e85b87c0b5faa2ae`; normalized SELAE JSON SHA-256 `2eee2fe48f82d5d1ab69e4be9cdbc51957b44c8fabd30d8dbf1356879d8470bb`; combined archive SHA-256 `fb8aceb909164b2d365adb01ed8c352fd8b7bfbcf4bd30c1be12e4c93afbf145`; backtest JSON SHA-256 `18e9629ba8df890fcce59eb88764e1787d214ecee3961481a95581096807eb2b`. The official PDF bytes were not captured; no raw-PDF digest is claimed. HistoricalQuiniela's `source_date_label_at` (14/08/2022 23:24 +02:00) remains a page label, not a result-publication timestamp.
+- **Final CI:** [run 44189932245](https://github.com/Baltas80/Kini-/actions/runs/44189932245) passed Actionlint, Ruff lint, Ruff format and **419 pytest tests** (25 non-blocking NumPy/penaltyblog deprecation warnings). The earlier strict prize test exposed that the official PDF host `www.selae.es` was missing from the allowlist; `selae.es` and `www.selae.es` are now accepted by exact hostname, and a lookalike-host regression rejects `www.selae.es.evil.example`.
+- **Interpretation limits:** this is pipeline and ticket-construction evidence, not a representative probability benchmark. It does not provide Brier Score, Log Loss, reliability curves, a same-match market comparison, actual purchased-ticket evidence, payouts, ROI or profitability. Keep the ensemble unpromoted.
+- **P4 probability contract:** strict 1/X/2 validation now applies consistently to model metrics, calibration, ensembles, live market/LAE eligibility and per-bookmaker backtest inputs. It rejects extra/missing keys, strings, booleans, non-finite/out-of-range values and non-unit sums; no coercion or silent repair. Implementation 564e205 passed the full historical backtest; current-head CI passed 430 tests.
+- **Next priority:** use The Odds API's free coverage-discovery endpoints to check Spanish LaLiga/Segunda 1X2 historical coverage, bookmaker availability and timestamp density before considering a paid month. Historical odds access is paid; do not incur spend or relax the current market eligibility rule without verified coverage and licensing. Keep the Betfair Basic archive as a secondary exchange-data option, subject to its personal-use-only terms. Do not promote any ensemble.
 
 Date: 2026-11-15  
 Repository: Baltas80/Kini-  
@@ -3271,3 +3324,673 @@ La integración que figuraba como pendiente queda implementada en el head de có
 El motor devuelve el registro, pero no lo escribe automáticamente en disco ni puede garantizar que un cliente MCP lo conserve. El consumidor debe persistir el JSON y los artefactos originales sin alterarlos. Las fechas y hashes son evidencia declarada y validada estructuralmente; no hay sellado temporal independiente ni autenticación criptográfica de la captura local. Sigue sin existir una muestra histórica suficiente de snapshots de participantes para evaluar probabilidades de sorteo público. El scorer actual tampoco calcula premios ni rentabilidad.
 
 Siguiente prioridad: construir un ledger append-only de boletos realmente generados, con persistencia del registro completo, hash verificable, fecha de creación, coste, cutoff y evidencias; después conectar ese ledger a la puntuación postpartido. No estimar rentabilidad con boletos hipotéticos.
+
+## Immutable ticket ledger — 2026-11-17
+
+**Implemented and CI-validated on `feat/immutable-ticket-ledger`.** Latest code head at validation: `8d54907a374940b8aed89535966f2c21fa82f448`.
+
+- Added `kini_engine/ticket_ledger.py`, a local SQLite append-only ledger for generated direct-ticket records and derived score records.
+- `KiniEngine` accepts an optional ledger and persists the complete ticket record when a strict pre-ticket coupon plan is used. Persistence errors fail the generation call instead of returning an unpersisted success.
+- The MCP server configures `KINI_TICKET_LEDGER_PATH` (default `data/kini-tickets.sqlite3`) and exposes ticket retrieval, listing, scoring and score-history tools.
+- Ticket IDs are unique and content-addressed. Identical replays are idempotent; reuse with different canonical JSON is rejected.
+- Ticket and score rows reject UPDATE/DELETE through SQLite triggers. Reads recompute SHA-256 and revalidate records.
+- The MCP scoring tool hashes the exact supplied UTF-8 reconciliation JSON. Python callers can use `score_ticket_json`; lower-level scoring accepts a digest produced by a trusted byte reader.
+- Added tests for persistence, idempotency, conflicting IDs, digest mismatch, append-only enforcement, SELAE scoring, exact-byte hashing, malformed JSON, listing and engine integration.
+- The local database and WAL/SHM files are excluded from Git via `.gitignore`.
+
+**CI evidence:** [run 44054701680](https://github.com/Baltas80/Kini-/actions/runs/44054701680) passed Actionlint, Ruff lint, Ruff format and pytest: **357 passed**, 25 upstream `penaltyblog`/NumPy deprecation warnings, 2.48 seconds.
+
+The coupon-backtest workflow was correctly skipped by its change filter; it is not a new coupon-level backtest. The historical walk-forward run on the parent branch [44047529531](https://github.com/Baltas80/Kini-/actions/runs/44047529531) remains in progress at its historical-comparison step. No new model metrics are claimed from this ticket-ledger change.
+
+Limitations remain explicit: SHA-256 is not a signature or trusted timestamp; SQLite triggers do not protect against a database owner replacing the file; a persistent volume is required in deployment; multi-host replicas need shared transactional storage; prize/payout/profitability modelling is not included.
+
+Next priority: obtain the result of the already-running historical comparison and verify non-empty model samples. Do not start a duplicate full backtest unless the code or dataset changes. PR #10 remains a draft stacked on PR #9; do not merge either PR or change `master`.
+
+
+
+
+## Execution update — 2026-11-17: reproducible backtest, market audit and ledger admission window
+
+### Current-head historical backtest
+
+The corrected artifact-based workflow completed [run 44073721157](https://github.com/Baltas80/Kini-/actions/runs/44073721157) successfully on code revision d7a577dc6fe47761d199d402e36a4fe5f7bdb251.
+
+- Historical dataset: 5,322 completed fixtures, 2020-09-12 through 2026-11-16.
+- Dataset SHA-256: 7251b84acd803047746c0c55c6bdabb60d9499208cfd6c781f72080295346f44.
+- All model streams generated 5,022/5,022 forecasts with zero prediction errors.
+- Snapshot-aligned market sample: 3,991 identical fixtures across 319 snapshot dates; model refit count 319.
+- The current-head metrics match run 44047529531 to numerical precision (maximum displayed metric difference 1e-12). The ledger integration did not change model predictions.
+- All non-empty model, per-fixture ledger, cold-start fallback, schedule-screened market, common-information-time, snapshot-aligned market, fixed-book Bet365 and prequential-calibration acceptance gates passed.
+
+| Model | Brier | Log Loss | Accuracy |
+|---|---:|---:|---:|
+| Market | **0.594152** | **0.994611** | **0.510649** |
+| Market-assisted ensemble | 0.610967 | 1.019536 | 0.482836 |
+| Dixon-Coles | 0.614828 | 1.028365 | 0.482836 |
+| Fixed DC/ML ensemble | 0.613521 | 1.023526 | 0.479830 |
+| Adaptive DC/ML ensemble | 0.613768 | 1.023933 | 0.480080 |
+| ML | 0.638916 | 1.060673 | 0.442496 |
+
+For the strongest standalone model stream (market-assisted ensemble), a paired bootstrap over 319 snapshot-date clusters (20,000 resamples; seed 20261117) produced model-minus-market differences of +0.016815 Brier (95% interval [+0.013174, +0.020514]), +0.024926 Log Loss ([+0.019518, +0.030421]) and -2.78 percentage points accuracy ([-3.79, -1.74] pp). These intervals are conditional on the generated forecast stream, not prospective guarantees, and do not adjust for model selection or multiple comparisons.
+
+### Prequential market/model pooling experiment
+
+The snapshot-aligned ledger was re-analysed using an expanding prequential selector: 500 prior forecasts minimum, 1,500-row rolling window, refit every 30 snapshot dates, and a 0.00–1.00 model-weight grid in 0.01 increments. Each snapshot's weight used only earlier snapshot dates.
+
+- Dixon-Coles, fixed ensemble, combined ensemble and adaptive ensemble selected model weight 0.00 under both Brier and Log Loss objectives.
+- ML selected 0.00 under Brier. Under Log Loss it selected at most 0.01 (mean 0.001); the resulting Brier/Log Loss were 0.594171/0.994642, marginally worse than market-only 0.594152/0.994611.
+- A conditional 20,000-draw paired bootstrap over snapshot-date clusters for that ML blend gave positive loss differences: Brier [+0.0000052, +0.0000457] and Log Loss [+0.0000106, +0.0000733]. The weights were not re-estimated inside bootstrap samples.
+- Market top-two coverage was 78.45% overall and 76.18% on actual draws, versus Dixon-Coles 76.50%/70.82%, fixed ensemble 76.70%/70.00% and ML 75.19%/71.18%.
+- In all 13 league-season cells with at least 100 fixtures, every model had worse Brier and Log Loss than the market.
+
+Decision: do not ship a market/model blend or select the current ensemble as production default. The exploratory pooling procedure does not show incremental value. The historical market benchmark remains schedule-aligned, not proof of exact executable prices.
+
+### Market source provenance
+
+Football-Data's [official data notes](https://football-data.co.uk/data.php) distinguish, since 2019/20, an initial post-market-opening odds set from a separate closing-odds set whose column headings include C. The parser uses un-suffixed pre-closing columns such as B365H/D/A, not B365CH/CD/CA. The [fixtures page](https://football-data.co.uk/matches.php) states that weekend odds are collected on Fridays, generally not later than 17:00 British time, and midweek odds on Tuesdays, not later than 13:00 British time. The evaluator maps those collection days and excludes fixtures played on either collection weekday.
+
+The CSV does not expose exact per-fixture capture timestamps or kickoff timezones. This supports a schedule-compatible pre-closing snapshot, but does not prove exact executable availability for every fixture. Pinnacle is excluded from market inputs for match dates on/after 2025-07-23 following the provider's stale-feed warning.
+
+### Data licensing and commercial-use gate
+
+Football-Data's [official data page](https://football-data.co.uk/data.php) states that its free data is intended for private individuals only and not for commercial or data-training products using automated bots/scrapers/AI. This repository currently automates source downloads and trains ML models. Treat the present Football-Data dataset as private/research-only under the provider's stated terms unless written permission or a different licence is obtained. Commercial release or redistribution must not rely on this source until that restriction is resolved.
+
+Potential paid replacement: Football-Data promotes [TheStatsAPI](https://www.thestatsapi.com/football-api). Its current plan page advertises commercial use, 10 years of historical data, odds and statistics, with Starter from USD 50/month and a 7-day trial. La Liga is explicitly listed; Spanish Segunda coverage must be requested and verified. The published historical-odds example exposes opening and last-seen prices but does not establish an exact per-fixture capture timestamp field. Before migration, verify Segunda coverage, timestamp semantics, historical depth, rate limits and contract terms during a trial. Do not treat this as an approved provider until those checks pass.
+
+### Ticket ledger admission-window hardening
+
+The persistent ledger previously validated declared ticket creation/cutoff timestamps but did not compare them with the actual ledger insertion time. That allowed a ticket to be appended after cutoff while claiming an earlier creation time.
+
+Implemented on feat/immutable-ticket-ledger:
+
+- The ledger's host-clock recorded_at_utc must be UTC, at or after ticket_created_at_utc, and strictly before ticket_cutoff_at_utc.
+- A late or pre-creation append is rejected before insertion.
+- Reads reject legacy records whose stored append timestamp falls outside the declared window.
+- Idempotent replay checks the original stored timestamp, so an already valid record remains replayable after cutoff.
+- Four regression tests cover cutoff rejection, pre-creation rejection, idempotent replay after cutoff and rejection of a legacy late record.
+- The engine integration test freezes the ledger clock within the declared admission window.
+
+The timestamp is generated by the host clock. It is an admission control, not a trusted timestamp, digital signature or independent external attestation.
+
+CI run 44083919679 passed 368 tests; Ruff lint and format passed. The first attempt 44082824006 exposed Ruff FURB162 and formatting issues, which were corrected in subsequent commits. The timestamp guard is now validated.
+
+### Workflow efficiency
+
+Commit a94c3fc1be011f2af102845c2067110163b789de sets historical-backtest concurrency to cancel-in-progress=false and excludes kini_engine/ticket_ledger.py from model-backtest triggers. This prevents a ledger/docs-only update from cancelling a long-running model backtest or forcing an unnecessary full walk-forward run.
+
+The changes job in [run 44082824018](https://github.com/Baltas80/Kini-/actions/runs/44082824018) compared changes since the last successful backtest head and listed only:
+- .github/workflows/historical-backtest.yml
+- docs/TICKET_LEDGER.md
+- kini_engine/ticket_ledger.py
+- tests/test_core.py
+- tests/test_ticket_ledger.py
+
+It correctly emitted run_backtest=false; the workflow completed with the backtest job skipped. This skip is not counted as a predictive validation.
+
+### Remaining priorities
+
+1. Complete CI for the timestamp admission guard and inspect the exact pytest count.
+2. Implement official-evidence-backed Pleno al 15 scoring in the ticket ledger; current scoring covers the 14 main signs only.
+3. Run the coupon-level pilot explicitly and validate actual ticket coverage, prizes and cost against official SELAE outcomes.
+4. Keep expected-payout/profitability modelling separate from sign accuracy and do not claim profitability without complete payout data.
+5. Preserve the market timing limitation until exact capture timestamps are available.
+
+PR #10 remains a draft stacked on PR #9. Do not merge either PR or modify master.
+
+## Fresh-source enforcement for historical backtests — 2026-11-17
+
+### Root cause of inconsistent historical snapshots
+
+Two successful walk-forward runs on the stacked PR chain produced different source datasets:
+
+- [Run 44047529531](https://github.com/Baltas80/Kini-/actions/runs/44047529531), code revision `412e11bde62a9df4baa0b2a18d96a25a79680869`: 5,322 completed fixtures, ending 2026-11-16; dataset SHA-256 `7251b84acd803047746c0c55c6bdabb60d9499208cfd6c781f72080295346f44`. The 14 restored source files were approximately 9.24 hours old.
+- [Run 44054909376](https://github.com/Baltas80/Kini-/actions/runs/44054909376), code revision `f4d0c4c4bfd9acc7820af8f968a5739dd35cda9c`: 5,311 completed fixtures, ending 2026-11-09; dataset SHA-256 `a01a68393de69c7ad37d2088864093a50108df9e299f1993d855cad87147acab`. Its restored source files were approximately 48.63 hours old; 2026/27 Segunda contained 140 rows rather than 151.
+
+The workflow restored a branch/fallback Actions cache and invoked `build_history.py --offline`. Offline mode intentionally accepts a valid stale cache, so the second successful run did not represent the same data vintage as the first. The two snapshots must not be pooled or described as a single reproducible dataset. This is an ingestion/workflow freshness defect, not evidence of a change in model quality.
+
+### Snapshot-aligned model comparison
+
+The 5,322-row dataset from run 44047529531 contains 5,022 out-of-sample forecasts and a snapshot-aligned market comparison on 3,991 identical fixtures across 319 market-snapshot dates. All five model configurations generated 5,022/5,022 forecasts with zero prediction errors. The exact common-sample fixture-ID digest is `41ef0afaafbdcece288ce77ca26e7f436997a6478797bf4be746fa1e934032f0`.
+
+| Model | Brier | Log Loss | Accuracy |
+|---|---:|---:|---:|
+| Market | **0.594152** | **0.994611** | **0.510649** |
+| Market-assisted ensemble | 0.610967 | 1.019536 | 0.482836 |
+| Dixon-Coles | 0.614828 | 1.028365 | 0.482836 |
+| Fixed DC/ML ensemble | 0.613521 | 1.023526 | 0.479830 |
+| Adaptive DC/ML ensemble | 0.613768 | 1.023933 | 0.480080 |
+| ML | 0.638916 | 1.060673 | 0.442496 |
+
+A separate paired cluster bootstrap was recomputed directly from the 3,991-row snapshot-aligned ledger, resampling its 319 snapshot dates with replacement (5,000 replicates; seed 20261117). Differences are model minus market; positive Brier/Log Loss and negative accuracy favour the market. For the market-assisted ensemble, the differences were +0.016815 Brier (95% percentile interval +0.013143 to +0.020453), +0.024926 Log Loss (+0.019442 to +0.030292), and -0.027813 accuracy (-0.038202 to -0.017387). All intervals exclude zero. This is conditional historical uncertainty, not a prospective guarantee; it is not adjusted for model selection or multiple comparisons.
+
+The later 5,311-row run 44054909376 independently produced 5,011 forecasts with zero errors and a 3,983-fixture snapshot-aligned comparison. Its market Brier/Log Loss/accuracy were 0.594112/0.994568/0.510670; the market-assisted ensemble scored 0.610921/1.019508/0.482801. It reaches the same directional conclusion, but its dataset is older and its fixture sample is different.
+
+### Weekly cache selection and freshness correction
+
+**Implemented on `feat/immutable-ticket-ledger`; validation pending.**
+
+The defect was not that every PR should download Football-Data again. That would disregard the provider's weekly download allowance. The defect was that the cache restore order preferred a branch-specific cache (48.63 hours old) over the newer default-branch cache (approximately 9.24 hours old).
+
+- `scripts/build_history.py` now exposes `--require-fresh`. When a forced refresh fails, it raises instead of silently falling back to a previously cached CSV.
+- Added regression tests for stale-cache rejection and the incompatible offline/require-fresh combination.
+- Both PR workflows now locate the latest successful, unexpired `kini-historical-data` artifact from the immediate base branch and download that immutable dataset. They no longer read a feature-branch cache. The current PR #10 base artifact is from data-validation run 44047529391.
+- The weekly scheduled data-validation run (and an explicitly requested refresh) uses `--refresh --require-fresh`; it cannot silently publish a stale fallback.
+- PR backtests do not download source CSVs; they consume the exact validated dataset artifact from the base branch, verify its CSV/profile row count, and require all 14 source-file mtimes to belong to one hourly snapshot no more than seven days old. PR data validation rechecks the downloaded artifact and canonical team identities. The weekly scheduled refresh on master uses `--refresh --require-fresh`, requires source files no more than one hour old, saves the raw cache and publishes the next immutable dataset artifact.
+- The script change remains in the historical-backtest change filter, so the next PR run should execute the historical comparison.
+
+The data-validation run 44072041469 was created before the artifact-based workflow correction and still used the old branch-local cache (49.96 hours old, 5,311 rows). It is diagnostic evidence of the defect, not the accepted source snapshot. The intermediate historical run 44071883972 also began before the workflow correction and must not be used to validate the new source-artifact policy.
+
+Do not treat this correction as validated until the new CI, data-validation and historical-backtest runs complete. Compare the new profile, cache mtimes, dataset hash, date coverage and model/market metrics against the prior immutable artifacts. No PR has been merged and `master` remains untouched.
+
+
+## Pleno al 15 persistent-ledger scoring — 2026-11-17
+
+Implemented on `feat/immutable-ticket-ledger`:
+
+- Added a strict optional Pleno result schema in `kini_engine/ticket_outcomes.py`. It binds the result to the stored coupon's draw date, home/away teams and Pleno kickoff; requires an official SELAE URL and a 64-character source SHA-256; and rejects negative/non-integer goals, unsupported categories, category/goal mismatches and verification times before kickoff.
+- Categories are exact `0`, `1`, `2`, or `M` for 3+ goals. Official SELAE rules: [Cómo jugar a La Quiniela](https://www.loteriasyapuestas.es/es/centro-de-ayuda/como-se-juega/como-jugar-a-la-quiniela).
+- The committed normalized historical extract for 13/12/2020 was checked against the official result page: Celta 4–0 Cádiz, category pair `M`–`0`. The regression test hashes the exact committed extract bytes and validates the category mapping: [official SELAE result](https://www.loteriasyapuestas.es/es/la-quiniela/resultados/la-quiniela-resultados-del-13-de-diciembre-de-2020).
+- `score_ticket_record` reports `pleno15_hit` and `covered_full_coupon` only when separate Pleno evidence is supplied. A 14-match hit remains separate from a full 15-match hit.
+- `TicketLedger.score_ticket_json` accepts optional `pleno15_json`, hashes its exact UTF-8 bytes and forms a domain-separated evidence-bundle digest with the fixture-reconciliation hash. The list API exposes the original reconciliation digest and combined score-evidence digest separately. Legacy 14-match score JSON remains unchanged.
+- MCP `score_persisted_ticket` accepts optional `pleno15_json`; the standalone CLI accepts `--pleno15`.
+- Regression coverage includes successful 2–M scoring, a Pleno miss despite 14-match coverage, missing evidence, invalid host/date/team/category/evidence type/time, malformed category types, digest pairing, idempotent persistent scoring and the committed official SELAE extract.
+
+Validation:
+- CI [44087662571](https://github.com/Baltas80/Kini-/actions/runs/44087662571): **382 passed**, Ruff lint/format and Actionlint passed.
+- Data validation [44087662413](https://github.com/Baltas80/Kini-/actions/runs/44087662413): 5,322 complete fixtures; 14 source files; 56 teams; 10,644/10,644 team references resolved; no ambiguous or unresolved references.
+- Historical model job skipped because model code was unchanged. Coupon pilot skipped by its filter. Neither is represented as a successful predictive or coupon-level evaluation.
+
+The importer that produces this Pleno evidence for every historical/current draw remains to be implemented. Until that exists, the ledger can score Pleno only when a separately verified report is supplied. The engine does not calculate prize tiers, payouts, expected value or profitability.
+
+
+
+## Coupon training-window provenance and first end-to-end pilot — 2026-11-17
+
+### Implementation
+
+- Commit `101b92ab7629bebe55d2aae361da1c0b0cf3e79e` records `training_history_min_date` and `training_history_max_date` from the exact filtered rows passed to the coupon model fit.
+- The acceptance validator now rejects missing or malformed date ranges, reversed ranges, maximum dates after the declared common cutoff, and any maximum date on/after first kickoff.
+- Added regression tests for the recorded training window and for post-cutoff/reversed ranges.
+- Commit `70a8288bb28d9a8199636c35ff57e918a43484e1` fixed Ruff formatting and duplicate documentation numbering.
+- Commit `2d3ee2fd626b502497126a73e6c952237ab3c16e` fixed the final blank-line formatting issue in Pleno outcome validation.
+
+### Validation
+
+- CI [44090941259](https://github.com/Baltas80/Kini-/actions/runs/44090941259): **388 passed**, 25 third-party NumPy deprecation warnings; Actionlint passed for 8 workflows; Ruff lint and format passed.
+- Historical-data validation [44090941634](https://github.com/Baltas80/Kini-/actions/runs/44090941634): **5,322 completed fixtures**, integrity passed, zero duplicates/conflicts, zero invalid result labels and zero score/result mismatches. Team identity: 10,644/10,644 references resolved across 56 canonical teams; zero ambiguous or unresolved references. The job reused the validated PR-base artifact under the weekly snapshot policy; it did not perform a new source download.
+- Coupon pilot [44090714917](https://github.com/Baltas80/Kini-/actions/runs/44090714917): **success**; all 15 fixture outcomes were reconciled, 15 canonical fixtures matched, and DC, ML and fixed ensemble each emitted 14 valid predictions. Acceptance passed for the 8-column budget and SELAE ticket bounds. Artifact: `14332295130`.
+- Historical model workflow [44090941270](https://github.com/Baltas80/Kini-/actions/runs/44090941270): backtest job skipped because predictive model code was unchanged. This is not counted as a new model validation.
+
+### Pilot result
+
+Coupon `2020-2021:21`, first kickoff `2020-12-12T14:00:00+01:00`, cutoff `2020-12-11`, training history 303 matches (`2020-09-12` to `2020-12-11`), full dataset 5,322 rows, SHA-256 `7251b84acd803047746c0c55c6bdabb60d9499208cfd6c781f72080295346f44`.
+
+| Model | Single hits | Best column | 14/14 | Pleno | 15/15 |
+|---|---:|---:|---|---|---|
+| Dixon-Coles | 7 | 7 | No | No | No |
+| ML | 5 | 6 | No | No | No |
+| Fixed DC/ML ensemble | 7 | 8 | No | No | No |
+
+All candidates used 8 columns, 3 doubles, no triples and €6.00 cost. Dixon-Coles selected Pleno pair `1–1` (mass 0.1300218); official result was `M–0`. One coupon is only an end-to-end smoke test; it is not a statistically sufficient performance sample and provides no profitability evidence. The official SELAE result is a manually reviewed normalized extract, not raw HTML; prize tiers/payouts remain unimplemented.
+
+### Next action
+
+Expand the archive to multiple coupons only where each journey has independently reviewed official SELAE evidence. Then implement a separate payout layer using official per-bet prize tiers and exact persisted direct columns. Do not infer expected value or profitability from the current single-coupon pilot. Keep market comparisons limited to odds with verifiable pre-kickoff capture timestamps.
+
+
+## Coupon backtest result schema version 3 — 2026-11-17
+
+The fitted training-window provenance added in the coupon backtest is a required result-contract change. To avoid silently changing the meaning of schema version 2, introduced `COUPON_BACKTEST_RESULT_SCHEMA_VERSION = 3` and use it in both the batch result writer and the fail-closed acceptance validator. The coupon archive itself remains `COUPON_SCHEMA_VERSION = 2`; the two version domains are deliberately separate. The regression suite now rejects legacy result schema version 2 and uses the shared version constant for current fixtures.
+
+
+## Schema-v3 end-to-end verification — 2026-11-17
+
+- Code commit: `7d1cd819e304907ed17e8157a6c765e184c63287`. Introduced `COUPON_BACKTEST_RESULT_SCHEMA_VERSION = 3` separately from coupon archive schema version 2; both writer and acceptance validator consume the shared constant. Legacy result schema v2 is rejected by a regression test.
+- CI [44091537439](https://github.com/Baltas80/Kini-/actions/runs/44091537439): **389 passed**, 25 third-party NumPy deprecation warnings; Actionlint, Ruff lint and Ruff format passed.
+- Historical data validation [44091537535](https://github.com/Baltas80/Kini-/actions/runs/44091537535): **5,322 completed fixtures**, integrity and canonical identity validation passed; 10,644/10,644 team references resolved, 56 canonical teams, zero ambiguous/unresolved references, zero duplicates/conflicts, zero invalid labels and zero score/result mismatches. It reused the validated PR-base dataset under the weekly snapshot policy.
+- Coupon pilot [44091537438](https://github.com/Baltas80/Kini-/actions/runs/44091537438): **success** with result schema version 3, artifact ID `14332240705`, code revision `7d1cd819e304907ed17e8157a6c765e184c63287`. One coupon, 303 training matches from `2020-09-12` through `2020-12-11`, 14 predictions for each of DC, ML and fixed ensemble. Results matched the prior pilot: DC 7 single/7 best-column hits, ML 5/6, ensemble 7/8; no 14/14, Pleno or full 15/15 coverage; €6 per candidate.
+- Historical model workflow [44091537384](https://github.com/Baltas80/Kini-/actions/runs/44091537384): model backtest job skipped because predictive model code was unchanged; not counted as a new model validation.
+
+The schema migration and one-coupon integration path are validated. The next substantive work remains multi-coupon official reconciliation and a separate prize-tier/payout evaluator; one coupon does not support performance or profitability claims.
+
+
+## Multi-coupon official pilot — 2026-11-17
+
+### Implementation and evidence
+
+- Development branch: `feat/immutable-ticket-ledger`; PR [#10](https://github.com/Baltas80/Kini-/pull/10) remains open as a draft. No changes were made to `master`, and no PR was merged.
+- Implementation commit: `d0330042dedf566503ce34e3dbd231ab749b017d`; formatting-only correction: `b2c1d9b5b04858f22058c5ff84ba2289d878ece3`.
+- Added an independently reviewed normalized SELAE result snapshot for 2020-12-06 (Jornada 19), including 14 ordered main results, the Eibar–Valencia Pleno result, supporting official source URLs and the official prize distribution transcribed from the SELAE press-release PDF.
+- Extended the 2020/21 HistoricalQuiniela-to-Football-Data alias crosswalk for Valladolid, Osasuna, Lugo, Rayo Vallecano, Sabadell and R. Oviedo. Added regression tests for the new mappings and the complete official result snapshot.
+- Updated the coupon workflow to import Jornadas 19 and 21, verify both exact normalized-snapshot hashes, require all 30 fixtures to reconcile to Football-Data, and require 14 predictions from each of DC, ML and fixed DC/ML ensemble for both coupons.
+- The coupon workflow now reuses the latest successful, unexpired validated historical-data artifact from the PR base branch. It validates the artifact's 14 source-cache timestamps, one-hour source-snapshot coherence, profile integrity and row count. Manual dispatch instead performs `build_history.py --refresh --require-fresh`.
+
+### Final validation
+
+- CI [44102306450](https://github.com/Baltas80/Kini-/actions/runs/44102306450): **391 passed**, 25 warnings; Ruff lint, Ruff format and workflow validation passed. The first run identified a formatting-only issue in the new snapshot test; it was corrected in commit `b2c1d9b` and the final CI run passed.
+- Historical data validation [44102306414](https://github.com/Baltas80/Kini-/actions/runs/44102306414): **success**; it reused the validated PR-base dataset and passed source-profile, canonical identity and dataset integrity checks.
+- Coupon pilot [44102306745](https://github.com/Baltas80/Kini-/actions/runs/44102306745): **success**; artifact ID `14336777336`, result schema v3, code revision `b2c1d9b5b04858f22058c5ff84ba2289d878ece3`. Acceptance passed for two official coupons, 30 SELAE main/Pleno results, 30 canonical fixture reconciliations and six complete 14-match model forecasts.
+- Historical model workflow [44102306591](https://github.com/Baltas80/Kini-/actions/runs/44102306591): workflow completed successfully, but its historical backtest job was skipped by the change filter because predictive-model code was not changed. It is **not** counted as a new full model backtest.
+
+### Reproducible coupon sample
+
+The validated dataset contained 5,322 rows, SHA-256 `7251b84acd803047746c0c55c6bdabb60d9499208cfd6c781f72080295346f44`.
+
+| Coupon | First kickoff | Cutoff | Training matches | Training dates |
+|---|---|---|---:|---|
+| 2020-2021:19 | 2020-12-05 14:00 CET | 2020-12-04 | 277 | 2020-09-12–2020-12-04 |
+| 2020-2021:21 | 2020-12-12 14:00 CET | 2020-12-11 | 303 | 2020-09-12–2020-12-11 |
+
+Each model/coupon evaluation generated 14 predictions, eight direct columns (three doubles, zero triples), eight payable bets and €6.00 stake. No model failed.
+
+| Coupon | Model | Single-sign hits | Best direct column | 14/14 | Pleno | 15/15 |
+|---|---|---:|---:|---|---|---|
+| Jornada 19 | Dixon-Coles | 5 | 6 | No | No | No |
+| Jornada 19 | ML | 6 | 7 | No | No | No |
+| Jornada 19 | Fixed DC/ML ensemble | 4 | 7 | No | No | No |
+| Jornada 21 | Dixon-Coles | 7 | 7 | No | No | No |
+| Jornada 21 | ML | 5 | 6 | No | No | No |
+| Jornada 21 | Fixed DC/ML ensemble | 7 | 8 | No | No | No |
+
+Across the two coupons, mean best-column hits were 6.5 (DC), 6.5 (ML) and 7.5 (ensemble); mean single-sign hits were 6.0, 5.5 and 5.5 respectively. Each candidate spent €12.00 over the two coupons. These are descriptive smoke-test outputs only. The two coupons are adjacent weeks with heavily overlapping training histories; they are not an independent or sufficiently large performance sample. No model selection, long-run hit-rate, payout, expected-value or profitability conclusion is justified.
+
+The Dixon-Coles Pleno category predictions were 0–1 (probability mass 0.1417872) for Jornada 19 and 1–1 (mass 0.1300218) for Jornada 21. Official categories were 0–0 and M–0 respectively; neither was hit.
+
+### Remaining P6 work
+
+- The Jornada 19 normalized extract stores the official SELAE prize distribution (Pleno and 14 both rollover; 13: 37 winners at €7,077.29; 12: 569 at €460.21; 11: 5,240 at €49.97; 10: 31,232 at €10.06). The scoring engine now validates and consumes this table for conditional published-unit-prize references; it does not infer actual payout or profitability.
+- Remaining: add conservative consistency checks against published winner counts, retain raw-PDF integrity evidence where available, and expand the official coupon archive across more draws/seasons. Two adjacent coupons do not support model ranking or any profitability claim.
+
+
+## Final source-metadata revalidation — 2026-11-17
+
+The Jornada 19 official result URL was normalized to the SELAE route generated by `selae_result_url` (day `6`, without a leading zero). The normalized snapshot now records both Football-Data SP1 and SP2 source URLs, in addition to the SELAE result page, SELAE press-release PDF and HistoricalQuiniela kickoff schedule. The exact normalized snapshot SHA-256 is `f74e3e0afc7b4c0aa6f2f7582c80b378f3bc29e6671a34bddf04925896c607cf`; Jornada 21 remains `293660df4bbdd044c944998b2979935451dd19c8dcde5639a6a2f5fc76a35488`.
+
+- Final coupon pilot [44103113026](https://github.com/Baltas80/Kini-/actions/runs/44103113026): **success**, artifact ID `14337585593`, code revision `590af9d7da44828845e51d484dcfa7c2805eec62`. Both coupons, 30 fixture reconciliations and six 14-prediction model evaluations passed acceptance; metrics were unchanged from the preceding two-coupon run.
+- Final CI [44103113010](https://github.com/Baltas80/Kini-/actions/runs/44103113010): **391 passed**, 25 warnings; lint, formatting and workflow validation passed.
+- Final historical-data validation [44103113152](https://github.com/Baltas80/Kini-/actions/runs/44103113152): **success**, using the validated PR-base dataset artifact.
+- Historical model workflow [44103112931](https://github.com/Baltas80/Kini-/actions/runs/44103112931): workflow succeeded, but the predictive-model backtest job was skipped by its change filter. No new full historical model backtest is claimed.
+
+PR #10 remains open and draft. No merge or `master` modification occurred.
+
+
+## Official prize-tier scoring — 2026-11-17
+
+**Implemented and CI-validated on PR #10; not integrated.** The previous P6 note that the Jornada 19 prize table was not consumed is superseded by this section.
+
+- Added `kini_engine/prize_scoring.py` with strict validation for the 14 main fixtures, Pleno al 15, official SELAE result-page/PDF source binding, all six prize categories, winner counts, awarded/rollover states, and EUR amounts.
+- `score_ticket_record`, `TicketLedger.score_ticket_json` and the MCP scoring tool now accept an exact official-result snapshot. The ledger hashes its exact JSON bytes and includes the snapshot digest in evidence-bundle version 2.
+- Every expanded bet (14-sign direct column × selected Pleno pair) is classified independently. A bet receives the 14 tier for 14 main hits; the Pleno tier is additionally counted only when those 14 hits and the exact Pleno pair both match. Rollover tiers are never assigned an invented unit prize.
+- Published unit prizes are exposed only as a conditional reference. The ledger has no SELAE purchase/validation receipt proving that a stored pre-ticket was entered in the draw, and adding hypothetical bets changes the winner-sharing denominator. Therefore `payout_evaluated` and `profitability_evaluated` remain false; no net return, ROI or expected value is claimed.
+- Jornada 19's normalized snapshot SHA-256 after correcting its verification-method wording: `f74e3e0afc7b4c0aa6f2f7582c80b378f3bc29e6671a34bddf04925896c607cf`. This hashes the normalized JSON, not the original PDF bytes.
+- CI [44115126901](https://github.com/Baltas80/Kini-/actions/runs/44115126901): **398 passed, 25 warnings**; Ruff lint, Ruff formatting and GitHub Actions workflow validation passed.
+- Historical-data validation [44115125319](https://github.com/Baltas80/Kini-/actions/runs/44115125319): **success**.
+- Coupon workflow [44115125369](https://github.com/Baltas80/Kini-/actions/runs/44115125369): workflow success, but the pilot job was **skipped** (not a new coupon evaluation).
+- Historical-model workflow [44115126897](https://github.com/Baltas80/Kini-/actions/runs/44115126897): pending with no backtest job started; this scoring-only change is not counted as a model backtest. The change gate now explicitly excludes `kini_engine/prize_scoring.py` as well as the ticket-scoring modules.
+- Commits on the PR branch: `b9978dd` (prize-tier implementation), `f208b7e` (ledger API wiring), `b3f9c79` (CI lint/format coverage), `2dfd286` and `053a80c` (Ruff corrections), `1d70a83` (real SELAE snapshot validation test and provenance wording), `7692200` (import ordering), `50c52bb` (CLI prize-snapshot support), `f8a3db1` (formatter and backtest change-gate updates), `9332616` (allow HTTPS non-SELAE cross-check sources while keeping the two official SELAE roles host-locked). Current head: `9332616949535c919482b55b6932be29540cb5f4`.
+
+The real Jornada 19 snapshot test initially exposed that supporting-source validation incorrectly required every cross-check URL to be hosted by SELAE. The validator now requires the result page and prize PDF roles to use official SELAE hosts, while independently cited HistoricalQuiniela/Football-Data cross-checks must use HTTPS. The full suite now passes.
+
+### Next priority
+
+1. Strict validator against the real Jornada 19 normalized SELAE snapshot: tested in `tests/test_prize_scoring.py`.
+2. Add conservative winner-count consistency diagnostics without assuming the 14-category count includes or excludes Pleno winners.
+3. CLI scorer now accepts `--official-result-snapshot` alongside `--pleno15`; the historical-backtest change filter excludes this scoring-only module so model backtests are not repeated for prize-ledger changes. Preserve original PDF byte digests when retrievable.
+4. Expand official coupon/prize evidence across seasons; do not use the two-coupon smoke test for model ranking or profitability claims.
+
+PR #10 remains draft and targets the existing feature branch. No merge and no changes to `master`.
+
+
+
+## Prize-evidence validation hardening — 2026-11-17
+
+- Commit `8bcae60533320f5da966d6ecba1e3155a8b82149` hardens the official prize snapshot contract: schema versions and fixture position numbers must be actual integers (booleans/floats are rejected); Elige8 revenue and unit prize must both be strictly positive.
+- The prize validator now emits `winner_count_diagnostics` with the official counts preserved independently by category, checks that rollover categories have zero winners and awarded categories have positive winners, and explicitly marks the Pleno-vs-14 relationship as `not_assessed`. It does not aggregate winner counts or compare SELAE winning tickets directly with model-generated direct bets.
+- Commit `4135954746dd6a8d4ab941dfc680323b15ddf8f8` adds regression tests for the diagnostic semantics, zero Elige8 amounts, boolean fixture positions and non-integer schema versions.
+- Commit `618c313f691c09c27d71ee7a439facf063083a34` documents the winner-count interpretation and preserves the distinction between the normalized snapshot hash and a raw PDF byte digest.
+- The official Jornada 19 PDF text is independently readable through the official SELAE PDF page: it reports 0 Pleno and 0 category-14 winners, 37/569/5,240/31,232 winners in categories 13/12/11/10, respectively, and revenue of €3,491,465.25. This is source-text evidence, not a byte-level archive.
+- Raw PDF bytes were not retrievable from the execution container (DNS resolution failed); therefore no raw-PDF SHA-256 is claimed or fabricated. The existing importer computes the exact PDF-byte digest when a local PDF is supplied. The normalized snapshot SHA-256 remains `f74e3e0afc7b4c0aa6f2f7582c80b378f3bc29e6671a34bddf04925896c607cf`, and must not be presented as the PDF digest.
+- Validation status at this log entry: CI and targeted tests pending on the updated PR head. No changes to `master`; PR #10 remains a draft.
+
+
+
+## Prize-evidence hardening validation — 2026-11-17
+
+- The first CI attempt on the evidence-hardening changes failed only the Ruff formatting check for `tests/test_prize_scoring.py`; lint passed and pytest was correctly skipped. The formatting-only correction is commit `2aa2351b2d52445882446af254c0362fd4c8c6f4`.
+- Final CI on that head: [44123082244](https://github.com/Baltas80/Kini-/actions/runs/44123082244) — Actionlint, Ruff lint and Ruff format passed; **403 tests passed**, with 25 upstream NumPy/penaltyblog deprecation warnings.
+- Historical data validation: [44123082404](https://github.com/Baltas80/Kini-/actions/runs/44123082404) — **5,322 completed fixtures**, validated profile and canonical team identity checks passed. The workflow reused the successful, unexpired PR-base dataset artifact; it did not rebuild Football-Data source files.
+- Coupon workflow: [44123082309](https://github.com/Baltas80/Kini-/actions/runs/44123082309) — workflow succeeded, but the coupon pilot was skipped by the change filter. No new coupon backtest is claimed.
+- Historical-model workflow: [44123083164](https://github.com/Baltas80/Kini-/actions/runs/44123083164) — workflow succeeded, but the predictive-model backtest job was skipped by the change filter. No new model metrics are claimed.
+- Final code head before this documentation update: `2aa2351b2d52445882446af254c0362fd4c8c6f4`. PR #10 remains open/draft, stacked on PR #9. No merge and no changes to `master`.
+- Next P6 candidate identified but not yet imported: 2020/21 Jornada 22 (draw 2020-12-20). Official SELAE result page and press-release PDF publish the 14 ordered results, Pleno and prize distribution; HistoricalQuiniela supplies fixture-level kickoff times. Before adding the snapshot, reconcile every fixture to the exact SP1/SP2 Football-Data row and season-scoped alias, then run the existing coupon acceptance workflow. Sources: [SELAE results](https://www.loteriasyapuestas.es/es/la-quiniela/resultados/la-quiniela-resultados-del-20-de-diciembre-de-2020), [SELAE press-release PDF](https://www.loteriasyapuestas.es/f/loterias/documentos/Quiniela/Notas%20de%20prensa/NOTA_DE_PRENSA_DE_LA_QUINIELA_DE_FECHA_20_12_20.pdf), [HistoricalQuiniela Jornada 22](https://www.historicoquiniela.com/historico/2020-2021/22).
+
+
+## Prize-evidence chronology validation — 2026-11-17
+
+A structural provenance gap was found in the official prize-snapshot validator: it parsed `verified_at` as a date but did not require it to be on or after the draw date. That allowed an internally inconsistent extract to claim verification before the result existed.
+
+- Commit: [`48a44fc`](https://github.com/Baltas80/Kini-/commit/48a44fcbb4a4c6aa594c2e0b521f6c75e11d085c).
+- `kini_engine/prize_scoring.py` now rejects `verified_at < draw_date`; a regression test covers the Jornada 19 draw date (2020-12-06) with an impossible verification date (2020-12-05). Same-day and later verification remain valid.
+- Updated `docs/TICKET_LEDGER.md` to state the chronology contract.
+- CI [44145763700](https://github.com/Baltas80/Kini-/actions/runs/44145763700): Actionlint, Ruff lint/format passed; **407 tests passed**, 25 upstream penaltyblog/NumPy deprecation warnings.
+- Historical data validation [44145763667](https://github.com/Baltas80/Kini-/actions/runs/44145763667): **5,322 completed fixtures**, 56 canonical team IDs, 10,644/10,644 resolved team references, zero unresolved/ambiguous references, zero duplicates/conflicts, and all 14 source files within the 168-hour weekly snapshot window. The validated PR-base dataset was reused; source CSVs were not rebuilt.
+- Coupon workflow [44145763637](https://github.com/Baltas80/Kini-/actions/runs/44145763637) succeeded with the pilot skipped by its change filter. No new coupon evaluation is claimed.
+- Historical model workflow [44145763743](https://github.com/Baltas80/Kini-/actions/runs/44145763743) succeeded with the expensive backtest job skipped by its change filter. No new predictive metric or market comparison is claimed.
+
+This is a provenance-validation fix only; it does not change forecasts, optimizer behavior or historical model metrics. PR #10 remains open/draft and targets `feat/selae-fixture-reconciliation`. No PR was merged and `master` was not modified.
+
+**Next priority:** expand the independently verified SELAE coupon/prize archive beyond Jornadas 19, 21 and 22, retaining exact raw-PDF byte digests whenever the source bytes can be retrieved. Keep the three-coupon pilot classified as a pipeline smoke test, not evidence for model ranking or profitability.
+
+
+## Jornada 25 and four-coupon pilot — validated 2026-11-17
+
+- Commit 2ebcc2a52c1ba20ca7ca0d9d8b1883f16865047e adds the normalized SELAE Jornada 25 snapshot, the explicit Ponferradina alias, fixture/prize regression tests and four-coupon workflow acceptance. Commit 9df6ac76fddd570b06e59b14dcb8c345ce8f2b2b is the formatting-only correction required by Ruff.
+- Official evidence: [SELAE result page](https://www.loteriasyapuestas.es/es/la-quiniela/resultados/la-quiniela-resultados-del-03-de-enero-de-2021), [SELAE press-release PDF](https://www.loteriasyapuestas.es/f/loterias/documentos/Quiniela/Notas%20de%20prensa/NOTA_DE_PRENSA_DE_LA_QUINIELA_DE_FECHA_3_1_21.pdf), and [HistoricalQuiniela Jornada 25 kickoff schedule](https://www.historicoquiniela.com/historico/2020-2021/25). All 14 ordered main fixtures and Valencia–Cádiz Pleno 1–1 reconcile to the validated 2020/2021 Football-Data SP1/SP2 dataset; all 15 fixture reconciliations passed in the coupon workflow.
+- The normalized extract records the official prize distribution: €2,669,930.25 Quiniela revenue; Pleno 1 winner/€200,244.77; 14: 14/€30,513.49; 13: 275/€728.16; 12: 3,660/€54.71; 11: 30,768/€6.51; 10: 143,371/€1.68; Elige8 286/€140.81 on €73,222.50 revenue. The published combined P15 + first-category amount €230,758.26 matches the sum of the two unit amounts. The PDF bytes were not retrievable; no raw-PDF hash is claimed.
+- The latest validated historical dataset had 5,322 rows and SHA-256 7251b84acd803047746c0c55c6bdabb60d9499208cfd6c781f72080295346f44. The Jornada 25 first kickoff is 2021-01-02 14:00 Europe/Madrid; cutoff 2021-01-01; 364 training matches through 2020-12-31.
+- Final four-coupon pilot [44147170147](https://github.com/Baltas80/Kini-/actions/runs/44147170147), artifact ID 14356852772, ZIP SHA-256 aa924ae1dcc73f06732b39a6091c5fa15278735dd25943cb4b737992e50bd1ef: 4 official coupons; 60/60 fixtures reconciled; 12 successful model/coupon evaluations; 14 forecasts per model/coupon (168 total); zero model failures or empty prediction sets. Each candidate used 8 columns, 3 doubles, no triples, 8 payable bets and €6.00 per coupon.
+
+| Coupon | Training cutoff | Matches | DC single/best | ML single/best | Ensemble single/best |
+|---|---|---:|---:|---:|---:|
+| 2020-2021:19 | 2020-12-04 | 277 | 5 / 6 | 6 / 7 | 4 / 7 |
+| 2020-2021:21 | 2020-12-11 | 303 | 7 / 7 | 5 / 6 | 7 / 8 |
+| 2020-2021:22 | 2020-12-18 | 325 | 6 / 7 | 7 / 7 | 6 / 7 |
+| 2020-2021:25 | 2021-01-01 | 364 | 8 / 9 | 7 / 8 | 8 / 8 |
+
+- Mean single-sign/best-column hits: DC 6.50/7.25; ML 6.25/7.00; fixed ensemble 6.25/7.50. No 14/14, no 15/15, and no Pleno pair hit. The sample is temporally close and overlapping; no model ranking, hit-rate, Brier/Log Loss, market comparison or profitability conclusion is justified.
+- CI [44147170232](https://github.com/Baltas80/Kini-/actions/runs/44147170232): **410 passed**, 25 upstream deprecation warnings; Actionlint, Ruff lint and format passed. Historical data validation [44147170149](https://github.com/Baltas80/Kini-/actions/runs/44147170149): 5,322 fixtures, 10,644 resolved team references, 56 canonical IDs, zero unresolved/ambiguous identities and zero duplicates/conflicts. Historical model workflow [44147170145](https://github.com/Baltas80/Kini-/actions/runs/44147170145): backtest job skipped by change filter; no new full model metrics.
+- The earlier statement that prize-tier validation/scoring was not implemented is superseded: kini_engine/prize_scoring.py now validates official prize tables and classifies each expanded direct bet, exposing conditional published-unit-prize references only. It still does not prove ticket participation or infer actual payout, expected value or profitability.
+- PR #10 remains open/draft and stacked; no merge and no modification of master.
+
+**Next action:** continue the P6 archive expansion across more dates/seasons with strict official-source and fixture reconciliation, retaining raw PDF bytes/hashes only when retrievable.
+
+
+## P6 archive expansion — Jornada 29 / five-coupon pilot (2026-11-17)
+
+- Added normalized SELAE snapshot `2020-2021-29.json` for draw 2021-01-24. Official result page and press-release PDF agree on 14 signs and Pleno M–1; prize table is validated by regression test.
+- Reconciled all 15 ordered fixtures (14 main + Pleno Athletic Club–Getafe 5–1) against HistoricalQuiniela kickoff schedule and Football-Data SP1/SP2. New explicit aliases: Girona → Girona and Castellón → Castellon.
+- First kickoff: 2021-01-23 14:00 Europe/Madrid. Training cutoff: 2021-01-22. Pre-kickoff history: 417 matches, 2020-09-12 through 2021-01-22.
+- Jornada 29 official prize evidence: revenue €3,149,695.50; Pleno and 14 rolled over; 13: 40 × €5,905.68; 12: 609 × €387.89; 11: 4,756 × €49.67; 10: 25,968 × €10.92; Elige8: €83,271.50 revenue, 66 winners, €693.93 each.
+- The original PDF bytes were not captured. No PDF SHA-256 is claimed. Normalized snapshot SHA-256: `4794789c451a10a3a8b7cf82b3fb9ea0e857007280e42546312b0c695205c34e`.
+- Five-coupon pilot [44156981828](https://github.com/Baltas80/Kini-/actions/runs/44156981828), artifact 14360688825, ZIP SHA-256 `4e7d5f21f8dcf4c871606db3fe24b3ff7eb2af02d908b6c381a3406723ad98b2`: 5 official coupons; 75/75 fixtures reconciled; 15 successful DC/ML/ensemble evaluations; 210 forecasts; zero failures and zero empty prediction sets. Each candidate generated 8 columns, 3 doubles, no triples, 8 bets and €6.00 per coupon.
+- Jornada 29 results: DC 4/6, ML 5/6, ensemble 5/5 (single-sign/best-column hits). Aggregate five-draw means: DC 6.00/7.00, ML 6.00/6.80, ensemble 6.00/7.00. No 14/14, full 15/15 or Pleno pair hit; no model ranking is justified.
+- CI [44156981868](https://github.com/Baltas80/Kini-/actions/runs/44156981868): **412 tests passed**, 25 upstream deprecation warnings; Actionlint and Ruff passed. Data validation [44156981922](https://github.com/Baltas80/Kini-/actions/runs/44156981922): 5,322 fixtures, 56 canonical team IDs, 10,644/10,644 references resolved, zero unresolved/ambiguous identities, duplicates or score/result mismatches; 14 source files within 168 hours.
+- Historical model workflow [44156982053](https://github.com/Baltas80/Kini-/actions/runs/44156982053): model-backtest job skipped by the change filter; no new Brier/Log Loss or market comparison. Actual payout/ROI remain unevaluated.
+- PR #10 remains open/draft, based on `feat/selae-fixture-reconciliation`; `master` remains untouched.
+
+**Next action:** identify and reconcile a candidate coupon from a different season, retaining strict source, kickoff, team-identity, score and prize evidence.
+
+
+
+## 2026-11-18 — Strict source probability-vector contract
+
+A consistency review after the P4 probability-contract change found that the shared live-source validator and the per-bookmaker historical helper were still more permissive than the backtest metrics/calibration contract. They could accept a vector with an extra key or numeric strings, then silently ignore/coerce those values.
+
+- `kini_engine/core.py::_validated_probability_vector` now requires exactly the `1`, `X`, `2` keys and actual numeric non-boolean values. It rejects non-finite/out-of-range values and sums outside 1e-6; it never coerces strings or repairs malformed vectors.
+- `kini_engine/backtest.py::_bookmaker_probability` now reuses the same validator, preventing a weaker per-book path.
+- Regression tests cover extra keys, missing keys, numeric strings and booleans for market/LAE eligibility, plus malformed bookmaker vectors.
+- No model formula, training split, source dataset or optimizer objective changes.
+
+### Baseline evidence before this change
+
+- Branch head: `b10fb74de57db5e674a8745eecabbc26ef971535`, PR #10.
+- CI [44190886893](https://github.com/Baltas80/Kini-/actions/runs/44190886893): Actionlint, Ruff lint/format and **423 tests passed** (25 third-party deprecation warnings).
+- Historical-data validation [44190886994](https://github.com/Baltas80/Kini-/actions/runs/44190886994): passed.
+- Historical backtest [44190887051](https://github.com/Baltas80/Kini-/actions/runs/44190887051): all five streams passed acceptance with **5,022/5,022 forecasts each**; the prediction-diagnostics gate passed. Dataset: 5,322 rows, SHA-256 `7251b84acd803047746c0c55c6bdabb60d9499208cfd6c781f72080295346f44`.
+- On the exact 3,856-fixture model/market intersection, market Brier/Log Loss were **0.597512 / 0.999449**; the main ensemble scored **0.613610 / 1.022979**. The market remained stronger. Its 4,433 schedule-eligible rows remain a schedule-screened benchmark, not exact timestamp-verified executable odds.
+
+### Validation of this change
+
+Pending CI, historical-data validation and the required historical-backtest workflow on the new head. No new predictive metric is claimed until those jobs complete.
+
+
+### Validation update — 2026-11-18, current head `867ec2f`
+
+The first CI attempt on implementation commit `564e205` failed only at the formatting gate because the appended bookmaker regression test had one missing top-level blank line. This was corrected in `867ec2f`; no code or test logic changed in that formatting-only commit.
+
+- CI [44205910370](https://github.com/Baltas80/Kini-/actions/runs/44205910370): **430 tests passed**; Actionlint, Ruff lint and Ruff format passed. The 25 NumPy/penaltyblog deprecation warnings are upstream.
+- Historical-data validation [44205910420](https://github.com/Baltas80/Kini-/actions/runs/44205910420): **5,322 completed fixtures**, 56 canonical team IDs, 10,644/10,644 references resolved, zero unresolved/ambiguous references, duplicates or conflicting duplicates; integrity passed.
+- Coupon workflow [44205910399](https://github.com/Baltas80/Kini-/actions/runs/44205910399): change gate passed; pilot skipped because coupon archive/optimizer behavior was not changed.
+- Historical backtest [44205701560](https://github.com/Baltas80/Kini-/actions/runs/44205701560) is still running its full comparison. The format-only follow-up [44205910454](https://github.com/Baltas80/Kini-/actions/runs/44205910454) is queued; no new predictive result is claimed until the full comparison passes its non-empty, ledger, market and calibration gates.
+
+The source-vector implementation and regression suite are validated by CI. The P4 change remains **partially validated** until the required full historical comparison completes.
+
+## 2026-11-18 — Strict source-vector contract and full historical backtest validated
+
+The strict source-vector hardening is now validated end-to-end. Functional code commit: [564e205](https://github.com/Baltas80/Kini-/commit/564e205c0a6b996ba65cf880a9c91ef5d57d0dd4). Later commits 867ec2f and a4992d9 contain formatting/documentation only.
+
+- kini_engine/core.py::_validated_probability_vector requires exactly the 1, X, 2 keys and actual numeric, non-boolean values. It rejects NaN/infinity, values outside [0,1] and sums outside 1e-6; it does not coerce strings or renormalize malformed data.
+- kini_engine/backtest.py::_bookmaker_probability now reuses that validator. Regression tests cover extra/missing keys, numeric strings and booleans in market/LAE and bookmaker paths.
+- CI on the current PR head: [44206165507](https://github.com/Baltas80/Kini-/actions/runs/44206165507), 430 tests passed; Actionlint, Ruff lint and Ruff format passed. The 25 NumPy/penaltyblog warnings are upstream deprecations.
+- Historical-data validation on the current PR head: [44206165633](https://github.com/Baltas80/Kini-/actions/runs/44206165633), 5,322 completed fixtures, 56 canonical team IDs, 10,644/10,644 team references resolved, zero unresolved/ambiguous references, duplicates or conflicting duplicates; integrity passed.
+- Coupon workflow [44206165542](https://github.com/Baltas80/Kini-/actions/runs/44206165542) passed its change gate and skipped the pilot because coupon/optimizer behavior did not change.
+- Full historical backtest on functional code commit [564e205](https://github.com/Baltas80/Kini-/commit/564e205c0a6b996ba65cf880a9c91ef5d57d0dd4): [run 44205701560](https://github.com/Baltas80/Kini-/actions/runs/44205701560) succeeded. All five forecast streams produced 5,022/5,022 forecasts with zero prediction errors. The per-fixture forecast ledger, cold-start diagnostics, market temporal gates, snapshot-aligned market benchmark and prequential calibration gates all passed. Dataset: 5,322 rows, SHA-256 7251b84acd803047746c0c55c6bdabb60d9499208cfd6c781f72080295346f44.
+- Snapshot-aligned comparison: 3,991 identical fixtures across 319 market snapshot dates, one fit per snapshot, with training cutoff strictly before the snapshot. Artifact [14386790498](https://github.com/Baltas80/Kini-/actions/runs/44205701560/artifacts/14386790498), ZIP SHA-256 9c37946728af423d1523553e0eabf01ce546a84d7d7a6d26d4002c99521099d3.
+
+| Model (snapshot-aligned) | n | Accuracy | Multiclass Brier | Log Loss |
+|---|---:|---:|---:|---:|
+| Dixon–Coles | 3,991 | 0.48284 | 0.61483 | 1.02837 |
+| ML | 3,991 | 0.44250 | 0.63892 | 1.06067 |
+| Market-assisted ensemble | 3,991 | 0.48284 | 0.61097 | 1.01954 |
+| Fixed DC/ML-only blend | 3,991 | 0.47983 | 0.61352 | 1.02353 |
+| Adaptive DC/ML-only blend | 3,991 | 0.48008 | 0.61377 | 1.02393 |
+| Multi-book pre-closing market | 3,991 | 0.51065 | 0.59415 | 0.99461 |
+
+The market remains better on all three headline metrics. The market-assisted ensemble is not an independent market challenger, and the DC/ML-only blends do not close the gap. No model is promoted. The separate wider schedule-screened market sample contains 4,433 fixtures; it is not a substitute for the snapshot-aligned sample.
+
+### Point-in-time review
+
+The existing feature path was reviewed in core.py and backtest.py:
+
+- The ML model uses 12 rolling form features derived only from completed results on dates strictly before the fixture.
+- Historical training rows are built chronologically in date groups; all fixtures on a date are featurized before any result from that date is added to the rolling state.
+- Inference uses the history available before the forecast date. The walk-forward loop forecasts a whole date before appending that date's results.
+- Snapshot-aligned forecasts refit once per snapshot and use one identical strictly prior history for all fixtures assigned to that snapshot.
+- Existing regression tests cover same-day/future-result contamination, unverified standings, incremental/reference feature-builder equivalence, same-day group isolation, snapshot-day exclusion and LAE capture ordering.
+
+This audit found no leakage path in the current 12 ML features or the date-level walk-forward construction. It does not prove the exact publication time of historical match results; the source provides calendar dates only.
+
+### Remaining limitation and next action
+
+Football-Data provides no per-fixture odds-capture timestamp and does not document the timezone of its CSV Time field. Friday/Tuesday fixtures remain excluded by the conservative schedule screen; other schedule-compatible rows are not exact timestamp verification or proof of executable prices. Next, investigate a historically timestamped odds provider with documented licensing and cost, then integrate it only if the captured-at timestamp can be tied to each fixture. Do not relax the current fail-closed eligibility rule to increase sample size.
+
+The current PR head is a4992d9; its changes after the tested functional commit are documentation/formatting only. PR #10 remains open/draft and stacked on feat/selae-fixture-reconciliation. master remains untouched; no PR was merged.
+
+## 2026-11-18 — Historical odds provider reconnaissance
+
+The exact per-fixture Football-Data capture timestamp cannot be reconstructed from the current CSVs. A targeted provider review identified two credible alternatives, but neither is yet approved for ingestion.
+
+### Candidate A — The Odds API
+
+- Historical featured markets include 1X2 and begin on 2020-06-06. Snapshots are every 10 minutes through 2022-09 and every 5 minutes thereafter.
+- A historical query returns the snapshot timestamp actually selected: the closest snapshot equal to or earlier than the requested ISO-8601 timestamp. This supports a reproducible pre-kickoff cutoff rather than inferring capture time from a weekly schedule.
+- Historical data requires a paid plan. Current published entry plans: $30/month for 20,000 credits, $59/month for 100,000, $119/month for 5 million and $249/month for 15 million. The free plan has 500 credits but excludes historical odds; historical coverage discovery is available on the free plan.
+- Historical featured-market usage is 10 credits per region per market per snapshot. One region and one 1X2 market therefore cost 10 credits per requested snapshot. This makes a targeted sample feasible on the 20,000-credit plan, but a full multi-season, multi-snapshot archive must be budgeted before extraction.
+- Coverage for Spanish LaLiga and Segunda, European bookmaker depth, historical bookmaker continuity and event-ID matching has not yet been verified. Do not assume those competitions or preferred Spanish books are available for every season.
+- Sources: [historical data and timestamp semantics](https://the-odds-api.com/historical-odds-data/), [API snapshot frequency and quota](https://the-odds-api.com/liveapi/guides/v4/index.html), [published plans](https://the-odds-api.com/).
+
+### Candidate B — Betfair Historical Data
+
+- Time-stamped Exchange data is available from May 2015. The published soccer tiers list Basic as free with one-minute frequency, Advanced at GBP 69 with one-second frequency and Pro at GBP 230 with tick data.
+- Data is released five days after settlement. This is historical exchange liquidity/price evidence, not a bookmaker consensus and not interchangeable with the Football-Data bookmaker benchmark.
+- The provider states that the data is for personal/internal use only; commercial use requires a separate licence, and redistribution is prohibited without written permission. This restriction is material for any public or commercial Quiniela Predictor product.
+- Sources: [official archive and soccer pricing](https://historicdata.betfair.com/ExchangeHistoricalStore/), [data access and download](https://support.developer.betfair.com/hc/en-us/articles/360000402211-How-do-I-download-and-view-Betfair-Historical-Data), [commercial-use and access terms](https://historicdata.betfair.com/).
+
+### Decision and next technical step
+
+The Odds API is the first candidate to coverage-probe because its historical snapshot response exposes an explicit timestamp and its published plans permit a bounded one-month test. The free plan can inspect coverage without buying historical odds. The next implementation unit is a read-only coverage probe for the Spanish LaLiga and Segunda 1X2 market, recording requested time, returned snapshot timestamp, bookmaker keys, event IDs, teams, commence time and response hash. It must not write market rows into the production dataset until exact fixture reconciliation and licensing review pass.
+
+No API key, paid subscription, provider data or new bookmaker probabilities were available in this run. No external data was ingested and no new predictive metric is claimed. The current Football-Data benchmark remains unchanged and must retain its schedule/timestamp limitations.
+
+## 2026-11-18 — Read-only historical odds coverage probe implemented
+
+- Added `scripts/probe_the_odds_api_coverage.py` and `tests/test_odds_api_coverage.py` on the existing PR branch. The probe reads the verified SELAE fixture crosswalk and checks Spanish SP1/SP2 events at 24, 6 and 1 hour before official kickoff by default.
+- It calls only the historical-events and historical-event-markets coverage endpoints. It records the requested timestamp, returned snapshot timestamp and staleness, exact fixture match status, event ID, provider team names, provider kickoff, bookmaker keys, per-bookmaker market keys, `h2h` availability, quota headers and SHA-256 response digests.
+- Team matching is strict (Unicode NFKC, whitespace and case only); accents and substantive aliases are not guessed. Unmatched candidates remain diagnostic evidence and are not joined to the model data.
+- The probe sends the API key in the `x-api-key` header, never puts it in the URL, restricts each run to one bookmaker region for an accurate credit ceiling, writes an atomic local report under gitignored `artifacts/`, and explicitly reports that prices were not requested and no production dataset was modified.
+- Official documentation checked 2026-11-18 lists both Spanish LaLiga and Segunda historical sport coverage from 2020-06-06. The free plan includes 500 credits/month; the two coverage-discovery endpoints are available on all plans at one credit per request. Historical prices remain paid-only (10 credits per region/market/snapshot); the published 20K plan is USD $30/month. No purchase is initiated.
+- Added operator documentation at `docs/ODDS_API_COVERAGE_PROBE.md`. CI's Ruff lint/format file lists include the new script and tests. The first CI attempt found style/type-exception issues; these were corrected in commit `32dc129`. The final CI run for that commit is still pending at this checkpoint. Historical-data validation passed; expensive historical-model and coupon jobs correctly skipped because no model/coupon behavior changed.
+
+**Not yet executed live:** no `THE_ODDS_API_KEY` was supplied to this run, so no provider requests were sent and no bookmaker/event coverage result is claimed. The ten-fixture crosswalk is a current-season sample, not a full multi-season census. Coverage metadata is not price evidence, not a market benchmark and not eligible model input. The next action is to run the probe with a valid key, review exact team reconciliation and h2h availability, then decide whether a bounded paid price pilot and licensing review are justified. Football-Data's conservative market eligibility rule remains unchanged.
+
+## 2026-11-18 — Bounded Actions entrypoint for historical-odds coverage
+
+- Prepared `.github/workflows/odds-api-coverage-probe.yml` as a manual, serialized, read-only GitHub Actions workflow.
+- It requires the repository secret `THE_ODDS_API_KEY`, uses the existing verified SELAE crosswalk, and enforces a hard cap of 10 fixtures × 3 horizons × 2 discovery endpoints = **60 maximum requests/credits**.
+- It calls only historical event and event-market coverage discovery. The paid historical-odds endpoint is not called; no prices enter the dataset or models.
+- The job summary contains aggregate match and `h2h` availability counts by competition/horizon only. It does not upload raw responses, event IDs or bookmaker-level records, and deletes the local raw report after summarization.
+- The workflow is on the PR branch only; GitHub manual dispatch becomes available after it reaches the default branch. It has not been merged.
+- No API key was supplied to this run, so no provider request was sent and no live coverage claim is made.
+- **Next action:** after authorized integration, add `THE_ODDS_API_KEY` as a repository Actions secret and run the default 10-fixture probe. Review the aggregate result before expanding the crosswalk or considering any paid price pilot.
+
+## 2026-11-18 — Bounded Actions workflow validation
+
+- Workflow and documentation commit: [713a87c](https://github.com/Baltas80/Kini-/commit/713a87cc9f0930e0ab4743ed2bf229c77801178e).
+- CI [44229519439](https://github.com/Baltas80/Kini-/actions/runs/44229519439) passed the Actionlint workflow-validation step, Ruff lint, Ruff format and **437 tests**. The 25 warnings are upstream NumPy/penaltyblog deprecations in the Dixon–Coles dependency path.
+- Historical-data validation [44229519448](https://github.com/Baltas80/Kini-/actions/runs/44229519448) passed: **5,322/5,322** completed fixtures; 56 canonical team IDs; 10,644/10,644 team references resolved; zero unresolved references, missing scores, duplicate fixtures, conflicting duplicates or score/result mismatches; `integrity_passed=true`.
+- Historical-model workflow [44229519480](https://github.com/Baltas80/Kini-/actions/runs/44229519480) and coupon workflow [44229519461](https://github.com/Baltas80/Kini-/actions/runs/44229519461) passed their change gates and correctly skipped the expensive model/coupon jobs. This change contains no model, dataset, coupon or optimizer behavior; no new predictive metric is claimed.
+- The new workflow's YAML and embedded Python blocks were parsed/compiled locally; the CI Actionlint step also passed against the committed workflow.
+- The live provider probe was not dispatched: the workflow is not yet on the default branch, and no API key was supplied to this run. Therefore zero provider requests were sent and no event/bookmaker coverage is claimed.
+- `master` remains at `ef331c3a3f50220b5d2b1a71900a2d7003b259c4`; PR [#10](https://github.com/Baltas80/Kini-/pull/10) remains open/draft. No merge or direct change to `master`.
+- **Next action:** after authorized integration makes the workflow dispatchable, add `THE_ODDS_API_KEY` as a repository Actions secret and run the default bounded EU probe. Do not ingest provider data or change model eligibility based on coverage metadata alone.
+
+
+## 2026-11-18 — WAL-aware ticket-ledger backup and integrity verification
+
+- Added `TicketLedger.verify_integrity()`: it runs SQLite `integrity_check` and `foreign_key_check`, recomputes every stored ticket and score SHA-256, revalidates every ticket schema and admission timestamp, and checks that each score remains bound to its ticket and scoring-evidence key.
+- Added `TicketLedger.backup_to(destination)`: it verifies the live ledger first, uses SQLite's online backup API so committed WAL content is included, verifies the standalone destination, checks ticket/score counts, fsyncs the completed file, and publishes it without overwriting an existing path. Publication uses a same-directory hard link; the destination filesystem must support hard links.
+- Added operator command `python -m scripts.backup_ticket_ledger --destination backups/kini-tickets-YYYY-MM-DD.sqlite3`. It accepts `--source` or defaults to `KINI_TICKET_LEDGER_PATH` / `data/kini-tickets.sqlite3`, and reports the absolute path, file SHA-256 and record counts. The command refuses to create a backup from a missing source or overwrite an existing backup.
+- Added regression tests for full logical verification, ticket+score backup/reopen, same-path and overwrite refusal, and fail-closed behavior on a corrupted source record. Updated the CI lint/format allowlist and `docs/TICKET_LEDGER.md`.
+- Final CI [44236087928](https://github.com/Baltas80/Kini-/actions/runs/44236087928) on commit [bf745a3](https://github.com/Baltas80/Kini-/commit/bf745a3192a33a84052343b6634f889b88ed3270) passed Actionlint, Ruff lint, Ruff format and **441 tests**. The 25 warnings are upstream NumPy/penaltyblog Dixon–Coles deprecations; no project test failed. The first attempt failed only the format gate; formatting was corrected in commit `bf745a3` and the full suite then passed.
+- Historical-data validation [44236087912](https://github.com/Baltas80/Kini-/actions/runs/44236087912) passed on the same commit: **5,322 completed fixtures**, zero missing team names, zero missing final scores, zero duplicate fixtures, zero conflicting duplicates and `integrity_passed=true`.
+- Historical-model [44236088112](https://github.com/Baltas80/Kini-/actions/runs/44236088112) and coupon [44236087904](https://github.com/Baltas80/Kini-/actions/runs/44236087904) workflows passed their change gates and correctly skipped the expensive model/coupon jobs. This change is storage/backup hardening only; it does not change probabilities, market inputs, ticket optimization or model metrics. No new backtest result is claimed.
+- PR [#10](https://github.com/Baltas80/Kini-/pull/10) remains open/draft on `feat/immutable-ticket-ledger`. `master` remains at `ef331c3a3f50220b5d2b1a71900a2d7003b259c4`; no merge or direct master change occurred.
+
+**Next action:** keep the historical-odds provider probe read-only and pending. It still requires an operator-supplied `THE_ODDS_API_KEY` and authorized integration before GitHub's manual dispatch can run. Do not add market prices to the training set until exact event/fixture matching, point-in-time validation and licensing are independently demonstrated.
+
+
+## 2026-11-18 — Ticket-ledger integrity metadata hardening
+
+- Follow-up review found that the ledger's ticket payload hash and schema validation did not compare the denormalized SQLite columns used by draw-date queries (draw_date, ticket creation/cutoff timestamps and first kickoff) with the canonical payload. A modified index column could therefore misroute a listing while the payload hash remained valid. The full integrity check now verifies these fields, and get_ticket_record validates them on every read so draw-date listings fail closed.
+- Score integrity now requires the score's reconciliation digest to be valid and bound to the stored evidence key (including legacy no-Pleno records), and validates that the score's recorded_at_utc is an explicit UTC timestamp.
+- Regression coverage includes four tampered ticket-index columns, a tampered draw-date listing/read path, a timezone-naive score timestamp, and a score reconciliation digest that is rehashed but no longer matches its immutable evidence key.
+- Final code commit: [103732a](https://github.com/Baltas80/Kini-/commit/103732ab7e3b5455cada13823a778fe2ba02dd41). The immediately preceding attempt [a83a257](https://github.com/Baltas80/Kini-/commit/a83a2574c66635425d322c5fea8b9beca1f8eaef) failed only the Ruff format gate; formatting was corrected in 103732a and the full CI was rerun.
+- CI [44243800741](https://github.com/Baltas80/Kini-/actions/runs/44243800741) passed Actionlint, Ruff lint, Ruff format and **448 tests**. The 25 warnings remain upstream NumPy/penaltyblog Dixon–Coles deprecations.
+- Historical-data validation [44243800727](https://github.com/Baltas80/Kini-/actions/runs/44243800727) passed with **5,322 completed fixtures**, 56 canonical team IDs, 10,644/10,644 team references resolved, zero unresolved references, zero duplicate/conflicting fixtures and integrity_passed=true.
+- Historical-model [44243800701](https://github.com/Baltas80/Kini-/actions/runs/44243800701) and coupon [44243800724](https://github.com/Baltas80/Kini-/actions/runs/44243800724) passed their change gates and correctly skipped the expensive model/coupon jobs. This is ledger-storage hardening; no new predictive metric or coupon result is claimed.
+- master remains at ef331c3a3f50220b5d2b1a71900a2d7003b259c4. PR [#10](https://github.com/Baltas80/Kini-/pull/10) remains open/draft on feat/immutable-ticket-ledger; no merge or direct change to master occurred.
+
+**Next action:** retain the Odds API probe as read-only and pending. Its manual workflow still requires the repository Actions secret THE_ODDS_API_KEY and authorized integration to the default branch before it can be dispatched. Do not ingest coverage metadata or prices into the training set until exact event/fixture matching, point-in-time timestamps and licensing are independently established.
+
+
+## 2026-11-18 — P0 historical backtest acceptance completed (run 44250711096)
+
+The previously pending historical-model run is now complete and validated on code revision `f17566ba8f70ca87917b4351a63a142c41e6faea` (PR #10 branch). This closes the non-empty forecast acceptance blocker for this revision: **5,022/5,022 forecasts for each of five model streams, zero prediction errors, zero empty prediction sets**.
+
+- [Historical backtest workflow 44250711096](https://github.com/Baltas80/Kini-/actions/runs/44250711096) completed successfully. The run enforced non-empty backtests, per-fixture forecast-ledger acceptance, cold-start diagnostics, schedule-screened market eligibility, common-information-time comparisons, snapshot-aligned market checks, fixed-book Bet365 checks and prequential-calibration sample consistency.
+- [CI 44250711029](https://github.com/Baltas80/Kini-/actions/runs/44250711029) passed Actionlint, Ruff lint/format and **452 tests** (25 upstream NumPy/penaltyblog deprecation warnings).
+- [Historical data validation 44250711084](https://github.com/Baltas80/Kini-/actions/runs/44250711084) passed. Dataset: 5,322 fixtures, 56 canonical teams, 10,644/10,644 team references resolved, no unresolved identities, duplicates or conflicting fixtures.
+- [Coupon pilot 44250710961](https://github.com/Baltas80/Kini-/actions/runs/44250710961) passed its change gate and skipped the pilot because this commit does not alter coupon behavior.
+
+### Reproducibility and integrity
+
+- Dataset CSV SHA-256: `7251b84acd803047746c0c55c6bdabb60d9499208cfd6c781f72080295346f44` (5,322 rows; 3,223,124 bytes). Profile SHA-256: `2886a3619a9156bfaac37015c734c357238f03261980ca536fa96afcec5809c5`.
+- Full prediction ledger: 5,022 forecast rows, SHA-256 `866187f24763bdacd5adcbcb1f6bf57ee677ba6acac9dbe480d0bb47cbc6fbb3`. Independent artifact audit verified 5,022 unique fixture IDs, five complete model streams per row, valid probability vectors and no training-cutoff/date violations.
+- Snapshot-aligned ledger: 3,991 forecast rows across 319 snapshot dates, SHA-256 `d2e1626681d9ed9a22ac59ec7ea5b9c961d8c0cdafaaf9f8460bce1d6095f3e0`. Independent artifact audit verified 3,991 unique fixture IDs, valid vectors and no cutoff violations.
+- Backtest artifact ZIP SHA-256: `30393fd6f16b6271b8c7f2ec189a98b784e34bada8cdcd86a5095b80cfd1040d` (artifact ID 14409181662; retained 90 days).
+- Test/backtest configuration: initial training minimum 300; refit every 30 forecast dates; Dixon–Coles decay 0.995; adaptive ensemble minimum history 300, window 1,000 and regularization 0.02; prequential calibration minimum history 500, window 1,500, refit every 30 dates and regularization 0.05.
+
+### Full walk-forward results (5,022 fixtures; 2020-12-11 to 2026-11-16)
+
+| Model | Accuracy | Brier | Log Loss | RPS | ECE |
+|---|---:|---:|---:|---:|---:|
+| Dixon–Coles | 0.48188 | 0.61665 | 1.02776 | 0.20822 | 0.01125 |
+| ML | 0.44166 | 0.64549 | 1.07131 | 0.21994 | 0.04386 |
+| Market-assisted ensemble | 0.47949 | 0.61361 | 1.02298 | 0.20700 | 0.01250 |
+| Fixed DC/ML-only | 0.47591 | 0.61585 | 1.02636 | 0.20799 | 0.00917 |
+| Adaptive DC/ML-only | 0.47730 | 0.61606 | 1.02666 | 0.20806 | 0.00815 |
+| Market baseline (schedule-eligible; n=4,433) | 0.50733 | 0.59746 | 0.99937 | 0.19982 | 0.02430 |
+
+The market comparison is evaluated separately on the exact 4,433-fixture common market sample (same fixtures for each model and market):
+
+| Model | Accuracy | Brier | Log Loss | Delta Brier vs market | Delta Log Loss vs market |
+|---|---:|---:|---:|---:|---:|
+| Dixon–Coles | 0.48071 | 0.61636 | 1.02746 | +0.01890 | +0.02809 |
+| ML | 0.43808 | 0.64743 | 1.07414 | +0.04997 | +0.07477 |
+| Market-assisted ensemble | 0.47823 | 0.61356 | 1.02297 | +0.01610 | +0.02360 |
+| Fixed DC/ML-only | 0.47417 | 0.61610 | 1.02680 | +0.01864 | +0.02743 |
+| Adaptive DC/ML-only | 0.47507 | 0.61630 | 1.02709 | +0.01884 | +0.02772 |
+| Market | 0.50733 | 0.59746 | 0.99937 | — | — |
+
+Paired uncertainty diagnostics use 10,000 resamples of 249 ISO-week clusters; exploratory 95% intervals for each model-market Brier and Log Loss deltas remain strictly positive, and accuracy deltas strictly negative. The intervals are not adjusted for multiple comparisons. **No model is promoted; the market remains better on proper scoring rules and sign accuracy.** The market screen remains schedule-compatible, not exact timestamp verified or evidence of executable prices.
+
+### Snapshot-aligned common-time benchmark
+
+- **3,991** fixtures on the exact model/market common sample; **319** valid snapshot dates and one fresh model fit per snapshot date.
+- 4,256 mapped fixtures; 457 unmapped fixtures; zero invalid snapshot mappings. 265 fixtures were skipped for insufficient prior training history. No missing actual results or prediction errors.
+- Training rule: completed result date and model-fit cutoff strictly before snapshot date; same-day outcomes excluded because exact publication timestamps are unavailable.
+
+| Model | Accuracy | Brier | Log Loss |
+|---|---:|---:|---:|
+| Dixon–Coles | 0.48284 | 0.61483 | 1.02837 |
+| ML | 0.44250 | 0.63892 | 1.06067 |
+| Market-assisted ensemble | 0.48284 | 0.61097 | 1.01954 |
+| Fixed DC/ML-only | 0.47983 | 0.61352 | 1.02353 |
+| Adaptive DC/ML-only | 0.48008 | 0.61377 | 1.02393 |
+| Market baseline | **0.51065** | **0.59415** | **0.99461** |
+
+The market again wins on the identical snapshot-aligned sample. The 111-fixture strict common-information-time market subset is too small for model selection and is retained only as a diagnostic; the schedule/snapshot benchmark remains the larger descriptive comparison.
+
+### Prequential calibration decision
+
+Calibration was learned from prior out-of-fold predictions only, with same-calendar-day outcomes excluded. On 4,491 post-warm-up fixtures, calibration improved DC and ML, but the main market-assisted ensemble's Brier and Log Loss worsened slightly (0.6125949 → 0.6127260; 1.0213299 → 1.0214362), while ECE improved. On the exact 3,856 model/market calibration intersection, ensemble Brier and Log Loss also worsened (0.6113160 → 0.6115258; 1.0197101 → 1.0199257). **Do not promote the calibrator for the main ensemble**; keep it experimental. Market calibration improves its own proper scores, but the market still outperforms the model streams.
+
+### P0 decision and limitations
+
+- **P0 non-empty backtest blocker is closed for revision `f17566b`**: all five streams produce valid, fixture-bound probabilities, full samples and zero forecast errors. Regression acceptance is enforced by CI.
+- The 73 Dixon–Coles-dependent cold-start forecasts (1.45% of the 5,022 forecasts) used the explicit fallback; ML had zero cold-start fallbacks. The fallback is recorded and accepted, not silently hidden.
+- Historical kickoff/result-publication timestamps and exact per-fixture odds-capture timestamps are not available for the public Football-Data sample. Market timing remains schedule-screened/snapshot-date aligned, not fully timestamp verified.
+- The ensemble remains unpromoted; the market is the strongest benchmark. No payout/ROI/profitability claim is made.
+
+**Next priority:** audit/resolve the read-only historical odds coverage probe using a valid `THE_ODDS_API_KEY` (the credential is not available in the current environment; no request has been sent). Keep prices out of the training dataset until event matching, point-in-time capture and licensing are demonstrated. Continue P1/P2 source and leakage work in the existing audit, without repeating this backtest unless code/data changes or new evidence require it.
+
+
+## 2026-11-18 — Code-level point-in-time feature audit (P2 partial)
+
+Reviewed `kini_engine/core.py` and the corresponding regression coverage in `tests/test_core.py` at revision `f17566ba8f70ca87917b4351a63a142c41e6faea`.
+
+- ML inference uses exactly 12 rolling features: overall and venue-specific recent-form summaries (points, goals for and goals against) for the home and away teams. The current implementation excludes standings and arbitrary contextual fields because the source lacks reliable publication timestamps.
+- `_prior_completed_matches` admits only completed matches with a source calendar date strictly earlier than the forecast date. `_assert_training_history_precedes_fixture` fails closed if the training snapshot contains any completed result on or after the forecast day.
+- ML training rows are built chronologically by calendar-day group: features are generated from the accumulated state before the group, then that day's results are added. This prevents within-day label leakage.
+- Context adjustments and H2H/surprise calculations use the same prior-date filter. DC and ML historical training guards reject same-day/future labels.
+- Existing tests explicitly cover same-day/future training results, same-day/future feature contamination, unverified standings, context/surprise contamination, incremental feature-row equivalence and same-calendar-day training-row exclusion. CI on the current documentation checkpoint [44268506792](https://github.com/Baltas80/Kini-/actions/runs/44268506792) passed **452 tests**, including these regression tests.
+
+**Code-level conclusion:** no leakage path was found in the audited rolling-feature, training-row or context/H2H functions. This is not a full point-in-time certification: the historical source is date-level, not timestamp-level. Exact kickoff/publication times and odds-capture times remain unavailable, so the model can be audited only against a conservative calendar-day boundary. Same-day fixtures/results are intentionally excluded.
+
+**P2 status:** code-level leakage controls and regression tests are validated; source timestamp availability and independent point-in-time reconstruction remain open. Continue with source provenance and odds-coverage evidence rather than re-running the same code audit.
+
+
+## 2026-11-18 — Odds coverage probe fixture-time guard
+
+A static review of the read-only coverage probe found that it matched provider events by exact normalized home/away names but did not enforce the provider kickoff against the independently verified crosswalk kickoff. A participant match within the broad ±12-hour event search window could therefore be reported as coverage despite a materially different scheduled time; a requested 1-hour snapshot could also be after the provider's scheduled kickoff while still being counted as coverage.
+
+- Added a strict 90-minute kickoff matching tolerance. Participant matches outside the tolerance are reported as `kickoff_mismatch` and do not trigger a markets request.
+- Added a pre-kickoff guard: if the requested snapshot is at or after the provider's scheduled kickoff, it is reported as `snapshot_not_pre_kickoff` and the markets endpoint is not called.
+- The workflow aggregate now counts kickoff mismatches and post-kickoff snapshots separately.
+- Added regression tests for both cases. The initial CI attempt failed only Ruff formatting; the formatting correction was committed and the final CI run passed: [44274752034](https://github.com/Baltas80/Kini-/actions/runs/44274752034), **454 tests passed**, workflow validation, Ruff lint and format all passed.
+- Historical-data validation [44274751931](https://github.com/Baltas80/Kini-/actions/runs/44274751931) passed: **5,322 completed fixtures**, zero unresolved team references, zero duplicate/conflicting fixtures and `integrity_passed=true`.
+- Historical-model workflow [44274751958](https://github.com/Baltas80/Kini-/actions/runs/44274751958) passed its change gate and skipped the model backtest; coupon pilot [44274751914](https://github.com/Baltas80/Kini-/actions/runs/44274751914) also skipped. No new predictive metric is claimed.
+- No live API request, price download or dataset modification was performed.
+
+**Next action:** keep the coverage probe read-only and pending the API key. Do not use this coverage metadata as model input or market benchmark evidence.
+
+
+## 2026-11-18 — CI fix checkpoint (ticket-ledger / odds-coverage stack)
+
+- Root cause: Ruff formatting failures in the joint-scenario audit and tests, plus an unsorted import block in the aggregate odds-coverage summarizer.
+- Fixes: normalized formatting; corrected the summarizer's `Path` usage; added a regression test for `main()` writing the GitHub step summary and removing the temporary report; kept the standard-library import block in Ruff's expected order.
+- Validated code commit: `4071d9db69bcd53eea03beaa345aecaafa0a3b3d`.
+- CI run [44336847452](https://github.com/Baltas80/Kini-/actions/runs/44336847452): Actionlint, Ruff lint, Ruff format and pytest passed.
+- Historical-data-validation [44336847473](https://github.com/Baltas80/Kini-/actions/runs/44336847473): passed. Coupon-backtest workflow [44336847485](https://github.com/Baltas80/Kini-/actions/runs/44336847485): passed. Historical-model backtest [44336847450](https://github.com/Baltas80/Kini-/actions/runs/44336847450): skipped because predictive behavior was unchanged.
+- PR #11 and #12 branches were updated with merge commits to carry the base fixes without modifying `master`. Their final CI runs are still pending.
+- Next priority: finish PR #11/#12 CI, then inspect the odds-coverage probe artifact and its sample's source/time integrity before expanding the probe.

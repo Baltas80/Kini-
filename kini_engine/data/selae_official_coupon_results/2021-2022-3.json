@@ -1,0 +1,214 @@
+{
+  "schema_version": 1,
+  "source": "SELAE",
+  "verified_at": "2026-11-17",
+  "snapshot_type": "normalized_json_extract_not_raw_html",
+  "draw_date": "2021-08-29",
+  "source_url": "https://www.loteriasyapuestas.es/es/la-quiniela/resultados/la-quiniela-resultados-del-29-de-agosto-de-2021",
+  "verification_method": "Manual review of the official SELAE result page and official SELAE press-release PDF. The 14 ordered main fixtures, team labels, scores and signs, plus the Atlético de Madrid–Villarreal Pleno al 15 (2-2), were cross-checked against the 2021/2022 Jornada 3 schedule and the validated Football-Data SP1/SP2 dataset. The earliest coupon fixture kickoff is 28/08/2021 17:00 Europe/Madrid; the model training cutoff is 27/08/2021. The Friday 27/08 Segunda fixtures were not among the 14 main coupon positions. The original PDF bytes were not captured; no raw-PDF digest is claimed.",
+  "supporting_sources": [
+    {
+      "role": "official_selae_result_page",
+      "url": "https://www.loteriasyapuestas.es/es/la-quiniela/resultados/la-quiniela-resultados-del-29-de-agosto-de-2021"
+    },
+    {
+      "role": "official_selae_press_release_pdf",
+      "url": "https://www.loteriasyapuestas.es/f/loterias/documentos/Quiniela/Notas%20de%20prensa/NOTA_DE_PRENSA_DE_LA_QUINIELA_DE_FECHA_29_8_21.pdf"
+    },
+    {
+      "role": "schedule_and_kickoff_crosscheck",
+      "url": "https://www.historicoquiniela.com/historico/2021-2022/3"
+    },
+    {
+      "role": "first_division_coupon_kickoff_crosscheck",
+      "url": "https://www.oddschecker.com/es/pronosticos/futbol/primera-division/20210826-pronostico-quiniela-de-la-jornada-3-apuestas-pronosticos-y-resultados-de-futbol"
+    },
+    {
+      "role": "laliga_hypermotion_schedule_crosscheck",
+      "url": "https://as.com/resultados/futbol/segunda/2021_2022/jornada/regular_a_3/"
+    },
+    {
+      "role": "rfef_second_division_calendar",
+      "url": "https://rfef.es/sites/default/files/images19/calendario_2d_2122.pdf"
+    },
+    {
+      "role": "football_data_sp1_crosscheck",
+      "url": "https://www.football-data.co.uk/mmz4281/2122/SP1.csv"
+    },
+    {
+      "role": "football_data_sp2_crosscheck",
+      "url": "https://www.football-data.co.uk/mmz4281/2122/SP2.csv"
+    }
+  ],
+  "fixtures": [
+    {
+      "number": 1,
+      "home": "Celta",
+      "away": "Athletic Club",
+      "home_goals": 0,
+      "away_goals": 1,
+      "result": "2"
+    },
+    {
+      "number": 2,
+      "home": "Real Sociedad",
+      "away": "Levante",
+      "home_goals": 1,
+      "away_goals": 0,
+      "result": "1"
+    },
+    {
+      "number": 3,
+      "home": "Elche",
+      "away": "Sevilla",
+      "home_goals": 1,
+      "away_goals": 1,
+      "result": "X"
+    },
+    {
+      "number": 4,
+      "home": "Betis",
+      "away": "Real Madrid",
+      "home_goals": 0,
+      "away_goals": 1,
+      "result": "2"
+    },
+    {
+      "number": 5,
+      "home": "Barcelona",
+      "away": "Getafe",
+      "home_goals": 2,
+      "away_goals": 1,
+      "result": "1"
+    },
+    {
+      "number": 6,
+      "home": "Cádiz",
+      "away": "Osasuna",
+      "home_goals": 2,
+      "away_goals": 3,
+      "result": "2"
+    },
+    {
+      "number": 7,
+      "home": "Rayo Vallecano",
+      "away": "Granada",
+      "home_goals": 4,
+      "away_goals": 0,
+      "result": "1"
+    },
+    {
+      "number": 8,
+      "home": "Amorebieta",
+      "away": "Almería",
+      "home_goals": 2,
+      "away_goals": 1,
+      "result": "1"
+    },
+    {
+      "number": 9,
+      "home": "R. Oviedo",
+      "away": "Tenerife",
+      "home_goals": 0,
+      "away_goals": 0,
+      "result": "X"
+    },
+    {
+      "number": 10,
+      "home": "Leganés",
+      "away": "Ibiza",
+      "home_goals": 1,
+      "away_goals": 2,
+      "result": "2"
+    },
+    {
+      "number": 11,
+      "home": "Ponferradina",
+      "away": "Girona",
+      "home_goals": 2,
+      "away_goals": 1,
+      "result": "1"
+    },
+    {
+      "number": 12,
+      "home": "Sporting",
+      "away": "Mirandés",
+      "home_goals": 2,
+      "away_goals": 1,
+      "result": "1"
+    },
+    {
+      "number": 13,
+      "home": "Lugo",
+      "away": "Valladolid",
+      "home_goals": 0,
+      "away_goals": 2,
+      "result": "2"
+    },
+    {
+      "number": 14,
+      "home": "Burgos",
+      "away": "Eibar",
+      "home_goals": 0,
+      "away_goals": 1,
+      "result": "2"
+    }
+  ],
+  "pleno": {
+    "number": 15,
+    "home": "At. Madrid",
+    "away": "Villarreal",
+    "home_goals": 2,
+    "away_goals": 2,
+    "home_category": "2",
+    "away_category": "2"
+  },
+  "prize_distribution": {
+    "source_type": "official_selae_press_release_pdf_transcribed_to_normalized_extract",
+    "source_url": "https://www.loteriasyapuestas.es/f/loterias/documentos/Quiniela/Notas%20de%20prensa/NOTA_DE_PRENSA_DE_LA_QUINIELA_DE_FECHA_29_8_21.pdf",
+    "revenue_eur": 2895129.75,
+    "categories": [
+      {
+        "category": "pleno_al_15",
+        "winner_count": 0,
+        "unit_prize_eur": null,
+        "status": "rollover"
+      },
+      {
+        "category": "14",
+        "winner_count": 1,
+        "unit_prize_eur": 463220.76,
+        "status": "awarded"
+      },
+      {
+        "category": "13",
+        "winner_count": 45,
+        "unit_prize_eur": 4825.22,
+        "status": "awarded"
+      },
+      {
+        "category": "12",
+        "winner_count": 569,
+        "unit_prize_eur": 381.61,
+        "status": "awarded"
+      },
+      {
+        "category": "11",
+        "winner_count": 4406,
+        "unit_prize_eur": 49.28,
+        "status": "awarded"
+      },
+      {
+        "category": "10",
+        "winner_count": 24843,
+        "unit_prize_eur": 10.49,
+        "status": "awarded"
+      }
+    ],
+    "elige8": {
+      "revenue_eur": 76579,
+      "winner_count": 34,
+      "unit_prize_eur": 1238.78
+    }
+  }
+}

@@ -14,3 +14,4 @@ data/ligaf_history.jsonl
 data/ligaf_history.profile.json
 data/ligaf_historical_team_profiles.json
 artifacts/
+data/kini-tickets.sqlite3*
