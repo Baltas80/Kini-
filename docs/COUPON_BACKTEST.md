@@ -701,3 +701,13 @@ CI [run 44189932245](https://github.com/Baltas80/Kini-/actions/runs/44189932245)
 This coupon pilot does **not** calculate Brier Score, Log Loss, reliability curves, same-match market comparisons or economic returns. Those remain separate P0–P5 work; do not infer calibrated probabilities or future hit rates from the coupon hit counts.
 
 
+
+
+## Joint-scenario coverage mechanics audit — 2026-11-18
+
+A standalone audit script is available at scripts/audit_joint_scenario_coverage.py. Run it against a coupon-backtest JSON artifact with: python scripts/audit_joint_scenario_coverage.py --input coupon-backtest.json --output joint-coverage-audit.json.
+
+The script verifies each model's 14 normalized probability vectors and the direct multiple's unique, complete Cartesian column structure. It independently calculates the covered joint probability by summing the probabilities of the exact expanded columns (mutually exclusive scenarios under the match-independence approximation), checks that sum against the saved optimizer estimate, and compares the realized 14-sign outcome with the columns. The report explicitly labels the independence assumptions and the selected-sample scope.
+
+Audit of the nine-coupon pilot artifact from workflow run 44188103063: realized coverage was 0/9 for DC, ML and ensemble. Mean estimated independent coverage per coupon was 0.1330%, 0.1178% and 0.0721%; expected covered coupons over nine draws were 0.0120, 0.0106 and 0.0065. Under the additional independent-coupon assumption, zero-covered probabilities were 98.81%, 98.94% and 99.35%. These small selected historical draws are mechanics evidence only, not a representative benchmark, model promotion, payout or profitability evidence. The audit covers 14 main matches only and excludes Pleno al 15.
+
